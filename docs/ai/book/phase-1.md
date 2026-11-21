@@ -4920,6 +4920,13 @@ a later Save from this page could overwrite those words without a conflict. Retu
 `?/saveAll` answer and settle on it. Done in the P1.21v follow-up PR: the answer names each written card's CID
 (`versions`), and unsaved edits and offered drafts settle on that CID only.
 
+Slice 3 (2026-11-21; Alex: "Ok you do your 400 lines of code", "But it better work the same"): on Milkdown 7.23.0's
+own @milkdown/plugin-block, plugin-slash and plugin-tooltip, with Crepe 7.23.0's behaviour as the model and our own
+markup (editor/menus.ts, text-menus.svelte): "/" opens the block menu (a listbox the editor names by
+aria-activedescendant, arrows, Enter, Escape, a press), selected words show a floating bar (bold, italic, inline
+code), and a pointer that can hover shows the side handle, whose "+" adds a line with the menu open and whose grip
+drags the block. Differences from the playground are listed in the PR.
+
 Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
 raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
 the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
