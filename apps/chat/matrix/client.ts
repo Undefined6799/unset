@@ -14,12 +14,19 @@ import {
   CryptoEvent,
   OnlySignedDevicesIsolationMode,
 } from "matrix-js-sdk/lib/crypto-api/index.js";
-import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
+import {
+  ClientEvent,
+  createClient,
+  HttpApiEvent,
+  type MatrixClient,
+  RoomEvent,
+  SyncState,
+} from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations } from "./conversation-service.ts";
-import { BACKUP_WAIT_MS, backupSettled } from "./log-out.ts";
+import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
   createKeyHolder,
@@ -45,10 +52,19 @@ const FIRST_SYNC_MS = 30_000;
  */
 export const storePrefix = (userId: string): string => `unset-chat:${userId}`;
 
-export type Chat = { readonly stop: () => void };
+export type Chat = {
+  readonly stop: () => void;
+  /**
+   * Log out of this browser (logOut below): the backup catches up, the door ends the device, the stores go. Callable on
+   * its own, by whatever ends chat for the member, not only from a screen.
+   */
+  readonly logOut: () => Promise<void>;
+};
 export type ChatOptions = {
   /** The page's own origin: the edge sends /_matrix/client/* to the homeserver (ADR 0081 decision 6). */
   readonly baseUrl: string;
+  /** Aborted when another tab takes chat over (core/tab-lock.ts): the client stops, and this store is left alone. */
+  readonly takenOver: AbortSignal;
   readonly onState: (state: ChatState) => void;
   /** The server stopped taking the token (HttpApiEvent.SessionLoggedOut, src/http-api/fetch.ts:183-196). */
   readonly onSignedOut: () => void;
@@ -89,14 +105,17 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
   let restoreAgain: ReturnType<typeof setTimeout> | undefined;
-  const chat = {
+  const chat: Chat = {
     stop: () => {
       stopped = true;
       clearTimeout(restoreAgain);
       client.stopClient();
     },
+    logOut: () => logOut(),
   };
+  options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
   const tell = (state: ChatState) => stopped || options.onState(state);
+  const backup = followBackup(client);
   client.on(HttpApiEvent.SessionLoggedOut, () => {
     chat.stop();
     options.onSignedOut();
@@ -109,12 +128,16 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const cryptoDatabasePrefix = storePrefix(session.userId);
   // A device new to this browser cannot open a store left by an ended one (its lock key is gone): that store is wiped,
   // as Log out would have (ADR 0083 decision 5). clearStores names the same two databases (src/client.ts:1614-1669).
+  // Another tab may have taken chat over while this one started: the store is then that tab's alone.
+  if (options.takenOver.aborted) return chat;
   if (session.newDevice) await client.clearStores({ cryptoDatabasePrefix });
+  if (options.takenOver.aborted) return chat;
   try {
     await client.initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix });
   } catch {
     return fail("chat.keys_unavailable"); // IndexedDB refused, WASM blocked, or a store this key cannot open
   }
+  if (options.takenOver.aborted) return chat;
   const crypto = client.getCrypto();
   if (crypto === undefined) return fail("chat.keys_unavailable");
   crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode());
@@ -142,9 +165,13 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const logOut = async () => {
     busy = true;
     tell({ kind: "logging_out" });
-    await backupSettled(client, BACKUP_WAIT_MS);
+    await backup.settled(BACKUP_WAIT_MS);
     chat.stop();
+    // Chat moved to another tab meanwhile: this browser's device stays, for that tab.
+    if (options.takenOver.aborted) return;
     if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
+    // A tab that took chat over meanwhile owns the store now; its new device wipes it (ADR 0083 decision 5).
+    if (options.takenOver.aborted) return;
     await client.clearStores({ cryptoDatabasePrefix });
     options.onState({ kind: "logged_out" });
   };
@@ -200,6 +227,27 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   client.on(CryptoEvent.DevicesUpdated, (users) => users.includes(session.userId) && void report());
   await report();
   return chat;
+}
+
+/**
+ * To-device types that carry a room key to this device (Matrix spec v1.16,
+ * https://spec.matrix.org/v1.16/client-server-api/#mroom_key and #mforwarded_room_key).
+ */
+const ROOM_KEY_TYPES = new Set(["m.room_key", "m.forwarded_room_key"]);
+
+/**
+ * The backup's own events, and the new room keys it has to upload, fed to Log out's watch (log-out.ts) from before the
+ * crypto starts, so the enable at start is seen. The to-device message arrives decrypted (src/sync.ts:2041-2093,
+ * src/sync-accumulator.ts:171-179); a local echo is this browser sending, which makes or uses its room key
+ * (src/models/room.ts:2846, re-emitted on the client, src/sync.ts:1964-1970).
+ */
+function followBackup(client: MatrixClient): BackupWatch {
+  const watch = watchBackup();
+  client.on(CryptoEvent.KeyBackupStatus, watch.enabled);
+  client.on(CryptoEvent.KeyBackupSessionsRemaining, watch.remaining);
+  client.on(ClientEvent.ReceivedToDeviceMessage, ({ message }) => ROOM_KEY_TYPES.has(message.type) && watch.keyMade());
+  client.on(RoomEvent.LocalEchoUpdated, () => watch.keyMade());
+  return watch;
 }
 
 /** Resolves true on the first PREPARED or SYNCING (src/sync.ts:80-92), false at the deadline. */
