@@ -26,6 +26,7 @@ import { schema } from "../../../interfaces/chat-auth/config.ts";
 import { loadChatPage } from "../../../interfaces/chat-auth/page.ts";
 import { fakeMas, startService } from "../../integration/chat-admin/harness.ts";
 import { migrateAsMigrator, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import { fakeRooms } from "./chat-rooms.ts";
 
 const ROOT = join(import.meta.dirname, "../../..");
 const ALICE = `did:plc:${"a".repeat(24)}` as Did;
@@ -96,8 +97,8 @@ type Signed = Json & { signatures?: Record<string, Record<string, string>> };
  * (https://spec.matrix.org/v1.18/client-server-api/#end-to-end-encryption, #server-side-key-backups,
  * #client-config), kept in memory so a setup in one browser and an unlock in another meet the same keys. A second,
  * different signing-key upload is refused as Synapse refuses it under MAS (keys.py SigningKeyUploadServlet: 401 with
- * the m.oauth flow). Account data and changed device lists reach every browser's sync. Every request is kept, with
- * its body, for the checks.
+ * the m.oauth flow). Account data and changed device lists reach every browser's sync. Direct rooms are
+ * fixtures/chat-rooms.ts (build step 9). Every request is kept, with its body, for the checks.
  */
 function fakeHomeserver() {
   const seen: { method: string; url: string; auth: string; body: string }[] = [];
@@ -113,6 +114,7 @@ function fakeHomeserver() {
   let backup: Json | null = null;
   let changedAt = 0;
   let clock = 1;
+  const rooms = fakeRooms(() => ++clock);
   const reply = (res: ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
@@ -134,7 +136,7 @@ function fakeHomeserver() {
     const lists = changed ? { changed: [user], left: [] } : { changed: [], left: [] };
     return {
       next_batch: `s${upTo}`,
-      rooms: {},
+      rooms: rooms.syncRooms(since),
       account_data: { events },
       to_device: { events: [] },
       device_lists: lists,
@@ -150,8 +152,11 @@ function fakeHomeserver() {
       const user = userOf();
       if (user === undefined) return reply(res, 200, { device_keys: {}, failures: {} });
       const withUser = (key: Signed | undefined): Record<string, Signed> => (key === undefined ? {} : { [user]: key });
+      // Anyone else asked for (the other people in a room) is known to have no devices, as Synapse answers for a
+      // user who has none.
+      const others = Object.keys((body.device_keys as Json | undefined) ?? {}).filter((u) => u !== user);
       return reply(res, 200, {
-        device_keys: { [user]: devices },
+        device_keys: { ...Object.fromEntries(others.map((u) => [u, {}])), [user]: devices },
         master_keys: withUser(signing.master),
         self_signing_keys: withUser(signing.self),
         user_signing_keys: withUser(signing.user),
@@ -229,9 +234,13 @@ function fakeHomeserver() {
         : reply(res, 200, stored.content);
     }
     if (keys(path, method, body, res) !== null) return;
+    const room = rooms.answer(path, method, body, userOf() ?? "");
+    if (room !== null) return reply(res, room[0], room[1]);
+    if (path === "/keys/claim") return reply(res, 200, { one_time_keys: {}, failures: {} });
+    if (path.startsWith("/sendToDevice/")) return reply(res, 200, {});
     return reply(res, 404, { errcode: "M_NOT_FOUND", error: "Not found" });
   };
-  return { seen, state, handle, now: () => clock };
+  return { seen, state, handle, rooms, now: () => clock };
 }
 
 const listen = (server: { listen(port: number, host: string, done: () => void): unknown }) =>

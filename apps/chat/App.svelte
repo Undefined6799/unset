@@ -1,7 +1,7 @@
 <!--
   The chat page's shell (ADR 0088): one card for where the page stands. The words are ours alone; no screen names the
   servers or the protocol behind it. A new account saves its recovery key here before anything else (ADR 0083
-  decision 2, ADR 0089), and a new browser unlocks with it (decision 3); conversations are build step 9. An error
+  decision 2, ADR 0089), and a new browser unlocks with it (decision 3); then the conversations (build step 9, Conversations.svelte). An error
   shows only its fixed code.
   The key fields follow Chromium's documented form shape, a username field (hidden) and a password field marked
   new-password to save and current-password to fill
@@ -12,6 +12,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { boot } from "./boot.ts";
+import Conversations from "./Conversations.svelte";
 import type { ChatState, UnlockOutcome } from "./core/chat.ts";
 import { CHECK_LENGTH, KEY_FILE_NAME, keyFileText, matchesEnd } from "./core/recovery-key.ts";
 import { hopPath } from "./core/sign-in.ts";
@@ -45,7 +46,7 @@ const WORDS = {
     title: "Unlock your messages",
     text: "Enter your recovery key to read your messages in this browser.",
   },
-  ready: { title: "Your messages", text: "No conversations yet." },
+  ready: { title: "Your messages", text: "" },
   signed_out: { title: "Signing you in again", text: "One moment." },
   error: { title: "Messages could not open", text: "Try again in a moment." },
 } as const;
@@ -95,7 +96,7 @@ onMount(() => {
   <Card.Root>
     <Card.Header>
       <Card.Title><h1>{words.title}</h1></Card.Title>
-      <Card.Description>{words.text}</Card.Description>
+      {#if view.kind !== "ready"}<Card.Description>{words.text}</Card.Description>{/if}
     </Card.Header>
     {#if view.kind === "save_key"}
       <Card.Content>
@@ -163,6 +164,10 @@ onMount(() => {
           {/if}
           <Button type="submit" disabled={unlocking}>{unlocking ? "Unlocking…" : "Unlock"}</Button>
         </form>
+      </Card.Content>
+    {:else if view.kind === "ready"}
+      <Card.Content>
+        <Conversations conversations={view.conversations} me={view.me} />
       </Card.Content>
     {:else if view.kind === "setup_elsewhere" || view.kind === "error"}
       <Card.Content class="flex flex-col items-start gap-4">

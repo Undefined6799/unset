@@ -8,6 +8,9 @@
 // after redeem neither web storage, cookies, IndexedDB nor the address holds the token, the lock key or the ticket;
 // the page runs under its CSP with no violation; renewal re-runs the hop for the same device and lock key; a token the
 // server stops taking right after sign-in shows a fixed code instead of looping; axe passes in both themes.
+// Conversations (build step 9): a request shows who asks and whether the room is encrypted, and Accept joins and records
+// it as direct; the start route makes exactly the room our server accepts, keeps the composer off until the other
+// person has joined, then sends only ciphertext; a second start finds the same room; a bad chat ID starts nothing.
 // Chromium only, by its name (playwright.config.ts ignores *chromium.spec.ts for Firefox and WebKit): the CSP check
 // reads Chromium's console wording, as csp.spec.ts does.
 import { readFileSync } from "node:fs";
@@ -49,7 +52,7 @@ test.afterEach(async () => {
   await stack.close();
 });
 
-type Redeemed = { accessToken: string; storageKey: string; deviceId: string; ticket: string };
+type Redeemed = { accessToken: string; storageKey: string; deviceId: string; userId: string; ticket: string };
 
 /** A page that records each redeem (the ticket it sent, the session it got) and every CSP complaint. */
 async function open(browser: Browser, colorScheme: "light" | "dark" = "light") {
@@ -318,6 +321,84 @@ for (const scheme of ["light", "dark"] as const) {
     expect((await new AxeBuilder({ page: second.page }).analyze()).violations.map((v) => v.id)).toEqual([]);
   });
 }
+
+const THEM = `@u${"b".repeat(20)}:staging.unset.cc`;
+const CY = `@u${"c".repeat(20)}:staging.unset.cc`;
+const conversation = (page: Page) => page.locator("[data-screen=conversation]");
+/** The account's m.direct as the page last wrote it. */
+const lastDirect = () => {
+  const writes = stack.homeserver.seen.filter((c) => c.method === "PUT" && c.url.includes("/account_data/m.direct"));
+  return JSON.parse(writes.at(-1)?.body ?? "null") as unknown;
+};
+
+test("chat_page.request_accept: a request names who asks and marks the room; Accept joins and records it", async ({
+  browser,
+}) => {
+  const { page, redeems, problems } = await open(browser);
+  await page.goto("https://unset.cc/");
+  await saveKey(page);
+  const me = redeems[0]?.userId ?? "";
+  const roomId = stack.homeserver.rooms.invite(me, THEM, "Bea <i>B</i>", "encrypted");
+  stack.homeserver.rooms.invite(me, CY, "Cy", "plain");
+  const request = page.locator(`[data-request="${THEM}"]`);
+  await expect(request).toContainText("Bea <i>B</i> wants to talk", { timeout: 30_000 });
+  expect(await request.locator("i").count()).toBe(0);
+  await expect(request.locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
+  await expect(page.locator(`[data-request="${CY}"] [data-mark]`)).toHaveAttribute("data-mark", "not_encrypted");
+  await request.getByRole("button", { name: "Accept" }).click();
+  const talk = page.locator(`[data-conversation="${THEM}"]`);
+  await expect(talk).toBeVisible({ timeout: 30_000 });
+  expect(stack.homeserver.seen.filter((c) => c.method === "POST" && c.url.includes("/join/")).length).toBe(1);
+  await expect.poll(lastDirect).toEqual({ [THEM]: [roomId] });
+  await talk.click();
+  await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 30_000 });
+  await page.locator("#message").fill("hi Bea");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(conversation(page).locator("ol")).toContainText("hi Bea");
+  const { sent } = stack.homeserver.rooms;
+  await expect.poll(() => sent.map((s) => s.type)).toEqual(["m.room.encrypted"]);
+  expect(JSON.stringify(sent)).not.toContain("hi Bea");
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.start_with: the start route makes the room the server accepts; the composer waits for the join", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, problems } = await open(browser);
+  await page.goto(`https://unset.cc/?with=${encodeURIComponent(THEM)}`);
+  await saveKey(page);
+  await expect(conversation(page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 30_000 });
+  expect(page.url()).toBe("https://unset.cc/");
+  const { created, rooms, sent } = stack.homeserver.rooms;
+  expect(created).toEqual([{ preset: "trusted_private_chat", is_direct: true, invite: [THEM] }]);
+  const [roomId] = [...rooms.keys()];
+  await expect.poll(lastDirect).toEqual({ [THEM]: [roomId] });
+  await expect(conversation(page).locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
+  expect([
+    await page.locator("#message").isDisabled(),
+    await page.getByRole("button", { name: "Send" }).isDisabled(),
+  ]).toEqual([true, true]);
+  expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+  stack.homeserver.rooms.join(roomId ?? "", THEM, "Bea");
+  await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 30_000 });
+  await page.locator("#message").fill("hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => sent.map((s) => s.type)).toEqual(["m.room.encrypted"]);
+  // A second start with the same person opens the same conversation.
+  await page.goto(`https://unset.cc/?with=${encodeURIComponent(THEM)}`);
+  await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 30_000 });
+  expect(created).toHaveLength(1);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.start_bad_id: a chat ID that is not one of ours starts nothing and says so", async ({ browser }) => {
+  const { page } = await open(browser);
+  await page.goto(`https://unset.cc/?with=${encodeURIComponent("@ubbbbbbbbbbbbbbbbbbbb:elsewhere.example")}`);
+  await saveKey(page);
+  await expect(page.getByRole("alert")).toContainText("That chat ID is not one we know.");
+  expect(stack.homeserver.rooms.created).toEqual([]);
+});
 
 test("chat_page.reload_cached_sync: a set-up browser reloaded within Synapse's sync cache is not asked to set up again", async ({
   browser,
