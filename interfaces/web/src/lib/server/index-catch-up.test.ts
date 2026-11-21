@@ -77,3 +77,14 @@ test("ends early enough that the request still answers inside its deadline", asy
   expect(await publicPageShows("ownerOnly", { ...late.deps, deadlineAt: ANSWER_MS })).toBe(false);
   expect(late.reads()).toBe(0);
 });
+
+test("a fractional clock, as performance.now() reads, still waits and answers", async () => {
+  // Codex review of #1906: AbortSignal.timeout throws on a fractional delay.
+  const w = world([record(), record("ownerOnly")]);
+  let at = 0.25;
+  const sleep = async (ms: number) => {
+    at += ms + 0.375;
+  };
+  const deps = { ...w.deps, now: () => at, sleep, deadlineAt: 9_999.5 };
+  expect(await publicPageShows("ownerOnly", deps)).toBe(true);
+});

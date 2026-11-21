@@ -33,7 +33,9 @@ export type CatchUpDeps = {
 export async function publicPageShows(wanted: ProfileVisibility, deps: CatchUpDeps): Promise<boolean> {
   const until = Math.min(deps.now() + CATCH_UP_MS, deps.deadlineAt - ANSWER_MS);
   for (;;) {
-    const left = until - deps.now();
+    // performance.now() is fractional, and AbortSignal.timeout takes whole milliseconds only (it throws a RangeError
+    // otherwise: https://nodejs.org/api/globals.html#static-method-abortsignaltimeoutdelay, Node 26).
+    const left = Math.floor(until - deps.now());
     if (deps.signal.aborted || left <= 0) return false;
     // A read that hangs ends with the wait, not with the request.
     const signal = AbortSignal.any([deps.signal, AbortSignal.timeout(left)]);
