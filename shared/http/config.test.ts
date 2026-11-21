@@ -92,6 +92,23 @@ describe("httpKitConfig", () => {
     );
   });
 
+  test("media_on_unset_site_accepted", () => {
+    // ADR 0029: media is served from usercontent.unset.site (staging.usercontent.unset.site on staging), another site
+    // from the app in both environments. A host four labels deep is placed by its last two, like every known TLD.
+    expect(load({ ...ENV, MEDIA_ORIGIN: "https://usercontent.unset.site" }).MEDIA_ORIGIN).toBe(
+      "https://usercontent.unset.site",
+    );
+    const staging = { ...ENV, PUBLIC_ORIGIN: "https://staging.unset.sh", HTTP_ALLOWED_HOSTS: "staging.unset.sh" };
+    expect(load({ ...staging, MEDIA_ORIGIN: "https://staging.usercontent.unset.site" }).MEDIA_ORIGIN).toBe(
+      "https://staging.usercontent.unset.site",
+    );
+    // .site is placed like the other known TLDs: an app on unset.site would be same-site with media there.
+    const sameSite = { ...ENV, PUBLIC_ORIGIN: "https://app.unset.site", HTTP_ALLOWED_HOSTS: "app.unset.site" };
+    expect(problems({ ...sameSite, MEDIA_ORIGIN: "https://staging.usercontent.unset.site" })).toEqual([
+      { key: "MEDIA_ORIGIN", reason: "invalid" },
+    ]);
+  });
+
   test("removed_keys_left_in_an_env_file_do_not_stop_boot", () => {
     // P1.21c removed ASSETS_BASE and DEV_VITE_ORIGIN, which fed only the dead Hono-era CSPs. An env file that still
     // sets them, even to a value the old rules refused, loads; the schema never reads a key it does not name.

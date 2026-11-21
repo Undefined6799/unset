@@ -9,10 +9,11 @@ const HOST_ENTRY = new RegExp(`\\.?${LABEL}(?:\\.${LABEL})*`);
 
 /**
  * Top-level domains whose registrable domain is the last two labels (P1.08; plan §5.2): the product's domains (`.sh`,
- * `.ac`, `.me`, `.space`), the media domain's (`.net`), and `.test` for test config. Any other TLD is refused, so
- * the same-site check needs no public-suffix library and never guesses.
+ * `.ac`, `.me`, `.space`), the media domain's (`.site` for `unset.site`, ADR 0029; `.net` for the placeholder example),
+ * and `.test` for test config. Any other TLD is refused, so the same-site check needs no public-suffix library and
+ * never guesses.
  */
-const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".test"];
+const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".site", ".test"];
 
 /** The site (registrable domain) of a URL's host: an IP or one-label host is its own site; else known TLDs only. */
 function siteOf(host: string): string | undefined {
