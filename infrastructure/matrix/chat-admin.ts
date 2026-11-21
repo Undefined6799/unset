@@ -4,7 +4,14 @@
 // second create for an account MAS already holds as created, so a lost reply is harmless. Retries are the queued
 // job's (domains/messaging createDueAccounts), never here (rule RE-1: one layer).
 import type { Handle } from "@unset/domains-identity";
-import type { ChatAccountChange, ChatAccountCreation, ChatUser, SignInTicket } from "@unset/domains-messaging";
+import type {
+  ChatAccountChange,
+  ChatAccountCreation,
+  ChatUser,
+  DeviceId,
+  EndOutcome,
+  SignInTicket,
+} from "@unset/domains-messaging";
 import type { NetGuard } from "@unset/infrastructure-net-guard";
 import { type ChatAdminSettings, type Fields, postChatAdmin, signChat } from "./chat-admin-call.ts";
 
@@ -87,6 +94,18 @@ export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettin
   const setLocked = (user: ChatUser, lock: boolean, deadline?: AbortSignal) =>
     changeAccount(user, lock ? "account.lock" : "account.unlock", deadline);
 
+  /**
+   * Ends `device` of `user` (ADR 0083 decision 5, ADR 0084 decision 7): chat-admin revokes its sessions, which removes
+   * the device and its pusher. Ending a device already gone is still ended (interfaces/chat-admin/commands.ts
+   * endSessions); retries are the queued job's (RE-1).
+   */
+  async function endSession(user: ChatUser, device: DeviceId, deadline?: AbortSignal): Promise<EndOutcome> {
+    const envelope = sign({ verb: "session.end", user, name: "", device, did: "", sid: "", state: "" });
+    const answer = await postChatAdmin(guard, settings, "/v1/session.end", envelope, TIMEOUT_MS, deadline);
+    const ended = answer !== "unavailable" && answer.status === 200 && count(answer.body?.ended);
+    return ended ? { kind: "ended" } : { kind: "unavailable" };
+  }
+
   /** Asks chat-admin to delete idle plain rooms (ADR 0091). The command names nothing: chat-admin finds the rooms. */
   async function sweepRooms(deadline?: AbortSignal): Promise<ChatRoomSweep> {
     const envelope = sign({ verb: "rooms.sweep", user: "", name: "", device: "", did: "", sid: "", state: "" });
@@ -94,7 +113,7 @@ export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettin
     return answer === "unavailable" ? { kind: "unavailable" } : sweepOf(answer.status, answer.body);
   }
 
-  return { createAccount, changeAccount, deactivateAccount, setLocked, signTicket, sweepRooms };
+  return { createAccount, changeAccount, deactivateAccount, setLocked, endSession, signTicket, sweepRooms };
 }
 
 export type ChatAdminClient = ReturnType<typeof createChatAdminClient>;

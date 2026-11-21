@@ -8,6 +8,7 @@ import {
   type ChatAccountJob,
   type ChatAccountPorts,
   type ChatUser,
+  CREATE_CALL_WITHIN_MS,
   createDueAccounts,
   type JobSettlement,
   MAX_ATTEMPTS,
@@ -65,7 +66,8 @@ describe("retryDelayS", () => {
 });
 
 /** Ports over one claimed job: what each was asked, and what they answer. */
-function ports(answers: { handle?: Handle | null; create?: ChatAccountCreation | Error; attempts?: number }) {
+type Answers = { handle?: Handle | null; create?: ChatAccountCreation | Error; attempts?: number; slowMs?: number };
+function ports(answers: Answers) {
   const job: ChatAccountJob = {
     did: ALICE,
     user: `u${"c".repeat(20)}` as ChatUser,
@@ -75,12 +77,17 @@ function ports(answers: { handle?: Handle | null; create?: ChatAccountCreation |
   const created: { user: ChatUser; name: Handle }[] = [];
   const settled: JobSettlement[] = [];
   let claims = 0;
+  let clock = 0;
   const doubles: ChatAccountPorts = {
+    nowMs: () => clock,
     claim: async () => {
       claims += 1;
       return claims === 1 ? job : null;
     },
-    verifiedHandle: async () => (answers.handle === undefined ? HANDLE : answers.handle),
+    verifiedHandle: async () => {
+      clock += answers.slowMs ?? 0;
+      return answers.handle === undefined ? HANDLE : answers.handle;
+    },
     create: async (user, name) => {
       created.push({ user, name });
       const answer = answers.create ?? { kind: "created" };
@@ -147,6 +154,16 @@ describe("createDueAccounts", () => {
     expect(claimed).toEqual([3, 2]);
     left = 1;
     expect(await createDueAccounts(many, 20)).toMatchObject({ ready: 1 });
+  });
+
+  test("chat.create_late_call_skipped: a job whose claim is too old by the call is not sent, and waits", async () => {
+    // Bounds how late a creation can reach MAS after the member is erased (chat-lifecycle.ts CREATE_LANDS_WITHIN_S).
+    const { doubles, created, settled } = ports({ slowMs: CREATE_CALL_WITHIN_MS + 1 });
+    expect(await createDueAccounts(doubles, 20)).toMatchObject({ retry: 1 });
+    expect(created).toEqual([]);
+    expect(settled).toEqual([{ state: "pending", retryInS: 30 }]);
+    const inTime = ports({ slowMs: CREATE_CALL_WITHIN_MS });
+    expect(await createDueAccounts(inTime.doubles, 20)).toMatchObject({ ready: 1 });
   });
 
   test("chat.create_lost_lease: a settle that finds the lease gone is counted, not retried", async () => {

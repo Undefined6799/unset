@@ -17,7 +17,7 @@ import {
 } from "./envelope.ts";
 import type { Mas } from "./mas.ts";
 import type { Quotas } from "./quota.ts";
-import { type SweepCounts, sweepRooms } from "./sweep.ts";
+import { type SweepCounts, type SweepCursor, sweepRooms } from "./sweep.ts";
 import type { Synapse } from "./synapse.ts";
 
 export type LogLine = {
@@ -34,6 +34,8 @@ export type HandlerDeps = {
   readonly mas: Mas;
   /** The Synapse admin API, for the room sweep only (ADR 0091). */
   readonly synapse: Synapse;
+  /** Where the next room sweep starts the room list, in the state folder (sweep.ts openSweepCursor). */
+  readonly sweepCursor: SweepCursor;
   readonly sessionTtl: number;
   readonly jti: JtiStore;
   readonly quotas: Quotas;
@@ -148,7 +150,7 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     if (command.verb === "account.create") return createAccount(deps.mas, command.user, command.name);
     if (command.verb === "session.end") return endSessions(deps.mas, command.user, command.device);
     if (command.verb === "rooms.sweep")
-      return sweepRooms({ mas: deps.mas, synapse: deps.synapse, now: deps.now }, abandoned);
+      return sweepRooms({ mas: deps.mas, synapse: deps.synapse, cursor: deps.sweepCursor, now: deps.now }, abandoned);
     if (command.verb !== "session.mint") return changeAccount(deps.mas, command.user, command.verb);
     return mintSession(deps.mas, deps.sessionTtl, command.user, device, abandoned);
   }

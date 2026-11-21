@@ -2,6 +2,10 @@
 // Synapse admin session minted for this run only. The token lives in this run's variables and nowhere else; the
 // session is revoked when the run ends, whatever happened. A room is deleted only after every check below passed in
 // this run, in order; any other answer keeps it. Nothing is retried here: the next run is the retry (RE-1).
+// A run is bounded (decision 6), so it hands on where it stopped: the next run starts the room list there, and one
+// that reaches the end of the list sets the next back to the start. The point is kept in chat-admin's state folder,
+// as the jti file is, because the command names nothing a caller could send it in (decision 1).
+import { readLines, replaceLines } from "@unset/shared-admin-envelope";
 import type { Abandoned, Result } from "./commands.ts";
 import { type Mas, MasUnavailable } from "./mas.ts";
 import { type RoomId, type StateEvent, type Synapse, SynapseUnavailable } from "./synapse.ts";
@@ -33,9 +37,27 @@ export type SweepCounts = {
   failed: number;
 };
 
+/** Where the next run starts the room list: an offset into Synapse's list (rooms.md `from`). */
+export type SweepCursor = { readonly read: () => number; readonly write: (from: number) => void };
+
+/**
+ * The resume point in `file`, one line with the offset; a missing or unreadable file starts at the beginning, which
+ * only checks rooms again. Written by replacing the file (state-file.ts), so a crash leaves the old point or the new.
+ */
+export function openSweepCursor(file: string): SweepCursor {
+  return {
+    read: () => {
+      const from = Number(readLines(file)[0]);
+      return Number.isSafeInteger(from) && from >= 0 ? from : 0;
+    },
+    write: (from) => replaceLines(file, [String(from)]),
+  };
+}
+
 export type SweepDeps = {
   readonly mas: Mas;
   readonly synapse: Synapse;
+  readonly cursor: SweepCursor;
   readonly now: () => number;
   readonly pause?: (ms: number) => Promise<void>;
 };
@@ -81,25 +103,42 @@ async function serviceUser(mas: Mas): Promise<string | null> {
   return user.locked || user.deactivated ? null : user.id;
 }
 
-/** Every page of the room list (at most MAX_PAGES): how many rooms it held, and those it does not show encrypted. */
-async function listCandidates(deps: SweepDeps, token: string, abandoned: Abandoned) {
-  const candidates: RoomId[] = [];
-  let listed = 0;
-  let from: number | null = 0;
+type Counts = { listed: number; plain: number; deleted: number; failed: number };
+
+/**
+ * Pages of the room list from the resume point (at most MAX_PAGES), each page's rooms checked before the next is read.
+ * The point handed on is the first page not wholly checked, or the start once the list has ended. Each page starts as
+ * many rooms earlier as the one before deleted, since Synapse's offsets close up behind a delete; rooms made or
+ * deleted elsewhere between runs can still move a few across the point, and the next walk of the list reaches them.
+ */
+async function sweepWith(deps: SweepDeps, token: string, abandoned: Abandoned): Promise<SweepCounts> {
+  const counts: Counts = { listed: 0, plain: 0, deleted: 0, failed: 0 };
+  let from: number | null = deps.cursor.read();
+  let resumeAt = from;
   for (let page = 0; from !== null && page < MAX_PAGES && abandoned() === null; page++) {
     const answer = await deps.synapse.rooms(token, from);
-    listed += answer.rooms.length;
-    for (const room of answer.rooms) if (!room.encrypted) candidates.push(room.id);
-    from = answer.next;
+    counts.listed += answer.rooms.length;
+    const candidates = answer.rooms.filter((room) => !room.encrypted).map((room) => room.id);
+    const deletedBefore = counts.deleted;
+    if (!(await checkRooms(deps, token, candidates, counts, abandoned))) break;
+    // The list closes up behind a delete, so the next page starts that many rooms earlier.
+    from = answer.next === null ? null : answer.next - (counts.deleted - deletedBefore);
+    resumeAt = from ?? 0;
   }
-  return { listed, candidates };
+  deps.cursor.write(Math.max(0, resumeAt));
+  return { ...counts, kept: counts.listed - counts.deleted - counts.failed };
 }
 
-async function sweepWith(deps: SweepDeps, token: string, abandoned: Abandoned): Promise<SweepCounts> {
-  const { listed, candidates } = await listCandidates(deps, token, abandoned);
-  const counts = { listed, plain: 0, deleted: 0, failed: 0 };
-  for (const room of candidates) {
-    if (counts.deleted + counts.failed >= MAX_DELETES || abandoned() !== null) break;
+/** Checks `rooms` in order, adding to `counts`; false when the run stopped before the last one. */
+async function checkRooms(
+  deps: SweepDeps,
+  token: string,
+  rooms: readonly RoomId[],
+  counts: Counts,
+  abandoned: Abandoned,
+): Promise<boolean> {
+  for (const room of rooms) {
+    if (counts.deleted + counts.failed >= MAX_DELETES || abandoned() !== null) return false;
     const outcome = await sweepOne(deps, token, room, abandoned).catch((error: unknown) => {
       if (error instanceof SynapseUnavailable) return "failed" as const;
       throw error;
@@ -108,7 +147,7 @@ async function sweepWith(deps: SweepDeps, token: string, abandoned: Abandoned): 
     if (outcome === "deleted") counts.deleted++;
     if (outcome === "failed" || outcome === "delete_failed") counts.failed++;
   }
-  return { ...counts, kept: listed - counts.deleted - counts.failed };
+  return true;
 }
 
 /** `failed`: a call failed before the room was known plain; `delete_failed`: Synapse failed it or it had not ended. */

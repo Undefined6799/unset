@@ -4,11 +4,20 @@
 // endpoint the test watches. One browser signing out keeps the others and the grant; the last browser revokes it, and
 // a row past its idle or absolute expiry is no browser; sign out everywhere ends only the caller's sessions; nothing
 // writes a sign-in record or a DID into a log line.
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
+import {
+  type BrowserKey,
+  type ChatUser,
+  type DeviceId,
+  type LockKey,
+  type SessionRef,
+  sessionRef,
+} from "@unset/domains-messaging";
 import { AUDIT_ACTIONS } from "@unset/infrastructure-audit";
 import {
+  createBrowserListStore,
   createLockPool,
   createOAuthSessionStore,
   createPool,
@@ -43,6 +52,13 @@ const pool = createPool({
   max: 4,
   connectTimeoutMs: 5000,
 });
+// The door's own role, to give a browser a chat entry as the door would (migration 0038).
+const doorPool = createPool({
+  connection: { host: provided.host, port: provided.port, database, ...provided.roles.chat_auth, ssl: false },
+  service: "web-sign-out-door",
+  max: 2,
+  connectTimeoutMs: 5000,
+});
 const auditorPool = asAuditor(inject("postgresAuditor"), database);
 const quiet = createLogger({ service: "web", commit: "c".repeat(40), env: "test", write: () => undefined });
 const lockPool = createLockPool({
@@ -60,7 +76,7 @@ const REQUEST_URI = "urn:ietf:params:oauth:request_uri:req-0123456789abcdef";
 
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 /** Accounts the stand-in PLC knows, all on our PDS; each test signs in as its own. */
-const ACCOUNTS: Did[] = Array.from({ length: 24 }, (_, i) => {
+const ACCOUNTS: Did[] = Array.from({ length: 32 }, (_, i) => {
   const did = parseDid(`did:plc:${"q".repeat(22)}${BASE32[i >> 5]}${BASE32[i & 31]}`);
   if (did === null) throw new Error("test DID did not parse");
   return did;
@@ -129,7 +145,7 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => {
   await web?.stop();
-  await Promise.all([pool.end(), auditorPool.end(), lockPool.pool.end()]);
+  await Promise.all([pool.end(), auditorPool.end(), lockPool.pool.end(), doorPool.end()]);
 });
 
 const headers = (extra: Record<string, string> = {}) => ({ "x-forwarded-for": clientAddress(), ...extra });
@@ -456,4 +472,59 @@ test("signing_out_writes_no_sign_in_record", async () => {
   expect(seen.revokes()).toBe(1);
   expect(seen.events()).toEqual(["auth.logout_this_browser", "oauth.session_deleted"]);
   expect(logsName(owner)).toBe(false);
+});
+
+describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () => {
+  const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }));
+  if (keyring === undefined) throw new Error("test keyring did not parse");
+  const browsers = createBrowserListStore(doorPool, createSealer(keyring));
+  let d = 0;
+  /** The door's entry for `owner` on a new browser, signed in by `ref`; its device. */
+  async function chatEntry(owner: Did, ref: SessionRef): Promise<DeviceId> {
+    const device = `WEB${String(d++).padStart(7, "0")}` as DeviceId;
+    const entry = {
+      id: randomUUID(),
+      did: owner,
+      user: `u${"w".repeat(20)}` as ChatUser,
+      device,
+      lockKey: randomBytes(32) as unknown as LockKey,
+    };
+    expect(await browsers.add(randomBytes(32) as unknown as BrowserKey, entry, ref, AbortSignal.timeout(5000))).toBe(
+      "added",
+    );
+    return device;
+  }
+  const refsOf = async (owner: Did) =>
+    (await pool.query<{ id_hash: Buffer }>("SELECT id_hash FROM app.session WHERE did = $1", [owner])).rows.map((r) =>
+      sessionRef(r.id_hash),
+    );
+  const queuedDevices = async () =>
+    (await pool.query<{ device_id: string }>("SELECT device_id FROM app.chat_session_end")).rows.map(
+      (r) => r.device_id,
+    );
+
+  test("log_out_queues_the_chat_devices_this_session_signed_in", async () => {
+    const owner = newDid();
+    const first = await signIn(owner);
+    const [firstRef] = await refsOf(owner);
+    await signIn(owner);
+    const secondRef = (await refsOf(owner)).find((ref) => ref !== firstRef) as SessionRef;
+    const mine = await chatEntry(owner, firstRef as SessionRef);
+    const other = await chatEntry(owner, secondRef);
+    expect((await signOut(first)).status).toBe(303);
+    const queued = await queuedDevices();
+    expect(queued).toContain(mine);
+    expect(queued).not.toContain(other);
+  });
+
+  test("sign_out_everywhere_queues_every_chat_device_of_the_member", async () => {
+    const owner = newDid();
+    const here = await signIn(owner);
+    await signIn(owner);
+    const devices = await Promise.all((await refsOf(owner)).map((ref) => chatEntry(owner, ref)));
+    web.setStandIns(pdsFixture(owner));
+    expect((await signOutEverywhere(here)).status).toBe(303);
+    const queued = await queuedDevices();
+    for (const device of devices) expect(queued).toContain(device);
+  });
 });

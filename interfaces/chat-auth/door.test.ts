@@ -19,7 +19,7 @@ const PAGE: ChatPage = {
   ]),
 };
 
-function door(limit = 100) {
+function door(limit = 100, signInLimit = limit) {
   const lines: DoorLog[] = [];
   const handle = createDoor({
     origin: ORIGIN,
@@ -28,7 +28,7 @@ function door(limit = 100) {
     limiter: createRateLimiter(
       {
         default: [{ capacity: limit, refillPerSec: 1, scope: "ip" }],
-        "sign-in": [{ capacity: limit, refillPerSec: 1, scope: "ip" }],
+        "sign-in": [{ capacity: signInLimit, refillPerSec: 1, scope: "ip" }],
       },
       { maxKeys: 100, onError: () => undefined },
     ),
@@ -36,7 +36,8 @@ function door(limit = 100) {
     random: () => STATE,
     log: (line) => lines.push(line),
     page: PAGE,
-    posts: {},
+    // Stands for POST /sign-in/redeem, the hop's one spend of the sign-in bucket (routes.ts redeemRoute).
+    posts: { "/redeem": { limit: "sign-in", handle: async () => ({ response: new Response(null, { status: 204 }) }) } },
   });
   const get = (path: string, headers: Record<string, string> = {}) =>
     handle(new Request(`${ORIGIN}${path}`, { headers: { host: "unset.cc", ...headers } }), "10.0.0.1");
@@ -87,7 +88,21 @@ describe("GET /sign-in", () => {
     expect((await door().get("/sign-in?return=/a&return=/b")).status).toBe(400);
   });
 
-  test("door.sign_in_limited: past the sign-in bucket the door answers 429 and sets nothing", async () => {
+  test("door.sign_in_one_spend_per_load: the hop's start spends nothing of the sign-in bucket; redeem spends one", async () => {
+    // A page load is GET /sign-in then POST /sign-in/redeem; behind one shared address each load costs one sign-in.
+    const { handle, get } = door(100, 1);
+    expect((await get("/sign-in")).status).toBe(303);
+    expect((await get("/sign-in")).status).toBe(303);
+    const redeem = () =>
+      handle(
+        new Request(`${ORIGIN}/redeem`, { method: "POST", headers: { host: "unset.cc", origin: ORIGIN } }),
+        "10.0.0.1",
+      );
+    expect((await redeem()).status).toBe(204);
+    expect((await redeem()).status).toBe(429);
+  });
+
+  test("door.sign_in_limited: past the page's bucket the hop's start answers 429 and sets nothing", async () => {
     const { get } = door(1);
     expect((await get("/sign-in")).status).toBe(303);
     const res = await get("/sign-in");

@@ -2,7 +2,7 @@
 // every check chat-admin makes, through a real net-guard on loopback. MAS is the fake from harness.ts (an unmanaged
 // dependency, TE-1).
 import type { Handle } from "@unset/domains-identity";
-import { type ChatUser, parseDoorState, sessionRef } from "@unset/domains-messaging";
+import { type ChatUser, type DeviceId, parseDoorState, sessionRef } from "@unset/domains-messaging";
 import { createChatAdminClient } from "@unset/infrastructure-matrix";
 import { createNetGuard } from "@unset/infrastructure-net-guard";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -75,6 +75,27 @@ describe("web's chat-admin client", () => {
     const again = await service.post("/v1/session.mint", { ticket, device: null });
     expect(again.status).toBe(403);
     expect(service.logs.at(-1)).toMatchObject({ outcome: "denied", reason: "replay" });
+  });
+
+  test("chat.client_end_session: web ends a device it names, and ending it again is still ended", async () => {
+    await clientFor().createAccount(USER, NAME);
+    const ticket = JSON.parse(
+      Buffer.from(
+        clientFor().signTicket({
+          user: USER,
+          did: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Parameters<ReturnType<typeof clientFor>["signTicket"]>[0]["did"],
+          sid: sessionRef(Buffer.alloc(32, 2)),
+          state: parseDoorState("T".repeat(43)) as NonNullable<ReturnType<typeof parseDoorState>>,
+        }),
+        "base64url",
+      ).toString("utf8"),
+    );
+    const minted = (await (await service.post("/v1/session.mint", { ticket, device: null })).json()) as {
+      device: DeviceId;
+    };
+    expect(await clientFor().endSession(USER, minted.device)).toEqual({ kind: "ended" });
+    expect(mas.sessions.every((s) => s.revoked)).toBe(true);
+    expect(await clientFor().endSession(USER, minted.device)).toEqual({ kind: "ended" });
   });
 
   test("chat.client_sweep_accepted: chat-admin takes web's sweep and deletes only the idle plain room", async () => {
