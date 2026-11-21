@@ -54,7 +54,8 @@ function seedApp(did: string, fill: string): void {
      INSERT INTO app.image_record (record_uri, did, settled_rev)
        VALUES ('at://${did}/sh.unset.section/3kaaaaaaaaaaa', '${did}', '3kcommit2aaaa');
      INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());
-     INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');`,
+     INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');
+     INSERT INTO app.sign_in (did) VALUES ('${did}');`,
   );
 }
 
@@ -196,6 +197,7 @@ describe("core.erase_did", () => {
       "app.image_upload": 1,
       "app.notification": 1,
       "app.image_record": 1,
+      "app.sign_in": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -237,6 +239,7 @@ describe("core.erase_did", () => {
       "app.image_upload": 0,
       "app.notification": 0,
       "app.image_record": 0,
+      "app.sign_in": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,

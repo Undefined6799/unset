@@ -23,3 +23,31 @@ export const NOTIFICATIONS = {
   stays: "Opening this doesn't remove it. It stays until you dismiss it, or for 30 days.",
   resize: "Resize the list",
 } as const;
+
+/** The two tabs of /notifications (P2.27c). */
+export const NOTIFICATION_TABS = {
+  label: "Notifications and sign-ins",
+  notifications: "Notifications",
+  signIns: "Sign-in history",
+} as const;
+
+/** The Sign-in history tab (P2.27c, ADR 0082). */
+export const SIGN_INS = {
+  title: "Sign-in history",
+  failed: "Your sign-in history could not be loaded. Try again in a moment.",
+  none: "No sign-ins in the last 30 days.",
+  noneHint: "Each time someone signs in to your account, the time shows up here.",
+  when: "When",
+  ago: "How long ago",
+  select: (when: string): string => `Select the sign-in on ${when}`,
+  selectAll: "Select all",
+  delete: "Delete",
+  deleteOne: (when: string): string => `Delete the sign-in on ${when}`,
+  deleteSelected: "Delete selected",
+  deleteAll: "Delete all",
+  count: (n: number, more: boolean): string => `${n}${more ? "+" : ""} sign-in${n === 1 && !more ? "" : "s"}`,
+  more: "Older sign-ins are not shown. Delete all covers them too.",
+  kept: "Only the time of each sign-in is kept: no address, device or location. Each one is deleted after 30 days, or sooner if you delete it.",
+  notYou: "A sign-in you don't recognise? Sign out everywhere and change your password with your provider.",
+  settings: "Account settings",
+} as const;

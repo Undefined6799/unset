@@ -45,3 +45,29 @@ export function shortTime(at: string, now: Date | undefined): string {
   if (now === undefined) return DAY.format(date);
   return OWN_DAY.format(date) === OWN_DAY.format(now) ? OWN_TIME.format(date) : OWN_DAY.format(date);
 }
+
+/** A sign-in as the Sign-in history tab shows it (P2.27c, ADR 0082): its id and when, ISO 8601 in UTC. Nothing else is kept. */
+export type SignInView = { readonly id: string; readonly at: string };
+
+/** The tab's data: the newest sign-ins, and whether older ones exist past the page. */
+export type SignInsView =
+  | { readonly state: "ready"; readonly entries: readonly SignInView[]; readonly more: boolean }
+  | { readonly state: "failed" };
+
+const AGO = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+/** Each unit and how many seconds it holds, largest first. */
+const UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
+  ["week", 604_800],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+];
+
+/** How long ago `at` was, from `now` ("3 hours ago", "yesterday"); "just now" under a minute. */
+export function howLongAgo(at: string, now: Date): string {
+  const seconds = (now.getTime() - new Date(at).getTime()) / 1000;
+  const found = UNITS.find(([, size]) => seconds >= size);
+  if (found === undefined) return "just now";
+  const [unit, size] = found;
+  return AGO.format(-Math.floor(seconds / size), unit);
+}

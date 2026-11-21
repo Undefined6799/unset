@@ -22,6 +22,7 @@ import { type NotificationsView, type NotificationView, shortTime, timeText } fr
 import { Icon, type IconName } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import DismissAll from "./dismiss-all.svelte";
+import Tabs from "./tabs.svelte";
 
 let { view, chosen }: { view: NotificationsView | undefined; chosen: string | null } = $props();
 
@@ -199,6 +200,22 @@ function liftClick(event: MouseEvent) {
   else location.assign(`${HOME}?n=${id}`);
 }
 
+// A wheel turn on the lifted copy scrolls the list under it, once. The browser would scroll what is under the copy
+// when the turn began: the page in WebKit, or the list a second time in Chromium once the copy is gone.
+function liftWheel(event: WheelEvent) {
+  event.preventDefault();
+  dropLift();
+  if (list === undefined) return;
+  // deltaMode: 0 pixels, 1 lines, 2 pages (https://w3c.github.io/uievents/#dom-wheelevent-deltamode).
+  const unit =
+    event.deltaMode === 1
+      ? Number.parseFloat(getComputedStyle(list).lineHeight) || 16
+      : event.deltaMode === 2
+        ? list.clientHeight
+        : 1;
+  list.scrollBy({ top: event.deltaY * unit, left: event.deltaX * unit });
+}
+
 function liftLeave(event: PointerEvent) {
   const to = event.relatedTarget as Node | null;
   if (to === null || list === undefined || !list.contains(to)) dropLift();
@@ -211,7 +228,8 @@ const chip = "shrink-0 rounded-full border px-2 text-xs text-muted-foreground";
 const checkbox = "relative z-10 size-6 accent-primary";
 </script>
 
-<svelte:window onresize={dropLift} />
+<!-- The copy is fixed to the window, so a page scroll would leave it beside its row. -->
+<svelte:window onresize={dropLift} onscroll={dropLift} />
 
 <section
   class="flex h-[calc(100svh-var(--site-header-height)-4rem)] min-h-[26rem] flex-col gap-3 max-md:h-auto max-md:min-h-[calc(100svh-var(--site-header-height)-4rem)]"
@@ -220,6 +238,7 @@ const checkbox = "relative z-10 size-6 accent-primary";
   <h1 id="notifications-title" class="text-3xl leading-tight font-semibold {detailScreen ? 'max-md:sr-only' : ''}">
     {T.title}
   </h1>
+  <div class={detailScreen ? "max-md:hidden" : ""}><Tabs current="notifications" /></div>
 
   {#if view === undefined || view.state === "failed"}
     <p role="alert" class="text-muted-foreground">{T.failed}</p>
@@ -378,10 +397,7 @@ const checkbox = "relative z-10 size-6 accent-primary";
     class="fixed z-30 grid cursor-pointer grid-cols-[1.5rem_1.375rem_max-content_max-content] items-center gap-3 rounded-lg border bg-card px-3.5 whitespace-nowrap shadow-md motion-safe:animate-in motion-safe:fade-in-0"
     onclick={liftClick}
     onpointerleave={liftLeave}
-    onwheel={(e) => {
-      dropLift();
-      list?.scrollBy({ top: e.deltaY });
-    }}
+    onwheel={liftWheel}
     role="presentation"
   >
     <input type="checkbox" tabindex="-1" class={checkbox} checked={ticked.has(entry.id)} />
