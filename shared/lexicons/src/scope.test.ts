@@ -7,14 +7,12 @@ const OUTSIDE_THE_SET = ["blob:image/*", "account:email?action=read"].join(" ");
 
 describe("scope strings", () => {
   test("scope_string_pinned", () => {
-    expect(scopeString()).toBe(`atproto include:sh.unset.authApp ${OUTSIDE_THE_SET}`);
+    expect(scopeString()).toBe(`atproto include:sh.unset.authFull ${OUTSIDE_THE_SET}`);
   });
 
   test("scope_fallback_pinned", () => {
     // The permission set written out as granular scopes, for a PDS without permission-set support.
-    expect(scopeStringFallback()).toBe(
-      `atproto repo:sh.unset.profile repo:sh.unset.section repo:sh.unset.follow?action=create&action=delete ${OUTSIDE_THE_SET}`,
-    );
+    expect(scopeStringFallback()).toBe(`atproto repo:sh.unset.profile repo:sh.unset.card ${OUTSIDE_THE_SET}`);
   });
 
   test("scopes_request_no_bluesky_or_unused_scope", () => {

@@ -7,6 +7,7 @@ export {
   parseCardInput,
   pictureLink,
   reorderCards,
+  TEXT_EDIT_BYTES,
   toCardRecord,
 } from "./card-edit.ts";
 export {
@@ -32,6 +33,9 @@ export {
   parseCardKey,
   parseCardVersion,
   parseDraftImageId,
+  parseNewCardKey,
+  parseRepoDid,
+  type RepoDid,
   readCard,
   type ShownCardContent,
   type StoredCardRecord,
@@ -87,7 +91,9 @@ export {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
+  withCardListed,
   withCardOrder,
+  withCardUnlisted,
 } from "./profile.ts";
 export {
   type PageShown,

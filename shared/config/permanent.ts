@@ -6,5 +6,5 @@
 export const MATRIX_SERVER_NAME = "unset.cc";
 
 /** The permission set NSID that users' OAuth grants name; the set grows under this NSID, never a new one (Q4, Alex
- * 2026-10-03 11:47Z). */
-export const PERMISSION_SET_NSID = "sh.unset.authApp";
+ * 2026-10-03 11:47Z; renamed before first publication, Alex 2026-11-21 17:42Z, ADR 0086). */
+export const PERMISSION_SET_NSID = "sh.unset.authFull";

@@ -17,13 +17,13 @@ const profile = (extra: Record<string, unknown> = {}): IndexChange => ({
   cid: CID,
   record: { $type: "sh.unset.profile", displayName: "Ada", createdAt: T, ...extra },
 });
-const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.unset.section#readme", text: "hi" }) =>
+const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.unset.block.text", text: "hi" }) =>
   ({
     kind: "put",
-    collection: "sh.unset.section",
+    collection: "sh.unset.card",
     rkey,
     cid: CID,
-    record: { $type: "sh.unset.section", content, createdAt: T },
+    record: { $type: "sh.unset.card", content, createdAt: T },
   }) satisfies IndexChange;
 const active = { lastRev: "3jzfcijpj2z2b", active: true };
 
@@ -39,34 +39,60 @@ describe("the largest cards a member may save are indexed", () => {
     uri: `https://a.example/${"x".repeat(1982)}`,
   };
   const largest = {
-    "a Text card of 100,000 bytes, each one a character JSON escapes": {
-      $type: "sh.unset.section#readme",
-      text: '"'.repeat(100_000),
+    [`a Text card of ${LIMITS.card.textBytes} bytes, each one a character JSON escapes`]: {
+      $type: "sh.unset.block.text",
+      text: '"'.repeat(LIMITS.card.textBytes),
     },
-    "a collection of 100 entries at every field's limit": {
-      $type: "sh.unset.section#collection",
+    [`a showcase of ${LIMITS.card.entriesMax} entries at every field's limit`]: {
+      $type: "sh.unset.block.showcase",
       title: heavy(100),
-      items: Array.from({ length: 100 }, () => ({ $type: "sh.unset.section#entry", ...entry })),
+      items: Array.from({ length: LIMITS.card.entriesMax }, () => ({
+        $type: "sh.unset.block.showcase#item",
+        ...entry,
+      })),
     },
   };
   test.each(Object.entries(largest))("index.keeps_%s", (_name, content) => {
     expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({ kind: "apply", skipped: 0 });
   });
+
+  test("index.keeps_the_largest_profile_card_list", () => {
+    // ADR 0086: the list holds full at:// addresses, the lexicon's 100 of them with a 512-character record key each
+    // (atproto.com/specs/record-key), about 56 KB.
+    const cards = Array.from({ length: LIMITS.profile.cardsMax }, (_, n) => ({
+      uri: `at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/${String(n).padStart(512, "a")}`,
+    }));
+    const change = profile({ cards });
+    expect(recordBytes(change.kind === "put" ? change.record : null)).toBeGreaterThan(50_000);
+    expect(planCommit(active, "3jzfcijpj2z2c", [change])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
 });
 
 // Review of #1911: all of a member's cards together are held to MAX_PAGE_BYTES (4 MiB, Alex's number to set), by the
-// save and the index alike. At the editor's per-field limits that is about 41 Text cards of 100,000 characters, or
-// about 54 collections of 30 full entries; a hundred cards fit while they average under about 41 KB. A hundred full
-// cards never fit: the page budget gives before the per-card limits do.
+// save and the index alike. Under ADR 0086's limits fifty Text cards are about 1 MB, so the budget binds on the
+// heavy kinds: a showcase of 50 entries at every field's limit is about 0.3 MB, and about thirteen of them fill it.
 describe("a member's cards together fit one page", () => {
   const card = (text: string) => ({
-    $type: "sh.unset.section",
-    content: { $type: "sh.unset.section#readme", text },
+    $type: "sh.unset.card",
+    content: { $type: "sh.unset.block.text", text },
     width: "full",
     surface: "filled",
     createdAt: "2026-11-21T05:00:00.000Z",
   });
-  const full = card("a".repeat(LIMITS.section.textBytes));
+  const full = card("a".repeat(LIMITS.card.textBytes));
+  const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+  const item = {
+    title: heavy(120),
+    tag: heavy(40),
+    description: heavy(300),
+    uri: `https://a.example/${"x".repeat(1982)}`,
+  };
+  const showcase = {
+    ...full,
+    content: { $type: "sh.unset.block.showcase", items: Array(LIMITS.card.entriesMax).fill(item) },
+  };
+  /** How many of the heaviest showcases fill the budget with one more to come. */
+  const room = Math.floor(MAX_PAGE_BYTES / recordBytes(showcase)) - 1;
   const many = (n: number, record: unknown) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: record }));
 
   test("page.a_hundred_everyday_cards_fit", () => {
@@ -76,14 +102,19 @@ describe("a member's cards together fit one page", () => {
     );
   });
 
-  test("page.forty_one_full_text_cards_fit_and_a_forty_second_does_not", () => {
-    expect(fitsPage(many(40, full), [{ key: null, record: full }])).toBe(true);
-    expect(fitsPage(many(41, full), [{ key: null, record: full }])).toBe(false);
+  test("page.the_most_cards_the_app_keeps_at_the_text_limit_fit", () => {
+    expect(fitsPage(many(49, full), [{ key: null, record: full }])).toBe(true);
+  });
+
+  test("page.heavy_showcases_fill_the_budget_and_one_more_does_not_fit", () => {
+    expect(room).toBeGreaterThan(10);
+    expect(fitsPage(many(room, showcase), [{ key: null, record: showcase }])).toBe(true);
+    expect(fitsPage(many(room + 1, showcase), [{ key: null, record: showcase }])).toBe(false);
   });
 
   test("page.a_card_being_replaced_counts_once", () => {
-    const stored = many(41, full);
-    expect(fitsPage(stored, [{ key: "k0", record: full }])).toBe(true);
+    const stored = many(room + 1, showcase);
+    expect(fitsPage(stored, [{ key: "k0", record: showcase }])).toBe(true);
     expect(fitsPage(stored, [{ key: "k0", record: card("a".repeat(MAX_PAGE_BYTES)) }])).toBe(false);
   });
 
@@ -144,17 +175,15 @@ describe("planCommit", () => {
   });
 
   test("index.gallery_records_each_picture_once", () => {
-    // ADR 0070: the media proxy serves only blobs a record references, so every picture of a gallery is recorded,
+    // ADR 0070: the media proxy serves only blobs a record references, so every picture of an images block is recorded,
     // and a picture used twice is recorded once.
     const OTHER = "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
     const picture = (link: string) => ({
-      image: {
-        image: { $type: "blob", ref: { $link: link }, mimeType: "image/jpeg", size: 1000 },
-        alt: "",
-        aspectRatio: { width: 4, height: 3 },
-      },
+      image: { $type: "blob", ref: { $link: link }, mimeType: "image/jpeg", size: 1000 },
+      alt: "",
+      aspectRatio: { width: 4, height: 3 },
     });
-    const content = { $type: "sh.unset.section#gallery", images: [picture(BLOB), picture(OTHER), picture(BLOB)] };
+    const content = { $type: "sh.unset.block.images", images: [picture(BLOB), picture(OTHER), picture(BLOB)] };
     expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({
       kind: "apply",
       writes: [
@@ -194,7 +223,7 @@ describe("planCommit", () => {
   // The repo now holds this record in a form we do not index, so any older version indexed under its key goes, as a
   // backfill of the same repo would remove it (trackStore.ts applySnapshot): the stream and a rebuild agree.
   test.each([
-    ["a record of another type", { ...profile(), record: { $type: "sh.unset.section", createdAt: T } }],
+    ["a record of another type", { ...profile(), record: { $type: "sh.unset.card", createdAt: T } }],
     ["a record the lexicon refuses", profile({ displayName: 7 })],
     ["a record over the size cap", profile({ note: "x".repeat(MAX_RECORD_BYTES) })],
     ["a record with a NUL character", profile({ displayName: "A\0da" })],
@@ -234,9 +263,9 @@ describe("planCommit", () => {
   });
 
   test("index.delete_passes_through", () => {
-    const del: IndexChange = { kind: "delete", collection: "sh.unset.section", rkey: TID };
+    const del: IndexChange = { kind: "delete", collection: "sh.unset.card", rkey: TID };
     expect(planCommit(active, "3jzfcijpj2z2c", [del])).toMatchObject({
-      writes: [{ kind: "delete", collection: "sh.unset.section", rkey: TID }],
+      writes: [{ kind: "delete", collection: "sh.unset.card", rkey: TID }],
     });
   });
 });

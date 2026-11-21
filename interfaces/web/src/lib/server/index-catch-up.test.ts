@@ -26,13 +26,13 @@ const record = (visibility?: string) => ({
 });
 
 test("answers at once when the index already has the choice", async () => {
-  const w = world([record("ownerOnly")]);
+  const w = world([record("owner-only")]);
   expect(await publicPageShows("ownerOnly", w.deps)).toBe(true);
   expect(w.reads()).toBe(1);
 });
 
 test("waits until the index has the choice", async () => {
-  const w = world([record(), record(), record("signedIn")]);
+  const w = world([record(), record(), record("signed-in")]);
   expect(await publicPageShows("signedIn", w.deps)).toBe(true);
   expect(w.reads()).toBe(3);
 });
@@ -73,14 +73,14 @@ test("ends early enough that the request still answers inside its deadline", asy
   const w = world([record()]);
   expect(await publicPageShows("ownerOnly", { ...w.deps, deadlineAt: 2_000 })).toBe(false);
   expect(w.elapsed()).toBeLessThanOrEqual(2_000 - ANSWER_MS);
-  const late = world([record("ownerOnly")]);
+  const late = world([record("owner-only")]);
   expect(await publicPageShows("ownerOnly", { ...late.deps, deadlineAt: ANSWER_MS })).toBe(false);
   expect(late.reads()).toBe(0);
 });
 
 test("a fractional clock, as performance.now() reads, still waits and answers", async () => {
   // Codex review of #1906: AbortSignal.timeout throws on a fractional delay.
-  const w = world([record(), record("ownerOnly")]);
+  const w = world([record(), record("owner-only")]);
   let at = 0.25;
   const sleep = async (ms: number) => {
     at += ms + 0.375;

@@ -22,15 +22,15 @@ const SHAPES: Readonly<Record<string, Shape>> = {
   readme: { fields: ["text"] },
   links: {
     fields: ["title", "layout"],
-    list: { name: "items", row: ["uri", "label", "description"], max: LIMITS.section.linksMax },
+    list: { name: "items", row: ["uri", "label", "description"], max: LIMITS.card.linksMax },
   },
   collection: {
     fields: ["title", "layout"],
-    list: { name: "items", row: ["title", "tag", "description", "uri"], max: LIMITS.section.entriesMax },
+    list: { name: "items", row: ["title", "tag", "description", "uri"], max: LIMITS.card.entriesMax },
   },
   buttons: {
     fields: ["heading", "text"],
-    list: { name: "buttons", row: ["kind", "address", "preset", "uri", "label"], max: LIMITS.section.buttonsMax },
+    list: { name: "buttons", row: ["kind", "address", "preset", "uri", "label"], max: LIMITS.card.buttonsMax },
     preset: ["kind", "preset"],
     byKind: { email: ["address"], link: ["uri", "label"] },
   },

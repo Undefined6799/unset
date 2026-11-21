@@ -49,29 +49,29 @@ const call = async (method, nsid, body, token) => {
   });
   if (made.status !== 200) return console.log(JSON.stringify({ made }));
   const { did, accessJwt: token } = made.body;
-  const card = (text) => ({ $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text },
+  const card = (text) => ({ $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text },
     createdAt: new Date().toISOString() });
   const keys = [];
   for (const text of ["a", "b"]) {
-    const made = await call("POST", "com.atproto.repo.createRecord", { repo: did, collection: "sh.unset.section",
+    const made = await call("POST", "com.atproto.repo.createRecord", { repo: did, collection: "sh.unset.card",
       record: card(text) }, token);
     keys.push(made.body.uri.split("/").at(-1));
   }
   const [a, b] = keys;
   const headOf = async () =>
     (await call("GET", "com.atproto.sync.getLatestCommit?did=" + encodeURIComponent(did), undefined, token)).body.cid;
-  const update = (rkey, text) => ({ $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section",
+  const update = (rkey, text) => ({ $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.card",
     rkey, value: card(text) });
   const save = (writes, swapCommit) => call("POST", "com.atproto.repo.applyWrites", { repo: did, writes, swapCommit },
     token);
   const texts = async () => {
-    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.section&repo=" +
+    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.card&repo=" +
       encodeURIComponent(did), undefined, token);
     const byKey = Object.fromEntries((listed.body.records ?? []).map((r) => [r.uri.split("/").at(-1), r.value.content.text]));
     return { a: byKey[a], b: byKey[b], count: Object.keys(byKey).length };
   };
   const cids = async () => {
-    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.section&repo=" +
+    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.card&repo=" +
       encodeURIComponent(did), undefined, token);
     return Object.fromEntries((listed.body.records ?? []).map((r) => [r.uri, r.cid]));
   };

@@ -21,7 +21,7 @@ The process is [`interfaces/indexer/`](../../../interfaces/indexer) ([ADR 0052](
 
 ## Domain rules
 
-[`domains/profile/index-plan.ts`](../../../domains/profile/index-plan.ts) decides what the index keeps from one verified commit. It keeps `sh.unset.profile` and `sh.unset.section`, checks each record against its lexicon, and ignores every other collection in the commit.
+[`domains/profile/index-plan.ts`](../../../domains/profile/index-plan.ts) decides what the index keeps from one verified commit. It keeps `sh.unset.profile` and `sh.unset.card`, checks each record against its lexicon, and ignores every other collection in the commit.
 
 [`discoverability.ts`](../../../domains/profile/discoverability.ts) checks the search and AI choices. Both switches start off. The title is at most 70 characters and the description at most 200. [`crawlers.ts`](../../../domains/profile/crawlers.ts) builds `robots.txt` and the sitemap from those choices.
 
