@@ -83,7 +83,8 @@ test.describe("phone", () => {
   // Outside audit of staging, 2026-11-19: More actions, then one of its panels, then Escape left More actions open
   // with focus on the page, so the next Tab went behind the menu. Focus goes back to the row that opened the panel
   // once the client runs (an app page; the public pages run no script).
-  for (const name of ["Create", "Messages", "Notifications"]) {
+  // Build step 10: for a member Messages is a link in the top bar (below), not a row here.
+  for (const name of ["Create", "Notifications"]) {
     test(`escape_from_${name.toLowerCase()}_returns_focus_to_more_actions`, async ({ page }) => {
       expect((await openPage(page, SETTINGS))?.status()).toBe(200);
       await page.waitForLoadState("networkidle");
@@ -96,6 +97,24 @@ test.describe("phone", () => {
       await expect(row).toBeFocused();
     });
   }
+});
+
+// Build step 10 (Alex: no dock on a phone): on a phone too, a member's Messages is the top bar's link to the chat
+// page, and More actions no longer lists it. Nothing answers the count here, so the icon shows with no number.
+test.describe("phone chat icon", () => {
+  test.use(phone({ width: 320, height: 640 }));
+
+  test("the_chat_icon_is_a_link_in_the_top_bar_on_a_phone", async ({ page }) => {
+    expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    const chat = page.locator("header").getByRole("link", { name: "Messages", exact: true });
+    await expect(chat).toBeVisible();
+    await expect(chat).toHaveAttribute("href", "https://staging.unset.cc/");
+    // The extra icon fits the narrowest screen: nothing scrolls sideways.
+    const width = await page.locator("html").evaluate((element: { scrollWidth: number }) => element.scrollWidth);
+    expect(width).toBeLessThanOrEqual(320);
+    await page.locator('header button[popovertarget="actions-menu"]').click();
+    await expect(page.locator("#actions-menu").getByRole("button", { name: "Messages" })).toHaveCount(0);
+  });
 });
 
 // P1.20k: home reads the member's session, so its header has their account menu, not Sign in.

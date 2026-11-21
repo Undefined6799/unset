@@ -12,6 +12,9 @@
 //   page passes no `account` (home and the legal pages, whose member copies are private).
 // - "bare": main alone, centred (the sign-in page, which Hono drew with no shell).
 
+/** The chat icon (build step 10): a plain link to the chat page, and the number of chats with new messages (0: none). */
+export type ChatIcon = Readonly<{ href: string; unread: number }>;
+
 export type ThemeChoice = "dark" | "light" | "system";
 
 export type ShellData = Readonly<{
@@ -73,6 +76,9 @@ export const SHELL_TEXT = {
   search: "Search unset.sh",
   create: "Create",
   messages: "Messages",
+  /** The chat icon's accessible name with its number of chats with new messages (build step 10). */
+  chat: (n: number): string =>
+    n === 0 ? "Messages" : `Messages, ${n} ${n === 1 ? "chat" : "chats"} with new messages`,
   notifications: "Notifications",
   community: "Community",
   explore: "Explore",
