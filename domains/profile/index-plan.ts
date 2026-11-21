@@ -97,7 +97,7 @@ function deleteOf(collection: IndexedCollection, rkey: string): IndexWrite | nul
 /** A put the lexicon accepts, under its record key type, within the size cap; anything else is skipped and counted. */
 function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null {
   const collection = change.collection as IndexedCollection;
-  if (!keyFits(collection, change.rkey) || !fitsIndex(change.record)) return null;
+  if (!keyFits(collection, change.rkey) || !fitsCap(change.record)) return null;
   const checked = validateRecord(collection, change.record, "read");
   if (!checked.ok) return null;
   const record = checked.value;
@@ -122,12 +122,7 @@ function keyFits(collection: IndexedCollection, rkey: string): boolean {
 /** atproto.com/specs/tid: 13 characters of base32-sortable, the first in 2-7 or a-j. */
 const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 
-/**
- * Whether the index keeps `record`: within MAX_RECORD_BYTES and storable. The save checks the record it writes with
- * this too, so a record the owner can save and see is never one the public page leaves out (staging break test
- * 2026-11-21).
- */
-export function fitsIndex(record: unknown): boolean {
+function fitsCap(record: unknown): boolean {
   try {
     return new TextEncoder().encode(JSON.stringify(record)).byteLength <= MAX_RECORD_BYTES && storable(record);
   } catch {

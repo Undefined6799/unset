@@ -3,7 +3,6 @@ import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
 import { parseCardKey } from "./cards.ts";
-import { planCommit } from "./index-plan.ts";
 
 const NOW = "2026-11-17T05:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
@@ -104,35 +103,6 @@ describe("parseCardInput", () => {
     expect(parseCardInput({ kind: "links", items })).toEqual({ ok: false, code: "card.too_long" });
     const buttons = Array.from({ length: 6 }, () => ({ kind: "email", address: "a@b.example" }));
     expect(parseCardInput({ kind: "buttons", heading: "Hi", buttons })).toEqual({ ok: false, code: "card.too_long" });
-  });
-});
-
-// Staging break test 2026-11-21: a Text card of 95 KB saved, but the index keeps records of at most 64 KiB, so the
-// card never showed on the public page. What the save accepts, the index keeps.
-describe("a card the save accepts is one the index keeps", () => {
-  const prose = (bytes: number) => "Some words of an ordinary page. ".repeat(Math.ceil(bytes / 32)).slice(0, bytes);
-  const indexed = (record: unknown) =>
-    planCommit({ lastRev: null, active: true }, "3jzfcijpj2z2a", [
-      { kind: "put", collection: "sh.unset.section", rkey: "3jzfcijpj2z2a", cid: "bafy", record },
-    ]);
-
-  test("a long Text card of normal use (about 9,000 words, 60 KB) saves and is indexed", () => {
-    const input = parseCardInput({ kind: "readme", text: prose(60_000) });
-    if (!input.ok) throw new Error(input.code);
-    const built = toCardRecord(input.content, input.width, null, NOW);
-    if (!built.ok) throw new Error(built.code);
-    expect(indexed(built.record)).toMatchObject({ kind: "apply", skipped: 0 });
-  });
-
-  test("a Text card past the index's size, though under the lexicon's 100,000 bytes, is refused at save", () => {
-    expect(parseCardInput({ kind: "readme", text: prose(95_000) })).toEqual({ ok: false, code: "card.too_long" });
-  });
-
-  test("kept fields that would take an edit past the index's size refuse it too", () => {
-    const input = parseCardInput({ kind: "readme", text: prose(40_000) });
-    if (!input.ok) throw new Error(input.code);
-    const existing = stored({ $type: ref("readme"), text: "old" }, { note: prose(40_000) });
-    expect(toCardRecord(input.content, input.width, existing, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 });
 

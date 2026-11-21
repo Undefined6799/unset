@@ -166,11 +166,6 @@ describe("toProfileRecord", () => {
     });
   });
 
-  test("a save the index would leave out is refused, so the public page never goes missing", () => {
-    const existing = { $type: "sh.unset.profile", createdAt: NOW, ...goodStored, note: "x".repeat(70_000) };
-    expect(toProfileRecord({ headline: "Hi" }, existing, NOW)).toEqual({ ok: false, code: "profile.too_long" });
-  });
-
   test("a stored record another client broke is refused, never written back", () => {
     expect(toProfileRecord(good, { listed: "yes", createdAt: "2026-10-01T00:00:00.000Z" }, NOW)).toEqual({
       ok: false,

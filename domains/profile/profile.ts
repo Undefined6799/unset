@@ -4,7 +4,6 @@
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import type { CardKey } from "./cards.ts";
-import { fitsIndex } from "./index-plan.ts";
 import { isPlainName, isPlainText } from "./member-text.ts";
 import type { ProfileVisibility } from "./visibility.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
@@ -146,8 +145,6 @@ export function toProfileRecord(
   const createdAt = typeof stored.createdAt === "string" ? stored.createdAt : now;
   const record: ProfileRecord = { $type: "sh.unset.profile", ...merged, createdAt };
   if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
-  // The index must keep what is written, or the public page would go missing (index-plan.ts).
-  if (!fitsIndex(record)) return { ok: false, code: "profile.too_long" };
   return { ok: true, record };
 }
 

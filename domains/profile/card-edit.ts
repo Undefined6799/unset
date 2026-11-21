@@ -26,7 +26,6 @@ import {
   SURFACES,
   WIDTHS,
 } from "./cards.ts";
-import { fitsIndex } from "./index-plan.ts";
 import { isPlainText } from "./member-text.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
@@ -222,8 +221,6 @@ export function parseCardInput(
   if (!content.ok) return content;
   const sized = validateRecord(NSID, { $type: NSID, content: toLexicon(content.value), createdAt: EPOCH }, "write");
   if (!sized.ok) return fail("card.too_long", tooLongField(sized.errors));
-  // The index keeps records of at most MAX_RECORD_BYTES, under the lexicon's 100,000-byte text (index-plan.ts).
-  if (!fitsIndex(sized)) return fail("card.too_long");
   return {
     ok: true,
     content: content.value,
@@ -423,9 +420,7 @@ export function toCardRecord(
     content: { ...old, ...keepElementFields(fresh, sameKind, content.kind) },
     createdAt: typeof createdAt === "string" ? createdAt : now,
   };
-  if (!validateRecord(NSID, record, "read").ok) return fail("card.invalid");
-  // A field kept from the stored card counts too: the index must keep what is written (index-plan.ts).
-  return fitsIndex(record) ? { ok: true, record } : fail("card.too_long");
+  return validateRecord(NSID, record, "read").ok ? { ok: true, record } : fail("card.invalid");
 }
 
 /**

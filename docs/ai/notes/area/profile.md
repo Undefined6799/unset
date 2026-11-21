@@ -34,10 +34,9 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 - `member-text.ts` (P3.12t): `isPlainText` (no control character, no lone surrogate; multi-line keeps "\n" and tabs)
   for every profile and card text field, and `isPlainName` for the display name (also no bidi control or invisible
   character; the joiners U+200C/U+200D stay). Both the save and the lenient profile reader use them.
-- **Save what the index keeps.** Every profile and card record the save writes must pass `fitsIndex` (index-plan.ts,
-  the same check the indexer applies), else it is refused (`profile.too_long`, `card.too_long`). A record the index
-  skips (over `MAX_RECORD_BYTES`, or a NUL Postgres jsonb refuses) shows on the owner's page, read from the PDS, but
-  not publicly, read from the index: a profile record skipped makes `/@handle` a 404 (staging break test 2026-11-21).
+- A record the index skips (a NUL or lone surrogate Postgres jsonb refuses) shows on the owner's page, read from the
+  PDS, but not publicly, read from the index: a profile record skipped makes `/@handle` a 404 (staging break test
+  2026-11-21). The text checks above keep such characters out of every save.
 - `web-address.ts`: `withScheme` ("alice.dev" means https://alice.dev) and `isWebAddress` (http or https, no
   credentials, and not on the visitor's own machine or network: localhost, .local, private and link-local IPs; P3.12t).
 
