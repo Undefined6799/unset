@@ -1,0 +1,59 @@
+/* The chat page's stylesheet (ADR 0099): Tailwind 4 for the stock shadcn-svelte components in lib/ and the shell
+ * (App.svelte), over the one theme file, mapped as apps/web/app.css maps it (shadcn-svelte 1.8.1 manual setup,
+ * https://shadcn-svelte.com/docs/installation/manual, "Configure styles"). Light and dark follow the system setting
+ * through theme.css's light-dark() colours; the page has no theme choice of its own yet. */
+@import "tailwindcss";
+@import "@unset/shared-ui/theme.css";
+
+@source "./lib";
+@source "./App.svelte";
+
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root, :root *) {
+      @slot;
+    }
+  }
+}
+
+/* Our two variable fonts, emitted by Vite as hashed files under /assets/ (font-src in the page's CSP). */
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in apps/web/app.css. */
+  font-family: "Space Grotesk";
+  src: url("@unset/shared-ui/fonts/SpaceGrotesk-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor gives the variable font's range. */
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 2);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}

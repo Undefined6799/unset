@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2025", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["vite/client"],
+    "exactOptionalPropertyTypes": false,
+    "erasableSyntaxOnly": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true
+  },
+  "include": ["*.ts", "*.svelte", "core/**/*.ts", "matrix/**/*.ts", "lib/**/*.ts", "lib/**/*.svelte"],
+  "exclude": ["**/*.test.ts", "vite.config.ts"]
+}
