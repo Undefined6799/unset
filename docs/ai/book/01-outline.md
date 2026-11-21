@@ -1516,6 +1516,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.38v | Name only files on the tree in the lint rules | — | — | `phase-1.md` |
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
+| P1.38x | Mark a multi-line ADR status superseded | [SEC] trusted | — | `phase-1.md` |
 | P1.39a | Save the reviewed `caddy adapt` output for each env | [SEC] trusted | — | `phase-1.md` |
 | P1.39b | Judge the adapted config with the edge rules | [SEC] trusted | P1.39a | `phase-1.md` |
 | P1.39c | Run `caddy adapt` in the edge image from C18 | [SEC] | P1.39b | `phase-1.md` |
