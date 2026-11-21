@@ -1,7 +1,8 @@
 // The door's composition root (build step 6; rule AB-2): the one place its parts are built. Its limits are its own:
-// a sign-in hop per client every few seconds, and a looser bucket for the chat page, its files, health, Log out and the setup claim. Before
-// it answers anything the pool must fit the role's connection limit across replicas, and the door's key must be
-// Ed25519, or it does not start.
+// a sign-in hop per client every few seconds, and a looser bucket for the chat page, its files, health, Log out, the
+// setup claim and the pushkey; the count port has none, since only Synapse and web reach it. Before it answers anything
+// the pool must fit the role's connection limit across replicas, and the door's key must be Ed25519, or it does not
+// start.
 import { createPrivateKey, randomBytes, randomUUID } from "node:crypto";
 import type { DoorPorts, LockKey } from "@unset/domains-messaging";
 import { createDoorChatAdminClient } from "@unset/infrastructure-matrix";
@@ -11,6 +12,7 @@ import {
   connectionOf,
   createBrowserListStore,
   createPool,
+  createPushKeyStore,
   createSetupClaimStore,
   withClient,
 } from "@unset/infrastructure-postgres";
@@ -18,13 +20,16 @@ import { createSealer } from "@unset/infrastructure-seal";
 import type { Config } from "@unset/shared-config";
 import { createClientIpResolver, createRateLimiter, definePolicies } from "@unset/shared-http";
 import type { schema } from "./config.ts";
+import { createCountDoor, NOTIFY_PATH } from "./count.ts";
 import { createDoor, type DoorLog } from "./door.ts";
 import { createListener } from "./listener.ts";
 import type { ChatPage } from "./page.ts";
-import { redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
+import { pushKeyRoute, redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
 
 /** The largest body the door reads: a redeem's ticket, about 600 bytes of JSON, with room to spare. */
 const BODY_CAP = 4096;
+/** The largest notification the count port reads: one device's is about 400 bytes; sixteen fit. */
+const COUNT_BODY_CAP = 16_384;
 
 const POLICIES = definePolicies({
   default: [{ capacity: 60, refillPerSec: 1, scope: "ip" }],
@@ -71,6 +76,8 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
     nowS: () => Math.floor(Date.now() / 1000),
   };
   const setup = { list: ports.list, claims: createSetupClaimStore(pool) };
+  const keys = createPushKeyStore(pool);
+  const notifyUrl = `${config.COUNT_ORIGIN}${NOTIFY_PATH}`;
   const handle = createDoor({
     origin: config.PUBLIC_ORIGIN,
     webOrigin: config.WEB_ORIGIN,
@@ -85,7 +92,15 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
       "/sign-out": signOutRoute({ ports }),
       "/setup/claim": setupClaimRoute(setup),
       "/setup/release": setupReleaseRoute(setup),
+      "/push/key": pushKeyRoute({ list: ports.list, keys, notifyUrl }),
     },
   });
-  return { listener: createListener(config.PUBLIC_ORIGIN, BODY_CAP, handle), handle, close: () => pool.end() };
+  const count = createCountDoor({ keys, log: logs.request, deadlineMs: config.REQUEST_DEADLINE_MS });
+  return {
+    listener: createListener(config.PUBLIC_ORIGIN, BODY_CAP, handle),
+    handle,
+    /** The count port (ADR 0090 decision 2): its own handler and listener, served on COUNT_LISTEN_PORT only. */
+    count: { handle: count, listener: createListener(config.COUNT_ORIGIN, COUNT_BODY_CAP, count) },
+    close: () => pool.end(),
+  };
 }
