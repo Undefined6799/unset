@@ -83,3 +83,8 @@ What the pinned SDK does (matrix-js-sdk 43.0.0, `lib/crypto-api/index.d.ts`, `li
   session must be the one that last signed the entry in (migration 0045), so it cannot log out another browser of the
   same member. Sign out everywhere queues every device at once and runs the same hop for the browser that pressed it,
   whose devices wait the 120 s instead (migration 0046); a revoked grant has no browser and only queues.
+
+## Follow-ups
+- [ADR 0093](0093-chat-trusts-devices-as-element-does.md) amends decision 1's isolation mode. The page now sets
+  Element's default, `AllDevicesIsolationMode(false)`, and marks a message from a device its owner has not confirmed
+  (Alex, 2026-11-21 19:12Z).

@@ -4,7 +4,7 @@
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { createClient, MatrixEvent, NotificationCountType, Room } from "matrix-js-sdk/lib/matrix.js";
 import { describe, expect, test } from "vitest";
-import { directRooms, findDirect, otherJoined, toConversation, toMessages, withDirect } from "./conversations.ts";
+import { directRooms, findDirect, otherMembership, toConversation, withDirect } from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -26,9 +26,12 @@ function room(id: string, state: MatrixEvent[], mine: string = KnownMembership.J
   r.updateMyMembership(mine);
   return r;
 }
+/** m.room.join_rules (spec v1.18 #mroomjoin_rules); both private presets set `invite`. */
+const joinRule = (rule: string) => event({ type: "m.room.join_rules", state_key: "", content: { join_rule: rule } });
 const dm = (id: string, them: string, theirs = "join") =>
   room(id, [
     event({ type: "m.room.encryption", state_key: "", content: MEGOLM }),
+    joinRule("invite"),
     member(ME, "join", { displayname: "Me" }),
     member(them, theirs, { displayname: "Bea" }),
   ]);
@@ -53,6 +56,7 @@ describe("toConversation", () => {
       id: "!a:unset.cc",
       with: { id: THEM, name: "Bea" },
       kind: "encrypted",
+      available: true,
       request: false,
       unread: 3,
       lastActiveAt: Number.MIN_SAFE_INTEGER,
@@ -64,6 +68,7 @@ describe("toConversation", () => {
       "!i:unset.cc",
       [
         event({ type: "m.room.encryption", state_key: "", sender: THEM, content: MEGOLM }),
+        joinRule("invite"),
         member(THEM, "join", { displayname: "Bea" }),
         event({
           type: "m.room.member",
@@ -77,8 +82,35 @@ describe("toConversation", () => {
     expect(toConversation(r, new Map())).toMatchObject({
       with: { id: THEM, name: "Bea" },
       kind: "encrypted",
+      available: true,
       request: true,
     });
+  });
+
+  test("chat.conversation_unavailable_crowded: a room with a third person joined or invited is unavailable", () => {
+    const direct = directRooms({ [THEM]: ["!c:unset.cc"] });
+    for (const theirs of ["join", "invite"]) {
+      const crowded = dm("!c:unset.cc", THEM);
+      const third = member(OTHER, theirs);
+      third.event.room_id = "!c:unset.cc";
+      crowded.currentState.setStateEvents([third]);
+      expect(toConversation(crowded, direct)).toMatchObject({ with: { id: THEM }, available: false });
+    }
+    expect(toConversation(dm("!c:unset.cc", THEM), direct)?.available).toBe(true);
+    // Sync's room summary counts everyone, even members lazy loading has not sent (spec v1.18 #_matrixclientv3sync).
+    const summarised = dm("!c:unset.cc", THEM);
+    summarised.setSummary({ "m.heroes": [THEM], "m.joined_member_count": 2, "m.invited_member_count": 1 });
+    expect(toConversation(summarised, direct)?.available).toBe(false);
+  });
+
+  test("chat.conversation_unavailable_not_private: a room anyone may join, or without its join rule, is unavailable", () => {
+    const direct = directRooms({ [THEM]: ["!o:unset.cc"] });
+    for (const rule of ["public", "knock", "restricted", "knock_restricted", "private"]) {
+      const open = room("!o:unset.cc", [joinRule(rule), member(ME, "join"), member(THEM, "join")]);
+      expect(toConversation(open, direct)?.available).toBe(false);
+    }
+    const unruled = room("!o:unset.cc", [member(ME, "join"), member(THEM, "join")]);
+    expect(toConversation(unruled, direct)?.available).toBe(false);
   });
 
   test("chat.conversation_not_encrypted: no Megolm encryption event is marked not encrypted", () => {
@@ -112,11 +144,13 @@ describe("toConversation", () => {
   });
 });
 
-describe("otherJoined", () => {
-  test("chat.other_joined: only the other person's join counts, not an invite", () => {
-    expect(otherJoined(dm("!a:unset.cc", THEM), THEM)).toBe(true);
-    expect(otherJoined(dm("!a:unset.cc", THEM, "invite"), THEM)).toBe(false);
-    expect(otherJoined(dm("!a:unset.cc", THEM, "leave"), THEM)).toBe(false);
+describe("otherMembership", () => {
+  test("chat.other_membership: the other person joined, invited, or out (left, refused, banned or never there)", () => {
+    expect(otherMembership(dm("!a:unset.cc", THEM), THEM)).toBe("join");
+    expect(otherMembership(dm("!a:unset.cc", THEM, "invite"), THEM)).toBe("invite");
+    expect(otherMembership(dm("!a:unset.cc", THEM, "leave"), THEM)).toBe("out");
+    expect(otherMembership(dm("!a:unset.cc", THEM, "ban"), THEM)).toBe("out");
+    expect(otherMembership(dm("!a:unset.cc", THEM), OTHER)).toBe("out");
   });
 });
 
@@ -134,60 +168,20 @@ describe("findDirect", () => {
     );
     const gone = dm("!gone:unset.cc", THEM, "leave");
     const crowded = room("!crowd:unset.cc", [member(ME, "join"), member(THEM, "join"), member(OTHER, "join")]);
-    const direct = directRooms({ [THEM]: ["!old:unset.cc", "!new:unset.cc", "!gone:unset.cc", "!crowd:unset.cc"] });
-    const rooms = new Map([old, fresh, gone, crowded].map((r) => [r.roomId, r]));
+    const open = room("!open:unset.cc", [joinRule("public"), member(ME, "join"), member(THEM, "join")]);
+    open.addLiveEvents(
+      [event({ type: "m.room.message", room_id: "!open:unset.cc", content: { msgtype: "m.text", body: "c" } })],
+      { addToState: false },
+    );
+    const ids = ["!old:unset.cc", "!new:unset.cc", "!gone:unset.cc", "!crowd:unset.cc", "!open:unset.cc"];
+    const direct = directRooms({ [THEM]: ids });
+    const rooms = new Map([old, fresh, gone, crowded, open].map((r) => [r.roomId, r]));
     expect(findDirect((id) => rooms.get(id) ?? null, direct, THEM)?.roomId).toBe("!new:unset.cc");
     expect(findDirect((id) => rooms.get(id) ?? null, direct, OTHER)).toBeUndefined();
     expect(
       findDirect((id) => rooms.get(id) ?? null, directRooms({ [THEM]: ["!gone:unset.cc"] }), THEM),
     ).toBeUndefined();
   });
-});
-
-describe("toMessages", () => {
-  test("chat.messages_text_only: text messages in order, mine marked; state, other kinds and empty bodies left out", () => {
-    const events = [
-      member(THEM, "join"),
-      event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body: "<b>hi</b>" } }),
-      event({ type: "m.room.message", content: { msgtype: "m.image", body: "x.png", url: "mxc://x/y" } }),
-      event({ type: "m.room.message", content: { msgtype: "m.text", body: 5 } }),
-      event({ type: "m.reaction", content: {} }),
-      event({ type: "m.room.message", content: { msgtype: "m.text", body: "hello" } }),
-    ];
-    expect(
-      toMessages(events, ME).map((m) => ({ mine: m.mine, kind: m.kind, text: "text" in m ? m.text : null })),
-    ).toEqual([
-      { mine: false, kind: "text", text: "<b>hi</b>" },
-      { mine: true, kind: "text", text: "hello" },
-    ]);
-  });
-
-  test("chat.messages_unreadable: a message the SDK's own crypto could not decrypt is shown as unreadable", async () => {
-    const reader = createClient({
-      baseUrl: "http://127.0.0.1:9",
-      userId: ME,
-      deviceId: "DEVICEBBBB",
-      accessToken: "t",
-    });
-    await reader.initRustCrypto({ useIndexedDB: false });
-    const sealed = event({
-      type: "m.room.encrypted",
-      room_id: "!a:unset.cc",
-      sender: THEM,
-      content: {
-        algorithm: "m.megolm.v1.aes-sha2",
-        ciphertext: "AwgA",
-        session_id: "s",
-        sender_key: "k",
-        device_id: "D",
-      },
-    });
-    await reader.decryptEventIfNeeded(sealed);
-    expect(sealed.isDecryptionFailure()).toBe(true);
-    const pending = event({ type: "m.room.encrypted", sender: THEM, content: { algorithm: "m.megolm.v1.aes-sha2" } });
-    expect(toMessages([sealed, pending], ME).map((m) => [m.mine, m.kind])).toEqual([[false, "unreadable"]]);
-    reader.stopClient();
-  }, 20_000);
 });
 
 describe("withDirect", () => {

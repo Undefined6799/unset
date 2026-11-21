@@ -97,3 +97,7 @@ themes. dependency-cruiser's `vendor-sdk-one-adapter` row for matrix-js-sdk.
   ticket (ADR 0083's note of the same day: no Log out on the chat page; unset.sh logout drives it, Alex 2026-11-21;
   new door route POST /sign-out/redeem), and `GET /sign-out/done` sends the tab back to unset.sh's `/signed-out`. The
   page's `ChatState` gains `signing_out`; this ADR never described a Log out button.
+
+## Follow-ups
+- [ADR 0093](0093-chat-trusts-devices-as-element-does.md) amends decision 3's isolation mode to Element's default,
+  `AllDevicesIsolationMode(false)` (Alex, 2026-11-21 19:12Z).

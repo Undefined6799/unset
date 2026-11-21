@@ -2,18 +2,14 @@
 // ADR 0088 decision 3). It starts a client on the session the door handed over, used as the SDK ships it:
 //   createClient({ baseUrl, accessToken, userId, deviceId, cryptoCallbacks, localTimeoutMs }) src/matrix.ts:149
 //   initRustCrypto({ storageKey, cryptoDatabasePrefix })                              src/client.ts:2014-2063
-//   getCrypto().setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())          src/crypto-api/index.ts:91,840
+//   getCrypto().setDeviceIsolationMode(new AllDevicesIsolationMode(false))            src/crypto-api/index.ts:91,811
 //   startClient({ lazyLoadMembers: true }), the default in-memory store               src/client.ts:1479
 // in Element's order: crypto, then the isolation mode, then startClient (element-web v1.12.35
 // apps/web/src/MatrixClientPeg.ts:321-331, 357). The import is lib/matrix.js, not the package's browser entry, which
 // would also open a legacy crypto store named "matrix-js-sdk:crypto" for every account (src/browser-index.ts:36-41);
 // Element imports matrix-js-sdk/src/matrix for the same reason (apps/web/src/utils/createMatrixClient.ts:9-19).
 // Screens get our ChatState only, never an SDK object.
-import {
-  type CryptoCallbacks,
-  CryptoEvent,
-  OnlySignedDevicesIsolationMode,
-} from "matrix-js-sdk/lib/crypto-api/index.js";
+import { AllDevicesIsolationMode, type CryptoCallbacks, CryptoEvent } from "matrix-js-sdk/lib/crypto-api/index.js";
 import {
   ClientEvent,
   createClient,
@@ -25,7 +21,7 @@ import {
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
-import { createConversations } from "./conversation-service.ts";
+import { createConversations, forgetLocalChoices } from "./conversation-service.ts";
 import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
@@ -96,8 +92,19 @@ export function chatClient(session: ChatSession, baseUrl: string, cryptoCallback
     deviceId: session.deviceId,
     cryptoCallbacks,
     localTimeoutMs: REQUEST_DEADLINE_MS,
+    fetchFn: sameOriginFetch,
   });
 }
+
+/**
+ * The homeserver is this page's own origin, and on staging that origin sits behind Pangolin's login (Alex, 2026-11-21
+ * ~19:30Z: "the chat page's own calls ride that login"), so its calls carry same-origin cookies. matrix-js-sdk 43.0.0
+ * sends every homeserver call with credentials "omit" (src/http-api/fetch.ts:302-315) through `fetchFn` when one is
+ * given (fetch.ts:69-74; createClient's option, src/client.ts:313, 1358); this changes that one field and nothing else.
+ * The token still goes in the Authorization header.
+ */
+const sameOriginFetch: typeof globalThis.fetch = (input, init) =>
+  globalThis.fetch(input, { ...init, credentials: "same-origin" }); // guard-allow: egress browser-own-origin-homeserver
 
 /** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
 export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
@@ -117,7 +124,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     },
     logOut: () => {
       busy = true;
-      return logOutOf({ client, backup, prefix: cryptoDatabasePrefix, stop: chat.stop, ...options });
+      return logOutOf({ client, backup, prefix: cryptoDatabasePrefix, me: session.userId, stop: chat.stop, ...options });
     },
   };
   options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
@@ -147,7 +154,13 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   if (options.takenOver.aborted) return chat;
   const crypto = client.getCrypto();
   if (crypto === undefined) return fail("chat.keys_unavailable");
-  crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode());
+  // Element's default (ADR 0093): feature_exclude_insecure_devices off (element-web v1.12.35
+  // apps/web/src/settings/Settings.tsx:508-517) sets this mode (settings/controllers/DeviceIsolationModeController.ts:
+  // 32-39), so a message decrypts whichever of the sender's devices sent it, and one from a device its owner has not
+  // signed shows a warning (matrix/conversations.ts unconfirmedDevice). Keys go to every device of the members, as the
+  // SDK's globalBlacklistUnverifiedDevices default false (src/rust-crypto/rust-crypto.ts:428) and Element's
+  // blacklistUnverifiedDevices default false (Settings.tsx:1144-1153) leave it.
+  crypto.setDeviceIsolationMode(new AllDevicesIsolationMode(false));
   await client.startClient({ lazyLoadMembers: true });
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
   const keys: Keys = { client, crypto, holder };
@@ -217,6 +230,7 @@ type LogOutParts = Pick<ChatOptions, "takenOver" | "signOut"> & {
   readonly client: MatrixClient;
   readonly backup: BackupWatch;
   readonly prefix: string;
+  readonly me: string;
   readonly stop: () => void;
 };
 
@@ -224,9 +238,10 @@ type LogOutParts = Pick<ChatOptions, "takenOver" | "signOut"> & {
  * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
  * apps/web/src/Lifecycle.ts onLoggedOut, clearStorage): the backup catches up, the client stops, the door ends the
  * device and deletes its lock key, and only then are this account's stores deleted. If the door cannot, nothing is
- * deleted: the store stays locked by a key only the door holds.
+ * deleted: the store stays locked by a key only the door holds. This browser's own choices (the delete prompt) go
+ * with the stores.
  */
-async function logOutOf({ client, backup, prefix, stop, takenOver, signOut }: LogOutParts): Promise<LogOutOutcome> {
+async function logOutOf({ client, backup, prefix, me, stop, takenOver, signOut }: LogOutParts): Promise<LogOutOutcome> {
   await backup.settled(BACKUP_WAIT_MS);
   stop();
   // Chat moved to another tab meanwhile: this browser's device stays, for that tab.
@@ -235,6 +250,9 @@ async function logOutOf({ client, backup, prefix, stop, takenOver, signOut }: Lo
   // A tab that took chat over meanwhile owns the store now; its new device wipes it (ADR 0083 decision 5).
   if (takenOver.aborted) return "taken_over";
   await client.clearStores({ cryptoDatabasePrefix: prefix });
+  // This browser's own choices on the chat origin go with the stores, as Element clears localStorage
+  // (element-web v1.12.35 apps/web/src/Lifecycle.ts:1208-1222).
+  forgetLocalChoices(globalThis.localStorage, me);
   return "logged_out";
 }
 
@@ -254,7 +272,7 @@ export async function openToLogOut(
   const backup = followBackup(client);
   const prefix = storePrefix(session.userId);
   const stop = () => client.stopClient();
-  const chat: Chat = { stop, logOut: () => logOutOf({ client, backup, prefix, stop, ...options }) };
+  const chat: Chat = { stop, logOut: () => logOutOf({ client, backup, prefix, me: session.userId, stop, ...options }) };
   options.takenOver.addEventListener("abort", stop, { once: true });
   if (options.takenOver.aborted) return chat;
   const opened = await client

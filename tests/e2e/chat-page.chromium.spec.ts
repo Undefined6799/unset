@@ -9,8 +9,9 @@
 // the page runs under its CSP with no violation; renewal re-runs the hop for the same device and lock key; a token the
 // server stops taking right after sign-in shows a fixed code instead of looping; axe passes in both themes.
 // Conversations (build step 9): a request shows who asks and whether the room is encrypted, and Accept joins and records
-// it as direct; the start route makes exactly the room our server accepts, keeps the composer off until the other
-// person has joined, then sends only ciphertext; a second start finds the same room; a bad chat ID starts nothing.
+// it as direct; the start route and a Message link open a composer and make nothing, and only the first Send makes
+// exactly the room our server accepts and sends only ciphertext, while the request is pending too; a second start
+// finds the same room; a bad chat ID starts nothing.
 // The count (build step 10; ADR 0090): once ready the page registers one pusher with the door's key, and a refused
 // pusher leaves chat as it is. Signup's chat step (book P6.17): opened at /welcome, the page saves the key on two
 // cards, registers the pusher, then offers the way back to unset.sh through the door.
@@ -519,33 +520,41 @@ test("chat_page.request_accept: a request names who asks and marks the room; Acc
   expect(problems).toEqual([]);
 });
 
-test("chat_page.start_with: the start route makes the room the server accepts; the composer waits for the join", async ({
+test("chat_page.start_with: the start route opens a composer and makes nothing; the first Send makes the room and the request", async ({
   browser,
 }) => {
   test.setTimeout(90_000);
   const { page, problems } = await open(browser);
   await page.goto(`https://unset.cc/?with=${encodeURIComponent(THEM)}`);
   await saveKey(page);
-  await expect(conversation(page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 30_000 });
+  const draft = page.locator("[data-screen=new-conversation]");
+  await expect(draft).toBeVisible({ timeout: 30_000 });
   expect(page.url()).toBe("https://unset.cc/");
   const { created, rooms, sent } = stack.homeserver.rooms;
+  // Following the link tells nobody anything: no room, no invite, nothing sent.
+  expect([created, [...rooms.keys()], sent]).toEqual([[], [], []]);
+  expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+  await page.locator("#message").fill("hello Bea");
+  await page.getByRole("button", { name: "Send" }).click();
+  // The first Send makes exactly the room our server accepts, with them invited, and sends the message encrypted.
+  await expect(conversation(page)).toHaveAttribute("data-composer", "pending", { timeout: 30_000 });
   expect(created).toEqual([{ preset: "trusted_private_chat", is_direct: true, invite: [THEM] }]);
   const [roomId] = [...rooms.keys()];
   await expect.poll(lastDirect).toEqual({ [THEM]: [roomId] });
+  await expect.poll(() => sent.map((s) => s.type)).toEqual(["m.room.encrypted"]);
+  expect(JSON.stringify(sent)).not.toContain("hello Bea");
   await expect(conversation(page).locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
-  expect([
-    await page.locator("#message").isDisabled(),
-    await page.getByRole("button", { name: "Send" }).isDisabled(),
-  ]).toEqual([true, true]);
+  // While the request is pending the member may go on writing.
+  await page.locator("#message").fill("are you there?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => sent.map((s) => s.type)).toEqual(["m.room.encrypted", "m.room.encrypted"]);
   expect((await new AxeBuilder({ page }).analyze()).violations.map((v) => v.id)).toEqual([]);
   stack.homeserver.rooms.join(roomId ?? "", THEM, "Bea");
   await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 30_000 });
-  await page.locator("#message").fill("hello");
-  await page.getByRole("button", { name: "Send" }).click();
-  await expect.poll(() => sent.map((s) => s.type)).toEqual(["m.room.encrypted"]);
-  // A second start with the same person opens the same conversation.
+  // A second start with the same person opens the same conversation, with no composer for a new one.
   await page.goto(`https://unset.cc/?with=${encodeURIComponent(THEM)}`);
   await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 30_000 });
+  await expect(draft).toHaveCount(0);
   expect(created).toHaveLength(1);
   expect(problems).toEqual([]);
 });
@@ -637,7 +646,7 @@ test("chat_page.pusher_refused: a homeserver that refuses the pusher leaves chat
   expect(problems).toEqual([]);
 });
 
-test("chat_page.message_link: /dm/<did> hops, asks the door for the chat ID and starts the conversation", async ({
+test("chat_page.message_link: /dm/<did> hops, asks the door for the chat ID and opens a composer that makes nothing", async ({
   browser,
 }) => {
   test.setTimeout(90_000);
@@ -646,9 +655,11 @@ test("chat_page.message_link: /dm/<did> hops, asks the door for the chat ID and 
   const { page, problems } = await open(browser);
   await page.goto(`https://unset.cc/dm/${did}`);
   await saveKey(page);
-  await expect(conversation(page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 30_000 });
+  await expect(page.locator("[data-screen=new-conversation]")).toBeVisible({ timeout: 30_000 });
   expect(page.url()).toBe("https://unset.cc/");
-  expect(stack.homeserver.rooms.created).toEqual([{ preset: "trusted_private_chat", is_direct: true, invite: [THEM] }]);
+  // Any site may link here: following the link makes no room and sends no request.
+  expect(stack.homeserver.rooms.created).toEqual([]);
+  expect(stack.homeserver.seen.filter((c) => c.method !== "GET" && /createRoom|\/invite/.test(c.url))).toEqual([]);
   expect(problems).toEqual([]);
 });
 

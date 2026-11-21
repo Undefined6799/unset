@@ -65,12 +65,31 @@ function secretsDir(image: string, pgPassword: string): string {
   return dir;
 }
 
-/** Starts the image on `network` with the stack's mounts; returns the container's name. */
-function startSynapse(image: string, network: string, config: string, secrets: string): string {
+/**
+ * The chat networks a Synapse listener binds an address on (homeserver.yaml; preflight C36 SYNAPSE_NETWORKS): each
+ * test network has the reviewed subnet, and Synapse holds the reviewed address on it before it starts, as Compose
+ * gives it.
+ */
+const LISTENER_NETWORKS = [
+  { subnet: "10.250.38.48/29", address: "10.250.38.51" },
+  { subnet: "10.250.38.0/29", address: "10.250.38.2" },
+  { subnet: "10.250.38.32/29", address: "10.250.38.35" },
+] as const;
+
+/**
+ * Starts the image on `network` (Postgres's) and the listener networks with the stack's mounts; returns the
+ * container's name.
+ */
+function startSynapse(
+  image: string,
+  network: string,
+  listenerNetworks: readonly string[],
+  config: string,
+  secrets: string,
+): string {
   const name = `unset-test-synapse-${randomBytes(6).toString("hex")}`;
   run([
-    "run",
-    "-d",
+    "create",
     "--name",
     name,
     "--network",
@@ -86,12 +105,15 @@ function startSynapse(image: string, network: string, config: string, secrets: s
     "/tmp",
     image,
   ]);
+  for (const [i, { address }] of LISTENER_NETWORKS.entries())
+    run(["network", "connect", "--ip", address, listenerNetworks[i] ?? "", name]);
+  run(["start", name]);
   return name;
 }
 
-/** The answer Synapse gives on its own client listener to GET `path`, once it serves, or why it never did. */
-function answer(name: string, path: string): string {
-  const fetch = `import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8008${path}', timeout=2).read().decode())`;
+/** The answer Synapse gives on its listener at `address` to GET `path`, once it serves, or why it never did. */
+function answer(name: string, path: string, address: string = LISTENER_NETWORKS[0].address): string {
+  const fetch = `import urllib.request; print(urllib.request.urlopen('http://${address}:8008${path}', timeout=2).read().decode())`;
   for (let attempt = 0; attempt < 60; attempt++) {
     const ran = docker(["exec", name, "/opt/synapse/bin/python", "-c", fetch], { timeoutMs: CALL_MS });
     if (ran.code === 0) return ran.out.trim();
@@ -135,6 +157,11 @@ describe("synapse image", () => {
       });
       expect(made.code, made.err).toBe(0);
       run(["network", "create", network]);
+      const listenerNetworks = LISTENER_NETWORKS.map(({ subnet }) => {
+        const named = `unset-test-chat-${randomBytes(6).toString("hex")}`;
+        run(["network", "create", "--internal", "--subnet", subnet, named]);
+        return named;
+      });
       const started: string[] = [];
       withCleanup(
         () => {
@@ -142,10 +169,23 @@ describe("synapse image", () => {
           const homeserver = readFileSync(join(CHAT, "homeserver.yaml"), "utf8");
           const secrets = secretsDir(image, pgPassword);
 
-          const synapse = startSynapse(image, network, configDir(homeserver), secrets);
+          const synapse = startSynapse(image, network, listenerNetworks, configDir(homeserver), secrets);
           started.push(synapse);
           expect(answer(synapse, "/health")).toBe("OK");
-          expect(JSON.parse(answer(synapse, "/_matrix/client/versions")).versions).toContain("v1.11");
+          // Each listener serves the client API on its own addresses, and nothing answers on any other.
+          for (const { address } of LISTENER_NETWORKS)
+            expect(JSON.parse(answer(synapse, "/_matrix/client/versions", address)).versions).toContain("v1.11");
+          const loopback = docker(
+            [
+              "exec",
+              synapse,
+              "/opt/synapse/bin/python",
+              "-c",
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/health', timeout=2)",
+            ],
+            { timeoutMs: CALL_MS },
+          );
+          expect(loopback.err).toContain("Connection refused");
           // As 991, never root, and nothing it imports is the OIDC or JWT library.
           expect(run(["exec", synapse, "id", "-u"])).toBe("991");
           const authlib = docker(["exec", synapse, "/opt/synapse/bin/python", "-c", "import authlib"], {
@@ -161,7 +201,7 @@ describe("synapse image", () => {
             "  - module: unset_chat_policy.RoomPolicy\n    config: { allow_plaintext: true }",
           );
           expect(refused).not.toBe(homeserver);
-          const broken = startSynapse(image, network, configDir(refused), secrets);
+          const broken = startSynapse(image, network, listenerNetworks, configDir(refused), secrets);
           started.push(broken);
           const stopped = exited(broken);
           expect(stopped.code).not.toBe("0");
@@ -170,7 +210,7 @@ describe("synapse image", () => {
         () => {
           for (const name of started) docker(["rm", "-f", name], { timeoutMs: CALL_MS });
           docker(["network", "disconnect", "-f", network, pg.name], { timeoutMs: CALL_MS });
-          docker(["network", "rm", network], { timeoutMs: CALL_MS });
+          for (const named of [network, ...listenerNetworks]) docker(["network", "rm", named], { timeoutMs: CALL_MS });
           removeTestImage(image, { timeoutMs: CALL_MS });
         },
       );

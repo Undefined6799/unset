@@ -63,6 +63,8 @@ async function browserFor(browser: Browser, handle: string) {
 const state = (page: Page) => page.locator("main").getAttribute("data-state");
 const conversation = (page: Page) => page.locator("[data-screen=conversation]");
 const messages = (page: Page) => conversation(page).locator("ol");
+const message = (page: Page, text: string) => messages(page).locator("li[data-message]", { hasText: text });
+const unconfirmed = (page: Page) => messages(page).locator("[data-mark=unconfirmed]");
 
 async function saveKey(page: Page): Promise<string> {
   await expect.poll(() => state(page), { timeout: 60_000 }).not.toBe("signing_in");
@@ -81,9 +83,14 @@ async function send(page: Page, text: string): Promise<void> {
   await page.locator("#message").fill(text);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(messages(page)).toContainText(text);
+  // The composer empties once the send has gone; until then Send takes no other, so the next send waits for it.
+  await expect(page.locator("#message")).toHaveValue("", { timeout: 60_000 });
 }
 
-/** Two members with keys saved, a conversation Alice started and Bob accepted, and one message each way. */
+/**
+ * Two members with keys saved, a conversation Alice started with a first message before Bob accepted (Alex,
+ * 2026-11-21: the asker writes along with the request), which Bob reads once he has, and one message each way after.
+ */
 async function talking(browser: Browser) {
   const alice = await stack.member(`alice${Date.now()}.unset.name`);
   const bob = await stack.member(`bob${Date.now()}.unset.name`);
@@ -93,17 +100,136 @@ async function talking(browser: Browser) {
   const aliceKey = await saveKey(a.page);
   await b.page.goto("https://unset.cc/");
   await saveKey(b.page);
-  await expect(conversation(a.page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 60_000 });
+  // The link opened a composer and made nothing; Alice's first Send makes the room and the request.
+  await expect(a.page.locator("[data-screen=new-conversation]")).toBeVisible({ timeout: 60_000 });
+  await a.page.locator("#message").fill("hello before you accept");
+  await a.page.getByRole("button", { name: "Send" }).click();
+  await expect(conversation(a.page)).toHaveAttribute("data-composer", "pending", { timeout: 60_000 });
+  await expect(messages(a.page)).toContainText("hello before you accept");
   const request = b.page.locator(`[data-request="${alice.userId}"]`);
   await expect(request).toContainText(alice.handle, { timeout: 60_000 });
   await expect(request.locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
   await request.getByRole("button", { name: "Accept" }).click();
-  await send(a.page, "hello from alice");
+  // Sent while Bob was only invited, and readable by him once he joined: the key went to his device as an invitee.
   await b.page.locator(`[data-conversation="${alice.userId}"]`).click();
+  await expect(messages(b.page)).toContainText("hello before you accept", { timeout: 60_000 });
+  // Alice's device is signed by her own keys, so no message carries the unconfirmed-device warning (ADR 0093). Bob's
+  // browser may read the message before it knows her device; the mark goes once his device list has it.
+  await expect(unconfirmed(b.page)).toHaveCount(0, { timeout: 30_000 });
+  await send(a.page, "hello from alice");
   await expect(messages(b.page)).toContainText("hello from alice", { timeout: 60_000 });
+  // Bob's page marks it read with a public receipt, so Alice sees "Seen" and the time under it (ADR 0092 decision 4).
+  const read = message(a.page, "hello from alice").locator("[data-seen]");
+  await expect(read).toHaveText(/^Seen \d/, { timeout: 60_000 });
+  // Bob reacts from the message's actions; Alice sees it, and it goes when Bob takes it back (ADR 0092 decision 1).
+  const bobs = message(b.page, "hello from alice");
+  await bobs.hover();
+  await bobs.getByRole("button", { name: "React", exact: true }).click();
+  await bobs.getByRole("button", { name: "React with 👍" }).click();
+  const thumbs = message(a.page, "hello from alice").locator('[data-reaction="👍"]');
+  await expect(thumbs).toHaveText("👍 1", { timeout: 60_000 });
+  await expect(bobs.locator('[data-reaction="👍"]')).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });
+  await bobs.locator('[data-reaction="👍"]').click();
+  await expect(thumbs).toHaveCount(0, { timeout: 60_000 });
+  // Bob replies to it; Alice sees the reply with her message quoted above it (ADR 0092 decision 3).
+  await bobs.hover();
+  await bobs.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect(b.page.locator("[data-replying]")).toContainText("hello from alice");
+  await send(b.page, "a reply from bob");
+  const answer = message(a.page, "a reply from bob");
+  await expect(answer.locator("[data-reply-to]")).toContainText("You hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  // Text typed while a send is still going stays in the composer; only what was sent is cleared.
+  await a.page.locator("#message").fill("sent first");
+  await a.page.getByRole("button", { name: "Send" }).click();
+  await a.page.locator("#message").fill("typed meanwhile");
+  await expect(messages(b.page)).toContainText("sent first", { timeout: 60_000 });
+  await expect(a.page.getByRole("button", { name: "Send" })).toBeEnabled();
+  await expect(a.page.locator("#message")).toHaveValue("typed meanwhile");
+  await a.page.locator("#message").fill("");
+  await deleting(a, b);
+  for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
   return { alice, bob, a, b, aliceKey };
+}
+
+type Member = { readonly page: Page };
+
+/**
+ * Alice deletes her own messages (ADR 0092 decision 2; Alex, 2026-11-21 20:42Z): one after confirming, two selected
+ * together after confirming with "Don't ask me again", and then one at once, with no confirm. Bob sees "Message
+ * deleted" in each one's place, with the time it was sent; Bob's messages get no Delete and no checkbox on her page.
+ */
+async function deleting(a: Member, b: Member) {
+  for (const text of ["oops from alice", "one to go", "two to go", "three to go"]) await send(a.page, text);
+  await expect(messages(b.page)).toContainText("three to go", { timeout: 60_000 });
+  const idOf = async (text: string) => (await message(a.page, text).getAttribute("data-message")) ?? "";
+  const ids = await Promise.all(["oops from alice", "one to go", "two to go", "three to go"].map(idOf));
+  const order = (page: Page) => page.locator("li[data-message]").evaluateAll((li) => li.map((e) => e.dataset.message));
+  const ordersBefore = [await order(a.page), await order(b.page)];
+  const sentAt = await Promise.all(
+    ids.map((id) => a.page.locator(`[data-message="${id}"] time`).getAttribute("datetime")),
+  );
+  // Only the sender has Delete; the toolbar is in the page but hidden until hover, hence includeHidden.
+  const deleteOn = (page: Page) =>
+    message(page, "oops from alice").getByRole("button", { name: "Delete", exact: true, includeHidden: true });
+  await expect(deleteOn(a.page)).toHaveCount(1);
+  await expect(deleteOn(b.page)).toHaveCount(0);
+  const confirm = a.page.locator("[data-confirm-delete]");
+  // A window tall enough that the page does not scroll, so nothing above the confirm may move it while it is open: the
+  // confirm's buttons are pressed with the mouse, where a press takes focus out of the message (a scrolled page hid
+  // that, as the browser held the bottom in place).
+  const size = a.page.viewportSize();
+  await a.page.setViewportSize({ width: 1280, height: 2400 });
+  // One, after the confirm.
+  const oops = message(a.page, "oops from alice");
+  await oops.hover();
+  await oops.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toContainText("Delete this message? It is deleted for both of you.");
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  // Two, selected from the same menu: only her own messages get a checkbox.
+  const one = message(a.page, "one to go");
+  await one.hover();
+  await one.getByRole("button", { name: "Select", exact: true }).click();
+  await expect(one.getByRole("checkbox", { name: "Select message" })).toBeChecked();
+  await expect(message(a.page, "hello from bob").getByRole("checkbox")).toHaveCount(0);
+  await message(a.page, "two to go").getByRole("checkbox", { name: "Select message" }).click();
+  await a.page.locator("[data-selecting]").getByRole("button", { name: "Delete 2" }).click();
+  await expect(confirm).toContainText("Delete 2 messages? They are deleted for both of you.");
+  await confirm.getByRole("checkbox", { name: "Don't ask me again" }).click();
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(a.page.locator("[data-selecting]")).toHaveCount(0);
+  // And then one at once: "Don't ask me again" holds in this browser.
+  const three = message(a.page, "three to go");
+  await three.hover();
+  await three.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  if (size !== null) await a.page.setViewportSize(size);
+  for (const p of [a, b])
+    for (const id of ids)
+      await expect(p.page.locator(`[data-message="${id}"] [data-deleted]`)).toHaveText("Message deleted", {
+        timeout: 60_000,
+      });
+  for (const text of ["oops from alice", "one to go", "two to go", "three to go"])
+    await expect(messages(b.page)).not.toContainText(text);
+  // Each in its place, with the time it was sent.
+  expect([await order(a.page), await order(b.page)]).toEqual(ordersBefore);
+  for (const p of [a, b])
+    for (const [i, id] of ids.entries())
+      await expect(p.page.locator(`[data-message="${id}"] time`)).toHaveAttribute("datetime", sentAt[i] ?? "");
+}
+
+/**
+ * A fresh sync brings only the newest events; earlier messages come with "Show older messages", pressed until `text`
+ * shows.
+ */
+async function scrolledBackTo(page: Page, text: string) {
+  const older = page.getByRole("button", { name: "Show older messages" });
+  await expect(async () => {
+    if (await older.isVisible()) await older.click();
+    await expect(messages(page)).toContainText(text, { timeout: 2_000 });
+  }).toPass({ timeout: 90_000 });
 }
 
 /** A Synapse admin read, for the checks only. */
@@ -126,11 +252,16 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   expect(rooms).toHaveLength(1);
   const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
     .chunk as { type: string; content: unknown }[];
-  const timeline = chunk.filter(
-    (e) => !e.type.startsWith("m.room.") || e.type === "m.room.encrypted" || e.type === "m.room.message",
-  );
-  expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted"]);
-  expect(JSON.stringify(chunk)).not.toContain("hello from");
+  const sent = chunk.filter((e) => e.type === "m.room.encrypted" || e.type === "m.room.message");
+  expect(sent.map((e) => e.type)).toEqual(Array(9).fill("m.room.encrypted"));
+  // The four deleted keep no ciphertext on the server (spec v1.18 #redactions).
+  expect(sent.filter((e) => Object.keys(e.content as object).length === 0)).toHaveLength(4);
+  // The reply's pointer is the one thing beside its ciphertext (ADR 0092 decision 3).
+  const relations = sent.map((e) => (e.content as Record<string, unknown>)["m.relates_to"]).filter(Boolean);
+  expect(relations).toEqual([{ "m.in_reply_to": { event_id: expect.stringMatching(/^\$/) } }]);
+  // Beside them only Bob's reaction, which is in the clear by design and was taken back (ADR 0092 decisions 1, 2).
+  expect(chunk.filter((e) => !e.type.startsWith("m.room.")).map((e) => e.type)).toEqual(["m.reaction"]);
+  expect(JSON.stringify(chunk)).not.toContain("hello");
   // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup,
   // opened at once: the first browser may not have uploaded the room's keys yet (it waits up to 10 s, matrix-js-sdk
   // 43.0.0 src/rust-crypto/backup.ts:70), and the page asks the backup again once it has (matrix/recovery.ts).
@@ -141,12 +272,19 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   await a2.page.getByRole("button", { name: "Unlock" }).click();
   await expect.poll(() => state(a2.page), { timeout: 60_000 }).toBe("ready");
   await a2.page.locator("[data-conversation]").first().click();
+  await scrolledBackTo(a2.page, "hello from alice");
   await expect(messages(a2.page)).toContainText("hello from bob", { timeout: 90_000 });
   await expect(messages(a2.page)).toContainText("hello from alice", { timeout: 90_000 });
+  // Keys from the backup give a grey shield, which Element shows as a plain padlock: no warning either.
+  await expect(unconfirmed(a2.page)).toHaveCount(0, { timeout: 30_000 });
   // Log out of unset.sh on the first browser, from another of its tabs (Alex 2026-11-21: there is no Log out on the chat
   // page): the open chat tab stops, the device ends at the homeserver, nothing of the account is left in that browser,
   // and the other browser is untouched.
   const device = a.redeems[0]?.deviceId ?? "";
+  // "Don't ask me again" lives only in this browser's localStorage, under the account's key (conversation-service.ts).
+  const choices = () =>
+    a.page.evaluate(() => Object.keys(globalThis.localStorage).filter((key) => key.startsWith("unset-chat:")));
+  expect(await choices()).toEqual([`unset-chat:${alice.userId}:skip-delete-confirm`]);
   const out = await a.context.newPage();
   await out.goto("https://unset.sh/logout");
   await out.waitForURL("https://unset.sh/signed-out", { timeout: 90_000 });
@@ -156,6 +294,7 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
     return (await indexedDB.databases()).map((d) => d.name ?? "");
   });
   expect(names.filter((n) => n.startsWith("unset-chat:"))).toEqual([]);
+  expect(await choices()).toEqual([]);
   const devices = (await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}/devices`)).devices as {
     device_id: string;
   }[];
@@ -209,7 +348,7 @@ test("chat_e2e.suspend_and_back: a lock stops Alice's open page; an unlock bring
   const [first, last] = [a.redeems[0], a.redeems.at(-1)];
   expect([last?.deviceId, last?.storageKey, last?.newDevice]).toEqual([first?.deviceId, first?.storageKey, false]);
   await a.page.locator("[data-conversation]").first().click();
-  await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  await scrolledBackTo(a.page, "hello from bob");
 });
 
 test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversation; what the server keeps", async ({
