@@ -120,6 +120,12 @@ const post = (path: string, fields: Record<string, string>, cookie: string, orig
     },
   });
 const html = async (path: string, cookie: string) => (await get(path, cookie)).text();
+/** A visit as a browser sends it, with its Fetch Metadata: from our own page unless `extra` says otherwise. */
+const visit = async (
+  path: string,
+  cookie: string,
+  extra: Record<string, string> = { "sec-fetch-site": "same-origin" },
+) => (await web.fetch(path, { headers: { "x-forwarded-for": clientAddress(), cookie, ...extra } })).text();
 /** The ids the page's forms carry, once each (the bell and the page both list them, newest first). */
 const listed = (page: string): string[] => [
   ...new Set([...page.matchAll(/name="(?:id|upTo)" value="([^"]+)"/g)].map((m) => m[1] ?? "")),
@@ -180,7 +186,7 @@ describe("the bell and the notifications page", () => {
     const phone = `__Host-sid=${created.cookieValue}`;
     await notice(did, "seen-1");
     expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
-    const page = await html("/notifications", laptop);
+    const page = await visit("/notifications", laptop);
     expect(page).not.toMatch(WAITING); // the bell on the page itself reads nothing waiting
     expect(page).toContain("Read the privacy notice");
     expect(await html("/legal/terms", laptop)).not.toMatch(WAITING);
@@ -190,6 +196,28 @@ describe("the bell and the notifications page", () => {
     await notice(did, "seen-2");
     expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
     expect(await html("/legal/terms", phone)).toContain("Notifications, 2 waiting");
+  });
+
+  test("notifications.only_a_visit_from_our_pages_or_a_typed_address_marks_seen", async () => {
+    // Review of #1910: with SameSite=Lax another site's link still carries the cookie, so it must not clear the badge.
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    const ignored: Record<string, string>[] = [
+      { "sec-fetch-site": "cross-site" },
+      { "sec-fetch-site": "same-site" },
+      {}, // no Fetch Metadata at all
+      { "sec-fetch-site": "same-origin", "sec-purpose": "prefetch" },
+      { "sec-fetch-site": "same-origin", "sec-purpose": "prefetch;prerender" },
+      { "sec-fetch-site": "none", purpose: "prefetch" },
+    ];
+    for (const headers of ignored) {
+      const page = await visit("/notifications", cookie, headers);
+      expect(page).toContain(SIGN_IN);
+      expect(page).toContain("Notifications, 1 waiting");
+    }
+    expect(await html("/legal/terms", cookie)).toContain("Notifications, 1 waiting");
+    await visit("/notifications", cookie, { "sec-fetch-site": "none" }); // typed or bookmarked
+    expect(await html("/legal/terms", cookie)).not.toMatch(WAITING);
   });
 
   test("notifications.opening_the_bell_marks_seen_in_this_browser_only", async () => {

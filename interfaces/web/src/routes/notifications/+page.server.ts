@@ -1,8 +1,8 @@
 // GET and POST /notifications (P2.27, ADR 0079 and 0081): the member's inbox, newest first, and the two forms the page
 // and the bell post. The gate has checked the session, onboarding, the confirmed email, the Origin, the body size and
 // the notifications limit. Viewing deletes nothing, and neither does showing an entry's detail (`?n=`, a link): an
-// entry stays until it is dismissed. Viewing marks the list seen in this browser, so the badge counts only newer
-// entries (ADR 0085), as opening the bell does with the `seen` form. Each form is safe to send again: an id already gone, another member's, or one
+// entry stays until it is dismissed. A visit from our own pages or a typed address marks the list seen in this
+// browser, so the badge counts only newer entries (ADR 0085), as opening the bell does with the `seen` form. Each form is safe to send again: an id already gone, another member's, or one
 // this browser may not see deletes nothing.
 import { type Actions, error, type RequestEvent, redirect, type ServerLoad } from "@sveltejs/kit";
 import {
@@ -15,7 +15,7 @@ import {
 import { safeReturnPath } from "@unset/shared-http";
 import { services } from "../../lib/server/compose.ts";
 import { dismissed } from "../../lib/server/notification-sources.ts";
-import { inboxOf, notificationsView } from "../../lib/server/notifications.ts";
+import { inboxOf, notificationsView, viewMarksSeen } from "../../lib/server/notifications.ts";
 import { single } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 
@@ -25,7 +25,7 @@ export const load: ServerLoad = async (event) => {
   const shell: ShellData = { kind: "core", noindex: true, wide: true, account: { path: `/${event.locals.did}` } };
   const notifications = await notificationsView(event, PAGE_LIMIT);
   const newest = parseNotificationId(notifications?.state === "ready" ? (notifications.entries[0]?.id ?? null) : null);
-  if (newest !== null) await markSeen(event, newest);
+  if (newest !== null && viewMarksSeen(event)) await markSeen(event, newest);
   return { shell, notifications };
 };
 

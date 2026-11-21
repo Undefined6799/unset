@@ -31,9 +31,12 @@ member's own laptop and phone. So the mark is kept per browser, not per account.
 2. **The badge counts the entries this browser has not seen**, capped at "9+" as before. Seen entries stay listed,
    and in the bell's panel, until they are dismissed or their 30 days are up.
 3. **What marks them seen:** opening the bell (with script, a background `POST /notifications?/seen` naming the newest
-   entry the bell shows; the badge goes at once) and loading `/notifications` (its newest listed entry). The page's
-   GET therefore writes this one mark and nothing else; with no script it is the only way the mark moves. Opening the
-   bell with no script marks nothing.
+   entry the bell shows; the badge goes at once) and a visit to `/notifications` that the member made: its
+   `Sec-Fetch-Site` is `same-origin` (our own links and client navigations) or `none` (a typed address or bookmark),
+   and it is no prefetch. The page's GET therefore writes this one mark and nothing else; with no script the "View all"
+   link is how the mark moves. A visit from another site, one with no Fetch Metadata, and a prefetch mark nothing, so
+   another site cannot make a new-sign-in badge vanish by sending the member's browser there (SameSite=Lax still
+   sends the cookie on that navigation). Opening the bell with no script marks nothing.
 4. **The mark only moves forward and only to an entry this browser may see.** One `UPDATE ... FROM app.inbox` with
    `greatest()`, so an older id, another member's id, or the id of a sign-in entry this browser may not see marks
    nothing. A browser's mark is never another browser's: the new browser of a sign-in cannot clear the alert's badge
@@ -46,8 +49,8 @@ member's own laptop and phone. So the mark is kept per browser, not per account.
   member (`core.erase_did` ends every session). It is not exported: it says nothing beyond the session it lives on.
 - A member with two browsers sees the count on the second until they look there too. That is the cost of not letting
   one browser clear another's alert.
-- A visit to `/notifications` from another site's link marks the list seen; the member is then looking at that list.
-  No link on our pages preloads it.
+- A browser that sends no Fetch Metadata (older than Chrome 76, Firefox 90 or Safari 16.4) clears the badge only by
+  opening the bell with script. No link on our pages preloads the page.
 - The `seen` form counts against the notifications limit; it is sent only when the badge shows a number.
 
 ## Alternatives
@@ -66,5 +69,5 @@ member's own laptop and phone. So the mark is kept per browser, not per account.
 `tests/integration/postgres/notification-store.test.ts` holds the mark: this browser's only, never moving back, and
 nothing for a later browser's or another member's id; the session read brings `seen` with the bell.
 `tests/integration/web/app/notifications.test.ts` holds the routes: the page clears its own browser's count and not
-another's, a newer entry counts again, the `seen` form from the alert's new browser or another site clears nothing.
+another's, a newer entry counts again, a cross-site, header-less or prefetch visit marks nothing, the `seen` form from the alert's new browser or another site clears nothing.
 Acceptance is Alex's line on the pull request that adds this record.

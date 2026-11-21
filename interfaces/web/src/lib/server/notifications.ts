@@ -52,6 +52,26 @@ export async function notificationsView(event: RequestEvent, limit: number): Pro
 const NOTIFICATIONS_PAGE = "/notifications";
 
 /**
+ * Whether this load of the notifications page marks its list seen (ADR 0085): only a visit the member made, from our
+ * own pages or by typing the address, and never a prefetch. With SameSite=Lax the session cookie also goes on a
+ * top-level navigation from another site, which must not clear a new-sign-in badge (review of #1910). Fetch Metadata
+ * says where a request came from: `Sec-Fetch-Site` is "same-origin" for our own links and client navigations and
+ * "none" for a typed address or a bookmark (https://w3c.github.io/webappsec-fetch-metadata/,
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Site; sent by Chrome 76+, Firefox
+ * 90+ and Safari 16.4+, read 2026-11-21); a request without it marks nothing. A prefetch says so in `Sec-Purpose`
+ * ("prefetch", the one value MDN defines: .../Headers/Sec-Purpose). A `prerender` value and the older `Purpose` header
+ * are refused too, unverified against a browser's docs: refusing them costs nothing but a mark.
+ */
+export function viewMarksSeen(event: RequestEvent): boolean {
+  if (event.route.id !== NOTIFICATIONS_PAGE || event.request.method !== "GET") return false;
+  const headers = event.request.headers;
+  const site = headers.get("sec-fetch-site");
+  if (site !== "same-origin" && site !== "none") return false;
+  const purpose = `${headers.get("sec-purpose") ?? ""} ${headers.get("purpose") ?? ""}`;
+  return !/prefetch|prerender/i.test(purpose);
+}
+
+/**
  * The bell, from the entries the session read brought (infrastructure/session/store.ts), so a page spends no
  * statement of its own on it; a session read without them reads the inbox instead.
  */
@@ -62,6 +82,6 @@ export async function bellView(event: RequestEvent): Promise<NotificationsView |
       ? await notificationsView(event, BELL_LIMIT)
       : viewOf(listOf(inbox, BELL_LIMIT));
   // The notifications page marks its list seen as it loads (ADR 0085), after the session read this view comes from, so
-  // the bell on that page reads nothing waiting.
-  return view?.state === "ready" && event.route.id === NOTIFICATIONS_PAGE ? { ...view, count: 0 } : view;
+  // the bell on that page reads nothing waiting whenever the page marks it.
+  return view?.state === "ready" && viewMarksSeen(event) ? { ...view, count: 0 } : view;
 }
