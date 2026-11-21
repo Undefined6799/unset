@@ -179,6 +179,25 @@ describe("a new picture card", () => {
     expect(written).toEqual([]);
   });
 
+  test("picture.pds_too_large: a PDS refusing the picture's size names the picture, releases the use, writes nothing", async () => {
+    const tooLarge = { kind: "rejected", xrpcError: "PayloadTooLarge", status: 413 } as const;
+    const sent: number[] = [];
+    const upload = async (bytes: Uint8Array) => {
+      sent.push(bytes.length);
+      return tooLarge;
+    };
+    const { writes, log, written } = stack({ pictures: { upload } });
+    expect(await writes.create(picture(), "full")).toEqual({
+      kind: "failed",
+      code: "card.image_too_large",
+      field: "image",
+    });
+    expect(log.at(-1)).toBe(`release ${DRAFT} ${NEW_KEY} ${LEASE}`);
+    // Sent once, as it was: no smaller copy is made and retried (Alex, 2026-11-21 17:43Z).
+    expect(sent).toEqual([3]);
+    expect(written).toEqual([]);
+  });
+
   test("picture.note_throws: the database failing after the upload releases the use, then the error surfaces", async () => {
     const broken = new Error("database down");
     const published = async () => {
