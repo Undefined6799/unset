@@ -105,7 +105,7 @@ describe("listCardRecords", () => {
     expect("keys" in result && result.keys).toHaveLength(100);
   });
 
-  test("a page past the size cap is read again one card at a time", async () => {
+  test("a page past the size cap is read again with half as many cards, down to one", async () => {
     // Card 12 is large: any page holding it with another card is past the cap; alone it fits.
     const { pdsCall, ctx, calls } = pds(holding(15, (n, limit) => n === 12 && limit > 1));
     expect(keys(await listCardRecords(pdsCall, ctx, DID))).toEqual({
@@ -113,7 +113,17 @@ describe("listCardRecords", () => {
       complete: true,
       overflow: false,
     });
-    expect(calls.map((c) => c.url.searchParams.get("limit"))).toEqual(["10", "10", "1", "1", "1", "1", "1", "1"]);
+    // 0-9; 10-19 and 10-14 hold 12; 10-11; 12-15 and 12-13 hold it; 12 alone; 13-14; an empty last page.
+    expect(calls.map((c) => c.url.searchParams.get("limit"))).toEqual(["10", "10", "5", "2", "4", "2", "1", "2", "4"]);
+  });
+
+  test("a page of large cards under the page budget is read in full, in a few calls", async () => {
+    // Codex review of #1911: 29 Text cards of 60,000 quotation marks, about 120 KB of JSON each (3.5 MB together,
+    // under the 4 MiB budget). Eight fit one response under the 1 MiB cap; nine do not.
+    const quotes = { ...card, content: { $type: "sh.unset.section#readme", text: '"'.repeat(60_000) } };
+    const { pdsCall, ctx, calls } = pds(holding(29, (_n, limit) => limit > 8, quotes));
+    expect(keys(await listCardRecords(pdsCall, ctx, DID))).toMatchObject({ complete: true, overflow: false });
+    expect(calls.length).toBeLessThanOrEqual(10);
   });
 
   test("one card alone past the cap stops the read before it, and the page keeps what it read", async () => {

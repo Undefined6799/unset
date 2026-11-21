@@ -12,12 +12,16 @@ export const CARD_COLLECTION = "sh.unset.section";
 
 /**
  * How the cards are read (Codex on #1657; coordinator 2026-11-17 07:04Z). Every PDS response is capped at 1 MiB
- * (net-guard libraryFetch), and one card may be about 900 KB, so the cards come in pages of PAGE records; a page past
- * the cap is read again one record at a time. One page load makes at most MAX_CALLS calls and keeps at most
+ * (net-guard libraryFetch), and one card may be about 900 KB, so the cards come in pages of at most PAGE records; a
+ * page past the cap is read again with half as many, down to one, and a page well under the cap lets the next hold
+ * twice as many again (GROW_BYTES), so a page of large cards is read in a few calls, not one per card (Codex review
+ * of #1911: 29 cards of 120 KB took 33 calls). One page load makes at most MAX_CALLS calls and keeps at most
  * CARD_LIST_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.profile.cardsMax), all inside the request's deadline.
  * When it stops early, the list says it is incomplete, and the caller shows what it has, never more.
  */
 const PAGE = 10;
+/** A page whose records come to at most this many bytes lets the next one hold twice as many (half the 1 MiB cap). */
+const GROW_BYTES = 512 * 1024;
 const MAX_CALLS = 24;
 /**
  * Equal to the most one member's cards may hold together (MAX_PAGE_BYTES in domains/profile, index-plan.ts; a test in
@@ -96,20 +100,18 @@ export async function listCardRecords(
   const cards: StoredCard[] = [];
   let bytes = 0;
   let cursor: string | undefined;
-  // After a page past the cap, the next PAGE cards are read one at a time, then pages resume.
-  let single = 0;
+  let limit = PAGE;
   for (let calls = 0; calls < MAX_CALLS; calls += 1) {
-    const limit = single > 0 ? 1 : PAGE;
     if (ctx?.deadline.aborted === true) break;
     const page = await readPage(pdsCall, ctx, did, limit, cursor);
     if (page.kind !== "ok") return cards.length === 0 || page.kind !== "transient" ? page : partial(cards);
     if (page.value === TOO_LARGE) {
       // One record alone past the cap cannot be read, and its key is unknown, so the read stops before it.
       if (limit === 1) break;
-      single = PAGE;
+      limit = Math.floor(limit / 2);
       continue;
     }
-    single = Math.max(0, single - 1);
+    if (page.value.bytes <= GROW_BYTES) limit = Math.min(PAGE, limit * 2);
     cards.push(...page.value.records);
     bytes += page.value.bytes;
     if (page.value.cursor === undefined) return listed(cards, cards.length <= MAX_CARDS);
