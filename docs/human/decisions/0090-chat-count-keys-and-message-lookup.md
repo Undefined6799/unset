@@ -29,7 +29,8 @@ list keeps an entry, and its device, across sign-ins (ADR 0083 decision 4); a re
    `{ "rejected": [...] }` with every key it does not hold; and `GET /count?did=<did>` answers `{ "unread": n }` or
    `{ "unread": null }`, the number counted last over that member's entries. Neither logs a DID, key or number. The
    public listener answers 404 for both paths. Only Synapse and web share its network; Synapse's
-   `ip_range_whitelist` holds only its address (ADR 0082 decision 2).
+   `ip_range_whitelist` holds only its address (ADR 0082 decision 2), since a pusher's URL is whatever the browser
+   sets, and `push.include_content: false` keeps a body or sender out of every push. C36 pins both.
 3. **The Message link is resolved only for a signed-in browser, and only to a member whose public page shows.** The
    door serves the page at `/dm/<did>`; after sign-in the page posts `{ deviceId, did }` to `POST /chat-id`, which
    needs a device this browser holds and reads a view, `door.chat_contact`, owned by migrator: `app.chat_account`
@@ -54,6 +55,7 @@ list keeps an entry, and its device, across sign-ins (ADR 0083 decision 4); a re
   own DID like any other, and the page refuses to start a chat with itself.
 
 ## Compliance
-`domains/messaging/push.test.ts`; `tests/integration/postgres/push-key-store.test.ts` and `chat-contact.test.ts` as
-`chat_auth`; `tests/integration/chat-auth/door.test.ts` and `push.test.ts` (denials, the internal port not on the
-public one, strict bodies, no DID or key in the logs); the grant matrix; C36's `ip_range_whitelist`.
+`domains/messaging/push.test.ts` and `contact.test.ts`; `tests/integration/postgres/push-key-store.test.ts` and
+`chat-contact-store.test.ts` as `chat_auth`; `tests/integration/chat-auth/door.test.ts` (denials, the internal port
+not on the public one, strict bodies, no DID or key in the logs); `tests/integration/web/app/chat-count.test.ts` and
+the public profile's Message test; the grant matrix; C36's `ip_range_whitelist` and `push`.
