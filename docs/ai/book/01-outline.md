@@ -1513,6 +1513,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.38e | Let C18 accept the dev file certificate | [SEC] [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
 | P1.38v | Name only files on the tree in the lint rules | — | — | `phase-1.md` |
+| P1.38z | Show the member's initial on notification pages | — | — | `phase-1.md` |
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
 | P1.39a | Save the reviewed `caddy adapt` output for each env | [SEC] trusted | — | `phase-1.md` |

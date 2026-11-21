@@ -16798,6 +16798,19 @@ its folder (today only `RENDER_ENTRIES.admin`) is listed there with its reason.
 
 ---
 
+### P1.38z — Show the member's initial on notification pages
+Tags: —            Depends on: —
+`interfaces/web/src/routes/{notifications,notifications/sign-ins,invite}/+page.server.ts` and the notifications'
+empty-list hint; staging break test 2026-11-21, items 2 and 3.
+
+**What:** those three pages passed their own shell `account` with a path and no name, which replaces the root
+layout's, so the header's account button drew the person icon as if signed out. They now leave the account to the
+layout, and `shell-account.test.ts` fails on any page shell that names an account without its name. A sign-in's entry
+is shown only in the browsers signed in before it (migration 0036 `older_sessions_only`), by design, so the browser
+that signed in never sees its own; the empty list's hint now says so.
+
+---
+
 ### P1.38 — Phase 1 exit
 
 **Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
