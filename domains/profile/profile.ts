@@ -4,7 +4,7 @@
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import type { CardKey } from "./cards.ts";
-import { type ProfileVisibility, parseProfileVisibility } from "./visibility.ts";
+import type { ProfileVisibility } from "./visibility.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
@@ -20,13 +20,11 @@ export const EMPTY_PROFILE: ProfileFields = {
 };
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
-/** A field a save may blame: the text fields and who sees the page (ADR 0078). */
-export type ProfileInputField = ProfileField | "visibility";
 /** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, Settings › Privacy). */
 export type ProfileEdit = Partial<ProfileFields> & { readonly visibility?: ProfileVisibility };
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
-  | { readonly ok: false; readonly field: ProfileInputField; readonly code: ProfileError };
+  | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };
 
 /**
  * What the editor accepts. The lexicon's limits are permanent once published, so they sit above these, which the
@@ -80,13 +78,7 @@ export function parseProfileFields(input: Readonly<Record<string, unknown>>): Pa
     if (!checked.ok) return { ok: false, field, code: checked.code };
     fields[field] = checked.value;
   }
-  const edit: { -readonly [K in keyof ProfileEdit]: ProfileEdit[K] } = fields;
-  if (input.visibility !== undefined) {
-    const visibility = parseProfileVisibility(input.visibility);
-    if (visibility === null) return { ok: false, field: "visibility", code: "profile.invalid" };
-    edit.visibility = visibility;
-  }
-  return { ok: true, fields: edit };
+  return { ok: true, fields };
 }
 
 /**

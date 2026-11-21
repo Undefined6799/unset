@@ -2,8 +2,8 @@
 // so a newer client's choice is never shown more widely than meant. What each viewer gets is one table.
 import { validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { parseProfileFields, toProfileRecord } from "./profile.ts";
-import { pageShownTo, readProfileVisibility, type Viewer } from "./visibility.ts";
+import { toProfileRecord } from "./profile.ts";
+import { pageShownTo, parseProfileVisibility, readProfileVisibility, type Viewer } from "./visibility.ts";
 
 const T = "2026-11-20T20:00:00.000Z";
 const stored = { $type: "sh.unset.profile", createdAt: T, displayName: "Alice", future: 1 };
@@ -19,12 +19,9 @@ describe("page visibility", () => {
   });
 
   test("a save reads the choice strictly", () => {
-    expect(parseProfileFields({ visibility: "signedIn" })).toEqual({ ok: true, fields: { visibility: "signedIn" } });
-    expect(parseProfileFields({ visibility: "friends" })).toEqual({
-      ok: false,
-      field: "visibility",
-      code: "profile.invalid",
-    });
+    expect(parseProfileVisibility("signedIn")).toBe("signedIn");
+    expect(parseProfileVisibility("friends")).toBeNull();
+    expect(parseProfileVisibility(["public"])).toBeNull();
   });
 
   test("a non-public choice is stored, public clears the field, and leaving it out keeps what was stored", () => {
