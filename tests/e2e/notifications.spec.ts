@@ -130,10 +130,13 @@ test.describe("narrow window", () => {
     await expect(lifted).toBeVisible();
     const [rowWidth, liftWidth] = [box.width, (await lifted.boundingBox())?.width ?? 0];
     expect(liftWidth).toBeGreaterThan(rowWidth);
-    // A wheel turn scrolls the list and drops it.
+    // A wheel turn scrolls the list by that turn, once, and not the page, and drops it.
     await page.mouse.wheel(0, 120);
     await expect(lifted).toHaveCount(0);
-    expect(await list(page).evaluate((form) => form.scrollTop)).toBeGreaterThan(0);
+    // A second scroll, of the list or the page, comes within a few frames when it comes.
+    await page.waitForTimeout(300);
+    expect(await list(page).evaluate((form) => form.scrollTop)).toBe(120);
+    expect(await page.evaluate(() => (globalThis as unknown as { scrollY: number }).scrollY)).toBe(0);
     // Once lifted again, a click shows that row.
     const again = await row.boundingBox();
     if (again === null) throw new Error("no row");
