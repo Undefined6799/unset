@@ -18,7 +18,6 @@ type Values = {
   headline: string;
   location: string;
   website: string;
-  layout: "sidebar" | "compact";
 };
 let {
   data,

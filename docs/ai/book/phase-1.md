@@ -4890,6 +4890,30 @@ edge rules and C18 accept exactly that site and that bind. Publishing is the man
 `docs/human/runbooks/docs-site.md`; DNS, the Pangolin resource and the deploy are Alex's. Proposed ADR 0075; it
 merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs/site.
 
+### P1.21x — Keep one profile layout (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21o · **Plan:** §5.4
+
+Alex, 2026-11-20 after trying staging: keep only the compact layout. The side column, the layout choice in Settings ›
+Profile and the unpublished `sh.unset.profile.layout` field go (Proposed ADR 0077, superseding 0072; it merges on
+Alex's line). The handle moves from under the name into the avatar's About panel, and hover no longer opens it, so
+the avatar behaves the same on every page. The own page gets View as public, a link to `/@<DID>`. The site header
+sticks to the top as the page scrolls, its height named once as `--site-header-height` in app.css for anchors and
+for a bar under it. Tests: e2e for the header and panel, the sticky header on desktop and phone in both shells, and
+a dialog over it. Ownership: apps/web → interfaces/web → domains/profile; shared/lexicons.
+
+### P1.21v — Edit Text cards in place, saved together (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1, §6
+
+Alex, 2026-11-20 19:03Z: "when I'm on my profile, I should be allowed to edit it the way I want to". Plan:
+`/mnt/project-files/plans/milkdown/in-place-editing.md`; Proposed ADR 0074, which merges on Alex's line. Slices, each a
+PR: (1) the one Save, `?/saveAll`, writing every changed card in one applyWrites call on the repo head (chained
+calls only past the PDS's 1 MB body), each card checked against the version its editor opened; (2) the page: Text cards always editable on the owner's page, the
+sticky unsaved-changes bar under the header, Width and Style in the card's menu, Show Markdown, device-only drafts;
+(3) Milkdown's block handle, slash menu and floating bar for a fine pointer. No script keeps per-card saves.
+Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; apps/web (page).
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
@@ -4904,6 +4928,22 @@ avatar until the media origin serves pictures (ADR 0070), when the page gains `o
 picture. With no script the preview shows what is saved; with the client it follows the fields. The save keeps its
 path, `POST /settings/search-and-ai`, and now returns to `/settings/privacy?saved`. No data, lexicon or ADR change.
 Ownership: apps/web → interfaces/web.
+
+### P1.22a — Who sees your page (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21y · **Plan:** ADR 0078
+
+Alex, 2026-11-20 19:35Z to 19:56Z: offer "to not show the page to unsigned in user ... like Blue Sky does", with a
+disclaimer that the profile "will always remain available publicly on the At Proto network"; three levels (Public,
+signed-in members only, and only the member); for anyone left out "some kind of a message there to say that it's a
+user ... show minimum information about his account"; a question mark beside each choice with the whole explanation.
+The choice is an optional open string `visibility` on `sh.unset.profile` (public, signedIn, ownerOnly; absent means
+public, unknown means ownerOnly), saved with Search and AI by Settings › Privacy's one form, Search and AI folded under
+Public (20:26Z), each question mark showing that choice's one line. `/@` reads an optional session;
+whoever the choice leaves out gets the limited page (avatar, name, handle, DID, one sentence; noindex, no link-preview
+tags); a page that is not public is never listed in the sitemap or robots.txt, and its Search and AI choices are kept.
+ADR 0078 supersedes decision 37's "never hides on unset.sh" sentence and decision 35 D7 for this page.
+Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postgres for the listing queries.
 
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
 

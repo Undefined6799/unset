@@ -28,7 +28,7 @@ export type ShellData = Readonly<{
   hiddenHeading?: string;
   /** Adds <meta name="robots" content="noindex">; the page sets the X-Robots-Tag header itself. */
   noindex?: true;
-  /** A full-width main (core shell) for a page with its own columns, the member page's side column and cards, with
+  /** A full-width main (core shell) for a page with its own frame (the member page, the settings list), with
    * the header's own side padding, so the page lines up under the header's menu button (Alex, 2026-11-18). The page
    * caps its own width. */
   wide?: true;
@@ -91,8 +91,6 @@ export const SHELL_TEXT = {
   messagesSoon: "Messages are coming soon. Your conversations will appear here.",
   openInbox: "Open inbox",
   searchSoon: "Search is coming soon. You will search unset.sh here.",
-  notificationsSoon: "Notifications are coming soon. You will see them here.",
-  allNotifications: "View all notifications",
   signOut: "Sign out",
   siteColumn: "unset.sh",
   legalColumn: "Legal",

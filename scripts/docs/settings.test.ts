@@ -41,7 +41,8 @@ test("secret_settings_never_carry_a_value_on_any_page", async () => {
   const secrets = loaded.model.processes.flatMap((p) => p.settings.filter((s) => s.secret));
   expect(secrets.length).toBeGreaterThan(0);
   for (const s of secrets) {
-    expect(s.fallback).toBe("required");
+    // An optional secret (a feature's switch requires it when on) says so; neither carries a value.
+    expect(["required", "optional"]).toContain(s.fallback);
     for (const cell of s.stacks) expect(["secret file", "not set", "not in this stack"]).toContain(cell);
   }
 });

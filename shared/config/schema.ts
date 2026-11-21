@@ -15,6 +15,8 @@ export type Field<T> = {
   /** The values that parse, in words, for the generated settings pages (scripts/docs/settings.ts). Data only. */
   readonly allowed?: string;
   readonly holds?: (config: Readonly<Record<string, unknown>>) => boolean;
+  /** A secret that may be absent: it loads as `undefined`, and a rule on another key says when it must be set. */
+  readonly optional?: true;
 };
 
 export type Fields = Record<string, Field<unknown>>;
@@ -134,6 +136,15 @@ export const secret = (options: SecretOptions): Field<Secret> => secretField("se
 
 /** A secret read from the file named by `<KEY>_FILE` (a Compose secret). No default exists. */
 export const secretFile = (options: SecretOptions): Field<Secret> => secretField("secretFile", options);
+
+/**
+ * A `secretFile` that may be left unset, for a feature a switch turns on (ADR 0080's invite requests): unset, it loads
+ * as `undefined`; set, it is read and checked like any secret file. The switch's rule must require it when on.
+ */
+export const optionalSecretFile = (options: SecretOptions): Field<Secret | undefined> => ({
+  ...secretField("secretFile", options),
+  optional: true,
+});
 
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
 

@@ -37,7 +37,7 @@ for (const javaScriptEnabled of [true, false]) {
       expect((await openPage(page, SETTINGS))?.status()).toBe(200);
       const section = page.locator("#search-and-ai");
       await expect(section).toContainText("Search and AI listing is switched off on this site");
-      await expect(section.getByRole("button", { name: "Save search and AI" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Save privacy" })).toBeVisible();
     });
   });
 }

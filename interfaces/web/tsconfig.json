@@ -19,10 +19,16 @@
       "path": "../../domains/identity"
     },
     {
+      "path": "../../domains/notifications"
+    },
+    {
       "path": "../../domains/profile"
     },
     {
       "path": "../../infrastructure/audit"
+    },
+    {
+      "path": "../../infrastructure/email"
     },
     {
       "path": "../../infrastructure/image"

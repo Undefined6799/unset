@@ -1,7 +1,7 @@
 <!--
-  The compact profile header (ADR 0072, P1.21o; Alex's approved avatar-panel direction, 2026-11-20): the avatar, the
-  name and the handle in one row above the cards. The avatar opens the profile's details in a panel just under it:
-  the headline, place, website, DID and the page's contact action, the same fields the side column shows.
+  The profile header (ADR 0072, P1.21o; the only layout since ADR 0077, Alex 2026-11-20): the avatar and the name in
+  one row above the cards. The avatar opens the profile's About panel just under it: the headline, handle, place,
+  website, DID and the page's contact action. The handle sits in the panel, not under the name (Alex 2026-11-20).
 
   The panel is a native `popover="auto"` opened by the avatar's `popovertarget`, as the header menus are
   (docs/human/features/core-shell.md), so it works with no script, which the public page never runs: click, tap,
@@ -11,17 +11,17 @@
   It sits below the avatar by CSS anchor positioning (the avatar is a named anchor;
   https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning/Using), and flips to stay on screen; a browser
   without it shows the panel in the popover's default place, centred. A browser with no popover support shows it as
-  a block under the header.
+  a block under the header. Hover opens nothing, on the owner's page too, so the avatar behaves the same everywhere,
+  with or without script (Alex 2026-11-20).
 
-  Where the client runs (the owner's page), a mouse resting on the avatar opens the panel after a short delay and
-  leaving both closes it, unless a click pinned it open. The public page has no script, so it has no hover.
-
-  On the owner's page the name has the pen to Settings › Profile and a separate Shape button opens the avatar's editor,
-  so opening the details and editing the avatar are distinct controls.
+  On the owner's page the name has the pen to Settings › Profile, a separate Shape button opens the avatar's editor, so
+  opening the details and editing the avatar are distinct controls, and View as public opens the public page (/@did,
+  routes/@[actor]) in a new tab, so this page stays open as the way back. That route reads no session, so the owner
+  gets exactly the visitor's page, signed out, with no owner controls and no script.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { PROFILE_PANEL, PROFILE_SIDE } from "../../profile/messages.ts";
+import { PROFILE_HEADER } from "../../profile/messages.ts";
 import type { AvatarShape, Enhance } from "../../profile/types.ts";
 import { Icon } from "../icon/index.ts";
 import * as Avatar from "../ui/avatar/index.ts";
@@ -51,7 +51,7 @@ let {
    * is empty, since the name sits right beside it.
    */
   avatar?: { readonly url: string; readonly width: number; readonly height: number } | null;
-  /** The handle line; null leaves it out (no profile yet). */
+  /** The handle row in the About panel; null leaves it out (no profile yet). */
   handle?: string | null;
   did: string;
   headline?: string;
@@ -61,8 +61,11 @@ let {
   /** The page's contact action (lib/profile/view.ts contactAction), already through safeHref. */
   contact?: { readonly href: string; readonly label: string } | null;
   shape?: AvatarShape;
-  /** The owner's page: the pen beside the name goes to `href`, and Shape opens the avatar's editor. */
-  edit?: { readonly href: string; readonly enhance?: Enhance };
+  /**
+   * The owner's page: the pen beside the name goes to `href`, Shape opens the avatar's editor, and View as public goes
+   * to `publicHref`, the page as a visitor sees it (Alex 2026-11-20).
+   */
+  edit?: { readonly href: string; readonly publicHref: string; readonly enhance?: Enhance };
   /** The owner page's notes on what could not be read, in small muted text under the header. */
   notes?: Snippet;
 } = $props();
@@ -75,49 +78,12 @@ const row = "grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 border-t py-1.5";
 /**
  * Under the avatar, its start edge on the avatar's, flipped to the other side or above when it would leave the screen
  * (CSS Anchor Positioning: position-area and position-try-fallbacks, Baseline 2026 on MDN, read 2026-11-20). The anchor
- * is named rather than implicit: showPopover() from the hover script has no invoker, so no implicit anchor. Only where
+ * is named rather than implicit, so it holds however the panel was opened. Only where
  * supported, since the gap would otherwise move the centred panel. One header per page, so one name.
  */
 const ANCHORED =
   "[position-anchor:--profile-avatar] [position-area:bottom_span-right] [position-try-fallbacks:flip-inline,flip-block] supports-[position-area:bottom]:mt-3";
 const term = "font-mono text-xs leading-[22px] tracking-wider text-muted-foreground uppercase";
-
-// Hover, where the client runs: open after OPEN_DELAY with a mouse or pen on the avatar, close CLOSE_DELAY after the
-// pointer has left both the avatar and the panel, unless a click pinned it. Touch has no hover, so a tap is a click.
-const OPEN_DELAY = 150;
-const CLOSE_DELAY = 200;
-let panel: HTMLElement | undefined = $state();
-let timer: ReturnType<typeof setTimeout> | undefined;
-let byHover = false;
-const isOpen = () => panel?.matches(":popover-open") === true;
-
-function hoverIn(event: PointerEvent): void {
-  if (event.pointerType === "touch") return;
-  clearTimeout(timer);
-  if (isOpen()) return;
-  timer = setTimeout(() => {
-    panel?.showPopover();
-    byHover = true;
-  }, OPEN_DELAY);
-}
-function hoverOut(event: PointerEvent): void {
-  if (event.pointerType === "touch") return;
-  clearTimeout(timer);
-  if (!byHover) return;
-  timer = setTimeout(() => {
-    if (byHover && panel?.contains(document.activeElement) !== true) panel?.hidePopover();
-  }, CLOSE_DELAY);
-}
-// A click on the avatar while hover holds the panel open pins it there, rather than closing it under the pointer.
-function pin(event: MouseEvent): void {
-  clearTimeout(timer);
-  if (!byHover || !isOpen()) return;
-  event.preventDefault();
-  byHover = false;
-}
-function toggled(event: ToggleEvent): void {
-  if (event.newState === "closed") byHover = false;
-}
 </script>
 
 <div class="group/profile">
@@ -126,11 +92,8 @@ function toggled(event: ToggleEvent): void {
     type="button"
     popovertarget={panelId}
     popovertargetaction="toggle"
-    aria-label={PROFILE_PANEL.open(name)}
+    aria-label={PROFILE_HEADER.open(name)}
     class="group/avatar relative size-16 [anchor-name:--profile-avatar] shrink-0 cursor-pointer {rounded} outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 md:size-20"
-    onpointerenter={hoverIn}
-    onpointerleave={hoverOut}
-    onclick={pin}
   >
     {#if avatar !== null}
       <img src={avatar.url} width={avatar.width} height={avatar.height} alt="" class="size-full object-cover {rounded}" />
@@ -150,7 +113,7 @@ function toggled(event: ToggleEvent): void {
     </span>
   </button>
   <div class="min-w-0 flex-1">
-    <div class="flex items-start gap-1">
+    <div class="flex flex-wrap items-start gap-1">
       <h1 class="min-w-0 text-2xl leading-8 font-bold tracking-tight [overflow-wrap:anywhere] md:text-3xl md:leading-9">{name}</h1>
       {#if edit !== undefined}
         <Button
@@ -159,27 +122,30 @@ function toggled(event: ToggleEvent): void {
           size="icon-sm"
           class="shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:size-11"
         >
-          <Icon name="edit" size={16} label={PROFILE_SIDE.edit} />
+          <Icon name="edit" size={16} label={PROFILE_HEADER.edit} />
         </Button>
-        <AvatarEditor {shape} enhance={edit.enhance} look="button" />
+        <AvatarEditor {shape} enhance={edit.enhance} />
+        <Button
+          href={edit.publicHref}
+          target="_blank"
+          rel="noopener"
+          variant="ghost"
+          size="sm"
+          class="shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:min-h-11">{PROFILE_HEADER.viewPublic}</Button
+        >
       {/if}
     </div>
-    {#if handle !== null}<p class="mt-0.5 font-mono text-sm text-muted-foreground [overflow-wrap:anywhere]">{handle}</p>{/if}
   </div>
 </header>
 
 <section
-  bind:this={panel}
   id={panelId}
   popover="auto"
   aria-labelledby={titleId}
   class="{ANCHORED} m-0 w-80 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-lg border bg-popover p-5 text-popover-foreground shadow-md open:flex"
-  onpointerenter={() => clearTimeout(timer)}
-  onpointerleave={hoverOut}
-  ontoggle={toggled}
 >
   <div class="flex items-center justify-between gap-3">
-    <h2 id={titleId} class="font-mono text-xs tracking-wider text-muted-foreground uppercase">{PROFILE_PANEL.title}</h2>
+    <h2 id={titleId} class="font-mono text-xs tracking-wider text-muted-foreground uppercase">{PROFILE_HEADER.title}</h2>
     <Button
       variant="ghost"
       size="icon-sm"
@@ -187,22 +153,28 @@ function toggled(event: ToggleEvent): void {
       popovertargetaction="hide"
       class="-me-2 text-muted-foreground hover:text-foreground pointer-coarse:size-11"
     >
-      <Icon name="close" size={16} label={PROFILE_PANEL.close} />
+      <Icon name="close" size={16} label={PROFILE_HEADER.close} />
     </Button>
   </div>
   {#if headline !== ""}<p class="m-0 text-lg leading-7 font-semibold [overflow-wrap:anywhere]">{headline}</p>{/if}
   <dl class="m-0 text-sm">
+    {#if handle !== null}
+      <div class={row}>
+        <dt class={term}>{PROFILE_HEADER.handle}</dt>
+        <dd class="m-0 min-w-0 font-mono [overflow-wrap:anywhere]">{handle}</dd>
+      </div>
+    {/if}
     {#if location !== ""}
-      <div class={row}><dt class={term}>{PROFILE_SIDE.place}</dt><dd class="m-0 min-w-0">{location}</dd></div>
+      <div class={row}><dt class={term}>{PROFILE_HEADER.place}</dt><dd class="m-0 min-w-0">{location}</dd></div>
     {/if}
     {#if website !== null}
       <div class={row}>
-        <dt class={term}>{PROFILE_SIDE.web}</dt>
+        <dt class={term}>{PROFILE_HEADER.web}</dt>
         <dd class="m-0 min-w-0"><a href={website.href} rel="me nofollow ugc noopener noreferrer">{website.text}</a></dd>
       </div>
     {/if}
     <div class={row}>
-      <dt class={term}>{PROFILE_SIDE.did}</dt>
+      <dt class={term}>{PROFILE_HEADER.did}</dt>
       <dd class="m-0 min-w-0"><code class="font-mono text-xs leading-[22px] break-all">{did}</code></dd>
     </div>
   </dl>

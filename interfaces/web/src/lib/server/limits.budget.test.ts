@@ -67,6 +67,18 @@ describe("one member", () => {
     expect(refused("socket", paced(11, 0, ask))).toBe(1);
   });
 
+  test("an_impatient_member_pressing_mark_all_as_read_ten_times_in_two_seconds_and_opening_fifty_passes", () => {
+    // P2.27: each press and each opened row is one POST under `notifications`; repeats change nothing more.
+    const press = (at: number): Request => ({ at, policy: "notifications", address: EDGE, did: member(1) });
+    expect(refused("socket", [...paced(10, 200, press), ...paced(50, 1000, press, 2000)])).toBe(0);
+    expect(refused("header", [...paced(10, 200, press), ...paced(50, 1000, press, 2000)])).toBe(0);
+  });
+
+  test("a_hundred_and_twenty_one_notification_posts_at_once_are_refused_once", () => {
+    const press = (at: number): Request => ({ at, policy: "notifications", address: EDGE, did: member(1) });
+    expect(refused("socket", paced(121, 0, press))).toBe(1);
+  });
+
   test("clicking_four_times_a_second_for_a_minute_passes_with_addresses_seen", () => {
     // Local and test stacks run in header mode, where the per-address bucket holds (60 at once, 5 a second).
     const click = (at: number): Request => ({ at, policy: "default", address: address(1) });
@@ -117,5 +129,35 @@ describe("the whole site behind the edge", () => {
         paced(30_001, 0, (at) => ({ at, policy: "default", address: EDGE })),
       ),
     ).toBe(1);
+  });
+});
+
+describe("invite requests (P2.10r; ADR 0080)", () => {
+  const ask = (at: number, n = 1): Request => ({ at, policy: "inviteRequest", address: address(n) });
+  const HOUR = 3_600_000;
+
+  test("a_visitor_who_mistypes_twice_then_sends_passes", () => {
+    expect(
+      refused(
+        "header",
+        paced(3, 20_000, (at) => ask(at)),
+      ),
+    ).toBe(0);
+  });
+
+  test("a_fourth_request_from_one_address_within_the_hour_is_refused", () => {
+    expect(
+      refused(
+        "header",
+        paced(4, 1000, (at) => ask(at)),
+      ),
+    ).toBe(1);
+  });
+
+  test("twenty_visitors_over_a_day_pass_and_a_twenty_first_at_once_is_refused", () => {
+    // Behind the edge only the site-wide bucket stays: 20 at once, refilled at 20 a day.
+    const viaEdge = (at: number): Request => ({ ...ask(at), address: EDGE });
+    expect(refused("socket", paced(20, HOUR, viaEdge))).toBe(0);
+    expect(refused("socket", paced(21, 1000, viaEdge))).toBe(1);
   });
 });
