@@ -170,3 +170,71 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   await removeCard(page, word);
   await giveBackWrites(page, 3);
 });
+
+// Alex, 2026-11-21: all of GFM. Struck words, tasks and tables stored in the card open as themselves in the editor
+// (Milkdown's preset-gfm 7.23.0), an edit elsewhere keeps their Markdown, and the page shows them.
+test("gfm_in_the_text_opens_as_itself_and_an_edit_elsewhere_keeps_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `gfm${Date.now()}`;
+  const gfm = "~~gone~~ kept\n\n- [ ] open\n- [x] done\n\n| a | b |\n| - | :-: |\n| 1 | 2 |";
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start\n\n${gfm}` });
+  const { editor } = await caretAtEnd(page, word);
+  await expect(editor.locator("del")).toHaveText("gone");
+  await expect(editor.locator("li[data-item-type='task']")).toHaveCount(2);
+  await expect(editor.locator("li[data-checked='true']")).toHaveText("done");
+  await expect(editor.locator("table td")).toHaveText(["1", "2"]);
+  // Aligned by a class, as the page is: the CSP refuses a style attribute (preset-gfm draws text-align in one).
+  await expect(editor.locator("table [style]")).toHaveCount(0);
+  await expect(editor.locator("table td").last()).toHaveCSS("text-align", "center");
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" more");
+  // A task's box is shown where its bullet was, and a press on it ticks the task.
+  const open = editor.locator("li[data-item-type='task']").first();
+  const box = await open.boundingBox();
+  if (box === null) throw new Error("no task");
+  await page.mouse.click(box.x + 6, box.y + box.height / 2);
+  await expect(open).toHaveAttribute("data-checked", "true");
+  const { card } = await saveAndReopen(page, word);
+  const html = await (await page.request.get(page.url())).text();
+  expect(html).toContain("<del");
+  expect(html).toContain('type="checkbox"');
+  expect(html).toContain("<table");
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await expect(field).toHaveValue(`${word} start more\n\n${gfm.replace("[ ] open", "[x] open")}`);
+  const shown = page.locator('[data-slot="card"]', { has: field });
+  await shown.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await removeCard(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await giveBackWrites(page, 3);
+});
+
+// The page reads no footnotes and no line break inside a table cell (GFM cells hold one line), so the editor takes
+// neither: a pasted footnote is refused whole, and Shift+Enter in a cell does nothing. A pasted table is a table.
+test("a_pasted_table_is_a_table_and_what_the_page_cannot_show_is_refused", async ({ page }) => {
+  const word = `nofoot${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word);
+  await page.keyboard.press("Enter");
+  await paste(page, { "text/plain": "| x | y |\n| - | - |\n| 1 | 2 |" });
+  await expect(editor.locator("table td")).toHaveText(["1", "2"]);
+  await editor.locator("table td").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("z");
+  await expect(editor.locator("table td").first()).toHaveText("1z");
+  await expect(editor.locator("table br")).toHaveCount(0);
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await paste(page, { "text/plain": "a[^1]\n\n[^1]: note" });
+  await expect(editor.locator("[data-type^='footnote']")).toHaveCount(0);
+  await expect(editor).not.toContainText("note");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+  await giveBackWrites(page, 2);
+});
