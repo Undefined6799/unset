@@ -66,7 +66,7 @@
       "plugins": ["./scripts/lint/biome/no-style-prop.grit"]
     },
     {
-      "includes": ["apps/web/app.css"],
+      "includes": ["apps/web/app.css", "apps/chat/app.css"],
       "css": { "parser": { "tailwindDirectives": true } },
       "linter": { "rules": { "nursery": { "useLayeredStyles": "off" } } }
     },
