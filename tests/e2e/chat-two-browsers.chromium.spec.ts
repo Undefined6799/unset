@@ -174,12 +174,18 @@ async function deleting(a: Member, b: Member) {
   await expect(deleteOn(a.page)).toHaveCount(1);
   await expect(deleteOn(b.page)).toHaveCount(0);
   const confirm = a.page.locator("[data-confirm-delete]");
+  // A window tall enough that the page does not scroll, so nothing above the confirm may move it while it is open: the
+  // confirm's buttons are pressed with the mouse, where a press takes focus out of the message (a scrolled page hid
+  // that, as the browser held the bottom in place).
+  const size = a.page.viewportSize();
+  await a.page.setViewportSize({ width: 1280, height: 2400 });
   // One, after the confirm.
   const oops = message(a.page, "oops from alice");
   await oops.hover();
   await oops.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(confirm).toContainText("Delete this message? It is deleted for both of you.");
   await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
   // Two, selected from the same menu: only her own messages get a checkbox.
   const one = message(a.page, "one to go");
   await one.hover();
@@ -197,6 +203,7 @@ async function deleting(a: Member, b: Member) {
   await three.hover();
   await three.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(confirm).toHaveCount(0);
+  if (size !== null) await a.page.setViewportSize(size);
   for (const p of [a, b])
     for (const id of ids)
       await expect(p.page.locator(`[data-message="${id}"] [data-deleted]`)).toHaveText("Message deleted", {

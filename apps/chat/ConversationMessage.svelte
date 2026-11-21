@@ -3,7 +3,9 @@
   apps/web/src/components/views/rooms/EventTile/ActionBarAdapter.tsx, components/views/context_menus/
   MessageContextMenu.tsx). On a desktop the actions show
   while the pointer is over the message or focus is in it, and a right-click opens them; on a phone pressing and holding
-  opens them. React offers Element's eight quick reactions (ADR 0092 decision 1); a reaction under the message is
+  opens them. The actions float over the message's top edge, as Element's action bar is absolutely placed
+  (packages/shared-components/src/room/timeline/event-tile/EventTileView/EventTileView.module.css:150-156), so showing
+  or hiding them never moves the timeline, or a confirm below it, under the pointer. React offers Element's eight quick reactions (ADR 0092 decision 1); a reaction under the message is
   pressed to add one's own or take it back. Reply quotes the message above the composer, and a reply shows what it
   answers above its own text (decision 3). Delete and Select hand over to the conversation, which asks to confirm
   (Conversation.svelte); in selection mode a message Delete is offered on has a checkbox and no menu. A deleted message
@@ -99,7 +101,7 @@ function react(key: QuickReaction) {
      so the message itself needs no keyboard handler of its own. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <li
-  class={["group flex flex-col gap-1", message.mine ? "items-end self-end text-right" : "items-start self-start"]}
+  class={["group relative flex flex-col gap-1", message.mine ? "items-end self-end text-right" : "items-start self-start"]}
   data-mine={message.mine}
   data-message={message.id}
   oncontextmenu={openFromContextMenu}
@@ -151,7 +153,11 @@ function react(key: QuickReaction) {
   {/if}
   {#if menuActions.length > 0}
     <div
-      class={[menu === "closed" ? "hidden group-hover:flex group-focus-within:flex" : "flex", "gap-1"]}
+      class={[
+        menu === "closed" ? "hidden group-hover:flex group-focus-within:flex" : "flex",
+        message.mine ? "end-0" : "start-0",
+        "bg-background absolute bottom-full z-10 gap-1 rounded-md border shadow-xs",
+      ]}
       role="toolbar"
       aria-label="Message actions"
       tabindex="-1"
