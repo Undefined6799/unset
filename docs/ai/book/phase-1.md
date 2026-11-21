@@ -4914,6 +4914,11 @@ sticky unsaved-changes bar under the header, Width and Style in the card's menu,
 (3) Milkdown's block handle, slash menu and floating bar for a fine pointer. No script keeps per-card saves.
 Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; apps/web (page).
 
+Follow-up booked (review of #1857, 2026-11-21): after a Save, the page settles unsaved edits and offered drafts on the
+version the refresh reads, not the one applyWrites answered. If the member's other device writes the card in that gap,
+a later Save from this page could overwrite those words without a conflict. Return each written card's new CID in the
+`?/saveAll` answer and settle on it.
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
