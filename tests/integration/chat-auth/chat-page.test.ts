@@ -8,7 +8,6 @@
 // after redeem neither web storage, cookies, IndexedDB nor the address holds the token, the lock key or the ticket;
 // the page runs under its CSP with no violation; renewal re-runs the hop for the same device and lock key; a token the
 // server stops taking right after sign-in shows a fixed code instead of looping.
-/// <reference lib="dom" />
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -201,6 +200,19 @@ async function open(colorScheme: "light" | "dark" = "light") {
 /** Everything this origin keeps in the browser, as text: web storage, readable cookies, and every IndexedDB value. */
 const kept = (page: Page) =>
   page.evaluate(async () => {
+    // The browser globals the probe reads, typed by shape: the tests program has no DOM lib (tests/e2e does the same).
+    type Request<T> = { result: T; error: unknown; onsuccess: (() => void) | null; onerror: (() => void) | null };
+    type Db = {
+      objectStoreNames: ArrayLike<string>;
+      transaction(store: string): { objectStore(store: string): { getAll(): Request<unknown[]> } };
+      close(): void;
+    };
+    const { localStorage, sessionStorage, document, indexedDB } = globalThis as unknown as {
+      localStorage: Record<string, string>;
+      sessionStorage: Record<string, string>;
+      document: { cookie: string };
+      indexedDB: { databases(): Promise<{ name?: string }[]>; open(name: string): Request<Db> };
+    };
     const show = (v: unknown): string =>
       JSON.stringify(v, (_k, x) =>
         x instanceof ArrayBuffer || ArrayBuffer.isView(x)
@@ -214,14 +226,16 @@ const kept = (page: Page) =>
     for (const { name } of await indexedDB.databases()) {
       if (name === undefined) continue;
       names.push(name);
-      const db = await new Promise<IDBDatabase>((ok, no) => {
+      const db = await new Promise<Db>((ok, no) => {
         const r = indexedDB.open(name);
         r.onsuccess = () => ok(r.result);
         r.onerror = () => no(r.error);
       });
       for (const store of Array.from(db.objectStoreNames)) {
         const all = db.transaction(store).objectStore(store).getAll();
-        await new Promise((ok) => (all.onsuccess = ok));
+        await new Promise<void>((ok) => {
+          all.onsuccess = () => ok();
+        });
         out.push(show(all.result));
       }
       db.close();
@@ -255,7 +269,10 @@ describe("the chat page", () => {
     if (one === undefined) throw new Error("no redeem");
     const { text, names } = await kept(page);
     const cookies = JSON.stringify(await context.cookies());
-    const address = await page.evaluate(() => `${location.href} ${history.state}`);
+    const address = await page.evaluate(() => {
+      const view = globalThis as unknown as { location: { href: string }; history: { state: unknown } };
+      return `${view.location.href} ${String(view.history.state)}`;
+    });
     for (const secret of [one.accessToken, one.storageKey, hex(one.storageKey), one.ticket]) {
       expect(text).not.toContain(secret);
       expect(cookies).not.toContain(secret);
