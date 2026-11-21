@@ -101,3 +101,40 @@ test("the_bar_sticks_under_the_site_header", async ({ page }) => {
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
 });
+
+// Review of f6c6a2f: the editors stay open while a Save is on its way, so words typed meanwhile must stay unsaved, with
+// their draft, and the editor must not be redrawn under the member's caret when the answer comes.
+test("words_typed_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) => {
+  const word = `during${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\?\/saveAll$/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
+  await editor.pressSequentially(" three");
+  release();
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // The same editor, still focused: typing goes on where it was.
+  await expect(editor).toBeFocused();
+  await editor.pressSequentially(" four");
+  await expect(editor).toContainText(`${word} one two three four`);
+  await page.unroute(/\?\/saveAll$/);
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two`);
+  await expect(page.getByText("This device kept unsaved words for 1 card from an earlier visit.")).toBeVisible();
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await removeCard(page, word);
+});

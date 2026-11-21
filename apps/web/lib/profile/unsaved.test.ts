@@ -1,7 +1,7 @@
 // The owner's unsaved Text cards (ADR 0074 item 4): what the bar counts, what Save posts and what a Save leaves.
 import { describe, expect, test } from "vitest";
 import type { CardView } from "./types.ts";
-import { edit, editsToSave, NO_EDITS, settle } from "./unsaved.ts";
+import { afterSave, edit, editsToSave, NO_EDITS } from "./unsaved.ts";
 
 const text = (key: string, words: string, version: string | null = `v-${key}`): CardView => ({
   key,
@@ -79,7 +79,37 @@ describe("unsaved cards", () => {
   test("after_a_save_only_the_cards_it_did_not_write_stay_unsaved", () => {
     let edits = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
     edits = edit(edits, page, "b", { fields: { text: "World" } });
-    expect([...settle(edits, ["a"]).keys()]).toEqual(["b"]);
-    expect(settle(edits, ["a", "b"]).size).toBe(0);
+    const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2")];
+    expect([...afterSave(edits, ["a"], stored).keys()]).toEqual(["b"]);
+    expect(afterSave(edits, ["a", "b"], stored).size).toBe(0);
+  });
+
+  // Review of f6c6a2f: words typed while a Save is on its way must not be lost when its answer comes.
+  test("after_a_save_a_card_typed_into_during_it_stays_unsaved_on_its_new_version", () => {
+    const sent = edit(edit(NO_EDITS, page, "a", { fields: { text: "Hello" } }), page, "b", {
+      fields: { text: "World" },
+    });
+    const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
+    const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2"), text("c", "Again")];
+    const left = afterSave(typed, ["a", "b"], stored);
+    expect([...left.keys()]).toEqual(["a"]);
+    expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hello there" } });
+  });
+
+  test("after_a_save_a_card_it_did_not_write_keeps_its_version", () => {
+    const sent = edit(edit(NO_EDITS, page, "a", { fields: { text: "Hello" } }), page, "b", {
+      fields: { text: "World" },
+    });
+    const stored = [text("a", "Hello", "v-a2"), text("b", "There"), text("c", "Again")];
+    const left = afterSave(sent, ["a"], stored);
+    expect([...left]).toEqual([["b", sent.get("b")]]);
+  });
+
+  test("after_a_save_a_card_typed_back_to_what_was_just_written_is_saved", () => {
+    const sent = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
+    const retyped = edit(edit(sent, page, "a", { fields: { text: "Hello!" } }), page, "a", {
+      fields: { text: "Hello" },
+    });
+    expect(afterSave(retyped, ["a"], [text("a", "Hello", "v-a2")]).size).toBe(0);
   });
 });

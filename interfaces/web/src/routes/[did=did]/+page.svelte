@@ -26,14 +26,14 @@ import { cardName, OWN_PAGE, TEXT_IN_PLACE, UNSAVED_BAR } from "@unset/apps-web/
 import { cardSaveForm, readSaveAnswer } from "@unset/apps-web/lib/profile/save-all.ts";
 import type { CardView } from "@unset/apps-web/lib/profile/types.ts";
 import {
+  afterSave,
   type CardChange,
   edit,
   editsToSave,
   NO_EDITS,
-  settle,
   type UnsavedCards,
 } from "@unset/apps-web/lib/profile/unsaved.ts";
-import { onMount } from "svelte";
+import { onMount, untrack } from "svelte";
 import { deserialize } from "$app/forms";
 import { refreshAll } from "$app/navigation";
 import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
@@ -53,6 +53,25 @@ const title = $derived(data.account.verified || data.name !== data.account.handl
 let edits: UnsavedCards = $state(NO_EDITS);
 /** Bumped to remount every in-place editor on the words it should now hold (Discard, drafts brought back). */
 let generation = $state(0);
+/**
+ * The words each in-place editor holds, as it last reported them; and a count per card that remounts its editor when
+ * the stored words change under it (a save from the card's own form), so it shows them. A Save from the bar leaves an
+ * editor as it is: it already holds what was written, or newer words.
+ */
+const held = new Map<string, string>();
+let remounts: ReadonlyMap<string, number> = $state(new Map());
+$effect(() => {
+  for (const card of data.cards) {
+    if (card.content.kind !== "readme") continue;
+    const want = textOf(card);
+    const has = held.get(card.key);
+    held.set(card.key, want);
+    if (has === undefined || has === want) continue;
+    untrack(() => {
+      remounts = new Map(remounts).set(card.key, (remounts.get(card.key) ?? 0) + 1);
+    });
+  }
+});
 /** The Text cards showing their plain Markdown field instead of the editor. */
 let plain: ReadonlySet<string> = $state(new Set());
 let saving = $state(false);
@@ -67,6 +86,7 @@ const textOf = (card: CardView) => {
 };
 
 function change(key: string, made: CardChange) {
+  if (made.fields?.text !== undefined) held.set(key, made.fields.text);
   edits = edit(edits, data.cards, key, made);
   said = undefined;
   const text = made.fields?.text;
@@ -90,7 +110,9 @@ function discard() {
 }
 
 async function save() {
-  const form = cardSaveForm(editsToSave(edits, data.cards), data.cardEditLimits.formBytes);
+  const toSend = editsToSave(edits, data.cards);
+  const sent = toSend.map((card) => card.key);
+  const form = cardSaveForm(toSend, data.cardEditLimits.formBytes);
   if (form.kind === "too_large") {
     said = { text: UNSAVED_BAR.tooLarge, refused: true };
     return;
@@ -108,19 +130,30 @@ async function save() {
   } catch {
     // Not sent, or no answer: nothing is known to be written, so everything stays unsaved.
   }
-  if (answer.kind === "saved") {
-    forget(edits.keys());
-    edits = NO_EDITS;
-    said = { text: UNSAVED_BAR.saved, refused: false };
-  } else if (answer.kind === "refused") {
-    const saved = answer.saved ?? [];
-    forget(saved);
-    edits = settle(edits, saved);
-    said = { text: answer.message, refused: true };
-  } else said = { text: UNSAVED_BAR.failed, refused: true };
-  // The page's cards and versions as now stored, so the next Save names the versions just written.
+  // The cards as now stored, with the versions just written, before reading what is left: the editors stay open while
+  // a Save is on its way, and words typed meanwhile stay unsaved on the new version (afterSave).
   if (answer.kind !== "failed") await refreshAll();
+  const written = answer.kind === "saved" ? sent : answer.kind === "refused" ? (answer.saved ?? []) : [];
+  const before = edits;
+  edits = afterSave(edits, written, data.cards);
+  keepDrafts(written, before);
+  if (answer.kind === "saved") said = { text: UNSAVED_BAR.saved, refused: false };
+  else if (answer.kind === "refused") said = { text: answer.message, refused: true };
+  else said = { text: UNSAVED_BAR.failed, refused: true };
   saving = false;
+}
+
+/** Each written card's draft goes, or moves to the new version when the card holds newer words. */
+function keepDrafts(written: readonly string[], before: UnsavedCards) {
+  const store = storage();
+  if (store === null) return;
+  for (const key of written) {
+    const left = edits.get(key);
+    const text = left?.fields.text;
+    if (left === undefined || text === undefined) {
+      if (before.has(key)) void clearDraft(store, data.account.did, key);
+    } else void writeDraft(store, data.account.did, key, { version: left.version, text });
+  }
 }
 
 function toggleMarkdown(key: string) {
@@ -253,8 +286,8 @@ function dropDrafts() {
               oninput={(event) => change(card.key, { fields: { text: event.currentTarget.value } })}
             />
           {:else}
-            <!-- Remounted on Discard, drafts brought back, or new stored text (a save from the card's own form). -->
-            {#key `${generation}:${card.key}:${card.version ?? ""}:${card.content.kind === "readme" ? card.content.text : ""}`}
+            <!-- Remounted on Discard, drafts brought back, or new stored words under it (remounts). -->
+            {#key `${generation}:${card.key}:${remounts.get(card.key) ?? 0}`}
               <CardText
                 blocks={card.shown.blocks}
                 name={cardName(card.content)}

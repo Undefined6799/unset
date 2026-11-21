@@ -56,9 +56,22 @@ export function editsToSave(edits: UnsavedCards, cards: readonly CardView[]): Ca
   });
 }
 
-/** What is left unsaved once a Save wrote the cards `saved`. */
-export function settle(edits: UnsavedCards, saved: readonly string[]): UnsavedCards {
+/**
+ * What is left unsaved once a Save wrote the cards `written`, read against the cards as now stored. The page stays
+ * editable while a Save is on its way, so a written card may hold newer words than were sent: it stays unsaved, now
+ * on the version just written, so the next Save sends it without a conflict. One that holds what is now stored is
+ * saved. A card the Save did not write keeps its edit as it was.
+ */
+export function afterSave(edits: UnsavedCards, written: readonly string[], stored: readonly CardView[]): UnsavedCards {
   const next = new Map(edits);
-  for (const key of saved) next.delete(key);
+  for (const key of written) {
+    const unsaved = edits.get(key);
+    const card = stored.find((c) => c.key === key);
+    const fields = card === undefined ? null : storedFields(card);
+    next.delete(key);
+    if (unsaved === undefined || card?.version === undefined || fields === null) continue;
+    const same = sameFields(unsaved.fields, fields) && unsaved.width === card.width && unsaved.surface === card.surface;
+    if (!same) next.set(key, { ...unsaved, version: card.version });
+  }
   return next;
 }
