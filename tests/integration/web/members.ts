@@ -6,6 +6,7 @@ import { type Did, PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identit
 import { createAccountRepository, type Pool, withTransaction } from "@unset/infrastructure-postgres";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
+import { chatAccountsOf } from "../../support/chat-accounts.ts";
 
 const quiet = createLogger({ service: "web", commit: "c".repeat(40), env: "test", write: () => undefined });
 
@@ -16,6 +17,7 @@ export async function readyMember(pool: Pool, did: Did, emailConfirmed: boolean 
     recordUnderageBlock: async () => {
       throw new Error("readyMember never blocks");
     },
+    chatAccounts: chatAccountsOf(pool),
   });
   await accounts.confirmAdult(did, deadline);
   const step = await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, deadline);

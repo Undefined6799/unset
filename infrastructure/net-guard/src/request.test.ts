@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { atproto, localPlc, objectStore, type Policy, pdsAdmin, plc } from "./policies.ts";
+import { atproto, chatAdmin, localPlc, objectStore, type Policy, pdsAdmin, plc } from "./policies.ts";
 import { fakeResolver, type Handler, httpServer, httpsServer, loopbackDial, testCertificate } from "./remote.fake.ts";
 import { createNetGuardWith, type EgressEvent } from "./request.ts";
 import { NetGuardError } from "./resolve.ts";
@@ -247,6 +247,18 @@ describe("guardedRequest", () => {
     const bad = guardFor({ "pds-admin": [PUBLIC] }, servers.http.port);
     const policy = pdsAdmin("http://pds-admin:8080");
     expect(await codeOf(bad.guard.request(policy, { url: "http://pds-admin:8080/" }))).toBe("egress.private_address");
+  });
+
+  test("chat_admin_policy_exact_origin_private_only", async () => {
+    // ADR 0081 decision 5: web reaches chat-admin by its one CHAT_ADMIN_URL, at a private address, nothing wider.
+    handler = (_req, res) => res.end("ok");
+    const policy = chatAdmin("http://chat-admin:8080");
+    expect(policy).toEqual({ name: "chat-admin", kind: "internal", origins: ["http://chat-admin:8080"] });
+    const ok = guardFor({ "chat-admin": ["172.20.0.13"], "pds-admin": ["172.20.0.11"] }, servers.http.port);
+    expect((await ok.guard.request(policy, { url: "http://chat-admin:8080/v1/account.create" })).status).toBe(200);
+    expect(await codeOf(ok.guard.request(policy, { url: "http://pds-admin:8080/" }))).toBe("egress.host_not_allowed");
+    const bad = guardFor({ "chat-admin": [PUBLIC] }, servers.http.port);
+    expect(await codeOf(bad.guard.request(policy, { url: "http://chat-admin:8080/" }))).toBe("egress.private_address");
   });
 
   test("put_only_on_internal_policy", async () => {

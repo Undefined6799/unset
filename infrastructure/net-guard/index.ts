@@ -6,6 +6,7 @@ export { type FetchDefaults, guardedFetch, libraryFetch } from "./src/libraryFet
 export {
   atproto,
   atprotoBlobUpload,
+  chatAdmin,
   DEFAULT_REQUEST_BYTES,
   internalPolicy,
   objectStore,

@@ -16,6 +16,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { chatAccountsOf } from "../../../support/chat-accounts.ts";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, type StandInFixture, startWeb } from "../built-server.ts";
 import { elements, textContent } from "../html.ts";
 import { readyMember } from "../members.ts";
@@ -44,6 +45,7 @@ const accounts = createAccountRepository(pool, {
   recordUnderageBlock: async () => {
     throw new Error("this file never blocks");
   },
+  chatAccounts: chatAccountsOf(pool),
 });
 const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }));
 if (keyring === undefined) throw new Error("test keyring did not parse");

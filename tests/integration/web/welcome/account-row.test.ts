@@ -6,6 +6,7 @@ import { type Did, parseDid } from "@unset/domains-identity";
 import { createAccountRepository, createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, expect, inject, test } from "vitest";
 import { recordUnderageBlock } from "../../../../interfaces/web/src/lib/server/age-gate-audit.ts";
+import { chatAccountsOf } from "../../../support/chat-accounts.ts";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../../..`, import.meta.filename)] ?? "";
@@ -31,7 +32,7 @@ const did = (text: string): Did => {
 const ADULT = did(`did:plc:${"a".repeat(24)}`);
 const CHILD = did(`did:plc:${"b".repeat(24)}`);
 const MOVED = did(`did:plc:${"c".repeat(24)}`);
-const store = createAccountRepository(pool, { recordUnderageBlock });
+const store = createAccountRepository(pool, { recordUnderageBlock, chatAccounts: chatAccountsOf(pool) });
 
 const columns = () =>
   withClient(pool, null, async (db) => {
@@ -94,6 +95,7 @@ test("age.audit_failure_rolls_block_back", async () => {
       written = await recordUnderageBlock(tx, subject, hosted);
       throw new Error("audit failed");
     },
+    chatAccounts: chatAccountsOf(pool),
   });
   await expect(failing.blockUnderage(did, false, AbortSignal.timeout(5_000))).rejects.toThrow("audit failed");
   expect(written).not.toBeNull();

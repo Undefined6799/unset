@@ -290,6 +290,19 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.chat_account": {
+      "web": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "chat_user": ["SELECT", "INSERT"],
+          "state": ["SELECT", "UPDATE"],
+          "attempts": ["SELECT", "UPDATE"],
+          "due_at": ["SELECT", "UPDATE"],
+          "lease_token": ["SELECT", "UPDATE"],
+          "updated_at": ["UPDATE"]
+        }
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {

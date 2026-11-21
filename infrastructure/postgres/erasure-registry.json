@@ -92,5 +92,9 @@
   "app.notification.did": {
     "strategy": "delete_row",
     "reason": "the person's unopened notifications (P2.27, ADR 0079); they go when the person is erased"
+  },
+  "app.chat_account.did": {
+    "strategy": "delete_row",
+    "reason": "the member's chat mapping (ADR 0010); the row goes when they are erased, and its chat user, with no DID, is queued in app.chat_erasure for the MAS deactivation (ADR 0084)"
   }
 }

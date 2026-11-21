@@ -19,6 +19,7 @@ import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, afterEach, beforeAll, describe, expect, inject, test } from "vitest";
+import { chatAccountsOf } from "../../../support/chat-accounts.ts";
 import {
   buildOnce,
   clientAddress,
@@ -52,6 +53,7 @@ const accounts = createAccountRepository(pool, {
   recordUnderageBlock: async () => {
     throw new Error("only the server blocks");
   },
+  chatAccounts: chatAccountsOf(pool),
 });
 // The server unseals the grants this file stores, so both use one keyring, handed to the server by file.
 const KEYRING = JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } });

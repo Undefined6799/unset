@@ -8,7 +8,8 @@
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
 // P2.27: the member's notification inbox and the one way to send into it (ADR 0079).
-import { createPrivateKey, type KeyObject } from "node:crypto";
+// Build step 5 (ADR 0081): each member's chat account, queued at the terms step and created through chat-admin.
+import { createPrivateKey, type KeyObject, randomBytes } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
   type AccountRepository,
@@ -20,8 +21,10 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
+import { type ChatAccountPorts, createDueAccounts, newChatUser } from "@unset/domains-messaging";
 import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
+import { type ChatAdminClient, createChatAdminClient } from "@unset/infrastructure-matrix";
 import {
   createNetGuard,
   guardedFetch,
@@ -39,9 +42,11 @@ import {
   type SavedSession,
 } from "@unset/infrastructure-pds";
 import {
+  type ChatAccountStore,
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
+  createChatAccountStore,
   createDiscoverabilityStore,
   createImageStore,
   createInviteStore,
@@ -83,6 +88,11 @@ import { startSweeps } from "./sweeps.ts";
 const SWEEP_MS = 10_000;
 /** The book's cadence for the expiry sweeps (phase-2.md P2.03 "run hourly"). */
 const EXPIRY_SWEEP_MS = 3_600_000;
+/** How often due chat accounts are created, and at most how many per run (build step 5). */
+const CHAT_JOBS_MS = 10_000;
+const CHAT_JOBS_PER_RUN = 20;
+/** A claim's lease: above one job's handle check (identity timeouts, at most 10 s each) and its 8 s chat-admin call. */
+const CHAT_LEASE_S = 120;
 /** Under the health check's 1 s bound (shared/http/health.ts), so the probe is ended, not left behind. */
 const READINESS_MS = 900;
 
@@ -193,11 +203,31 @@ async function sweepImages(store: ImageStore, drafts: ObjectStore): Promise<void
   if (failed > 0) throw new Error("image sweep could not delete some objects");
 }
 
-/** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
-function webAdminKey(pem: string): KeyObject {
+/** web's signing key for an admin service: an Ed25519 private key, or the process does not start (exit 78 path). */
+function webAdminKey(pem: string, name: "PDS_ADMIN_WEB_KEY" | "CHAT_ADMIN_WEB_KEY"): KeyObject {
   const key = createPrivateKey(pem);
-  if (key.asymmetricKeyType !== "ed25519") throw new Error("PDS_ADMIN_WEB_KEY is not an Ed25519 private key");
+  if (key.asymmetricKeyType !== "ed25519") throw new Error(`${name} is not an Ed25519 private key`);
   return key;
+}
+
+/**
+ * The queued chat account creation's ports (domains/messaging createDueAccounts): the store's claim and settle, the
+ * handle check both ways (the display name is only ever a verified handle), and chat-admin.
+ */
+function chatAccountPorts(
+  store: ChatAccountStore,
+  handles: Services["handles"],
+  chatAdmin: ChatAdminClient,
+): ChatAccountPorts {
+  return {
+    claim: async () => (await store.claim(1))[0] ?? null,
+    verifiedHandle: async (did) => {
+      const verdict = await handles.verifyHandle(did);
+      return verdict.status === "verified" ? verdict.handle : null;
+    },
+    create: (user, name) => chatAdmin.createAccount(user, name),
+    settle: (job, settlement) => store.settle(job, settlement),
+  };
 }
 
 /** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
@@ -302,7 +332,19 @@ async function build(): Promise<Services> {
     log,
   });
   const nonces = createSingleUseStore({ log });
-  const accounts = createAccountRepository(pool, { recordUnderageBlock });
+  const chatAccounts = createChatAccountStore(pool, {
+    newUser: () => newChatUser((n) => randomBytes(n)),
+    leaseS: CHAT_LEASE_S,
+  });
+  const accounts = createAccountRepository(pool, { recordUnderageBlock, chatAccounts });
+  const chatAdmin = createChatAdminClient(guard, {
+    origin: config.CHAT_ADMIN_URL,
+    env: config.UNSET_ENV === "prod" ? "prod" : "dev",
+    key: {
+      kid: config.CHAT_ADMIN_WEB_KID,
+      privateKey: webAdminKey(config.CHAT_ADMIN_WEB_KEY.reveal(), "CHAT_ADMIN_WEB_KEY"),
+    },
+  });
   const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
     withTransaction(pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
   // `deadlineAt` is the request's own, on the monotonic clock: pdsCall retries a read only while it fits (P2.07a).
@@ -317,7 +359,10 @@ async function build(): Promise<Services> {
       origin: config.PDS_ADMIN_URL,
       env: config.UNSET_ENV === "prod" ? "prod" : "dev",
       pdsDid: config.PDS_DID,
-      key: { kid: config.PDS_ADMIN_WEB_KID, privateKey: webAdminKey(config.PDS_ADMIN_WEB_KEY.reveal()) },
+      key: {
+        kid: config.PDS_ADMIN_WEB_KID,
+        privateKey: webAdminKey(config.PDS_ADMIN_WEB_KEY.reveal(), "PDS_ADMIN_WEB_KEY"),
+      },
     }),
     denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
   };
@@ -365,6 +410,24 @@ async function build(): Promise<Services> {
     log,
   });
 
+  // Every replica runs the creations: a claim takes one row with SKIP LOCKED under a lease, so two never call for the
+  // same account at once, and a call never holds a transaction or connection (rule DA-4). A chat-admin outage only
+  // delays them (ADR 0084 decision 4: chat never fails the account change).
+  const chatPorts = chatAccountPorts(chatAccounts, handles, chatAdmin);
+  const stopChatJobs = startSweeps({
+    sweeps: [
+      {
+        job: "chat-account-create",
+        run: async () => {
+          const counts = await createDueAccounts(chatPorts, CHAT_JOBS_PER_RUN);
+          if (counts.failed > 0) log.error("chat.account_failed", { count: counts.failed });
+        },
+      },
+    ],
+    everyMs: CHAT_JOBS_MS,
+    log,
+  });
+
   const health = createHealth({
     service: config.UNSET_SERVICE,
     commit: config.UNSET_COMMIT,
@@ -376,6 +439,7 @@ async function build(): Promise<Services> {
   shutdown.close.push(
     async () => clearInterval(sweeper),
     async () => stopSweeps(),
+    async () => stopChatJobs(),
     () => pool.end(),
     () => lockPool.pool.end(),
   );

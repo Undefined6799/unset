@@ -99,6 +99,9 @@ const EVENTS = [
   "invite.store_failed",
   // P2.27, notifications: the bell's or the page's read failed, so it says so and the page renders. `kind` is the class
   // name. No DID and no count.
+  // Build step 5, chat accounts: queued creations that stopped for good this run (`count`; a name MAS holds for someone
+  // else, a request chat-admin refused, or too many attempts), for an operator. No DID or chat user.
+  "chat.account_failed",
   "notifications.read_failed",
   "notifications.send_failed",
   // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), it stopped (`kind` "finished",
