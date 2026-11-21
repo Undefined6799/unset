@@ -180,30 +180,6 @@ describe("index store", () => {
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
   });
 
-  test("index.a_refused_main_page_is_kept_closed", async () => {
-    // ADR 0091: the main page says who sees the account, so one we cannot read is kept with no cards and shown only to
-    // its member, never dropped (a dropped page would read as public). Its own account, so A's revisions stay as the
-    // later tests expect.
-    const C = "did:plc:cccccccccccccccccccccccc";
-    track(C, true);
-    await commit(C, rev(3), [section(CARD_1), page([{ uri: `at://${C}/sh.unset.card/${CARD_1}` }])]);
-    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position = 0`)).toEqual(["1"]);
-    const before = stat("ingest_invalid");
-    const broken: IndexChange = {
-      kind: "put",
-      collection: "sh.unset.page",
-      rkey: "self",
-      cid: CID,
-      record: { $type: "sh.unset.page", cards: 7, createdAt: T },
-    };
-    await commit(C, rev(4), [broken]);
-    expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${C}'`)).toEqual([
-      "owner-only|f",
-    ]);
-    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position IS NOT NULL`)).toEqual(["0"]);
-    expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
-  });
-
   test("index.inactive_account_keeps_nothing_new", async () => {
     track(B, false);
     await commit(B, rev(3), [profile()]);
@@ -429,6 +405,30 @@ describe("index store", () => {
       "confirm_deletion",
     ]);
     expect(await store.cursor()).toBe(seq);
+  });
+
+  test("index.a_refused_main_page_is_kept_closed", async () => {
+    // ADR 0091: the main page says who sees the account, so one we cannot read is kept with no cards and shown only to
+    // its member, never dropped (a dropped page would read as public). Its own account, last in this block, so no
+    // other test's revisions or account counts move.
+    const C = "did:plc:pppppppppppppppppppppppp";
+    track(C, true);
+    await commit(C, rev(3), [section(CARD_1), page([{ uri: `at://${C}/sh.unset.card/${CARD_1}` }])]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position = 0`)).toEqual(["1"]);
+    const before = stat("ingest_invalid");
+    const broken: IndexChange = {
+      kind: "put",
+      collection: "sh.unset.page",
+      rkey: "self",
+      cid: CID,
+      record: { $type: "sh.unset.page", cards: 7, createdAt: T },
+    };
+    await commit(C, rev(4), [broken]);
+    expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${C}'`)).toEqual([
+      "owner-only|f",
+    ]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position IS NOT NULL`)).toEqual(["0"]);
+    expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
   });
 });
 

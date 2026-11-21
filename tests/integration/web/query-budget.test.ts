@@ -29,7 +29,12 @@ const BUDGET = 5;
  * the main page became its own record (ADR 0091), a third PDS read after the profile and before the cards (CI run on
  * #1952, 2026-11-21).
  */
-const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 7 };
+/**
+ * Settings › Privacy runs 6 (CI run on #1952, 2026-11-21). It was 5 until who sees the page moved to the main page
+ * record (ADR 0091): the page is read with the profile in one PDS call (loadProfileAndPage), which took it from 7 back
+ * to 6, and the second PDS request adds the one statement over the budget.
+ */
+const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 7, "/settings/privacy": 6 };
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const ROUTES = join(REPO, "interfaces", "web", "src", "routes");
 const provided = inject("postgres");
