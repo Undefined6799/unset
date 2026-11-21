@@ -311,24 +311,38 @@ test("a_paste_with_two_paragraphs_in_a_list_item_is_refused", async ({ page }) =
 
 // Codex review of #1827: a line break in a list item is written as a continuation line the page moves out of the
 // list, so it is refused there.
-test("a_line_break_in_a_list_item_is_refused", async ({ page }) => {
+// Alex, 2026-11-21: "swap the enter and shift enter everywhere", the dialog's editor as the one on the page.
+test("enter_breaks_the_line_and_shift_enter_starts_a_new_block_in_the_dialog_too", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await writeText(editor, ["one"]);
+  await editor.press("Enter");
+  await editor.pressSequentially("two");
+  await expect(postedText(dialog)).toHaveValue("one\\\ntwo");
+  await editor.press("Shift+Enter");
+  await editor.pressSequentially("three");
+  await expect(postedText(dialog)).toHaveValue("one\\\ntwo\n\nthree");
+  await page.keyboard.press("Escape");
+});
+
+// A list item's line break would not show on the page (parse.ts), so there Enter starts the next item.
+test("enter_in_a_list_item_starts_the_next_item", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
   await writeText(editor, ["- one"]);
   await expect(postedText(dialog)).toHaveValue("- one");
-  await editor.press("Shift+Enter");
+  await editor.press("Enter");
   await editor.pressSequentially("two");
-  await expect(postedText(dialog)).toHaveValue("- onetwo");
+  await expect(postedText(dialog)).toHaveValue("- one\n- two");
   await page.keyboard.press("Escape");
 });
 
 // Codex review of #1827 kept a quote to one paragraph and refused line breaks while the page could show neither; since
 // P1.21s the page draws a quote's paragraphs and a hard line break, so both are kept.
-test("a_quote_keeps_its_paragraphs_and_shift_enter_breaks_the_line", async ({ page }) => {
+test("a_quote_keeps_its_paragraphs_and_enter_breaks_the_line", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
   await paste(page, editor, "<p>a</p><blockquote><p>one</p><p>two</p></blockquote><p>b</p>");
   await editor.pressSequentially("typed");
   await expect(postedText(dialog)).toHaveValue("a\n\n> one\n>\n> two\n\nbtyped");
-  await editor.press("Shift+Enter");
+  await editor.press("Enter");
   await editor.pressSequentially("more");
   await expect(postedText(dialog)).toHaveValue("a\n\n> one\n>\n> two\n\nbtyped\\\nmore");
   await page.keyboard.press("Escape");

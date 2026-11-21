@@ -105,7 +105,7 @@ test("pasted_markdown_becomes_formatting_and_pasted_html_loads_nothing", async (
   const watched = watch(page);
   const word = `paste${Date.now()}`;
   const { editor } = await cardWithCaret(page, word);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await paste(page, { "text/plain": "## Title\n\n- item\n\n**bold** and [site](https://example.com)" });
   // "##" is the card's second level, an h3 under the card's h2, as the page shows it.
   await expect(editor.locator("h3")).toHaveText("Title");
@@ -114,7 +114,7 @@ test("pasted_markdown_becomes_formatting_and_pasted_html_loads_nothing", async (
   await expect(editor.locator("a")).toHaveAttribute("href", /^https:\/\/example\.com\/?$/);
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await caretAtEnd(page, word);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await paste(page, {
     "text/html":
       // Styled HTML (a sheet or style attributes) is refused by the CSP and reported, a known item while Crepe is weighed.
@@ -136,17 +136,17 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   const word = `typed${Date.now()}`;
   const { editor } = await cardWithCaret(page, word);
   // An empty line.
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("after");
-  // Shift+Enter breaks the line inside the paragraph.
   await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("after");
+  // Enter breaks the line inside the paragraph.
+  await page.keyboard.press("Enter");
   await page.keyboard.type("next line");
   await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(1);
-  // Enter in a quote starts the quote's next paragraph.
-  await page.keyboard.press("Enter");
+  // Shift+Enter in a quote starts the quote's next paragraph.
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("> first");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("second");
   await expect(editor.locator("blockquote p")).toHaveCount(2);
   const { card, editor: reopened } = await saveAndReopen(page, word);
