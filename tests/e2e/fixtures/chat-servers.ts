@@ -155,6 +155,10 @@ export async function startRealStack(
   const unsetSh = (req: IncomingMessage, res: ServerResponse) => {
     const path = new URL(req.url ?? "/", "https://unset.sh").pathname;
     if (path === "/logout") return void logOut(req, res);
+    if (path === "/logout/done")
+      return void res
+        .writeHead(200, { "content-type": "text/html" })
+        .end('<title>Signing out</title><meta http-equiv="refresh" content="0;url=/signed-out">');
     if (path === "/signed-out")
       return void res.writeHead(200, { "content-type": "text/html" }).end("<title>Out</title>");
     return void signIn(req, res);

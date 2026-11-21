@@ -86,11 +86,15 @@ function startSignIn(url: URL, deps: DoorDeps): DoorAnswer {
   return { response: new Response(null, { status: 303, headers }) };
 }
 
-/** GET /sign-out/done: the chat page, its Log out over, back to unset.sh's signed-out page. Sets nothing. */
+/**
+ * GET /sign-out/done: the chat page, its Log out over, back to unset.sh. Sets nothing. It lands on web's bounce page
+ * (interfaces/web routes/logout/done), not /signed-out: this navigation is cross-site, and only the bounce's own,
+ * same-site one carries the signed-out page's Strict cookie.
+ */
 const signedOut: GetRoute = (_url, deps) => ({
   response: new Response(null, {
     status: 303,
-    headers: { ...BASE, ...NO_REFERRER, location: `${deps.webOrigin}/signed-out` },
+    headers: { ...BASE, ...NO_REFERRER, location: `${deps.webOrigin}/logout/done` },
   }),
 });
 

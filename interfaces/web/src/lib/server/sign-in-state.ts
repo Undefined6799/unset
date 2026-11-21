@@ -42,13 +42,11 @@ const COOKIES = {
   target: { name: "__Host-login_target", sameSite: "strict", maxAge: 120 },
   /**
    * P2.08b: the issuer origin recorded at sign-in, for the signed-out page's account link. The last browser's sign-out
-   * deletes the token set that records it, so POST /logout carries it here, short-lived. Lax, because a Log out that
-   * wipes chat reaches /signed-out from unset.cc's sign-out page, a cross-site top-level GET that carries Lax cookies and
-   * never Strict ones (RFC 6265bis-22 section 5.2, "Same-site and Cross-site Requests"). Only our own POST /logout
-   * writes it, the page checks it again and spends it, so a link from another site can at most spend it. Never a query
-   * parameter, which any site could link with another origin.
+   * deletes the token set that records it, so POST /logout carries it here: Strict, because only our own pages lead to
+   * /signed-out (our 303, or GET /logout/done's same-site refresh after unset.cc's sign-out page), and short-lived.
+   * Never a query parameter, which any site could link with another origin.
    */
-  issuer: { name: "__Host-signed_out_issuer", sameSite: "lax", maxAge: 600 },
+  issuer: { name: "__Host-signed_out_issuer", sameSite: "strict", maxAge: 600 },
   /**
    * Alex 2026-11-21 (ADR 0083 decision 5): web's ticket that lets unset.cc wipe chat in this browser after POST /logout,
    * waiting for GET /logout/chat. Strict, because only our own 303 leads there; 60 s, the ticket's own life.

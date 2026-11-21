@@ -606,13 +606,19 @@ describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () =>
     expect(due.rows.map((r) => r.device_id)).not.toContain(device);
   });
 
-  test("the_signed_out_page_after_chat_keeps_the_issuer: the carried issuer is sent on the door's way back", async () => {
+  test("log_out_done_bounces_same_site: unset.cc's way back reaches /signed-out from a page of ours", async () => {
+    // The issuer cookie stays Strict; the door sends the tab here, and this page's own navigation is same-site.
     const owner = newDid();
-    const cookie = await signIn(owner);
-    const response = await signOut(cookie);
-    const line = response.headers.getSetCookie().find((each) => each.startsWith("__Host-signed_out_issuer=")) ?? "";
-    // The door's 303 to /signed-out is a cross-site navigation, which carries Lax cookies and never Strict ones
-    // (RFC 6265bis-22 section 5.2, "Same-site and Cross-site Requests").
-    expect(line.split(";").map((part) => part.trim().toLowerCase())).toContain("samesite=lax");
+    const line =
+      (await signOut(await signIn(owner))).headers
+        .getSetCookie()
+        .find((each) => each.startsWith("__Host-signed_out_issuer=")) ?? "";
+    expect(line.split(";").map((part) => part.trim().toLowerCase())).toContain("samesite=strict");
+    const page = await web.fetch("/logout/done", { headers: headers({ cookie: "__Host-signed_out_issuer=x" }) });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("cache-control")).toContain("no-store");
+    expect(page.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(page.headers.getSetCookie()).toEqual([]);
+    expect(await page.text()).toContain('<meta http-equiv="refresh" content="0;url=/signed-out"');
   });
 });

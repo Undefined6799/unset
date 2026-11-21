@@ -131,11 +131,11 @@ describe("the chat page", () => {
     },
   );
 
-  test("door.sign_out_done: the page's way back to unset.sh's signed-out page sets nothing and sends no referrer", async () => {
+  test("door.sign_out_done: the page's way back to unset.sh's bounce page sets nothing and sends no referrer", async () => {
     const { get, lines } = door();
     const res = await get("/sign-out/done");
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe(`${WEB}/signed-out`);
+    expect(res.headers.get("location")).toBe(`${WEB}/logout/done`);
     expect(res.headers.get("referrer-policy")).toBe("no-referrer");
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(res.headers.getSetCookie()).toEqual([]);

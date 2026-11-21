@@ -77,6 +77,6 @@ What the pinned SDK does (matrix-js-sdk 43.0.0, `lib/crypto-api/index.d.ts`, `li
   door route POST /sign-out/redeem. POST /logout ends the web session and queues the chat devices it signed in; when
   it queued one, this browser holds it, and the tab goes through GET /logout/chat to `/sign-out/return#ticket=…` with
   a ticket for the ended session. The door spends it only on the entry this browser already holds (no new device, no
-  renewal), the page takes the tab lock over and runs Log out as above, then returns to unset.sh's signed-out page.
-  The queued end fires after 120 s if the page never finishes. The signed-out issuer cookie is Lax, as that page is
-  now reached from unset.cc.
+  renewal), the page takes the tab lock over and runs Log out as above, then returns to unset.sh through GET
+  /logout/done, a stateless page whose meta refresh is a same-site navigation to /signed-out, so the issuer cookie
+  stays Strict (RFC 6265bis-22 section 5.2). The queued end fires after 120 s if the page never finishes.
