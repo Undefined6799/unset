@@ -7,7 +7,7 @@
 // dismissing. Its Sign-in history tab (P2.27c) has INBOX_SIZE sign-ins, and nothing here deletes one either.
 import { expect, type Page, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
-import { INBOX_SIZE, type PageFixture } from "./pages.ts";
+import { BELL_SIZE, INBOX_SIZE, type PageFixture } from "./pages.ts";
 
 const INBOX: PageFixture = {
   path: "/notifications",
@@ -109,6 +109,31 @@ test.describe("wide screen", () => {
     await expect(rows(page).getByRole("checkbox", { checked: true })).toHaveCount(INBOX_SIZE);
     await page.getByRole("checkbox", { name: "Select all" }).uncheck();
     await expect(button).toBeDisabled();
+  });
+});
+
+test.describe("the bell's count", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+  // The sign-ins tab marks nothing seen on its own (ADR 0085), so the count is the bell member's BELL_SIZE.
+  const BELL: PageFixture = {
+    ...INBOX,
+    path: "/notifications/sign-ins",
+    route: "/notifications/sign-ins",
+    member: "bell",
+  };
+
+  test("comes_back_when_marking_it_seen_fails", async ({ page }) => {
+    // Every mark fails, as on a dropped connection, so this member's count is never stored as seen.
+    await page.route("**/notifications?/seen", (route) => route.abort("failed"));
+    const marked = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("?/seen"));
+    expect((await openPage(page, BELL))?.status()).toBe(200);
+    const bell = page.getByRole("button", { name: `Notifications, ${BELL_SIZE} waiting` });
+    await page.waitForLoadState("networkidle"); // the client has run, so opening the bell marks it
+    await bell.click();
+    await marked;
+    // The mark was not stored, so the badge is back, and the next opening tries again.
+    await page.keyboard.press("Escape");
+    await expect(bell).toBeVisible();
   });
 });
 
