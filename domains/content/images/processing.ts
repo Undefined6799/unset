@@ -25,7 +25,14 @@ export type VersionSpec = {
   readonly minQuality: number;
   readonly maxBytes: number;
   /**
-   * Still over `maxBytes` at `minQuality`: true refuses the upload as too large; false leaves this version out, so a
+   * Still over `maxBytes` at `minQuality`: the smaller sizes tried next, each from `quality` down to its own
+   * `minQuality`, so a hard photo loses pixels before it loses much quality (ADR 0088). Each is below the one before.
+   */
+  readonly smaller?: readonly { readonly size: number; readonly minQuality: number }[];
+  /** Sources tried lossless first, kept when that fits (a PNG screenshot or drawing; ADR 0088). WebP only. */
+  readonly losslessFrom?: readonly SourceFormat[];
+  /**
+   * Still over `maxBytes` at the last size tried: true refuses the upload as too large; false leaves this version out, so a
    * hard photo never fails on a display size. A result never holds a version over its `maxBytes`.
    */
   readonly required: boolean;
