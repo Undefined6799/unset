@@ -90,6 +90,18 @@ describe("chat erasure store", () => {
     expect(await store.finish(again as NonNullable<typeof again>)).toBe(true);
   });
 
+  test("chat.erasure_age: a claim says how long ago the erasure queued the row, by the database's clock", async () => {
+    const user = await erased();
+    postgres.sql(
+      "unset",
+      `UPDATE app.chat_erasure SET queued_at = now() - interval '200 seconds' WHERE chat_user = '${user}'`,
+    );
+    const job = (await store.claim(10)).find((j) => j.user === user);
+    expect(job?.queuedForS).toBeGreaterThanOrEqual(200);
+    expect(job?.queuedForS).toBeLessThan(260);
+    await store.finish(job as NonNullable<typeof job>);
+  });
+
   test("chat.erasure_web_bounds: web may not add a row, nor change who is queued", async () => {
     expect(
       await refusedCode(`INSERT INTO app.chat_erasure (chat_user, queued_at) VALUES ('u${"y".repeat(20)}', now())`),

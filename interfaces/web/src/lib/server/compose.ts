@@ -270,6 +270,7 @@ function chatAccountPorts(
     },
     create: (user, name) => chatAdmin.createAccount(user, name),
     settle: (job, settlement) => store.settle(job, settlement),
+    nowMs: () => performance.now(),
   };
 }
 

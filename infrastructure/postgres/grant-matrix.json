@@ -331,7 +331,8 @@
           "chat_user": ["SELECT"],
           "due_at": ["SELECT", "UPDATE"],
           "attempts": ["SELECT", "UPDATE"],
-          "lease_token": ["SELECT", "UPDATE"]
+          "lease_token": ["SELECT", "UPDATE"],
+          "queued_at": ["SELECT"]
         },
         "rowPrivileges": ["DELETE"]
       }

@@ -142,6 +142,10 @@ $$;
 CREATE TRIGGER browser_refuse_ended_session BEFORE INSERT OR UPDATE OF web_session ON door.browser
   FOR EACH ROW EXECUTE FUNCTION door.refuse_ended_session();
 
+-- The erasure job (migration 0042) reads how long ago a row was queued: an account MAS does not hold yet may still be
+-- created by a creation claimed before the erasure, so "no account" only finishes the row once none can land.
+GRANT SELECT (queued_at) ON app.chat_erasure TO web;
+
 GRANT EXECUTE ON FUNCTION app.end_chat_sessions(text[], types.did, integer) TO web;
 GRANT EXECUTE ON FUNCTION app.claim_chat_session_end(integer, integer) TO web;
 GRANT EXECUTE ON FUNCTION app.finish_chat_session_end(text, text, uuid) TO web;

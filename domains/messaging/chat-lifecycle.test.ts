@@ -11,6 +11,7 @@ import {
   type ChatLockPorts,
   type ChatSessionEndJob,
   type ChatSessionEndPorts,
+  CREATE_LANDS_WITHIN_S,
   END_STUCK_ATTEMPTS,
   ERASE_STUCK_ATTEMPTS,
   endDueSessions,
@@ -41,7 +42,12 @@ function ports(answers: ChatAccountChange[], jobs: ChatErasureJob[]) {
   };
   return { double, calls };
 }
-const job = (c: string, attempts = 0): ChatErasureJob => ({ user: user(c), attempts, lease: `lease-${c}` });
+const job = (c: string, attempts = 0, queuedForS = CREATE_LANDS_WITHIN_S): ChatErasureJob => ({
+  user: user(c),
+  attempts,
+  lease: `lease-${c}`,
+  queuedForS,
+});
 
 describe("eraseDueAccounts", () => {
   test("chat.erase_deactivates_then_finishes: the queued row goes only once chat-admin has deactivated", async () => {
@@ -54,6 +60,22 @@ describe("eraseDueAccounts", () => {
     const { double, calls } = ports([{ kind: "no_account" }], [job("b")]);
     expect((await eraseDueAccounts(double, 10)).erased).toBe(1);
     expect(calls.at(-1)).toBe(`finish ${user("b")}`);
+  });
+
+  test("chat.erase_waits_for_late_create: an account missing right after erasure is asked again later", async () => {
+    // A creation claimed before the erasure may still reach MAS; until it can no longer land, "no account" is not
+    // the end, or the account would be created afterwards with the erased member's handle.
+    const { double, calls } = ports(
+      [{ kind: "no_account" }, { kind: "no_account" }],
+      [job("y", 0, CREATE_LANDS_WITHIN_S - 1), job("z", 1, CREATE_LANDS_WITHIN_S)],
+    );
+    expect(await eraseDueAccounts(double, 10)).toEqual({ erased: 1, retry: 1, lost: 0, stuck: 0 });
+    expect(calls).toEqual([
+      `deactivate ${user("y")}`,
+      `retry ${user("y")} 30`,
+      `deactivate ${user("z")}`,
+      `finish ${user("z")}`,
+    ]);
   });
 
   test("chat.erase_retries: unavailable or refused keeps the row and waits; it never gives up", async () => {
