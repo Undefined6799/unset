@@ -1553,6 +1553,13 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     expect(JSON.stringify(chatRoute(config, 2))).not.toContain('"Cookie"');
   });
 
+  test("chat_signin_counts_each_sign_in_and_sign_out_redeem", () => {
+    // The door's two ticket redeems (ADR 0083 decisions 2 and 5) share the sign-in zone: GET /sign-in starts the hop,
+    // POST /sign-in/redeem and POST /sign-out/redeem spend a ticket. A path under them is not the door's and 404s.
+    const zone = o(o(o(a(chatRoute(adapted("dev-chat"), 0).handle)[0]).rate_limits).chat_signin);
+    expect(a(zone.match).map((m) => o(m).path)).toEqual([["/sign-in", "/sign-in/redeem", "/sign-out/redeem"]]);
+  });
+
   test("chat_paths_reach_only_the_ruled_upstream", () => {
     // P6.02 (ADR 0081 decision 6, ADR 0088): each pattern is judged on the decoded path before Caddy cleans it, so a
     // dot segment or an empty segment never names a path under /_matrix/client/ that Synapse would read as another.
@@ -1573,6 +1580,11 @@ describe("edge rules on the adapted config (P1.39b)", () => {
       "/sign-in/return",
       "/sign-in/redeem",
       "/sign-out",
+      "/sign-out/return",
+      "/sign-out/redeem",
+      "/sign-out/done",
+      "/welcome",
+      "/welcome/done",
       "/setup/claim",
       "/setup/release",
       "/push/key",
@@ -1600,6 +1612,10 @@ describe("edge rules on the adapted config (P1.39b)", () => {
       "/.well-known/matrix/server",
       "/sign-in/",
       "/sign-in/other",
+      "/sign-out/",
+      "/sign-out/other",
+      "/welcome/",
+      "/welcome/other",
       "/assets/",
       "/assets/../sign-out",
       "/assets/a/b.js",

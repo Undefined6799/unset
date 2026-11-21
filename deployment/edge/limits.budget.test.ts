@@ -224,7 +224,8 @@ describe("docs_global", () => {
 });
 
 // The chat site (P6.02; dev/chat.caddy): chat_global counts every request to staging.unset.cc, the page, its files and
-// the Matrix client API; chat_signin the two requests of each sign-in hop, GET /sign-in and POST /sign-in/redeem. The
+// the Matrix client API; chat_signin the two requests of each sign-in hop, GET /sign-in and POST /sign-in/redeem, and
+// the one of each sign-out hop, POST /sign-out/redeem (one per unset.sh Log out, well inside the 20). The
 // door and Synapse see only the edge's address, so these are the only per-client limits in front of them.
 //
 // What one member's browser sends, estimated high (not measured): a cold page is the document and its content-hashed

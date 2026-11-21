@@ -19,13 +19,16 @@ client listener, `10.250.38.51:8008`).
    (`CHAT_HOST`, `CHAT_UPSTREAM`, `MATRIX_UPSTREAM`), and C18 refuses it on an edge outside the two chat networks.
 2. **Two upstream paths, matched before cleaning.** On the decoded path before Caddy cleans it: `/_matrix/client/...`
    with no empty or dot-only segment to Synapse; exactly the door's routes (`/`, `/sign-in`, `/sign-in/return`,
-   `/sign-in/redeem`, `/sign-out`, `/setup/claim`, `/setup/release`, `/push/key`, `/chat-id`, `/assets/<file>`,
-   `/dm/<did>`) to the door. Everything else, `/_synapse/`, federation, keys, media outside the client API,
-   `/.well-known/` and the door's `/health` among it, is the edge's own 404. Both upstreams get no client address.
+   `/sign-in/redeem`, `/sign-out`, `/sign-out/return`, `/sign-out/redeem`, `/sign-out/done`, `/welcome`,
+   `/welcome/done`, `/setup/claim`, `/setup/release`, `/push/key`, `/chat-id`, `/assets/<file>`, `/dm/<did>`) to the
+   door; the welcome and sign-out ones arrive with #1939 and #1950. Everything else, `/_synapse/`, federation, keys,
+   media outside the client API, `/.well-known/` and the door's `/health` among it, is the edge's own 404. Both
+   upstreams get no client address.
 3. **Policies.** The door sets its own CSP on every answer (ADR 0088 decision 1); a response with none of its own,
    Synapse's JSON or the edge's 404, gets the strict policy (`?Content-Security-Policy`, set only when absent).
-4. **Limits.** `chat_signin` (20 per 5 minutes, GET `/sign-in` and POST `/sign-in/redeem`) and `chat_global` (6000 per
-   5 minutes, every request), per client address; the door and Synapse see only the edge's address.
+4. **Limits.** `chat_signin` (20 per 5 minutes, GET `/sign-in`, POST `/sign-in/redeem` and POST `/sign-out/redeem`)
+   and `chat_global` (6000 per 5 minutes, every request), per client address; the door and Synapse see only the
+   edge's address.
 5. **Pangolin.** A resource `staging.unset.cc` on the staging site, login on, target `https` to `10.250.37.3:443`,
    certificate check off, TLS Server Name `staging.unset.cc`, as for the other staging names (runbook
    `chat-servers.md`). Public DNS gains the A/AAAA record to Pangolin and, as ADR 0025 foresaw, the

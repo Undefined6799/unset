@@ -54,10 +54,11 @@ export const DEV_CHAT = {
 /**
  * The chat site's two upstream paths (dev/chat.caddy), each matched on the decoded path before Caddy cleans it. The
  * Matrix client API: one or more segments under /_matrix/client, none empty and none only dots, and an optional
- * trailing slash (an empty state key). The door's routes: exactly those interfaces/chat-auth serves but /health.
+ * trailing slash (an empty state key). The door's routes: exactly those interfaces/chat-auth serves but /health, with
+ * /welcome, /welcome/done (#1939) and /sign-out/return, /sign-out/redeem, /sign-out/done (#1950).
  */
 export const CHAT_MATRIX_PATH = String.raw`^/_matrix/client(?:/[^/]*[^/.][^/]*)+/?$`;
-export const CHAT_DOOR_PATH = String.raw`^/(?:sign-in(?:/return|/redeem)?|sign-out|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$`;
+export const CHAT_DOOR_PATH = String.raw`^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$`;
 /** Where the dev edge reads the built docs (compose.dev.yaml's one folder bind). */
 export const DOCS_ROOT = "/srv/docs";
 /** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */
@@ -1004,7 +1005,7 @@ const DOCS_ZONES: readonly Zone[] = [["docs_global", 6000, 300]];
 /** The chat site's zones (dev/chat.caddy; limits.json chatRateLimitZones): each sign-in hop, then every request. */
 const CHAT_ZONES: readonly Zone[] = [
   ["chat_global", 6000, 300],
-  ["chat_signin", 20, 300, paths("/sign-in", "/sign-in/redeem")],
+  ["chat_signin", 20, 300, paths("/sign-in", "/sign-in/redeem", "/sign-out/redeem")],
 ];
 /** Each site's unmatched zone, which no other site's rate_limit may hold. */
 const GLOBALS = ["global", "app_global", "docs_global", "chat_global"];

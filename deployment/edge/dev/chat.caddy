@@ -8,7 +8,9 @@
 #     repository outside the client API, no /.well-known/: nothing routes to MAS or chat-admin (ADR 0081 decision 6).
 #   - the door's own routes (interfaces/chat-auth/door.ts GETS and compose.ts posts; ADR 0088 decision 1): the page at
 #     / and /sign-in/return, its built files under /assets/, a Message link /dm/<did>, the hop's /sign-in, and the
-#     POST routes, to the door's public listener (10.250.38.43:8090 on chat_edge). Its /health is not public.
+#     POST routes, to the door's public listener (10.250.38.43:8090 on chat_edge). Its /health is not public. Also the
+#     routes the door gains on other branches: /welcome and /welcome/done (#1939, P6.17), /sign-out/return,
+#     POST /sign-out/redeem and /sign-out/done (#1950, P6.16); until they land the door answers its own 404 there.
 # Everything else is the edge's own 404. Only the edge's address reaches either upstream, as on every site.
 #
 # The door sets its own CSP on every answer (the page's in interfaces/chat-auth/page.ts pageCsp, the strict one on the
@@ -35,7 +37,7 @@
 			request_header -Cookie
 			import upstream {$MATRIX_UPSTREAM}
 		}
-		@door vars_regexp {http.request.uri.path} ^/(?:sign-in(?:/return|/redeem)?|sign-out|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$
+		@door vars_regexp {http.request.uri.path} ^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$
 		route @door {
 			import upstream {$CHAT_UPSTREAM}
 		}
