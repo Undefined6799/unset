@@ -86,6 +86,7 @@ export const PAGE_VISIBILITY = {
     "This asks apps not to show your page; it does not hide your profile. What you publish stays public on the atproto network: any app or person can still read it from your sign-in server.",
   save: "Save privacy",
   saved: "Privacy saved.",
+  catchingUp: "Your public page is still catching up and will follow this choice within a few seconds.",
   noProfile: "You have no page yet. Publish your profile first, then choose who sees it.",
   unreadable:
     "We could not read your profile from your sign-in server, so this choice is not shown. Try again in a moment.",

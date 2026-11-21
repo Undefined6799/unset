@@ -4,11 +4,13 @@
 // their PDS first, as POST /profile writes it; then the Search and AI choices (ADR 0062) are saved in Postgres, but
 // only while the page is public: a page shown to fewer than everyone is never listed, and its stored choices are kept
 // for when it is public again (the form posts them hidden). A save answers 303 back to Settings › Privacy; a refusal
-// shows its code and the field to blame. The route has no page of its own, so a GET is a 404, as /profile's is.
+// shows its code and the field to blame. A new visibility waits a few seconds at most for the index the public page
+// reads (index-catch-up.ts). The route has no page of its own, so a GET is a 404, as /profile's is.
 import { type Actions, error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { type ProfileVisibility, parseDiscoverabilityForm, parseProfileVisibility } from "@unset/domains-profile";
 import { ERROR_CODES, type ErrorCode } from "@unset/shared-errors";
 import { services } from "../../../lib/server/compose.ts";
+import { publicPageShows, sleep } from "../../../lib/server/index-catch-up.ts";
 import { saveToPds } from "../../../lib/server/profile-save.ts";
 
 export const load: ServerLoad = () => error(404, { message: "http.not_found" });
@@ -50,6 +52,16 @@ export const actions: Actions = {
       if (saved.kind === "unavailable") refuse("profile.pds_unavailable");
     }
     if (parsed?.ok) await services().discoverability.save(did, parsed.value, locals.deadline);
-    redirect(303, "/settings/privacy?saved#privacy");
+    // The public page reads the index, a second or two behind the PDS: "saved" only once it shows the choice, else
+    // "pending", so the member is never told a page is hidden while a visitor can still load it (index-catch-up.ts).
+    const caughtUp =
+      visibility === undefined ||
+      (await publicPageShows(visibility, {
+        read: async (signal) => (await services().publicProfiles.find({ did }, signal))?.record ?? null,
+        now: Date.now,
+        sleep,
+        signal: locals.deadline,
+      }));
+    redirect(303, `/settings/privacy?saved${caughtUp ? "" : "=pending"}#privacy`);
   },
 };

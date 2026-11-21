@@ -57,6 +57,8 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
     },
     // The save's 303 back here (routes/settings/search-and-ai): with no script, the page says it saved.
     saved: url.searchParams.has("saved"),
+    // The save ran out of time waiting for the public page to follow (index-catch-up.ts): it says so.
+    catchingUp: url.searchParams.get("saved") === "pending",
     // Listing switched off on the whole site (P1.21b): the section says so, and the choices still save.
     searchListingOff: config.SEARCH_LISTING !== "on",
   };
