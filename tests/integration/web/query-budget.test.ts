@@ -24,10 +24,12 @@ import { readyMember } from "./members.ts";
 
 const BUDGET = 5;
 /**
- * The owner's page runs 6: the session, the account row, then the sealed grant read once to restore the OAuth session
- * and once more inside the restore lock for each of the page's PDS calls (measured 2026-11-18 on k2).
+ * The owner's page runs 7: the session, the account row, then the sealed grant read once to restore the OAuth session
+ * and once more inside the restore lock for each of the page's PDS calls (measured 2026-11-18 on k2). It was 6 until
+ * the main page became its own record (ADR 0091), a third PDS read after the profile and before the cards (CI run on
+ * #1952, 2026-11-21).
  */
-const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 6 };
+const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 7 };
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const ROUTES = join(REPO, "interfaces", "web", "src", "routes");
 const provided = inject("postgres");

@@ -39,7 +39,7 @@ const HIDDEN = [INACTIVE, DELISTED, SUSPENDED, NO_PROFILE];
 
 const store = () => createPublicProfileStore(web);
 
-/** An account row, its profile unless `profile` is false, and one card. */
+/** An account row, its profile unless `profile` is false, its main page (ADR 0091) and one card. */
 function account(did: string, handle: string, opts: { active?: boolean; status?: string; profile?: boolean } = {}) {
   const { active = true, status = "verified", profile = true } = opts;
   const profileRow = `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
@@ -49,6 +49,8 @@ function account(did: string, handle: string, opts: { active?: boolean; status?:
     `INSERT INTO idx.account (did, handle, handle_status, pds_active, updated_at)
        VALUES ('${did}', '${handle}', '${status}', ${active}, now());
      ${profile ? profileRow : ""}
+     INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', '{"cards":[]}', now());
      INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
        VALUES ('at://${did}/sh.unset.card/3k', '${did}', '3k', 'cid-s', '3l', '{"type":"x"}', 0, now());`,
   );
@@ -97,6 +99,7 @@ describe("public profile store", () => {
       handle: "alice.unset.test",
       cid: "cid-p",
       record: { displayName: "N" },
+      page: { cards: [] },
       sections: [{ key: "3k", cid: "cid-s", value: { type: "x" } }],
       discoverability: { searchEngines: false, aiSearch: false, title: "", description: "" },
     });
@@ -118,7 +121,7 @@ describe("public profile store", () => {
   test("web_sees_no_hidden_row_in_the_views", async () => {
     const dids = await withClient(web, null, (c) =>
       c.query<{ did: string }>(
-        "SELECT did FROM idx.public_profile UNION SELECT did FROM idx.public_section ORDER BY did",
+        "SELECT did FROM idx.public_profile UNION SELECT did FROM idx.public_section UNION SELECT did FROM idx.public_page ORDER BY did",
       ),
     );
     expect(dids.rows.map((r) => r.did)).toEqual([SHOWN, UNVERIFIED]);
