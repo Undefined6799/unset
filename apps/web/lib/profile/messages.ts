@@ -232,7 +232,20 @@ export const TEXT_MENUS = {
     numbers: "Ordered list",
     codeBlock: "Code",
   },
-  format: { strong: "Bold", emphasis: "Italic", code: "Inline code" },
+  format: { strong: "Bold", emphasis: "Italic", code: "Inline code", link: "Link" },
+  /** What an empty line with the caret says. */
+  hint: "Type / to choose a block",
+  link: {
+    editor: "Link for the selected words",
+    address: "Link address",
+    placeholder: "Paste a link…",
+    apply: "Apply link",
+    refused: "Use an address that starts with https:// or http://",
+    preview: "Link",
+    copy: "Copy link",
+    edit: "Edit link",
+    remove: "Remove link",
+  },
 } as const;
 
 /** The bar that holds the owner's unsaved changes (ADR 0074 item 4), and the drafts offered back when the page opens. */

@@ -4927,6 +4927,15 @@ aria-activedescendant, arrows, Enter, Escape, a press), selected words show a fl
 code), and a pointer that can hover shows the side handle, whose "+" adds a line with the menu open and whose grip
 drags the block. Differences from the playground are listed in the PR.
 
+Slice 4 (2026-11-21, the two gaps of slice 3 a member notices first): the floating bar's Link opens a link editor
+over the selected words (Enter sets it, Escape or a press elsewhere closes it; on linked words Link takes it off),
+and a pointer resting on a link shows its address with Copy, Edit and Remove, as Crepe 7.23.0's link-tooltip does
+(its code is Vue, in @milkdown/components, so ours is drawn in text-menus.svelte and placed by plugin-tooltip). Only
+an address safeHref takes as http or https is set, since the page shows no other link. An empty line with the caret
+says "Type / to choose a block", Crepe's placeholder feature (Milkdown ships no placeholder plugin). Mod+Shift+Up
+and Down move the block with the caret (its list item, or the top-level block) past its neighbour: the grip's move
+by keys, which neither plugin-block nor Crepe has.
+
 Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
 raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
 the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a

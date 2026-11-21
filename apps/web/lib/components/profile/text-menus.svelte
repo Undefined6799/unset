@@ -11,14 +11,17 @@ import { TEXT_MENUS } from "../../profile/messages.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 
 let {
-  state,
+  state: shown,
   optionId,
   handle = $bindable(),
   add = $bindable(),
   menu = $bindable(),
   bar = $bindable(),
+  linkEdit = $bindable(),
+  linkPreview = $bindable(),
   onchoose,
   onformat,
+  onlink,
 }: {
   state: MenusState;
   optionId: (item: BlockItem) => string;
@@ -26,8 +29,17 @@ let {
   add?: HTMLElement;
   menu?: HTMLElement;
   bar?: HTMLElement;
+  linkEdit?: HTMLElement;
+  linkPreview?: HTMLElement;
   onchoose: (item: BlockItem) => void;
   onformat: (item: BarItem) => void;
+  /** The link editor's and preview's actions (editor/menus.ts Menus). */
+  onlink: {
+    confirm: (address: string) => void;
+    cancel: () => void;
+    edit: () => void;
+    remove: () => void;
+  };
 } = $props();
 
 const BLOCK_ICONS: Partial<Record<BlockItem, IconName>> = {
@@ -51,12 +63,36 @@ const GROUPS: Record<BlockItem, keyof typeof TEXT_MENUS.groups> = {
   numbers: "list",
   codeBlock: "advanced",
 };
-const BAR_ICONS: Record<BarItem, IconName> = { strong: "bold", emphasis: "italic", code: "inline-code" };
+const BAR_ICONS: Record<BarItem, IconName> = { strong: "bold", emphasis: "italic", code: "inline-code", link: "link" };
+const refusedId = $props.id();
+
+let address = $state("");
+// The field holds what the editor opened it with, each time it opens (an empty field, or the link being edited).
+$effect.pre(() => {
+  if (shown.link?.mode === "edit" && !shown.link.refused) address = shown.link.value;
+});
+
+// Enter sets the link and Escape closes the editor; neither reaches the page's own keys (Crepe link-edit).
+function addressKey(event: KeyboardEvent) {
+  if (event.key !== "Enter" && event.key !== "Escape") return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key === "Enter") onlink.confirm(address);
+  else onlink.cancel();
+}
+
+function copy() {
+  if (shown.link?.mode !== "preview") return;
+  void navigator.clipboard?.writeText(shown.link.href).catch(() => undefined);
+}
 
 const keep = (event: Event) => event.preventDefault();
 // Hidden by visibility, not display (Crepe's CSS does the same with opacity): floating-ui measures the element before
 // it is shown, which it cannot do with no box.
 const floating = "absolute z-20 flex invisible data-[show=true]:visible";
+// The link editor and preview are shown only by an explicit show(), which marks them shown before placing them, so
+// they take no room while hidden: an invisible one beside a narrow card would scroll a phone's page sideways.
+const placedOnShow = "absolute z-20 hidden data-[show=true]:flex max-w-[calc(100vw-2rem)]";
 const control =
   "inline-flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 </script>
@@ -70,14 +106,14 @@ const control =
 
 <div bind:this={menu} data-show="false" class="{floating} w-56 flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
   <ul role="listbox" aria-label={TEXT_MENUS.blocks} class="max-h-72 overflow-y-auto" onpointerdown={keep}>
-    {#each state.items as item, at (item)}
-      {#if at === 0 || GROUPS[state.items[at - 1] as BlockItem] !== GROUPS[item]}
+    {#each shown.items as item, at (item)}
+      {#if at === 0 || GROUPS[shown.items[at - 1] as BlockItem] !== GROUPS[item]}
         <li role="presentation" class="px-2 pt-2 pb-1 text-xs text-muted-foreground">{TEXT_MENUS.groups[GROUPS[item]]}</li>
       {/if}
       <li
         id={optionId(item)}
         role="option"
-        aria-selected={at === state.index}
+        aria-selected={at === shown.index}
         class="flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
         onclick={() => onchoose(item)}
         onkeydown={() => undefined}
@@ -90,13 +126,47 @@ const control =
 </div>
 
 <div bind:this={bar} data-show="false" role="toolbar" tabindex="-1" aria-label={TEXT_MENUS.bar} class="{floating} gap-0.5 rounded-md border bg-popover p-0.5 shadow-md" onpointerdown={keep}>
-  {#each ["strong", "emphasis", "code"] as const as item (item)}
+  {#each ["strong", "emphasis", "code", "link"] as const as item (item)}
     <button
       type="button"
       class="{control} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
       aria-label={TEXT_MENUS.format[item]}
-      aria-pressed={state.on.has(item)}
+      aria-pressed={shown.on.has(item)}
       onclick={() => onformat(item)}><Icon name={BAR_ICONS[item]} /></button
     >
   {/each}
+</div>
+
+<div bind:this={linkEdit} data-show="false" data-text-popover role="dialog" aria-label={TEXT_MENUS.link.editor} class="{placedOnShow} w-72 flex-col gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+  <div class="flex items-center gap-1">
+    <input
+      bind:value={address}
+      type="url"
+      class="h-8 min-w-0 flex-1 rounded-sm bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
+      aria-label={TEXT_MENUS.link.address}
+      aria-invalid={shown.link?.mode === "edit" && shown.link.refused}
+      aria-describedby={shown.link?.mode === "edit" && shown.link.refused ? refusedId : undefined}
+      placeholder={TEXT_MENUS.link.placeholder}
+      onkeydown={addressKey}
+    />
+    {#if address !== ""}
+      <button type="button" class={control} aria-label={TEXT_MENUS.link.apply} onclick={() => onlink.confirm(address)}><Icon name="done" /></button>
+    {/if}
+  </div>
+  {#if shown.link?.mode === "edit" && shown.link.refused}
+    <p id={refusedId} role="alert" class="px-2 pb-1 text-xs text-destructive">{TEXT_MENUS.link.refused}</p>
+  {/if}
+</div>
+
+<div bind:this={linkPreview} data-show="false" data-text-popover role="group" aria-label={TEXT_MENUS.link.preview} class="{placedOnShow} items-center gap-0.5 rounded-md border bg-popover p-0.5 text-sm text-popover-foreground shadow-md" onpointerdown={keep}>
+  {#if shown.link?.mode === "preview"}
+    <button type="button" class={control} aria-label={TEXT_MENUS.link.copy} onclick={copy}><Icon name="copy" /></button>
+    {#if shown.link.safe !== null}
+      <a href={shown.link.safe} target="_blank" rel="noopener noreferrer" class="min-w-0 truncate px-1 underline">{shown.link.href}</a>
+    {:else}
+      <span class="min-w-0 truncate px-1 text-muted-foreground">{shown.link.href}</span>
+    {/if}
+    <button type="button" class={control} aria-label={TEXT_MENUS.link.edit} onclick={onlink.edit}><Icon name="edit" /></button>
+    <button type="button" class={control} aria-label={TEXT_MENUS.link.remove} onclick={onlink.remove}><Icon name="delete" /></button>
+  {/if}
 </div>
