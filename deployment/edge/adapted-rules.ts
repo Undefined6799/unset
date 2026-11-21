@@ -976,20 +976,22 @@ function proxyProblems(name: string, proxy: Obj, upstream: string): string[] {
     found.push(`${name}: a reverse_proxy passes X-Forwarded-Host`);
   }
   // Then the handler whole, so it sets no other request header and keeps the ruled transport and timeouts.
-  const ruled: Json = {
-    handler: "reverse_proxy",
-    headers: {
-      request: {
-        delete: [...ADDRESS_HEADERS, WEB_KEY_HEADER],
-        set: { "X-Forwarded-Host": ["{http.request.host}"], "X-Forwarded-Proto": ["https"] },
-      },
-    },
-    transport: { protocol: "http", dial_timeout: 5_000_000_000, response_header_timeout: 130_000_000_000 },
-    upstreams: [{ dial: upstream }],
-  };
-  if (!same(proxy, ruled)) found.push(`${name}: a reverse_proxy is not the ruled one`);
+  if (!same(proxy, ruledProxy(upstream))) found.push(`${name}: a reverse_proxy is not the ruled one`);
   return found;
 }
+
+/** (upstream) as adapted for `upstream` (snippets/upstream.caddy): every rule proxyProblems names, whole. */
+const ruledProxy = (upstream: string): Json => ({
+  handler: "reverse_proxy",
+  headers: {
+    request: {
+      delete: [...ADDRESS_HEADERS, WEB_KEY_HEADER],
+      set: { "X-Forwarded-Host": ["{http.request.host}"], "X-Forwarded-Proto": ["https"] },
+    },
+  },
+  transport: { protocol: "http", dial_timeout: 5_000_000_000, response_header_timeout: 130_000_000_000 },
+  upstreams: [{ dial: upstream }],
+});
 
 /** The index of the first inner route that holds a reverse_proxy, or the route count when none does. */
 const upstreamAt = (routes: Obj[]): number => {
