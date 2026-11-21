@@ -19,7 +19,28 @@ export type AdminPayload = {
   readonly exp: number;
 };
 
-export type AdminEnvelope = { readonly payload: AdminPayload; readonly kid: string; readonly sig: string };
+/** What chat-admin may be asked (ADR 0081 decision 5): fixed, and none of them takes a scope. */
+export type ChatAdminVerb = "account.create" | "session.mint" | "session.end";
+
+/**
+ * One chat-admin request. `user` is the chat account's username (the MAS localpart web's mapping holds, never a DID).
+ * `name` is the display name for `account.create` and `device` the device to end for `session.end`; each is "" for the
+ * other verbs, so every payload has the same keys and the verifier refuses any other.
+ */
+export type ChatAdminPayload = {
+  readonly v: 1;
+  readonly env: string;
+  readonly aud: "chat-admin";
+  readonly verb: ChatAdminVerb;
+  readonly user: string;
+  readonly name: string;
+  readonly device: string;
+  readonly jti: string;
+  readonly iat: number;
+  readonly exp: number;
+};
+
+export type AdminEnvelope<P = AdminPayload> = { readonly payload: P; readonly kid: string; readonly sig: string };
 
 /** Exactly the payload's keys: the verifier refuses any other key or a missing one. */
 export const PAYLOAD_KEYS: readonly (keyof AdminPayload)[] = [
@@ -30,6 +51,20 @@ export const PAYLOAD_KEYS: readonly (keyof AdminPayload)[] = [
   "verb",
   "target",
   "actor_did",
+  "jti",
+  "iat",
+  "exp",
+];
+
+/** Exactly a chat-admin payload's keys. */
+export const CHAT_PAYLOAD_KEYS: readonly (keyof ChatAdminPayload)[] = [
+  "v",
+  "env",
+  "aud",
+  "verb",
+  "user",
+  "name",
+  "device",
   "jti",
   "iat",
   "exp",
@@ -46,8 +81,11 @@ export function canonicalize(object: Readonly<Record<string, string | number>>):
   return `{${keys.map((key) => `${JSON.stringify(key)}:${JSON.stringify(object[key])}`).join(",")}}`;
 }
 
-/** Signs `payload` with web's key: the signature is Ed25519 over the canonical bytes, base64url. */
-export function signEnvelope(payload: AdminPayload, key: { kid: string; privateKey: KeyObject }): AdminEnvelope {
+/** Signs `payload` with the caller's key: the signature is Ed25519 over the canonical bytes, base64url. */
+export function signEnvelope<P extends AdminPayload | ChatAdminPayload>(
+  payload: P,
+  key: { kid: string; privateKey: KeyObject },
+): AdminEnvelope<P> {
   const sig = sign(null, Buffer.from(canonicalize(payload)), key.privateKey).toString("base64url");
   return { payload, kid: key.kid, sig };
 }

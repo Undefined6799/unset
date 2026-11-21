@@ -1,0 +1,150 @@
+// The MAS admin calls (ADR 0081 decisions 1 and 5): the only file in chat-admin that opens a connection, and only to
+// the two internal origins checked at boot (the egress guard's exemption). Every answer is parsed here into what
+// chat-admin needs; anything else throws MasUnavailable, which the handler answers 503 and never retries (RE-1: the
+// caller's queued job or the door retries). Read from MAS 1.26.0 docs/api/spec.json and docs/topics/admin-api.md
+// (https://github.com/element-hq/matrix-authentication-service/tree/v1.26.0/docs), checked on a live 1.26.0:
+// token by client_credentials with client_secret_basic and scope urn:mas:admin; users 201/409, by-username 200/404;
+// personal-sessions 201; revoke 200, 409 when already revoked.
+import { request } from "node:http";
+import { type Resolve, systemResolve, vettedLookup } from "@unset/shared-admin-envelope";
+
+export class MasUnavailable extends Error {}
+
+export type MasUser = { readonly id: string; readonly locked: boolean; readonly deactivated: boolean };
+export type Mas = {
+  readonly createUser: (username: string, displayname: string) => Promise<"created" | "conflict">;
+  readonly findUser: (username: string) => Promise<MasUser | null>;
+  /** Personal sessions of a user holding `device`'s scope token: active ones, or every one ever made. */
+  readonly sessions: (userId: string, device: string, which: "active" | "ever") => Promise<string[]>;
+  readonly mint: (userId: string, scope: string, expiresIn: number) => Promise<string>;
+  readonly revoke: (sessionId: string) => Promise<void>;
+};
+export type MasOptions = {
+  readonly adminUrl: URL;
+  readonly tokenUrl: URL;
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly resolve?: Resolve;
+};
+
+/** Each call's whole deadline, inside the request's (RE-1), and the most any answer may hold. */
+const TIMEOUT_MS = 5_000;
+const CAP = 64 * 1024;
+/** A token is dropped this long before MAS says it expires, so none is used as it runs out. */
+const TOKEN_MARGIN_MS = 30_000;
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+const HUMAN_NAME = "unset.cc";
+
+type Answer = { status: number; body: Record<string, unknown> };
+const field = (value: unknown, ...path: string[]): unknown =>
+  path.reduce<unknown>((at, key) => (typeof at === "object" && at !== null ? Reflect.get(at, key) : undefined), value);
+
+export function createMas(options: MasOptions): Mas {
+  const lookup = vettedLookup(options.resolve ?? systemResolve, () => new MasUnavailable("public_answer"));
+  const send = (url: URL, method: string, headers: Record<string, string>, body?: string) =>
+    new Promise<Answer>((resolve, reject) => {
+      const req = request(url, { method, headers, timeout: TIMEOUT_MS, lookup }, (res) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        res.on("data", (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > CAP) return req.destroy(new MasUnavailable("cap"));
+          chunks.push(chunk);
+        });
+        res.on("end", () => {
+          let parsed: unknown = {};
+          try {
+            parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          } catch {
+            // Not JSON: an empty body, which every parser below refuses.
+          }
+          const record = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+          resolve({ status: res.statusCode ?? 0, body: record });
+        });
+        res.on("error", () => reject(new MasUnavailable("read")));
+      });
+      const deadline = setTimeout(() => req.destroy(new MasUnavailable("deadline")), TIMEOUT_MS);
+      req.on("close", () => clearTimeout(deadline));
+      req.on("timeout", () => req.destroy(new MasUnavailable("timeout")));
+      req.on("error", (error) => reject(error instanceof MasUnavailable ? error : new MasUnavailable("connect")));
+      req.end(body);
+    });
+
+  let cached: { token: string; until: number } | null = null;
+  async function adminToken(): Promise<string> {
+    if (cached !== null && Date.now() < cached.until) return cached.token;
+    // client_secret_basic: id and secret form-encoded, then base64 (RFC 6749 section 2.3.1).
+    const basic = Buffer.from(`${encodeURIComponent(options.clientId)}:${encodeURIComponent(options.clientSecret)}`);
+    const answer = await send(
+      new URL("/oauth2/token", options.tokenUrl),
+      "POST",
+      { authorization: `Basic ${basic.toString("base64")}`, "content-type": "application/x-www-form-urlencoded" },
+      new URLSearchParams({ grant_type: "client_credentials", scope: "urn:mas:admin" }).toString(),
+    );
+    const { access_token: token, expires_in: lifetime } = answer.body;
+    if (answer.status !== 200 || typeof token !== "string" || typeof lifetime !== "number") {
+      throw new MasUnavailable(`token_${answer.status}`);
+    }
+    cached = { token, until: Date.now() + lifetime * 1000 - TOKEN_MARGIN_MS };
+    return token;
+  }
+
+  async function admin(method: "GET" | "POST", path: string, body?: object): Promise<Answer> {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${await adminToken()}`,
+      accept: "application/json",
+    };
+    if (body !== undefined) headers["content-type"] = "application/json";
+    const url = new URL(path, options.adminUrl);
+    if (url.origin !== options.adminUrl.origin) throw new MasUnavailable("origin");
+    const answer = await send(url, method, headers, body === undefined ? undefined : JSON.stringify(body));
+    // A refused token is dropped, so the next request fetches another; this one still fails.
+    if (answer.status === 401) cached = null;
+    return answer;
+  }
+  const refuse = (op: string, answer: Answer): never => {
+    throw new MasUnavailable(`${op}_${answer.status}`);
+  };
+
+  return {
+    createUser: async (username, displayname) => {
+      const answer = await admin("POST", "/api/admin/v1/users", { username, displayname });
+      if (answer.status === 201) return "created";
+      return answer.status === 409 ? "conflict" : refuse("create", answer);
+    },
+    findUser: async (username) => {
+      const answer = await admin("GET", `/api/admin/v1/users/by-username/${encodeURIComponent(username)}`);
+      if (answer.status === 404) return null;
+      const id = field(answer.body, "data", "id");
+      if (answer.status !== 200 || typeof id !== "string" || !ULID.test(id)) return refuse("user", answer);
+      const at = (key: string) => field(answer.body, "data", "attributes", key) !== null;
+      return { id, locked: at("locked_at"), deactivated: at("deactivated_at") };
+    },
+    sessions: async (userId, device, which) => {
+      // filter[scope] matches sessions whose scope list holds every given token (MAS 1.26.0
+      // crates/storage-pg/src/personal/session.rs, PersonalSessionFilter, `contains`).
+      const query = new URLSearchParams({
+        "filter[actor_user]": userId,
+        "filter[scope]": `urn:matrix:client:device:${device}`,
+        "page[first]": "100",
+      });
+      if (which === "active") query.set("filter[status]", "active");
+      const answer = await admin("GET", `/api/admin/v1/personal-sessions?${query}`);
+      const data = answer.body.data;
+      if (answer.status !== 200 || !Array.isArray(data)) return refuse("list", answer);
+      const ids = data.map((item) => field(item, "id"));
+      if (!ids.every((id): id is string => typeof id === "string" && ULID.test(id))) return refuse("list", answer);
+      return ids;
+    },
+    mint: async (userId, scope, expiresIn) => {
+      const body = { actor_user_id: userId, human_name: HUMAN_NAME, scope, expires_in: expiresIn };
+      const answer = await admin("POST", "/api/admin/v1/personal-sessions", body);
+      const token = field(answer.body, "data", "attributes", "access_token");
+      return answer.status === 201 && typeof token === "string" ? token : refuse("mint", answer);
+    },
+    revoke: async (sessionId) => {
+      const answer = await admin("POST", `/api/admin/v1/personal-sessions/${sessionId}/revoke`);
+      if (answer.status !== 200 && answer.status !== 409) refuse("revoke", answer);
+    },
+  };
+}

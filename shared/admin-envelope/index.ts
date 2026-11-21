@@ -4,6 +4,9 @@
 export {
   type AdminEnvelope,
   type AdminPayload,
+  CHAT_PAYLOAD_KEYS,
+  type ChatAdminPayload,
+  type ChatAdminVerb,
   canonicalize,
   PAYLOAD_KEYS,
   signEnvelope,

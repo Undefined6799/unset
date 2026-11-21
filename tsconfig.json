@@ -18,6 +18,7 @@
     { "path": "infrastructure/seal" },
     { "path": "infrastructure/session" },
     { "path": "infrastructure/storage" },
+    { "path": "interfaces/chat-admin" },
     { "path": "interfaces/indexer" },
     { "path": "interfaces/media" },
     { "path": "interfaces/review" },
