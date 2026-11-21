@@ -337,6 +337,22 @@ describe("index store", () => {
     expect(Number(stat("ingest_over_budget"))).toBe(before);
   });
 
+  test("index.a_card_that_shrinks_is_kept_on_a_page_already_past_the_budget", async () => {
+    // Codex review of #1911: a page indexed before the budget may be past it; a write that makes it smaller stays.
+    const K = "did:plc:kkkkkkkkkkkkkkkkkkkkkkkk";
+    track(K, true);
+    sql(
+      `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, bytes, indexed_at)
+       VALUES ('at://${K}/sh.unset.section/${CARD_1}', '${K}', '${CARD_1}', '${CID}', '${rev(3)}', '{}', 100000, now()),
+              ('at://${K}/sh.unset.section/${CARD_2}', '${K}', '${CARD_2}', '${CID}', '${rev(3)}', '{}',
+               ${MAX_PAGE_BYTES}, now())`,
+    );
+    const before = Number(stat("ingest_over_budget"));
+    await commit(K, rev(4), [section(CARD_1)]);
+    expect(lines(`SELECT rkey FROM idx.section WHERE did = '${K}' AND bytes < 100000`)).toEqual([CARD_1]);
+    expect(Number(stat("ingest_over_budget"))).toBe(before);
+  });
+
   test("index.active_status_is_only_queued_for_confirmation", async () => {
     track(C, false);
     await store.apply({ kind: "account", seq: ++seq, did: C, active: true, status: null });

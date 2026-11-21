@@ -457,11 +457,15 @@ async function sectionRoom(tx: PoolClient, did: string, uri: string, bytes: numb
     `SELECT EXISTS (SELECT 1 FROM idx.section WHERE did = $1 AND uri = $2) AS known,
             (SELECT count(*) FROM idx.section WHERE did = $1) AS held,
             (SELECT coalesce(sum(coalesce(bytes, octet_length(record::text))), 0)
-               FROM idx.section WHERE did = $1 AND uri <> $2) AS others`,
+               FROM idx.section WHERE did = $1 AND uri <> $2) AS others,
+            (SELECT coalesce(bytes, octet_length(record::text)) FROM idx.section WHERE did = $1 AND uri = $2) AS mine`,
     [did, uri],
   );
   const row = rows[0];
   if (row?.known !== true && !(Number(row?.held) < MAX_SECTIONS_PER_ACCOUNT)) return "count";
+  // A card that does not grow never makes the page worse, so it is kept even on a page indexed past the budget before
+  // the budget existed (Codex review of #1911); the public read still stops at the budget.
+  if (row?.mine !== null && row?.mine !== undefined && bytes <= Number(row.mine)) return "ok";
   return Number(row?.others) + bytes <= MAX_PAGE_BYTES ? "ok" : "bytes";
 }
 
