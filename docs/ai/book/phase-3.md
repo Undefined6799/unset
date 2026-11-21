@@ -1894,6 +1894,23 @@ Reuse:
 Not in this step: the Follow button (P4.18); post rendering beyond the generic card (P4.16); edge purge and the cookie-bypass rule (P5).
 Diagram: none.
 
+### P3.12t — Refuse profile text the public page cannot show
+Tags: —            Depends on: P3.12
+`domains/profile/` (member-text.ts, web-address.ts, profile.ts, card-edit.ts) and the refusal messages; staging
+break test 2026-11-21, bugs 1, 5 and 6 (bug 2, the record size, is P3.12v).
+
+**What:** what the owner can save and see must show on the public page, or be refused at save. A NUL in the
+profile's location was saved, and the index skips any record Postgres jsonb refuses (a NUL or a lone surrogate), so
+`/@handle` answered 404 while the owner's own page still showed. Every profile and card text field now refuses
+control characters (Unicode Cc; multi-line card text keeps line breaks and tabs) and lone surrogates, and a stored
+field another client wrote with one reads as unset. The display name also refuses the bidirectional embeddings,
+overrides and isolates and the characters that draw nothing (UTS #36); the joiners U+200C and U+200D stay, as
+Persian, the Indic scripts and emoji need them. Links and the website refuse addresses on the visitor's own machine
+or network (localhost, .local, .internal, home.arpa, loopback, private, carrier-grade NAT and link-local IP
+addresses, however typed); http stays. All tightenings, so nothing is needed from Alex.
+
+---
+
 ### P3.13 — Handle hosts
 Tags: none            Depends on: P3.12            Plan: §5.4 "Handle hosts", §5.2 "Rules for the handle domain", §11 Q1
 Where: `deployment/caddy/` (handle-domain site block), `tests/integration/deployment/handle-host.test.ts`

@@ -67,6 +67,31 @@ describe("parseProfileFields", () => {
     expect(parseProfileFields({ headline: "a\nb" })).toEqual({ ok: false, field: "headline", code: "profile.invalid" });
   });
 
+  // Staging break test 2026-11-21: a NUL in the location was saved, and the index then left the record out.
+  test.each(["displayName", "headline", "location", "website"] as const)("%s refuses a control character", (field) => {
+    for (const bad of ["a\u0000b", "a\u0007b", "a\u0085b", "a\ud800b"]) {
+      expect(parseProfileFields({ [field]: `https://x.example/${bad}` })).toEqual({
+        ok: false,
+        field,
+        code: "profile.invalid",
+      });
+    }
+  });
+
+  test("the display name refuses bidirectional controls and invisible characters, other fields keep them", () => {
+    for (const mark of ["\u202e", "\u2067", "\u200b", "\ufeff"]) {
+      expect(parseProfileFields({ displayName: `Ali${mark}ce` })).toEqual({
+        ok: false,
+        field: "displayName",
+        code: "profile.invalid",
+      });
+    }
+    expect(parseProfileFields({ displayName: "👩‍💻 Ada", headline: "a\u200bb" })).toEqual({
+      ok: true,
+      fields: { displayName: "👩‍💻 Ada", headline: "a\u200bb" },
+    });
+  });
+
   test.each(["javascript:alert(1)", "ftp://x.example", "mailto:a@x.example", "https://user:pw@x.example"])(
     "website must be a plain http or https URL: %s",
     (website) => {
@@ -163,6 +188,11 @@ describe("readProfileRecord", () => {
       location: "x".repeat(LIMITS.profile.location + 1),
     };
     expect(readProfileRecord(stored)).toEqual({ ...good, website: "", headline: "", location: "" });
+  });
+
+  test("a field another client wrote with a control character, or a name with a bidi override, reads as unset", () => {
+    const stored = { ...goodStored, location: "a\u0000b", displayName: "\u202eecilA" };
+    expect(readProfileRecord(stored)).toEqual({ ...good, location: "", displayName: "" });
   });
 
   test("a field another client wrote within the lexicon's limit shows, even past the editor's", () => {
