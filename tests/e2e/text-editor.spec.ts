@@ -18,6 +18,12 @@ async function openNewText(page: Page) {
   return { dialog, editor };
 }
 
+/** Picks a text style (Normal text, Heading 1 to 3) from the bar's Heading menu. */
+async function chooseStyle(page: Page, dialog: Locator, style: string) {
+  await dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" }).click();
+  await page.getByRole("menuitemcheckbox", { name: style }).click();
+}
+
 test("the_toolbar_and_shortcuts_write_markdown_into_the_posted_field", async ({ page }) => {
   const watched = watch(page);
   const { dialog, editor } = await openNewText(page);
@@ -29,12 +35,106 @@ test("the_toolbar_and_shortcuts_write_markdown_into_the_posted_field", async ({ 
   await expect(postedText(dialog)).toHaveValue("Title\n\n**a word**");
   // A click puts the caret in the first line, as a member does; an arrow key raced WebKit's restored selection in CI.
   await editor.getByText("Title", { exact: true }).click();
-  await dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" }).click();
+  await chooseStyle(page, dialog, "Heading 2");
   await expect(postedText(dialog)).toHaveValue("## Title\n\n**a word**");
   await writeText(editor, ["- one", "two"]);
   await expect(postedText(dialog)).toHaveValue("- one\n- two");
   await page.keyboard.press("Escape");
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Alex 2026-11-20 on staging: the buttons "kind of work" and he could not pick a heading size. Each block button now
+// shows when it is on and takes the text back to a plain paragraph when pressed again, and the Heading menu offers
+// every size the page shows.
+test("each_block_button_shows_it_is_on_and_turns_off_again", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  const bar = dialog.getByRole("toolbar", { name: "Formatting" });
+  const blocks = [
+    ["List", "- one two"],
+    ["Numbered list", "1. one two"],
+    ["Quote", "> one two"],
+    ["Code block", "```\none two\n```"],
+  ] as const;
+  for (const [name, written] of blocks) {
+    await writeText(editor, ["one two"]);
+    const button = bar.getByRole("button", { name, exact: true });
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await button.click();
+    await expect(postedText(dialog)).toHaveValue(written);
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await button.click();
+    await expect(postedText(dialog)).toHaveValue("one two");
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+  }
+  await page.keyboard.press("Escape");
+});
+
+test("the_heading_menu_sets_each_size_and_back_to_normal_text", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await writeText(editor, ["Title"]);
+  for (const [style, written] of [
+    ["Heading 1", "# Title"],
+    ["Heading 2", "## Title"],
+    ["Heading 3", "### Title"],
+    ["Normal text", "Title"],
+  ] as const) {
+    await chooseStyle(page, dialog, style);
+    await expect(postedText(dialog)).toHaveValue(written);
+    await dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" }).click();
+    await expect(page.getByRole("menuitemcheckbox", { name: style })).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+  }
+  // Focus is back in the text, so typing goes on where it was.
+  await editor.press("End");
+  await page.keyboard.type("!");
+  await expect(postedText(dialog)).toHaveValue("Title!");
+  await page.keyboard.press("Escape");
+});
+
+test("bold_italic_and_code_show_they_are_on_for_the_selected_words", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  const bar = dialog.getByRole("toolbar", { name: "Formatting" });
+  await writeText(editor, ["one two"]);
+  await editor.getByText("one two").dblclick({ position: { x: 4, y: 8 } });
+  for (const [name, written] of [
+    ["Bold", "**one** two"],
+    ["Italic", "_**one**_ two"],
+  ] as const) {
+    const button = bar.getByRole("button", { name, exact: true });
+    await button.click();
+    await expect(postedText(dialog)).toHaveValue(written);
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+  }
+  await page.keyboard.press("Escape");
+});
+
+// A press the page could not show (a quote around a heading, a list inside a quote) used to do nothing at all; the
+// button is now unavailable instead, and switching a list's kind changes the list rather than nesting a new one.
+test("a_button_the_page_could_not_show_is_unavailable_and_lists_switch_kind", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  const bar = dialog.getByRole("toolbar", { name: "Formatting" });
+  await writeText(editor, ["one"]);
+  await chooseStyle(page, dialog, "Heading 2");
+  await expect(bar.getByRole("button", { name: "Quote", exact: true })).toBeDisabled();
+  await chooseStyle(page, dialog, "Normal text");
+  await expect(bar.getByRole("button", { name: "Quote", exact: true })).toBeEnabled();
+  await bar.getByRole("button", { name: "List", exact: true }).click();
+  await expect(postedText(dialog)).toHaveValue("- one");
+  await bar.getByRole("button", { name: "Numbered list", exact: true }).click();
+  await expect(postedText(dialog)).toHaveValue("1. one");
+  await expect(bar.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(bar.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
+});
+
+// Impatient members: five quick presses leave the text as an odd number of presses would.
+test("rapid_presses_on_a_block_button_end_where_one_press_would", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await writeText(editor, ["one"]);
+  const list = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "List", exact: true });
+  for (let i = 0; i < 5; i += 1) await list.click({ delay: 0 });
+  await expect(postedText(dialog)).toHaveValue("- one");
+  await page.keyboard.press("Escape");
 });
 
 // A real copy and paste, by keyboard, from another page with no CSP, as a member copies from another site: Firefox
@@ -115,8 +215,8 @@ test("a_save_sent_in_the_same_moment_as_an_edit_posts_it", async ({ page }) => {
   await card.getByRole("link", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("textbox", { name: "Text" })).toHaveAttribute("contenteditable", "true");
-  const heading = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" });
-  await heading.evaluate((button) => {
+  const quote = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Quote" });
+  await quote.evaluate((button) => {
     // No DOM lib in this project: the two calls this test makes, in one task so no frame runs between them.
     type Form = { requestSubmit: () => void };
     const area = button as unknown as {
@@ -128,7 +228,7 @@ test("a_save_sent_in_the_same_moment_as_an_edit_posts_it", async ({ page }) => {
   });
   await expect(dialog).toBeHidden();
   await card.getByRole("link", { name: "Edit" }).click();
-  await expect(postedText(dialog)).toHaveValue("## plain");
+  await expect(postedText(dialog)).toHaveValue("> plain");
   await page.keyboard.press("Escape");
   await deleteCard(page, "Text card");
 });
@@ -140,11 +240,11 @@ test("quote_wraps_paragraphs_and_leaves_headings_and_lists_alone", async ({ page
   const quote = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Quote" });
   await writeText(editor, ["- one", "two"]);
   await editor.press("ControlOrMeta+a");
-  await quote.click();
+  await expect(quote).toBeDisabled();
   await expect(postedText(dialog)).toHaveValue("- one\n- two");
   await writeText(editor, ["## Title"]);
   await editor.press("ControlOrMeta+a");
-  await quote.click();
+  await expect(quote).toBeDisabled();
   await expect(postedText(dialog)).toHaveValue("## Title");
   await writeText(editor, ["plain"]);
   await quote.click();
@@ -190,9 +290,12 @@ test("undo_brings_back_deleted_text_the_page_shows_flat", async ({ page }) => {
   await writeText(editor, ["gone"]);
   await expect(postedText(dialog)).toHaveValue("gone");
   const bar = dialog.getByRole("toolbar", { name: "Formatting" });
-  await bar.getByRole("button", { name: "Undo" }).click();
-  await bar.getByRole("button", { name: "Undo" }).click();
-  await expect(postedText(dialog)).toHaveValue("> - one\n> - two");
+  // Undo as often as it takes, as a member does: how many steps typing makes is the browser's to decide.
+  const undo = bar.getByRole("button", { name: "Undo" });
+  await expect(async () => {
+    if (await undo.isEnabled()) await undo.click();
+    await expect(postedText(dialog)).toHaveValue("> - one\n> - two", { timeout: 500 });
+  }).toPass();
   await page.keyboard.press("Escape");
   await deleteCard(page, "Text card");
 });
@@ -228,6 +331,22 @@ test("a_quote_keeps_one_paragraph_and_no_line_break_is_added", async ({ page }) 
   await editor.press("Shift+Enter");
   await editor.pressSequentially("more");
   await expect(postedText(dialog)).toHaveValue("typedmore");
+  await page.keyboard.press("Escape");
+});
+
+// Codex review of #1827: the page nests lists three deep and shows a fourth level beside the third, so a paste that
+// nests deeper is refused.
+test("a_paste_nesting_lists_deeper_than_the_page_shows_is_refused", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await paste(
+    page,
+    editor,
+    "<p>a</p><ul><li>one<ul><li>two<ul><li>three<ul><li>four</li></ul></li></ul></li></ul></li></ul><p>b</p>",
+  );
+  await editor.pressSequentially("typed");
+  await expect(postedText(dialog)).toHaveValue("typed");
+  await paste(page, editor, "<p>a</p><ul><li>one<ul><li>two<ul><li>three</li></ul></li></ul></li></ul><p>b</p>");
+  await expect(postedText(dialog)).toHaveValue(/ {4}- three/);
   await page.keyboard.press("Escape");
 });
 
@@ -310,6 +429,33 @@ test("text_typed_before_the_editor_loads_is_kept", async ({ page }) => {
   await expect(editor).toHaveText("typed early");
   await expect(postedText(dialog)).toHaveValue("typed early");
   await page.keyboard.press("Escape");
+});
+
+// Review of #1843: opened in place (?edit=, the page's own panel, not a dialog), the formatting bar sticks under the
+// sticky site header, so it stays usable while a long text scrolls.
+test("the_in_place_toolbar_sticks_below_the_site_header", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const long = Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1} of a long text.`).join("\n\n");
+  await addCard(page, { kind: "readme", width: "full", text: `# Long text\n\n${long}` });
+  await page.reload();
+  try {
+    const href = await page
+      .getByRole("group", { name: "Text card" })
+      .getByRole("link", { name: "Edit" })
+      .getAttribute("href");
+    await page.goto(new URL(href ?? "", page.url()).toString());
+    const editor = page.getByRole("textbox", { name: "Text" });
+    await expect(editor).toHaveAttribute("contenteditable", "true");
+    await editor.getByText("Paragraph 30 of a long text.").scrollIntoViewIfNeeded();
+    const header = await page.locator("[data-site-header]").boundingBox();
+    const bar = await page.getByRole("toolbar", { name: "Formatting" }).boundingBox();
+    expect(header !== null && bar !== null && bar.y >= header.y + header.height - 0.5).toBe(true);
+    await openPage(page, OWN_PAGE);
+  } finally {
+    await deleteCard(page, "Text card");
+  }
 });
 
 test.describe("on a phone", () => {

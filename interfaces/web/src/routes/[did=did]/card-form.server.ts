@@ -122,3 +122,29 @@ export function readCardForm(form: URLSearchParams): {
   };
   return { body, fieldName };
 }
+
+/** The most cards one Save carries: every card a page shows (LIMITS.profile.cardsMax). */
+const SAVE_CARDS_MAX = LIMITS.profile.cardsMax;
+/** Each card's form, with its `key` and `version`. */
+const SAVE_FIELDS_MAX = SAVE_CARDS_MAX * (CARD_FORM_MAX_FIELDS + 2);
+const CARD_FIELD = /^cards\.(0|[1-9][0-9]*)\.(.+)$/;
+
+/**
+ * The one Save's form (ADR 0074) as one card form per card, in index order: `cards.N.text` is card N's `text`. Only
+ * splits by name; each card form is then read as one card (readCardForm). Any other name, an index that is not a
+ * plain number below SAVE_CARDS_MAX, or more fields than that many full cards hold is card.invalid.
+ */
+export function splitCardsForm(form: URLSearchParams): { readonly index: number; readonly form: URLSearchParams }[] {
+  let count = 0;
+  for (const _ of form) if (++count > SAVE_FIELDS_MAX) throw invalid();
+  const cards = new Map<number, URLSearchParams>();
+  for (const [name, value] of form) {
+    const match = CARD_FIELD.exec(name);
+    const index = match === null ? Number.NaN : Number(match[1]);
+    if (match === null || !(index < SAVE_CARDS_MAX)) throw invalid();
+    const card = cards.get(index) ?? new URLSearchParams();
+    card.append(match[2] as string, value);
+    cards.set(index, card);
+  }
+  return [...cards.entries()].sort(([a], [b]) => a - b).map(([index, card]) => ({ index, form: card }));
+}

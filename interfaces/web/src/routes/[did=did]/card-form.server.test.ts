@@ -2,7 +2,7 @@
 // A card editor's plain form read into the object the JSON editor sends (ADR 0037 point 7, ADR 0051).
 import { AppError } from "@unset/shared-errors";
 import { describe, expect, test } from "vitest";
-import { CARD_FORM_MAX_FIELDS, readCardForm } from "./card-form.server.ts";
+import { CARD_FORM_MAX_FIELDS, readCardForm, splitCardsForm } from "./card-form.server.ts";
 
 const read = (pairs: [string, string][]) => readCardForm(new URLSearchParams(pairs)).body;
 const code = (pairs: [string, string][]) => {
@@ -257,4 +257,66 @@ test("surface reaches the domain for every kind and duplicates are refused", () 
       ]),
     ).toBe("card.invalid");
   }
+});
+
+describe("splitCardsForm", () => {
+  const split = (pairs: [string, string][]) =>
+    splitCardsForm(new URLSearchParams(pairs)).map((c) => [c.index, [...c.form]]);
+  const refusal = (pairs: [string, string][]) => {
+    try {
+      split(pairs);
+      return "read";
+    } catch (error) {
+      return error instanceof AppError ? error.code : "thrown";
+    }
+  };
+
+  test("a Save of several cards is one form per card, in index order, with the prefix taken off", () => {
+    expect(
+      split([
+        ["cards.1.key", "b"],
+        ["cards.0.key", "a"],
+        ["cards.0.text", "A"],
+        ["cards.1.items.0.uri", "https://x.example"],
+      ]),
+    ).toEqual([
+      [
+        0,
+        [
+          ["key", "a"],
+          ["text", "A"],
+        ],
+      ],
+      [
+        1,
+        [
+          ["key", "b"],
+          ["items.0.uri", "https://x.example"],
+        ],
+      ],
+    ]);
+  });
+
+  test("a field outside a card, a bad index or one past the most cards is card.invalid", () => {
+    for (const name of [
+      "key",
+      "cards.key",
+      "cards.01.key",
+      "cards.-1.key",
+      "cards.1e2.key",
+      "cards.100.key",
+      "cards.0",
+    ]) {
+      expect(refusal([[name, "x"]])).toBe("card.invalid");
+    }
+    expect(refusal([["cards.99.key", "x"]])).toBe("read");
+  });
+
+  test("more fields than a hundred full cards hold is refused before any is read", () => {
+    const pairs = Array.from({ length: 100 * (CARD_FORM_MAX_FIELDS + 2) + 1 }, (_, n): [string, string] => [
+      `cards.0.f${n}`,
+      "",
+    ]);
+    expect(refusal(pairs)).toBe("card.invalid");
+  });
 });

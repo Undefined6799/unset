@@ -10,8 +10,10 @@ export {
   deleteCardRecord,
   latestCommit,
   listCardRecords,
+  type SaveManyOutcome,
   type StoredCard,
   saveCardRecord,
+  saveCardRecords,
 } from "./card-records.ts";
 export { createIdentityNetwork, type IdentityNetworkOptions } from "./identity-network.ts";
 export {

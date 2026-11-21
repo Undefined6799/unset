@@ -188,6 +188,129 @@ export function saveCardRecord<C extends string>(
   );
 }
 
+export type SaveManyOutcome =
+  | { readonly kind: "saved" }
+  /** The repo's head was no longer `swapCommit`: something was written first, and none of the cards was written. */
+  | { readonly kind: "changed" }
+  /** This card alone would pass the PDS's JSON body limit, so nothing was sent and nothing was written. */
+  | { readonly kind: "too_large"; readonly key: string }
+  /** The cards did not fit one call; the first calls landed, a later one did not. `saved` are the cards written. */
+  | { readonly kind: "partial"; readonly saved: readonly string[] };
+
+/**
+ * The most bytes of JSON one applyWrites body may hold. @atproto/pds 0.5.51 parses most JSON bodies up to 150 KiB
+ * (dist/index.js:155) but raises applyWrites and putRecord to `jsonLimit: 1_000_000`
+ * (dist/api/com/atproto/repo/applyWrites.js:50), and net-guard caps every atproto request but uploadBlob at 1 MiB
+ * (infrastructure/net-guard/src/libraryFetch.ts); the smaller, the PDS's, binds. Checked on the pinned image by
+ * tests/integration/pds-apply-writes.image.test.ts.
+ */
+export const APPLY_WRITES_BODY_BYTES = 1_000_000;
+/** Room for the swapCommit of a later call, which is another CID of the same length, and rounding. */
+const BODY_SLACK_BYTES = 64;
+
+type Update = { readonly key: string; readonly record: Readonly<Record<string, unknown>> };
+type CardWriteOp = {
+  readonly $type: "com.atproto.repo.applyWrites#update";
+  readonly collection: typeof CARD_COLLECTION;
+  readonly rkey: string;
+  readonly value: Record<string, unknown>;
+};
+type Batch = { readonly keys: string[]; readonly writes: CardWriteOp[] };
+
+/**
+ * The updates in order, packed into as few applyWrites bodies as fit the PDS's limit: almost always one. Each body
+ * is measured as the JSON we send (`JSON.stringify`, as @atproto/api's fetch handler encodes it). A card that alone
+ * does not fit is returned by key.
+ */
+function batches(did: Did, updates: readonly Update[], swapCommit: string): Batch[] | { readonly tooLarge: string } {
+  const base = Buffer.byteLength(JSON.stringify({ repo: did, swapCommit, writes: [] })) + BODY_SLACK_BYTES;
+  const packed: Batch[] = [];
+  let current: Batch = { keys: [], writes: [] };
+  let size = base;
+  for (const update of updates) {
+    const write: CardWriteOp = {
+      $type: "com.atproto.repo.applyWrites#update",
+      collection: CARD_COLLECTION,
+      rkey: update.key,
+      value: { ...update.record },
+    };
+    const bytes = Buffer.byteLength(JSON.stringify(write)) + 1;
+    if (base + bytes > APPLY_WRITES_BODY_BYTES) return { tooLarge: update.key };
+    if (size + bytes > APPLY_WRITES_BODY_BYTES) {
+      packed.push(current);
+      current = { keys: [], writes: [] };
+      size = base;
+    }
+    current.keys.push(update.key);
+    current.writes.push(write);
+    size += bytes;
+  }
+  packed.push(current);
+  return packed;
+}
+
+/**
+ * Writes over several cards (ADR 0074), each call of com.atproto.repo.applyWrites all or none, and only if the repo's
+ * head is still `swapCommit`. @atproto/pds 0.5.51 (dist/api/com/atproto/repo/applyWrites.js) refuses more than 200
+ * writes, checks the grant once for each action and collection, and applies a call in one processWrites transaction,
+ * answering InvalidSwap with nothing written when the head moved. A write has no per-record swap, so the caller
+ * checks each card's version against a list read on the same head.
+ *
+ * Cards that do not fit one call (past about 1 MB of changed text) go in several, each swapping on the commit the
+ * one before it returned (applyWrites.js answers `commit.cid`), so no other write can land between them unnoticed:
+ * one that does stops the chain. A refusal or failure of the first call is the caller's, as for one call; of a later
+ * call it is `partial`, naming the cards already written (pdsCall has already logged an unexpected error). Not
+ * retried here: the caller re-reads and decides (RE-1, one layer).
+ */
+export async function saveCardRecords(
+  pdsCall: PdsCall,
+  ctx: PdsContext | null,
+  did: Did,
+  updates: readonly Update[],
+  swapCommit: string,
+): Promise<PdsResult<SaveManyOutcome>> {
+  if (updates.length === 0) return { kind: "ok", value: { kind: "saved" } };
+  const packed = batches(did, updates, swapCommit);
+  if (!Array.isArray(packed)) return { kind: "ok", value: { kind: "too_large", key: packed.tooLarge } };
+  const saved: string[] = [];
+  let head: string | undefined = swapCommit;
+  for (const batch of packed) {
+    if (head === undefined) return { kind: "ok", value: { kind: "partial", saved } };
+    const result = await applyCardWrites(pdsCall, ctx, did, batch.writes, head);
+    const first = saved.length === 0;
+    if (result.kind !== "ok") return first ? result : { kind: "ok", value: { kind: "partial", saved } };
+    if (result.value === "changed")
+      return { kind: "ok", value: first ? { kind: "changed" } : { kind: "partial", saved } };
+    saved.push(...batch.keys);
+    head = result.value.commit;
+  }
+  return { kind: "ok", value: { kind: "saved" } };
+}
+
+/** One applyWrites call: the new head's CID when it landed (absent if the PDS did not say), or `changed`. */
+function applyCardWrites(
+  pdsCall: PdsCall,
+  ctx: PdsContext | null,
+  did: Did,
+  writes: CardWriteOp[],
+  swapCommit: string,
+): Promise<PdsResult<{ readonly commit: string | undefined } | "changed">> {
+  return pdsCall(
+    ctx,
+    did,
+    async (agent) => {
+      try {
+        const { data } = await agent.com.atproto.repo.applyWrites({ repo: did, swapCommit, writes });
+        return { commit: data.commit?.cid };
+      } catch (error: unknown) {
+        if (isXrpcError(error, "InvalidSwap")) return "changed" as const;
+        throw error;
+      }
+    },
+    { idempotent: false },
+  );
+}
+
 /** Deletes one card. Not retried. */
 export function deleteCardRecord(
   pdsCall: PdsCall,

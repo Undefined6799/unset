@@ -9,10 +9,11 @@
 -->
 <script lang="ts">
 import { onDestroy, onMount, tick } from "svelte";
-import type { EditorCommand, MarkdownEditor } from "../../editor/milkdown.ts";
+import type { EditorCommand, MarkdownEditor, ToolbarState } from "../../editor/milkdown.ts";
 import { TEXT_EDITOR } from "../../profile/messages.ts";
 import { Icon, type IconName } from "../icon/index.ts";
-import { Button } from "../ui/button/index.ts";
+import { Button, buttonVariants } from "../ui/button/index.ts";
+import * as DropdownMenu from "../ui/dropdown-menu/index.ts";
 import { Label } from "../ui/label/index.ts";
 import { Textarea } from "../ui/textarea/index.ts";
 
@@ -51,9 +52,20 @@ let editor: MarkdownEditor | undefined = $state();
 let closed = false;
 /** Whether the member has changed the text in the editor: text opened and saved untouched posts as it was stored. */
 let changed = false;
+/** What each button shows: on for the selection, and whether a press would change the text. */
+let toolbar: ToolbarState = $state({ active: new Set(), enabled: new Set() });
+/** Undo and Redo show no on state; the others are toggles. */
+const pressed = (command: EditorCommand) =>
+  command === "undo" || command === "redo" ? undefined : toolbar.active.has(command);
 
+/** The text styles the Heading menu offers: the page shows headings of three sizes. */
+const STYLES: readonly { readonly command: EditorCommand; readonly label: string }[] = [
+  { command: "paragraph", label: TEXT_EDITOR.paragraph },
+  { command: "heading1", label: TEXT_EDITOR.heading1 },
+  { command: "heading2", label: TEXT_EDITOR.heading2 },
+  { command: "heading3", label: TEXT_EDITOR.heading3 },
+];
 const TOOLS: readonly { readonly command: EditorCommand; readonly label: string; readonly icon: IconName }[] = [
-  { command: "heading", label: TEXT_EDITOR.heading, icon: "heading" },
   { command: "strong", label: TEXT_EDITOR.strong, icon: "bold" },
   { command: "emphasis", label: TEXT_EDITOR.emphasis, icon: "italic" },
   { command: "bullets", label: TEXT_EDITOR.bullets, icon: "list" },
@@ -82,6 +94,9 @@ onMount(async () => {
       },
       onChange: (markdown) => {
         textarea.value = markdown;
+      },
+      onToolbar: (state) => {
+        toolbar = state;
       },
     });
     // Closed while it loaded: nothing was drawn for the member, so drop it.
@@ -122,14 +137,50 @@ function run(command: EditorCommand) {
   editor?.run(command);
   editor?.focus();
 }
+function keepFocus(event: MouseEvent) {
+  if (editor !== undefined) event.preventDefault();
+}
+/** The menu gives focus back to the text, not to its trigger, so typing goes on where it was. */
+function backToText(event: Event) {
+  event.preventDefault();
+  editor?.focus();
+}
 </script>
 
 <div class="grid gap-2">
   <Label id={labelId} for={id}>{label}</Label>
   <div class="grid rounded-md border focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 {editor === undefined ? 'hidden' : ''}" aria-invalid={invalid}>
-    <div role="toolbar" aria-label={TEXT_EDITOR.toolbar} class="sticky top-0 z-10 flex flex-wrap gap-1 border-b bg-background p-1">
+    <!-- The bar sticks under the site header on the page (?edit=, app.css --site-header-height) and at the top of the
+         dialog, which scrolls on its own. -->
+    <div role="toolbar" aria-label={TEXT_EDITOR.toolbar} class="sticky top-(--site-header-height) z-10 in-data-[slot=dialog-content]:top-0 flex flex-wrap gap-1 border-b bg-background p-1">
+      <!-- A press keeps the editor's focus and selection (mousedown is not let move focus to the bar), so it acts on
+           the words the member chose and, on a phone, the keyboard stays open. -->
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger class={buttonVariants({ variant: "ghost", size: "icon" })} onmousedown={keepFocus}
+          ><Icon name="heading" label={TEXT_EDITOR.heading} /></DropdownMenu.Trigger
+        >
+        <!-- The tick follows the editor only: the item's own toggle on select is dropped (bits-ui CheckboxItem). -->
+        <DropdownMenu.Content align="start" preventScroll={false} onCloseAutoFocus={backToText}>
+          {#each STYLES as style (style.command)}
+            <DropdownMenu.CheckboxItem
+              bind:checked={() => toolbar.active.has(style.command), () => {}}
+              disabled={!toolbar.enabled.has(style.command) && !toolbar.active.has(style.command)}
+              onSelect={() => editor?.run(style.command)}>{style.label}</DropdownMenu.CheckboxItem
+            >
+          {/each}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
       {#each TOOLS as tool (tool.command)}
-        <Button type="button" variant="ghost" size="icon" onclick={() => run(tool.command)}><Icon name={tool.icon} label={tool.label} /></Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-pressed={pressed(tool.command)}
+          disabled={!toolbar.enabled.has(tool.command)}
+          class="aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+          onmousedown={keepFocus}
+          onclick={() => run(tool.command)}><Icon name={tool.icon} label={tool.label} /></Button
+        >
       {/each}
     </div>
     <div
