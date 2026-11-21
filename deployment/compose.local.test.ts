@@ -225,6 +225,14 @@ function serviceDrift(dev: Service, local: Service): string[] {
       )
         ? []
         : [`${dev.name}: networks differs`],
+    // A fixed address on a dev-only network (the edge's on newt_edge) is the dev file's alone.
+    addresses: () =>
+      same(
+        dev.addresses.filter(([n]) => !DEV_ONLY_NETWORKS.has(n)),
+        local.addresses,
+      )
+        ? []
+        : [`${dev.name}: addresses differs`],
     ports: () => {
       const edge = dev.name === "edge" && dev.ports.length === 0 && same(local.ports, LOCAL_EDGE_PORTS);
       return edge || (dev.name !== "edge" && same(dev.ports, local.ports)) ? [] : [`${dev.name}: ports differs`];

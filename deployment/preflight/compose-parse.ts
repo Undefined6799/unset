@@ -34,6 +34,8 @@ export type Service = {
   ports: Port[];
   /** The networks the service joins, by their key in the file. */
   networks: string[];
+  /** Each fixed `ipv4_address`, as [network, address], in file order (P6.02, C36). */
+  addresses: [string, string][];
   networkMode: string | null;
   /** The service's `volumes`; a bind source is as written, relative to the project directory (the first file's). */
   mounts: Mount[];
@@ -344,6 +346,7 @@ function service(r: Reader, name: string, spec: unknown, scope: Scope): Service 
     environment: environment(r, spec.get("environment", true), name),
     ports: r.list(spec.get("ports", true), "ports").map((n) => port(r, n)),
     networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
+    addresses: serviceAddresses(r, spec.get("networks", true)),
     networkMode: spec.has("network_mode") ? r.text(spec.get("network_mode", true), "network_mode") : null,
     mounts: r.list(spec.get("volumes", true), "volumes").map((n) => declared(r, mount(r, n), n, scope.volumes)),
     hardening: hardening(r, spec),
@@ -671,6 +674,15 @@ const aliased = (node: unknown, network: string): boolean =>
   node.items.some(
     (pair) => isScalar(pair.key) && pair.key.value === network && isMap(pair.value) && pair.value.has("aliases"),
   );
+
+/** The fixed addresses in a service's `networks:` mapping; serviceNetworks has already refused any other shape. */
+function serviceAddresses(r: Reader, node: unknown): [string, string][] {
+  if (!isMap(node)) return [];
+  return node.items.flatMap((pair): [string, string][] => {
+    const address = isMap(pair.value) ? pair.value.get("ipv4_address", true) : undefined;
+    return address === undefined ? [] : [[r.text(pair.key, "network"), r.text(address, "ipv4_address")]];
+  });
+}
 
 /** `networks:` on a service, as a list of keys or a map of key to attachment; with neither it is on `default`. */
 function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: string): string[] {
