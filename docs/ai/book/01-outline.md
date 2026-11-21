@@ -585,6 +585,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.27b | Notifications: stay until dismissed, the full-window page | [SEC] | P2.27 | `phase-2.md` |
 | P2.27c | Sign-in history: when each sign-in happened, kept 30 days | [SEC] | P2.27b | `phase-2.md` |
 | P2.28 | Ask for a second check before sensitive actions (the list of actions that need it) | [SEC] [ALEX] | P2.27c | `phase-2.md` |
+| P2.27e | Clear the bell's count once the list is seen | [SEC] | P2.27c | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13d | Keep next and handle after a sign-in theme change | [SEC] | P1.25f | `phase-2.md` |

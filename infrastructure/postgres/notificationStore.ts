@@ -15,17 +15,26 @@ import type { Db } from "./singleUse/store.ts";
  */
 const VISIBLE_IDS = "SELECT i.id FROM app.inbox i WHERE i.viewer = $2 AND i.did = $1";
 
-const LIST = `SELECT i.id, i.reason, i.topic, i.created_at FROM app.inbox i WHERE i.viewer = $2 AND i.did = $1
+const LIST = `SELECT i.id, i.reason, i.topic, i.created_at, i.seen FROM app.inbox i WHERE i.viewer = $2 AND i.did = $1
    ORDER BY i.created_at DESC, i.id LIMIT $3`;
 
 /** The ids a form named ($3, a uuid[]), those this browser may see only. */
 const DISMISS = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id = ANY($3::uuid[]) AND n.id IN (${VISIBLE_IDS})
-   RETURNING n.id, n.reason, n.topic, n.created_at`;
+   RETURNING n.id, n.reason, n.topic, n.created_at, false AS seen`;
 
 /** Everything the list showed: `upTo` is its newest entry, so one sent after the list was drawn stays. */
 const DISMISS_UP_TO = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id IN (${VISIBLE_IDS})
    AND n.created_at <= (SELECT u.created_at FROM app.notification u WHERE u.id = $3 AND u.did = $1)
-   RETURNING n.id, n.reason, n.topic, n.created_at`;
+   RETURNING n.id, n.reason, n.topic, n.created_at, false AS seen`;
+
+/**
+ * This browser's seen mark (ADR 0085, migration 0039) moved up to `upTo` ($3), an entry it may see, and never back:
+ * greatest() ignores the null of a session with no mark yet
+ * (https://www.postgresql.org/docs/18/functions-conditional.html#FUNCTIONS-GREATEST-LEAST). One statement, so the row
+ * lock orders two browsers' tabs marking at once (rule DA-4); an id this browser may not see matches no row.
+ */
+const MARK_SEEN = `UPDATE app.session s SET notifications_seen_at = greatest(s.notifications_seen_at, i.created_at)
+    FROM app.inbox i WHERE s.id_hash = $2 AND s.did = $1 AND i.viewer = $2 AND i.did = $1 AND i.id = $3`;
 
 /**
  * A member with no account row yet (their first sign-in, before the terms step) has nothing to be told, so the row is
@@ -44,13 +53,14 @@ const WITHDRAW = "DELETE FROM app.notification WHERE did = $1 AND dedupe_key = $
  */
 const SWEEP = "DELETE FROM app.notification WHERE created_at <= now() - make_interval(days => $1)";
 
-type Row = { id: string; reason: string; topic: string | null; created_at: Date };
+type Row = { id: string; reason: string; topic: string | null; created_at: Date; seen: boolean };
 
 const entryOf = (row: Row): Entry => ({
   id: row.id as NotificationId,
   reason: row.reason as Reason, // the table's CHECK holds the same closed list as REASONS
   topic: row.topic,
   sentAt: row.created_at,
+  seen: row.seen,
 });
 
 export function createNotificationStore() {
@@ -70,6 +80,9 @@ export function createNotificationStore() {
     async dismissUpTo(db: Db, did: Did, idHash: Buffer, upTo: NotificationId): Promise<Entry[]> {
       const { rows } = await db.query<Row>(DISMISS_UP_TO, [did, idHash, upTo]);
       return rows.map(entryOf);
+    },
+    async markSeen(db: Db, did: Did, idHash: Buffer, upTo: NotificationId): Promise<void> {
+      await db.query(MARK_SEEN, [did, idHash, upTo]);
     },
     /** A source taking back what it sent, by its dedupe key (the banner's dismiss withdraws the notice's entry). */
     async withdraw(db: Db, did: Did, dedupeKey: string): Promise<void> {

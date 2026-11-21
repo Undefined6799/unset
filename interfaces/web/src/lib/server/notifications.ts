@@ -48,12 +48,20 @@ export async function notificationsView(event: RequestEvent, limit: number): Pro
   }
 }
 
+/** The notifications page's route id. */
+const NOTIFICATIONS_PAGE = "/notifications";
+
 /**
  * The bell, from the entries the session read brought (infrastructure/session/store.ts), so a page spends no
  * statement of its own on it; a session read without them reads the inbox instead.
  */
 export async function bellView(event: RequestEvent): Promise<NotificationsView | undefined> {
   const inbox = gateSession(event)?.inbox;
-  if (inbox === undefined || event.locals.did === undefined) return notificationsView(event, BELL_LIMIT);
-  return viewOf(listOf(inbox, BELL_LIMIT));
+  const view =
+    inbox === undefined || event.locals.did === undefined
+      ? await notificationsView(event, BELL_LIMIT)
+      : viewOf(listOf(inbox, BELL_LIMIT));
+  // The notifications page marks its list seen as it loads (ADR 0085), after the session read this view comes from, so
+  // the bell on that page reads nothing waiting.
+  return view?.state === "ready" && event.route.id === NOTIFICATIONS_PAGE ? { ...view, count: 0 } : view;
 }

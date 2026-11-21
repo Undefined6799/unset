@@ -369,6 +369,7 @@ async function build(): Promise<Services> {
       list: (limit) => withClient(pool, deadline, (db) => inboxRows.list(db, did, idHash, limit)),
       dismiss: (ids) => withClient(pool, deadline, (db) => inboxRows.dismiss(db, did, idHash, ids)),
       dismissUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.dismissUpTo(db, did, idHash, upTo)),
+      markSeen: (upTo) => withClient(pool, deadline, (db) => inboxRows.markSeen(db, did, idHash, upTo)),
     }),
     send: (did, notification, deadline) =>
       withClient(pool, deadline, (db) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification)),
