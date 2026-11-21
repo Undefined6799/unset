@@ -1,4 +1,4 @@
-// P2.27 (ADR 0079): the bell and the notifications page on the built web server, over the inbox. Postgres as `web`
+// P2.27 (ADR 0079 and 0081): the bell and the notifications page on the built web server, over the inbox. Postgres as `web`
 // (TE-2). A member's browsers are stored grants and sessions, as own-page.test.ts makes them; a sign-in on another
 // device is a session made with its notification in one transaction, as the OAuth callback does it, which the older
 // browser is told about and the new one is not.
@@ -125,7 +125,7 @@ const listed = (page: string): string[] => [
   ...new Set([...page.matchAll(/name="(?:id|upTo)" value="([^"]+)"/g)].map((m) => m[1] ?? "")),
 ];
 /** The bell's count, as its accessible name reads it. */
-const UNREAD = /Notifications, (?:\d+|9\+) unread/;
+const WAITING = /Notifications, (?:\d+|9\+) waiting/;
 const SIGN_IN = "New sign-in to your account";
 
 describe("the bell and the notifications page", () => {
@@ -142,24 +142,25 @@ describe("the bell and the notifications page", () => {
     const page = await html("/notifications", laptop);
     expect(page).toContain(SIGN_IN);
     // The bell on every page: the count in the button's name, and the newest few.
-    expect(page).toContain("Notifications, 1 unread");
+    expect(page).toContain("Notifications, 1 waiting");
     expect(listed(page)[0]).toMatch(/^[0-9a-f-]{36}$/);
     const other = await html("/notifications", phone);
     expect(other).not.toContain(SIGN_IN);
-    expect(other).toContain("No new notifications.");
+    expect(other).toContain("No notifications.");
   });
 
-  test("notifications.denial: another member's notifications never show, and their ids open nothing", async () => {
+  test("notifications.denial: another member's notifications never show, and their ids dismiss nothing", async () => {
     const alice = await member();
     await signInElsewhere(alice.did);
     const [id] = listed(await html("/notifications", alice.cookie));
     const bob = await member();
     const page = await html("/notifications", bob.cookie);
     expect(page).not.toContain(SIGN_IN);
-    expect(page).not.toMatch(UNREAD);
-    const opened = await post("/notifications?/open", { id: id as string }, bob.cookie);
-    expect(opened.headers.get("location")).toBe("/notifications");
-    await post("/notifications?/readAll", { upTo: id as string }, bob.cookie);
+    expect(page).not.toMatch(WAITING);
+    expect(await html(`/notifications?n=${id}`, bob.cookie)).not.toContain(SIGN_IN);
+    const dismissed = await post("/notifications?/dismiss", { id: id as string }, bob.cookie);
+    expect(dismissed.headers.get("location")).toBe("/notifications");
+    await post("/notifications?/dismissAll", { upTo: id as string }, bob.cookie);
     expect(await html("/notifications", alice.cookie)).toContain(SIGN_IN);
   });
 
@@ -167,54 +168,110 @@ describe("the bell and the notifications page", () => {
     const { did, cookie: laptop } = await member();
     const thief = await signInElsewhere(did);
     const [id] = listed(await html("/notifications", laptop));
-    await post("/notifications?/open", { id: id as string }, thief);
-    await post("/notifications?/readAll", { upTo: id as string }, thief);
+    await post("/notifications?/dismiss", { id: id as string }, thief);
+    await post("/notifications?/dismissAll", { upTo: id as string }, thief);
     expect(await html("/notifications", laptop)).toContain(SIGN_IN);
   });
 
-  test("notifications.viewing_changes_nothing", async () => {
-    const { did, cookie } = await member();
-    await signInElsewhere(did);
-    for (let n = 0; n < 3; n += 1) await html("/notifications", cookie);
-    expect(await html("/notifications", cookie)).toContain(SIGN_IN);
-  });
-
-  test("notifications.open: it is gone and the browser goes to its reason's page", async () => {
+  test("notifications.viewing_or_showing_an_entry_changes_nothing", async () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);
     const [id] = listed(await html("/notifications", cookie));
-    const response = await post("/notifications?/open", { id: id as string }, cookie);
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/settings/account");
-    const page = await html("/notifications", cookie);
-    expect(page).not.toContain(SIGN_IN);
-    expect(page).not.toMatch(UNREAD);
+    for (let n = 0; n < 3; n += 1) await html(`/notifications?n=${id}`, cookie);
+    expect(await html("/notifications", cookie)).toContain(SIGN_IN);
   });
 
-  test("notifications.read_all_twice_and_rapid_opens_change_nothing_more", async () => {
+  test("notifications.an_entry_is_shown_by_its_link_with_its_button_to_the_reasons_page", async () => {
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    await notice(did, "an-older-notice");
+    const [newest, older] = listed(await html("/notifications", cookie));
+    // The newest is shown when the address names none; a row's link shows its own.
+    const first = await html("/notifications", cookie);
+    expect(first).toContain("Read the privacy notice");
+    expect(first).not.toContain("Review sign-ins");
+    const page = await html(`/notifications?n=${older}`, cookie);
+    expect(page).toMatch(/href="\/settings\/account"(?:[^<]|<!--[^>]*-->)*Review sign-ins/);
+    expect(page).not.toContain("Read the privacy notice");
+    expect(page).toContain(`href="/notifications?n=${newest}"`);
+    // An id that is not listed shows the newest.
+    expect(await html(`/notifications?n=${crypto.randomUUID()}`, cookie)).toContain("Read the privacy notice");
+  });
+
+  test("notifications.dismiss: the named entries go and the browser goes back to the list", async () => {
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    await signInElsewhere(did);
+    await notice(did, "an-older-notice");
+    const [notice1, ...signIns] = listed(await html("/notifications", cookie));
+    const body = new URLSearchParams(signIns.map((id) => ["id", id]));
+    body.append("return", "/notifications");
+    const response = await web.fetch("/notifications?/dismiss", {
+      method: "POST",
+      body: body.toString(),
+      headers: {
+        "x-forwarded-for": clientAddress(),
+        origin: ORIGIN,
+        accept: "text/html",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie,
+      },
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/notifications");
+    const page = await html("/notifications", cookie);
+    expect(page).not.toContain(SIGN_IN);
+    expect(listed(page)).toEqual([notice1]);
+  });
+
+  test("notifications.dismiss_selected_of_a_full_page_fits_the_form_limit", async () => {
+    const { did, cookie } = await member();
+    for (let n = 0; n < 50; n += 1) {
+      await withClient(pool, null, (db) => inbox.insert(db, did, { reason: "privacy_notice", topic: `v${n}` }));
+    }
+    const ids = listed(await html("/notifications", cookie));
+    expect(ids).toHaveLength(50);
+    const body = new URLSearchParams(ids.map((id) => ["id", id]));
+    body.append("return", "/notifications");
+    const response = await web.fetch("/notifications?/dismiss", {
+      method: "POST",
+      body: body.toString(),
+      headers: {
+        "x-forwarded-for": clientAddress(),
+        origin: ORIGIN,
+        accept: "text/html",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie,
+      },
+    });
+    expect(response.status).toBe(303);
+    expect(await html("/notifications", cookie)).toContain("No notifications.");
+  });
+
+  test("notifications.dismiss_all_twice_and_rapid_dismisses_change_nothing_more", async () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);
     await signInElsewhere(did);
     const ids = listed(await html("/notifications", cookie));
     expect(ids).toHaveLength(2);
     const fields = { upTo: ids[0] as string, return: "/settings/account" };
-    const sent = await Promise.all([1, 2, 3].map(() => post("/notifications?/readAll", fields, cookie)));
+    const sent = await Promise.all([1, 2, 3].map(() => post("/notifications?/dismissAll", fields, cookie)));
     for (const response of sent) {
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/settings/account");
     }
-    // A stale tab then opens the older one: it is gone, so the browser goes back to the list.
-    const stale = await post("/notifications?/open", { id: ids[1] as string }, cookie);
+    // A stale tab then dismisses the older one: it is gone, so nothing changes.
+    const stale = await post("/notifications?/dismiss", { id: ids[1] as string }, cookie);
     expect(stale.headers.get("location")).toBe("/notifications");
     expect(await html("/notifications", cookie)).not.toContain(SIGN_IN);
   });
 
-  test("notifications.read_all_keeps_one_that_came_after_the_list", async () => {
+  test("notifications.dismiss_all_keeps_one_that_came_after_the_list", async () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);
     const [shown] = listed(await html("/notifications", cookie));
     await signInElsewhere(did);
-    await post("/notifications?/readAll", { upTo: shown as string }, cookie);
+    await post("/notifications?/dismissAll", { upTo: shown as string }, cookie);
     expect(listed(await html("/notifications", cookie))).toHaveLength(1);
   });
 
@@ -222,33 +279,31 @@ describe("the bell and the notifications page", () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);
     for (const fields of [{ id: "not-an-id" }, { id: "" }, {}, { id: crypto.randomUUID() }]) {
-      const response = await post("/notifications?/open", fields as Record<string, string>, cookie);
+      const response = await post("/notifications?/dismiss", fields as Record<string, string>, cookie);
       expect(response.headers.get("location"), JSON.stringify(fields)).toBe("/notifications");
     }
-    const outside = await post("/notifications?/readAll", { upTo: "x", return: "https://evil.test/" }, cookie);
+    const outside = await post("/notifications?/dismissAll", { upTo: "x", return: "https://evil.test/" }, cookie);
     expect(outside.headers.get("location")).toBe("/notifications");
     expect(await html("/notifications", cookie)).toContain(SIGN_IN);
   });
 
-  test("notifications.cross_site: a POST from another site is refused and opens nothing", async () => {
+  test("notifications.cross_site: a POST from another site is refused and dismisses nothing", async () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);
     const [id] = listed(await html("/notifications", cookie));
-    const response = await post("/notifications?/open", { id: id as string }, cookie, "https://evil.test");
+    const response = await post("/notifications?/dismiss", { id: id as string }, cookie, "https://evil.test");
     expect(response.status).toBe(403);
     expect(await html("/notifications", cookie)).toContain(SIGN_IN);
   });
 
-  test("notifications.privacy_notice: listed once, and opening it leads to the notice", async () => {
+  test("notifications.privacy_notice: listed once, and its button leads to the notice", async () => {
     const { did, cookie } = await member();
     await notice(did, "an-older-notice");
     await notice(did, "an-older-notice");
     const page = await html("/notifications", cookie);
     expect(page).toContain("We updated our privacy notice");
+    expect(page).toMatch(/href="\/legal\/privacy"(?:[^<]|<!--[^>]*-->)*Read the privacy notice/);
     expect(listed(page)).toHaveLength(1);
-    const response = await post("/notifications?/open", { id: listed(page)[0] as string }, cookie);
-    expect(response.headers.get("location")).toBe("/legal/privacy");
-    expect(await html("/notifications", cookie)).not.toContain("We updated our privacy notice");
   });
 
   test("notifications.privacy_notice: dismissing the banner withdraws the entry", async () => {
@@ -267,9 +322,9 @@ describe("the bell and the notifications page", () => {
     expect(await html("/notifications", cookie)).not.toContain("We updated our privacy notice");
   });
 
-  test("notifications.privacy_notice: opening it or marking all records the notice as seen, so it is not sent again", async () => {
-    // Codex review of 2491506: the row goes on open, so the seen version is what stops the next sign-in resending it.
-    for (const action of ["open", "readAll"] as const) {
+  test("notifications.privacy_notice: dismissing it, alone or with all, records the notice as seen, so it is not sent again", async () => {
+    // Codex review of 2491506: the row goes on dismiss, so the seen version is what stops the next sign-in resending it.
+    for (const action of ["dismiss", "dismissAll"] as const) {
       const { did, cookie } = await member();
       await withClient(pool, null, (db) =>
         db.query("UPDATE app.account SET privacy_version = 'an-older-notice' WHERE did = $1", [did]),
@@ -278,7 +333,7 @@ describe("the bell and the notifications page", () => {
       const [id] = listed(await html("/notifications", cookie));
       await post(
         `/notifications?/${action}`,
-        action === "open" ? { id: id as string } : { upTo: id as string },
+        action === "dismiss" ? { id: id as string } : { upTo: id as string },
         cookie,
       );
       const { rows } = await withClient(pool, null, (db) =>
@@ -291,12 +346,17 @@ describe("the bell and the notifications page", () => {
     }
   });
 
-  test("notifications.no_script: the page and the bell are plain forms", async () => {
+  test("notifications.no_script: the page and the bell are plain links and forms", async () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);
     const page = await html("/notifications", cookie);
-    expect(page).toMatch(/<form method="POST" action="\/notifications\?\/open">/);
-    expect(page).toMatch(/<form method="POST" action="\/notifications\?\/readAll">/);
+    const [id] = listed(page);
+    expect(page).toContain(`href="/notifications?n=${id}"`);
+    expect(page).toMatch(/<form[^>]* method="POST" action="\/notifications\?\/dismiss"/);
+    expect(page).toMatch(/<form method="POST" action="\/notifications\?\/dismissAll">/);
+    expect(page).toMatch(/<input type="checkbox" name="id" value="[0-9a-f-]{36}"/);
+    // No style attribute: the page's CSP allows none.
+    expect(page).not.toMatch(/<(?:div|section|form|li)[^>]* style="/);
     // With no script the time reads in UTC.
     expect(page).toMatch(/<time datetime="[^"]+">[^<]+ UTC<\/time>/);
   });
