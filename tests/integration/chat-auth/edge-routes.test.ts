@@ -1,5 +1,6 @@
 // The unset.cc edge lets through exactly the door's browser routes (review finding N1; ADR 0088 decision 1, ADR 0094).
-// The edge's door pattern (deployment/edge/adapted-rules.ts CHAT_DOOR_PATH, the same text in dev/chat.caddy's @door)
+// The edge's door pattern (dev/chat.caddy's @door matcher, which the adapted-rules check holds to CHAT_DOOR_PATH in
+// deployment/edge/adapted-rules.ts; read here from the Caddyfile, which tests/ can read without deployment's project)
 // and the door's route tables (interfaces/chat-auth/door.ts GET_ROUTES and POST_PATHS, which compose.ts wires) are
 // written by hand in two places; this test holds them to one list, so a door route the browser visits never answers
 // the edge's 404 and the edge never forwards a path the door does not serve.
@@ -16,11 +17,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { CHAT_DOOR_PATH } from "../../../deployment/edge/adapted-rules.ts";
 import { DM_PREFIX, GET_ROUTES, POST_PATHS } from "../../../interfaces/chat-auth/door.ts";
 import { ASSETS } from "../../../interfaces/chat-auth/page.ts";
 
 const ROOT = join(import.meta.dirname, "../../..");
+const CADDY = readFileSync(join(ROOT, "deployment/edge/dev/chat.caddy"), "utf8");
+const DOORS = [...CADDY.matchAll(/@door vars_regexp \{http\.request\.uri\.path\} (\S+)/g)].map((m) => m[1] ?? "");
+/** The edge's one door pattern. */
+const CHAT_DOOR_PATH = DOORS[0] ?? "";
 /** Door routes only a server calls: no edge path on purpose. */
 const SERVER_ONLY = ["/health"];
 /** The door's pattern routes, each with a path the browser really asks for. */
@@ -104,10 +108,8 @@ describe("the unset.cc edge and the door", () => {
   const literalRoutes = [...GET_ROUTES, ...POST_PATHS].filter((r) => !(r in PATTERN_ROUTES)).sort();
   const browserLiterals = literalRoutes.filter((r) => !SERVER_ONLY.includes(r));
 
-  test("edge.chat_caddy_door_is_the_rule: dev/chat.caddy's @door matcher is CHAT_DOOR_PATH, character for character", () => {
-    const caddy = readFileSync(join(ROOT, "deployment/edge/dev/chat.caddy"), "utf8");
-    const doors = [...caddy.matchAll(/@door vars_regexp \{http\.request\.uri\.path\} (\S+)/g)].map((m) => m[1]);
-    expect(doors).toEqual([CHAT_DOOR_PATH]);
+  test("edge.one_door_matcher: dev/chat.caddy has exactly one @door matcher", () => {
+    expect(DOORS).toHaveLength(1);
   });
 
   test("edge.door_routes_match: every door route the browser visits has an edge path, and every edge path a route", () => {
