@@ -1894,6 +1894,23 @@ Reuse:
 Not in this step: the Follow button (P4.18); post rendering beyond the generic card (P4.16); edge purge and the cookie-bypass rule (P5).
 Diagram: none.
 
+### P3.12t — Refuse profile text the public page cannot show
+Tags: —            Depends on: P3.12
+`domains/profile/` (member-text.ts, web-address.ts, profile.ts, card-edit.ts) and the refusal messages; staging
+break test 2026-11-21, bugs 1, 5 and 6 (bug 2, the record size, is P3.12v).
+
+**What:** what the owner can save and see must show on the public page, or be refused at save. A NUL in the
+profile's location was saved, and the index skips any record Postgres jsonb refuses (a NUL or a lone surrogate), so
+`/@handle` answered 404 while the owner's own page still showed. Every profile and card text field now refuses
+control characters (Unicode Cc; multi-line card text keeps line breaks and tabs) and lone surrogates, and a stored
+field another client wrote with one reads as unset. The display name also refuses the bidirectional embeddings,
+overrides and isolates and the characters that draw nothing (UTS #36); the joiners U+200C and U+200D stay, as
+Persian, the Indic scripts and emoji need them. Links and the website refuse addresses on the visitor's own machine
+or network (localhost, .local, .internal, home.arpa, loopback, private, carrier-grade NAT and link-local IP
+addresses, however typed); http stays. All tightenings, so nothing is needed from Alex.
+
+---
+
 ### P3.13 — Handle hosts
 Tags: none            Depends on: P3.12            Plan: §5.4 "Handle hosts", §5.2 "Rules for the handle domain", §11 Q1
 Where: `deployment/caddy/` (handle-domain site block), `tests/integration/deployment/handle-host.test.ts`
@@ -1934,6 +1951,21 @@ Reuse: prototype `deploy/traefik/dynamic.yml` and `appview/src/wellknown.ts` →
 Not in this step: the external resolver check (P3.23, P5.02a); DNS TXT at mint.
 Diagram: none.
 
+### P3.12u — Fix small rough edges from the staging test
+Tags: —            Depends on: P3.12
+`apps/web/lib/components/{profile,notifications}/`, `interfaces/web/src/routes/request-invite/`; staging break test
+2026-11-21, UX items 3, 5, 6, 7 and 9, and the second pass's sign-in times.
+
+**What:** small fixes the tester found, no design choice among them. A card being moved is dimmed and busy until the
+new order comes, and Delete says "Deleting…" while it runs (each took about 2 s with no sign). On a phone the owner's
+Shape and View as public take a row under the name, and a Text card's controls sit above its text, so the text keeps
+the card's width. The Add a card options are no longer underlined like links. Request an invite uses the core shell,
+and with requests closed says one sentence instead of an ask and a refusal. Sign-in history on a phone drops the "How
+long ago" column and the count, so the whole time and the toolbar each fit one line, and each time keeps its UTC
+value as a tooltip.
+
+---
+
 ### P3.14 — Directory and search
 Tags: none            Depends on: P3.05            Plan: §5.4 "Discoverable is labelled 'listed in the unset.sh directory'", §2 rule 11
 Where: `interfaces/http/routes/people.ts`, `apps/web/src/screens/people.tsx`, `infrastructure/postgres/people/queries.ts`
@@ -1967,6 +1999,28 @@ Done when (tests):
 Reuse: prototype `appview/src/db.ts:468-500` → LESSON, provisional: keyset and gates right; `%q%` with `json_extract` was a full scan.
 Not in this step: a live-search island; Follow buttons (P4.18).
 Diagram: none.
+
+### P3.12v — Keep every card a member can save on the public page
+Tags: [SEC] [ALEX] (typed line: it raises a resource cap)            Depends on: P3.12
+`domains/profile/` (index-plan.ts, card-edit.ts, profile.ts), the card writes in `interfaces/web`, the indexer's and
+web's stores in `infrastructure/postgres` (migration 0040); staging break test 2026-11-21, bug 2.
+
+**What:** a 95 KB Text card saved and showed to its owner, but the index kept records of at most 64 KiB
+(`MAX_RECORD_BYTES`), so the public page never had it. Alex's limits allow more: the lexicon's 100,000-byte text and
+100-entry collections, about 620 KB at every field's limit. The cap becomes 1,000,000 bytes, the most one write to the
+pinned PDS may carry (`APPLY_WRITES_BODY_BYTES`; a test holds the two equal), so every record saved through our PDS is
+kept. The save checks each profile and card record it writes with the indexer's own `fitsIndex`, so the two never
+drift again. A member's cards together are held to `MAX_PAGE_BYTES` (4 MiB, Alex's number; 8 MiB the alternative), the
+number the owner's card list already stopped at (`CARD_LIST_BYTES`, a test holds the two equal): the save refuses a
+write past it (`card.page_full`), counted on the list it checks; the indexer stores each card's size (migration 0040)
+and skips and counts (`ingest_over_budget`) a card past it, removing its older version; and the public page reads the
+cards one row each, in page order, stopping at it. Without the budget, 200 cards of 1 MB would make one page of about
+191 MiB that web reads for any visitor (review of #1911). At the editor's limits 4 MiB holds about 41 Text cards of
+100,000 characters or 54 collections of 30 full entries; a hundred cards fit while they average under about 41 KB.
+**Tests:** the largest Text card and collection the limits allow are indexed; an edit whose kept fields pass the cap
+is refused at save; the cap equals the PDS write limit; a hundred everyday cards fit and the 42nd full Text card does
+not; create, edit and Save of several are refused past the budget; the indexer skips, counts and removes past it; the
+public read stops at it in page order.
 
 ### P3.14s — Web search through SearXNG behind the search bar
 Tags: [SEC] [ALEX] (ADR 0035, typed line)            Depends on: P3.14, P1.18a

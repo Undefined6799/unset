@@ -23,6 +23,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | `domains/identity/auth/age.ts` | `parseBirthDate`, `ageInYears`, `latestCalendarDay`. |
 | `domains/identity/auth/gates.ts` | `emailGate`, `CACHED_RECHECK_CAP_MULTIPLE`, `cachedRecheckCapS`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`. |
 | `domains/identity/legal/versions.ts` | `TERMS_VERSION`, `PRIVACY_VERSION`. |
+| `domains/identity/sign-in-history.ts` | The Sign-in history port `SignInHistory` (list, remove, remove up to), `SignInId`, `parseSignInId`, `parseSignInIds`, `HISTORY_LIMIT` (50), `SIGN_IN_KEEP_DAYS` (30). The rows are `app.sign_in` (migration 0038, [ADR 0082](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0082-sign-in-history.md)). |
 
 `parseDid` accepts `did:plc` (24 base32 characters) or `did:web` plus a hostname `isResolvableHostname` accepts. It does not lowercase. `parseHandle` trims, drops one leading `@`, and lowercases. It returns null unless that result is a hostname `isResolvableHostname` accepts. `isHandleSyntax` is that hostname pattern before the disallowed-TLD list: the string must be printable ASCII and at most 253 characters, judged after lowercasing. It does not trim or drop `@`. A name such as `alice.local` passes `isHandleSyntax` and is still null from `parseHandle`. The lists and the spec cites are in `syntax.ts`.
 

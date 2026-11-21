@@ -124,15 +124,19 @@ const term = "font-mono text-xs leading-[22px] tracking-wider text-muted-foregro
         >
           <Icon name="edit" size={16} label={PROFILE_HEADER.edit} />
         </Button>
-        <AvatarEditor {shape} enhance={edit.enhance} />
-        <Button
-          href={edit.publicHref}
-          target="_blank"
-          rel="noopener"
-          variant="ghost"
-          size="sm"
-          class="shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:min-h-11">{PROFILE_HEADER.viewPublic}</Button
-        >
+        <!-- On a phone Shape and View as public take a row of their own under the name, so they never wrap ragged beside
+             it (staging test 2026-11-21, u5); from md up they stay on the name's line. -->
+        <div class="flex basis-full items-center gap-1 max-md:-ms-3 md:contents">
+          <AvatarEditor {shape} enhance={edit.enhance} />
+          <Button
+            href={edit.publicHref}
+            target="_blank"
+            rel="noopener"
+            variant="ghost"
+            size="sm"
+            class="shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:min-h-11">{PROFILE_HEADER.viewPublic}</Button
+          >
+        </div>
       {/if}
     </div>
   </div>
