@@ -5261,6 +5261,21 @@ fallbacks the font swap shifts layout, which the CLS budget would catch late.
 
 ---
 
+### P1.22c — Say "Privacy saved" once the public page follows
+Tags: —            Depends on: P1.22a
+`interfaces/web/src/lib/server/index-catch-up.ts`, `routes/settings/search-and-ai`, `routes/settings/privacy`;
+staging break test 2026-11-21, second pass.
+
+**What:** a visitor could still load a page for about 2 s after "Privacy saved" (Only me), and un-hiding took about 3 s:
+the save writes the choice to the member's PDS, but the public page reads the index, which the indexer updates from
+the PDS stream a moment later (ADR 0052). The save now reads the index every 250 ms, for at most 5 s and inside the
+request's deadline, until it has the new choice; then it says "Privacy saved." If the wait runs out it still answers,
+and says the public page is catching up. Reads only, outside any transaction. A visitor's own cached copy may still
+live up to the page's max-age of 60 s (book P3.12, unchanged). Closing the gap fully would need the choice in an
+app-owned table that the public page also reads (rule DA-1), a data-model change left for Alex.
+
+---
+
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)
 
 **English first (Alex, 2026-10-04 12:58Z):** this step is built in slice 1 **without its locale half**, which moves to
