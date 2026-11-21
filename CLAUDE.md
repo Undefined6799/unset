@@ -71,6 +71,7 @@ Every change:
 - **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in
   `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm
   package (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG.
+  The one exception is ADR 0087's Lucide `grip` (the editor's drag handle), copied and pinned the same way.
 
 ## Protocol work: read the source of truth first
 - AT Protocol: the specs at atproto.com/specs and the `@atproto/*` source for the pinned version. Pin `@atproto/*`

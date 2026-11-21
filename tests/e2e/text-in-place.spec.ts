@@ -535,9 +535,13 @@ test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) =
   const { editor } = await editorHolding(page, word);
   await editor.focus();
   // The spec's types have no DOM, so the browser's own function is named by its shape.
-  type Styles = { getComputedStyle: (element: unknown) => { boxShadow: string } };
-  const ring = await editor.evaluate((el) => (globalThis as unknown as Styles).getComputedStyle(el).boxShadow);
-  expect(ring).not.toBe("none");
+  // A light outline 8 px out, so the words never touch it (staging, 2026-11-21: a 3 px ring hugged them).
+  type Styles = { getComputedStyle: (element: unknown) => { outlineStyle: string; outlineOffset: string } };
+  const ring = await editor.evaluate((el) => {
+    const style = (globalThis as unknown as Styles).getComputedStyle(el);
+    return [style.outlineStyle, style.outlineOffset];
+  });
+  expect(ring).toEqual(["solid", "8px"]);
   await removeCard(page, word);
 });
 
