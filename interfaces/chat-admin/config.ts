@@ -10,6 +10,8 @@ export type Config = {
   readonly env: "dev" | "prod";
   readonly adminUrl: URL;
   readonly tokenUrl: URL;
+  /** Synapse's client listener on the network only Synapse and chat-admin join, for the room sweep (ADR 0091). */
+  readonly synapseUrl: URL;
   readonly clientId: string;
   readonly clientSecret: string;
   /** Seconds each minted token lives; always sent, as MAS mints a token that never expires without it (spec.json,
@@ -38,7 +40,8 @@ function integer(env: NodeJS.ProcessEnv, name: string, fallback: number, max: nu
   return Number(raw);
 }
 
-/** An internal http origin and nothing more (the edge never routes to MAS; ADR 0081 decision 6). */
+/** An internal http origin and nothing more (the edge never routes to MAS or this listener; ADR 0081 decision 6,
+ * ADR 0091 decision 8). */
 function origin(env: NodeJS.ProcessEnv, name: string): URL {
   const raw = required(env, name);
   if (!URL.canParse(raw) || new URL(raw).protocol !== "http:" || new URL(raw).origin !== raw) {
@@ -90,6 +93,7 @@ export function readConfig(env: NodeJS.ProcessEnv): Config {
     env: mode,
     adminUrl: origin(env, "MAS_ADMIN_URL"),
     tokenUrl: origin(env, "MAS_TOKEN_URL"),
+    synapseUrl: origin(env, "SYNAPSE_ADMIN_URL"),
     clientId,
     clientSecret: secret(secrets, "chat_admin_client_secret"),
     sessionTtl: integer(env, "SESSION_TTL_SECONDS", 86_400, 30 * 86_400),

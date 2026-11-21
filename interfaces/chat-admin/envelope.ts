@@ -13,7 +13,15 @@ export type ServiceKey = {
   readonly verbs: ChatAdminVerb[];
 };
 export const ISSUER_VERBS: Readonly<Record<Issuer, readonly ChatAdminVerb[]>> = {
-  web: ["account.create", "session.mint", "session.end", "account.lock", "account.unlock", "account.deactivate"],
+  web: [
+    "account.create",
+    "session.mint",
+    "session.end",
+    "account.lock",
+    "account.unlock",
+    "account.deactivate",
+    "rooms.sweep",
+  ],
   door: ["session.end"],
 };
 export type Refusal = { readonly status: 400 | 403; readonly reason: string };
@@ -31,6 +39,7 @@ export type Command = Claims &
     | { readonly verb: "session.mint" }
     | { readonly verb: "session.end"; readonly device: DeviceId }
     | { readonly verb: AccountVerb }
+    | { readonly verb: "rooms.sweep" }
   );
 /** The account calls of ADR 0084: they name the user and nothing else. */
 export type AccountVerb = "account.lock" | "account.unlock" | "account.deactivate";
@@ -88,8 +97,10 @@ export function checkEnvelope(
   if (typeof p.iat !== "number" || typeof p.exp !== "number") return { status: 403, reason: "claims" };
   if (p.exp - p.iat > MAX_LIFETIME || p.iat > now + CLOCK_SKEW || now > p.exp) return { status: 403, reason: "time" };
   if (typeof p.jti !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(p.jti)) return { status: 400, reason: "jti" };
-  if (typeof p.user !== "string" || !USER.test(p.user)) return { status: 400, reason: "user" };
-  const claims: Claims = { kid, jti: p.jti, exp: p.exp, user: p.user as ChatUser };
+  // The sweep names no account (ADR 0091 decision 1); every other verb names exactly one.
+  const userOk = verb === "rooms.sweep" ? p.user === "" : typeof p.user === "string" && USER.test(p.user);
+  if (!userOk) return { status: 400, reason: "user" };
+  const claims: Claims = { kid, jti: p.jti, exp: p.exp, user: String(p.user) as ChatUser };
   return fieldsFor(verb, claims, p);
 }
 
@@ -111,6 +122,7 @@ function fieldsFor(verb: ChatAdminVerb, claims: Claims, p: Record<string, string
       ? { ...claims, verb, device: device as DeviceId }
       : bad;
   }
+  if (verb === "rooms.sweep") return empty(p, ["name", "device", ...TICKET_KEYS]) ? { ...claims, verb } : bad;
   if (ACCOUNT_VERBS.includes(verb)) {
     return empty(p, ["name", "device", ...TICKET_KEYS]) ? { ...claims, verb: verb as AccountVerb } : bad;
   }

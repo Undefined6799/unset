@@ -14,13 +14,22 @@ import type { ServiceKey } from "../../../interfaces/chat-admin/envelope.ts";
 import { createMas } from "../../../interfaces/chat-admin/mas.ts";
 import { createQuotas } from "../../../interfaces/chat-admin/quota.ts";
 import { createHandler, type HandlerDeps } from "../../../interfaces/chat-admin/server.ts";
+import { createSynapse } from "../../../interfaces/chat-admin/synapse.ts";
 
 export const CLIENT_ID = "01JCHATADM1N0000000000000A";
 export const CLIENT_SECRET = "test-client-secret-not-real";
 export const ALICE = "alice0000000000000000000";
 export const SCOPE_PREFIX = "urn:matrix:client:api:* urn:matrix:client:device:";
 
-type Session = { id: string; actor: string; scope: string; revoked: boolean; expiresIn: unknown; humanName: unknown };
+type Session = {
+  id: string;
+  actor: string;
+  scope: string;
+  revoked: boolean;
+  expiresIn: unknown;
+  humanName: unknown;
+  token: string;
+};
 type User = { id: string; username: string; locked: boolean; deactivated: boolean; displayname: unknown };
 
 export type FakeMas = {
@@ -116,9 +125,10 @@ function route(fake: FakeMas, req: IncomingMessage, body: string, res: ServerRes
       revoked: false,
       expiresIn: parsed.expires_in,
       humanName: parsed.human_name,
+      token: `mpt_${randomBytes(12).toString("hex")}`,
     };
     fake.sessions.push(s);
-    return json(res, 201, { data: sessionResource(s, `mpt_${randomBytes(12).toString("hex")}`) });
+    return json(res, 201, { data: sessionResource(s, s.token) });
   }
   if (req.method === "GET" && path === "/api/admin/v1/personal-sessions") {
     fake.onList(url);
@@ -226,6 +236,7 @@ export async function startService(mas: FakeMas, overrides: Partial<HandlerDeps>
     "account.lock",
     "account.unlock",
     "account.deactivate",
+    "rooms.sweep",
   ]);
   const door = callerKey("door-1", "door", ["session.end"]);
   const logs: Record<string, unknown>[] = [];
@@ -233,6 +244,8 @@ export async function startService(mas: FakeMas, overrides: Partial<HandlerDeps>
     keys: [web.service, door.service],
     env: "dev",
     mas: createMas({ adminUrl: mas.url, tokenUrl: mas.url, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET }),
+    // No Synapse unless a test brings one (fake-synapse.ts): a sweep against this one fails to connect.
+    synapse: createSynapse({ adminUrl: new URL("http://127.0.0.1:9") }),
     sessionTtl: 3600,
     jti: openJtiStore(join(tempDir(), "jti.log"), nowSeconds()),
     quotas: createQuotas(),

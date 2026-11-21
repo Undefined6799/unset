@@ -98,6 +98,7 @@ describe("session.mint", () => {
         revoked: true,
         expiresIn: 1,
         humanName: "x",
+        token: "",
       });
     };
     const body = (await (await mint()).json()) as { device: string };

@@ -19,17 +19,19 @@ export type AdminPayload = {
   readonly exp: number;
 };
 
-/** What chat-admin may be asked (ADR 0081 decision 5): fixed, and none of them takes a scope. */
+/** What chat-admin may be asked (ADR 0081 decision 5, ADR 0091): fixed, and none of them takes a scope. */
 export type ChatAdminVerb =
   | "account.create"
   | "session.mint"
   | "session.end"
   | "account.lock"
   | "account.unlock"
-  | "account.deactivate";
+  | "account.deactivate"
+  | "rooms.sweep";
 
 /**
  * One chat-admin request. `user` is the chat account's username (the MAS localpart web's mapping holds, never a DID).
+ * `rooms.sweep` names no account: its `user` is "" like every field it does not use (ADR 0091 decision 1).
  * `name` is the display name for `account.create` and `device` the device to end for `session.end`. A `session.mint`
  * is web's sign-in ticket (ADR 0081 decision 3): `did` is the member, `sid` names the web session it came from (a
  * one-way reference, never the session's key) and `state` is the one-time value the door set in the browser before

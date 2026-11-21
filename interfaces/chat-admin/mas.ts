@@ -17,7 +17,8 @@ export type Mas = {
   readonly findUser: (username: string) => Promise<MasUser | null>;
   /** Personal sessions of a user holding `device`'s scope token: active ones, or every one ever made. */
   readonly sessions: (userId: string, device: string, which: "active" | "ever") => Promise<string[]>;
-  readonly mint: (userId: string, scope: string, expiresIn: number) => Promise<string>;
+  /** A new personal session: its ID (to revoke it) and its token. */
+  readonly mint: (userId: string, scope: string, expiresIn: number) => Promise<{ id: string; token: string }>;
   readonly revoke: (sessionId: string) => Promise<void>;
   /** lock, unlock or deactivate the user with this MAS ID (ADR 0084). */
   readonly setState: (userId: string, call: "lock" | "unlock" | "deactivate") => Promise<void>;
@@ -107,8 +108,10 @@ export function createMas(options: MasOptions): Mas {
     mint: async (userId, scope, expiresIn) => {
       const body = { actor_user_id: userId, human_name: HUMAN_NAME, scope, expires_in: expiresIn };
       const answer = await admin("POST", "/api/admin/v1/personal-sessions", body);
+      const id = field(answer.body, "data", "id");
       const token = field(answer.body, "data", "attributes", "access_token");
-      return answer.status === 201 && typeof token === "string" ? token : refuse("mint", answer);
+      const good = answer.status === 201 && typeof token === "string" && typeof id === "string" && ULID.test(id);
+      return good ? { id: id as string, token: token as string } : refuse("mint", answer);
     },
     setState: async (userId, call) => {
       if (!ULID.test(userId)) throw new MasUnavailable("user_id");

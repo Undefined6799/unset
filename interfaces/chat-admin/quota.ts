@@ -13,6 +13,8 @@ export const DEFAULT_LIMITS: Limits = {
   "account.lock": { perUser: 10, global: 1_000 },
   "account.unlock": { perUser: 10, global: 1_000 },
   "account.deactivate": { perUser: 5, global: 500 },
+  // ADR 0091: web's hourly job from each replica; the sweep names no account, so both counts are the same.
+  "rooms.sweep": { perUser: 6, global: 6 },
 };
 const WINDOW_MS = 3_600_000;
 

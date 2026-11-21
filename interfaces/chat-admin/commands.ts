@@ -61,7 +61,7 @@ export const mintSession = (
     if (target.kind !== "ok") return target;
     const gone = abandoned();
     if (gone !== null) return refused(403, gone);
-    const token = await mas.mint(account.id, sessionScope(target.device), ttl);
+    const { token } = await mas.mint(account.id, sessionScope(target.device), ttl);
     for (const id of target.old) await mas.revoke(id);
     return { kind: "ok", token, device: target.device, expiresIn: ttl };
   });
