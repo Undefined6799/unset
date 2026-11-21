@@ -57,7 +57,8 @@ const SHARED_FILE = join(ROOT, ".github", "trivyignore.yaml");
  * 2026-12-11 by P1.38u (no PDS image newer than 0.4.5051 on 2026-11-21). */
 const KEPT_STATEMENT = [
   "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
-  "newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z,",
+  "newest upstream release, staging and local stacks; every address it sees is an account email the PDS validated",
+  "(254 characters at most); accepted by Alex 2026-10-14T20:34:16Z,",
   "removed on re-pin or before P1.34",
 ].join(" ");
 const KEPT_ENTRIES = [
@@ -73,11 +74,15 @@ const KEPT_ENTRIES = [
   statement: KEPT_STATEMENT,
   expired_at: "2026-12-11",
 }));
-const REPIN_STATEMENT = [
-  "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
-  "0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z,",
-  "removed on the next re-pin or before P1.34",
-].join(" ");
+/** P1.38u: each statement names why the finding is not a live risk on staging and local stacks. */
+const repinStatement = (why: string) =>
+  [
+    "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
+    `0.4.5049 re-pin, staging and local stacks; ${why}; accepted by Alex 2026-10-28T03:36:24Z,`,
+    "removed on the next re-pin or before P1.34",
+  ].join(" ");
+/** The npm CLI's bundled undici and brace-expansion: the image starts node, never npm. */
+const NPM_NEVER_RUNS = "npm never runs";
 const NPM = "usr/local/lib/node_modules/npm/node_modules";
 const REPIN_ENTRIES = [
   {
@@ -86,6 +91,7 @@ const REPIN_ENTRIES = [
       "app/node_modules/.pnpm/@opentelemetry+propagator-jaeger@2.8.0_@opentelemetry+api@1.10.0/node_modules/@opentelemetry/propagator-jaeger/package.json",
     ],
     purls: ["pkg:npm/%40opentelemetry/propagator-jaeger@2.8.0"],
+    why: "OTel is not loaded",
   },
   { id: "CVE-2026-102276", paths: [`${NPM}/brace-expansion/package.json`], purls: ["pkg:npm/brace-expansion@5.0.9"] },
   { id: "CVE-2026-102278", paths: [`${NPM}/brace-expansion/package.json`], purls: ["pkg:npm/brace-expansion@5.0.9"] },
@@ -97,8 +103,13 @@ const REPIN_ENTRIES = [
     id: "CVE-2023-54404",
     paths: ["app/node_modules/.pnpm/zod@3.25.76/node_modules/zod/package.json"],
     purls: ["pkg:npm/zod@3.25.76"],
+    why: "bounded by the PDS's body limits",
   },
-].map((entry) => ({ ...entry, statement: REPIN_STATEMENT, expired_at: "2026-12-11" }));
+].map(({ why = NPM_NEVER_RUNS, ...entry }: { why?: string; id: string; paths: string[]; purls: string[] }) => ({
+  ...entry,
+  statement: repinStatement(why),
+  expired_at: "2026-12-11",
+}));
 /** P1.38q: goat v0.2.7 in 0.4.5051 (8e58b797) is built with Go 1.27.3; Trivy reported CVE-2026-97054 on 2026-11-19.
  * Alex's line 2026-11-19T02:00:23Z: "Waive CVE-2026-97054 for goat in the PDS image until 2026-12-19". */
 const GOAT_ENTRIES = [
