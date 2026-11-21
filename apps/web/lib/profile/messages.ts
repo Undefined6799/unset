@@ -84,6 +84,7 @@ export const CARD_EDIT = {
   more: (name: string) => `More for ${name} card`,
   down: "Move down",
   remove: "Delete",
+  removing: "Deleting…",
   /** Names the card, so a page of similar cards says which one goes (staging audit 2026-11-19). */
   removeTitle: (name: string) => `Delete ${name} card?`,
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",

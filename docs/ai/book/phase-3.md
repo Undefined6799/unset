@@ -1951,6 +1951,21 @@ Reuse: prototype `deploy/traefik/dynamic.yml` and `appview/src/wellknown.ts` →
 Not in this step: the external resolver check (P3.23, P5.02a); DNS TXT at mint.
 Diagram: none.
 
+### P3.12u — Fix small rough edges from the staging test
+Tags: —            Depends on: P3.12
+`apps/web/lib/components/{profile,notifications}/`, `interfaces/web/src/routes/request-invite/`; staging break test
+2026-11-21, UX items 3, 5, 6, 7 and 9, and the second pass's sign-in times.
+
+**What:** small fixes the tester found, no design choice among them. A card being moved is dimmed and busy until the
+new order comes, and Delete says "Deleting…" while it runs (each took about 2 s with no sign). On a phone the owner's
+Shape and View as public take a row under the name, and a Text card's controls sit above its text, so the text keeps
+the card's width. The Add a card options are no longer underlined like links. Request an invite uses the core shell,
+and with requests closed says one sentence instead of an ask and a refusal. Sign-in history on a phone drops the "How
+long ago" column and the count, so the whole time and the toolbar each fit one line, and each time keeps its UTC
+value as a tooltip.
+
+---
+
 ### P3.14 — Directory and search
 Tags: none            Depends on: P3.05            Plan: §5.4 "Discoverable is labelled 'listed in the unset.sh directory'", §2 rule 11
 Where: `interfaces/http/routes/people.ts`, `apps/web/src/screens/people.tsx`, `infrastructure/postgres/people/queries.ts`
