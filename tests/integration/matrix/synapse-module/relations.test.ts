@@ -65,9 +65,10 @@ afterAll(stopAllSynapse, STOP_SYNAPSE_MS);
 // A reaction is a
 // plain m.reaction annotation (spec v1.18 #event-annotations-and-reactions), with one of Element's quick reactions as its
 // key (element-web v1.12.35 packages/shared-components/src/core/EmojiPicker/QuickReactions.tsx:22), on a message in
-// the same room. A reply is Megolm with m.relates_to.m.in_reply_to in the clear (spec v1.18 #rich-replies). Taking a
-// reaction back is a redaction of one's own m.reaction (spec v1.18 #redactions); every other redaction stays refused.
-describe("reactions, replies and taking a reaction back", () => {
+// the same room. A reply is Megolm with m.relates_to.m.in_reply_to in the clear (spec v1.18 #rich-replies). A member
+// deletes their own encrypted message or takes their own reaction back with a redaction (spec v1.18 #redactions; Alex,
+// 2026-11-21 19:23Z); every other redaction stays refused.
+describe("reactions, replies and deleting one's own", () => {
   const QUICK = ["👍", "👎", "😄", "🎉", "😕", "❤️", "🚀", "👀"];
   const annotation = (eventId: string, key: string) => ({
     "m.relates_to": { rel_type: "m.annotation", event_id: eventId, key },
@@ -122,16 +123,48 @@ describe("reactions, replies and taking a reaction back", () => {
     );
   });
 
-  test("own_reaction_may_be_taken_back_and_nothing_else_redacted", async () => {
-    const onIt = await message();
-    const mine = (await react(encrypted, onIt, "🚀")).body.event_id as string;
-    const theirs = (await react(encrypted, onIt, "🚀", bob)).body.event_id as string;
-    const withReason = (await react(encrypted, onIt, "❤️")).body.event_id as string;
-    expect(outcome(await redact(encrypted, theirs, alice))).toEqual(refused);
-    expect(outcome(await redact(encrypted, onIt, alice))).toEqual(refused);
-    expect(outcome(await redact(encrypted, withReason, alice, { reason: "oops" }))).toEqual(refused);
-    expect((await redact(encrypted, mine, alice)).status).toBe(200);
-    expect((await redact(encrypted, theirs, bob)).status).toBe(200);
+  test("own_message_and_own_reaction_may_be_deleted_by_their_sender", async () => {
+    const [mine, bobs] = [await message(), await message(encrypted, bob)];
+    const reaction = (await react(encrypted, bobs, "🚀")).body.event_id as string;
+    const deleted = await outcomes(
+      [
+        [mine, alice],
+        [bobs, bob],
+        [reaction, alice],
+      ] as const,
+      ([eventId, user]) => redact(encrypted, eventId, user),
+    );
+    expect(deleted.map((d) => d.status)).toEqual([200, 200, 200]);
+  });
+
+  test("redacting the other person's event, any state event or with a reason refused", async () => {
+    const [mine, theirs] = [await message(), await message(encrypted, bob)];
+    const theirReaction = (await react(encrypted, mine, "🚀", bob)).body.event_id as string;
+    const withReason = await message();
+    const plainText = (await send(plain, "m.room.message", TEXT)).body.event_id as string;
+    const elsewhere = await message(await startConversation({}));
+    const ownRedaction = await message();
+    const redaction = (await redact(encrypted, ownRedaction, alice)).body.event_id as string;
+    const fresh = await startConversation({});
+    const state = await Promise.all(
+      ["m.room.create", "m.room.encryption", "m.room.member", "m.room.join_rules", "m.room.power_levels"].map((type) =>
+        stateEventId(fresh, type),
+      ),
+    );
+    const attempts: [string, string, unknown][] = [
+      [encrypted, theirs, {}],
+      [encrypted, theirReaction, {}],
+      [encrypted, withReason, { reason: "oops" }],
+      [plain, plainText, {}],
+      [encrypted, elsewhere, {}],
+      [encrypted, "$nothere", {}],
+      [encrypted, redaction, {}],
+      ...state.map((eventId): [string, string, unknown] => [fresh, eventId, {}]),
+    ];
+    const tried = await outcomes(attempts, ([id, eventId, body]) => redact(id, eventId, alice, body));
+    expect(tried.map(({ item, status, errcode }) => ({ item, status, errcode }))).toEqual(
+      attempts.map((item) => ({ item, ...refused })),
+    );
   });
 
   test("encrypted_reply_with_a_cleartext_in_reply_to_accepted", async () => {

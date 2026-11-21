@@ -27,7 +27,7 @@ and spam_checker_callbacks.md):
   /send, /state for any type but m.room.member, /redact, delayed events
   (handlers/message.py:1195, `_create_and_send_nonmember_event_locked`). It refuses
   every state event after creation (so neither kind can change, nor its
-  retention), every redaction but of one's own reaction (below; redacting
+  retention), every redaction but of one's own message or reaction (below; redacting
   m.room.encryption strips its content, spec v1.18 room v11 redaction rules),
   and in each kind every event but its one
   allowed shape: exactly Megolm's keys (spec v1.18 m.room.encrypted; m.relates_to
@@ -48,10 +48,12 @@ message answers which, and read times; nothing else is opened up.
   as Element's makeReplyMixIn writes it (element-web v1.12.35 apps/web/src/
   utils/Reply.ts:52-66; spec v1.18 #rich-replies), pointing at a message in
   this room. Edits, threads and every other relation stay refused.
-- A redaction is allowed only of the sender's own m.reaction in this room,
-  with no reason (Element's ReactionPicker redacts with none, apps/web/src/
-  components/views/emojipicker/ReactionPicker.tsx:95). Every other redaction
-  stays refused, messages included.
+- A redaction is allowed only of the sender's own m.reaction or Megolm
+  message in this room, with no reason (Element's ReactionPicker redacts with
+  none, apps/web/src/components/views/emojipicker/ReactionPicker.tsx:95).
+  Alex, 2026-11-21 19:23Z: "I do believe that members should be able to
+  delete their own messages". Every other redaction stays refused: the other
+  person's events, any state event, a plain message (it expires instead).
 - Targets are read with run_db_interaction (module API, "Added in Synapse
   v0.25.0", module_api/__init__.py:1052-1076), the only module API that can
   read an event that is not state: a non-state, non-rejected row of Synapse's
@@ -97,6 +99,9 @@ ENCRYPTION = "m.room.encryption"
 REACTION = "m.reaction"
 REDACTION = "m.room.redaction"
 MESSAGE_TYPES = frozenset({"m.room.encrypted", "m.room.message"})
+# What a member may delete of their own (Alex, 2026-11-21 19:23Z): an encrypted
+# message, or a reaction to take it back. Plain messages expire instead.
+REDACTABLE = frozenset({"m.room.encrypted", REACTION})
 # element-web v1.12.35 packages/shared-components/src/core/EmojiPicker/
 # QuickReactions.tsx:22, as code points.
 QUICK_REACTIONS = frozenset(
@@ -277,11 +282,13 @@ class RoomPolicy:
         return await self.message_here(reply_target(event.content), event.room_id)
 
     async def check_redaction(self, event: EventBase) -> Verdict:
-        """Only the sender's own reaction in this room, its content nothing but `redacts`."""
+        """Only the sender's own Megolm message or reaction here; content only `redacts`."""
         if not frozenset(event.content) <= {"redacts"} or not isinstance(event.redacts, str):
             return Codes.FORBIDDEN
         found = await self.event_here(event.redacts, event.room_id)
-        return NOT_SPAM if found == (REACTION, event.sender) else Codes.FORBIDDEN
+        if found is None or found[1] != event.sender:
+            return Codes.FORBIDDEN
+        return NOT_SPAM if found[0] in REDACTABLE else Codes.FORBIDDEN
 
     async def message_here(self, event_id: str | None, room_id: str) -> Verdict:
         found = None if event_id is None else await self.event_here(event_id, room_id)

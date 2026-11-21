@@ -67,4 +67,5 @@ Read and tested 2026-11-21 against Synapse v1.165.0 (P6.10a, PR #1864):
 
 ## Follow-ups
 - [ADR 0092](0092-chat-reactions-replies-and-seen-receipts.md) amends decisions 1 and 2. Reactions, replies and own
-  reaction redactions are allowed (Alex, 2026-11-21 18:59Z).
+  reaction redactions are allowed (Alex, 2026-11-21 18:59Z), and so is deleting one's own encrypted message
+  (19:23Z).
