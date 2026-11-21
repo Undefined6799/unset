@@ -26,6 +26,19 @@ export {
   retryDelayS,
 } from "./chat-account.ts";
 export {
+  type AccessToken,
+  type DoorPorts,
+  type EndOutcome,
+  type MintOutcome,
+  type RedeemOutcome,
+  type RedeemRefusal,
+  readTicket,
+  redeem,
+  type SignOutOutcome,
+  signOut,
+  type Ticket,
+} from "./door.ts";
+export {
   type DoorState,
   parseDoorState,
   type SessionRef,
