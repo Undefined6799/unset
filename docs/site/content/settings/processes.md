@@ -64,10 +64,10 @@ Every environment setting, by process. "not set" means the default applies.
 | `PDS_ADMIN_WEB_KEY` | secretFile | at least 64 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `PDS_ADMIN_WEB_KID` | str | text (pattern in source) | required | from env file: `WEB_PDS_ADMIN_KID` | from env file: `WEB_PDS_ADMIN_KID` | `interfaces/web/src/lib/server/config.ts` |
 | `PDS_DID` | str | text (pattern in source) | required | from env file: `PDS_DID` | from env file: `PDS_DID` | `interfaces/web/src/lib/server/config.ts` |
-| `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `INVITE_REQUEST_SMTP_URL` | secretFile | at least 16 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `INVITE_REQUEST_TO` | secretFile | at least 6 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `INVITE_REQUEST_FROM` | str | text (pattern in source) | (empty) | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | `on` | `interfaces/web/src/lib/server/config.ts` |
+| `INVITE_REQUEST_SMTP_URL` | secretFile | at least 16 bytes | optional | not set | secret file | `interfaces/web/src/lib/server/config.ts` |
+| `INVITE_REQUEST_TO` | secretFile | at least 6 bytes | optional | not set | secret file | `interfaces/web/src/lib/server/config.ts` |
+| `INVITE_REQUEST_FROM` | str | text (pattern in source) | (empty) | not set | `noreply@staging.unset.sh` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_URL` | origin | http: or https: | required | `http://objects:8333` | `http://objects:8333` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |

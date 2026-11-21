@@ -3241,6 +3241,20 @@ Threats:
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
+### P2.10u — Invite requests on in staging: mounts, env, C9 names a missing file
+Tags: [SEC]            Depends on: P2.10r            Plan: §5.3 "Login and signup"; ADR 0080
+Where: `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` (web's env and two secret mounts),
+  `deployment/compose.dev.test.ts`, `deployment/compose.local.test.ts`, `deployment/web-config.test.ts`,
+  `docs/human/runbooks/dev-stack-secrets.md`.
+Goal: the staging stacks set `INVITE_REQUESTS=on` and mount `web_invite_request_smtp` and `web_invite_request_to`
+  (0400, uid 65532); the local stack stays off. Alex creates the two files by hand before the deploy.
+Threats:
+- The stack boots half-on (page on, mail unconfigured). Answered: C9 fails the preflight and names the file while
+  either is missing (`c9_fails_while_an_invite_request_file_is_missing`); web refuses to boot on a bad value (P2.10r).
+- Another service reads the provider key. Answered: only web mounts the files, owned by web's uid
+  (`SECRET_OWNERS`, `invite_requests_are_on`).
+- The local stack mails anyone. Answered: it stays off and mounts neither (`invite_requests_are_off`).
+
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19
 Where: `domains/identity/identity-seam/{mint.ts, module-accounts.ts, verify.ts}` (`verify.ts` is the verifier: imports only
