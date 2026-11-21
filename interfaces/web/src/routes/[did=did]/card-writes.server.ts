@@ -155,7 +155,11 @@ export type CardEdit = {
 };
 
 export type CardWrites = {
-  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
+  /**
+   * `key`, when given, is the one the add form named, so the same form sent twice (a double click, a retry after a
+   * lost answer) adds one card: a key already stored is answered as saved.
+   */
+  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface, key?: CardKey) => Promise<CardWrite>;
   readonly save: (key: CardKey, content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
   /** Every changed card at once, all or none (ADR 0074). */
   readonly saveAll: (edits: readonly CardEdit[]) => Promise<CardWrite>;
@@ -325,12 +329,12 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
     // a second refusal asks the member to save again. A list cut short by the read budget (card-records.ts) is not a
     // count: the add is refused. The card's key is picked once, before the first write (a picture's use is recorded
     // under it), and a retry reuses it and the published picture.
-    create: async (content, width, surface) => {
+    create: async (content, width, surface, named) => {
       const early = draftOf(content) === null ? toCardRecord(content, width, null, now(), surface) : null;
       if (early !== null && !early.ok) return failed(early.code, early.field);
       let record = early?.record ?? null;
       let held: Held | null = null;
-      const key = store.newKey();
+      const key = named ?? store.newKey();
       const done = async (result: CardWrite, unsure = false) => {
         await settle(held === null ? [] : [held], [], unsure);
         return result;
@@ -339,6 +343,8 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
         const repo = await readRepo();
         if (!repo.ok) return done(repo.failed);
         const { list, profile } = repo;
+        // Checked before the count, so a form sent again at the last free place is still answered as saved.
+        if (list.cards.some((card) => card.key === key)) return done(SAVED);
         if (list.overflow || list.cards.length >= CARDS_MAX) return done(failed("card.too_many"));
         if (!list.complete) return done(failed("card.list_incomplete"));
         const listed = withCardListed(owner, key, profile?.value ?? null, now());

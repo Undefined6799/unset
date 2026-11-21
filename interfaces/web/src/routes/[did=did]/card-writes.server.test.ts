@@ -117,6 +117,33 @@ describe("cardWrites", () => {
     expect(calls.swaps).toEqual([HEAD]);
   });
 
+  test("card.create_once: a new card takes the key its form named", async () => {
+    const formKey = "3kformkey2aaa" as CardKey;
+    const { writes, calls } = store();
+    expect(await writes.create(input().content, "full", undefined, formKey)).toEqual({ kind: "saved" });
+    expect(calls.profile).toEqual([
+      { ok: true, exists: true, record: { ...PROFILE, cards: listed("a", "b", formKey) } },
+    ]);
+  });
+
+  test("card.create_once: the same form sent again after its card landed is saved, and nothing more is written", async () => {
+    const { writes, calls } = store();
+    expect(await writes.create(input().content, "full", undefined, "a" as CardKey)).toEqual({ kind: "saved" });
+    expect(calls.swaps).toEqual([]);
+  });
+
+  test("card.create_once: two sends at once write one card; the second finds it on the read after its swap failed", async () => {
+    const card = (key: string) => ({ key, value: readme("A"), cid: "c" });
+    const lists = [
+      [card("a"), card("b")],
+      [card("a"), card("b"), card(NEW_KEY)],
+    ];
+    const list = async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false });
+    const { writes, calls } = store({ list }, PROFILE, ["changed"]);
+    expect(await writes.create(input().content, "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    expect(calls.created).toHaveLength(1); // the try the PDS refused, as the first send had landed
+  });
+
   test("a card cannot be added before there is a profile to list it, and nothing is written", async () => {
     const { writes, calls } = store({}, null);
     expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "profile.name_required" });
