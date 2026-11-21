@@ -17,4 +17,9 @@ export const VENDOR_IMAGES: ReadonlySet<string> = new Set([
  * (accepted ADR 0041; P2.18s). Our objects image adds no package, drops the upstream entrypoint and runs `weed` as a
  * non-root user, so only the binary and its Alpine base ship. Never a run-only image (VENDOR_IMAGES), never a builder.
  */
-export const VENDOR_BASES: ReadonlySet<string> = new Set(["docker.io/chrislusf/seaweedfs"]);
+export const VENDOR_BASES: ReadonlySet<string> = new Set([
+  "docker.io/chrislusf/seaweedfs",
+  // P6.02 (ADR 0086 Decision 1; Alex's card "Yes, use distroless", 2026-11-21): the Synapse image's runtime, Debian's
+  // own python3.13 with no pip, shell, apt or dpkg. The image only copies its venv in and runs nothing there.
+  "gcr.io/distroless/python3-debian13",
+]);

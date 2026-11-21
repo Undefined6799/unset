@@ -37,6 +37,11 @@
   {
     "source": "docker.io/library/python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
     "mirror": "ghcr.io/undefined6799/mirror/python",
+    "stage": "build"
+  },
+  {
+    "source": "gcr.io/distroless/python3-debian13:nonroot@sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71",
+    "mirror": "ghcr.io/undefined6799/mirror/python3-debian13",
     "stage": "runtime"
   },
   {

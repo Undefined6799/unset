@@ -872,8 +872,7 @@ const ZLIB_UPGRADE = {
   line:
     "RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade " +
     "zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*",
-  // P6.02: the Synapse image's Python base is on the same trixie zlib1g (checked 2026-11-21); Alex to confirm in the PR.
-  kinds: new Set<Kind>(["node", "postgres", "synapse"]),
+  kinds: new Set<Kind>(["node", "postgres"]),
   expires: "2026-11-30T00:00:00Z",
 } as const;
 const isZlibUpgrade = (text: string, kind: Kind | undefined): boolean =>
@@ -1113,6 +1112,7 @@ describe("base images", () => {
       "newt",
       "seaweedfs",
       "python",
+      "python3-debian13",
       "mas",
     ]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
@@ -1175,20 +1175,25 @@ describe("base images", () => {
       stage: "runtime",
       buildStage: false,
     });
-    // P6.02 (ADR 0086 Decision 1): the Synapse image's base, which both its stages build on; its final stage deletes
-    // the base's pip and the wheel ensurepip would reinstall it from.
+    // P6.02 (ADR 0086 Decision 1; Alex's card "Yes, use distroless", 2026-11-21): the Synapse image builds its venv on
+    // the official Python image and ships nothing of it. Build-only, so no stripped paths: the mirror scan fails it on
+    // CRITICAL and reports HIGH, the pip SBOM findings among them.
     expect(lock.python).toStrictEqual({
       ref: "docker.io/library/python",
       tag: expect.stringMatching(/^3\.13(?:\.\d+)?-slim-trixie$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
-      stage: "runtime",
+      stage: "build",
       buildStage: true,
-      stripped: [
-        "/usr/local/lib/python3.13/site-packages/pip",
-        "/usr/local/lib/python3.13/site-packages/pip-26.2.2.dist-info",
-        "/usr/local/lib/python3.13/ensurepip",
-      ],
+    });
+    // Its runtime is Debian's own python3.13 in Google's distroless image, which ships no pip, shell, apt or dpkg.
+    expect(lock["python3-debian13"]).toStrictEqual({
+      ref: "gcr.io/distroless/python3-debian13",
+      tag: "nonroot",
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
     });
     // MAS (ADR 0086 Decision 1), run as shipped: a runtime entry no Dockerfile builds on.
     expect(lock.mas).toStrictEqual({
@@ -1204,9 +1209,15 @@ describe("base images", () => {
   test("vendor_bases_are_named_runtime_bases", () => {
     // P2.18s (ADR 0041): SeaweedFS is the one vendor image a Dockerfile may build on, by its exact name, as a runtime
     // base only. A run-only vendor image is never a base, and the two lists never share a name.
-    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs"]);
+    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs", "gcr.io/distroless/python3-debian13"]);
     for (const ref of VENDOR_BASES) expect(VENDOR_IMAGES.has(ref), ref).toBe(false);
-    for (const ref of ["docker.io/chrislusf/other", "docker.io/chrislusf/seaweedfs-x", "ghcr.io/chrislusf/seaweedfs"]) {
+    for (const ref of [
+      "docker.io/chrislusf/other",
+      "docker.io/chrislusf/seaweedfs-x",
+      "ghcr.io/chrislusf/seaweedfs",
+      "gcr.io/distroless/python3-debian12",
+      "gcr.io/distroless/static-debian13",
+    ]) {
       expect(allowed(ref), ref).toBe(false);
     }
     expect(lock.seaweedfs).toStrictEqual({
@@ -1446,6 +1457,8 @@ describe("base images", () => {
       expect(osPackageProblems(`${node}${changed}`), changed).toContain(`line 3: ${floor}`);
     }
     expect(ZLIB_UPGRADE.kinds.has("edge")).toBe(false);
+    // The Synapse image's distroless runtime already ships zlib1g deb13u1 and has no apt to run it.
+    expect(ZLIB_UPGRADE.kinds.has("synapse")).toBe(false);
   });
 
   test("zlib_upgrade_exception_has_not_expired", () => {
