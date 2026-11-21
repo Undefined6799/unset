@@ -49,8 +49,11 @@ export type Member = { readonly did: Did; readonly user: ChatUser; readonly user
 
 export type RealStack = {
   readonly proxy: string;
-  /** A new member with a chat account made by chat-admin in the real MAS, display name `handle`. */
-  readonly member: (handle: string) => Promise<Member>;
+  /**
+   * A new member with a chat account made by chat-admin in the real MAS, display name `handle`; with `publicName`,
+   * also a public page under that name (what the door's /chat-name answers, ADR 0096).
+   */
+  readonly member: (handle: string, publicName?: string) => Promise<Member>;
   /** web's chat-admin client, as the lifecycle jobs call it. */
   readonly chatAdmin: ReturnType<typeof createChatAdminClient>;
   /** A short-lived Synapse admin token for the checks only (a MAS personal session with urn:synapse:admin:*). */
@@ -117,12 +120,13 @@ export async function startRealStack(
     key: { kid: service.web.kid, privateKey: service.web.privateKey },
   });
   const members = new Map<string, Member>();
-  const member = async (handle: string): Promise<Member> => {
+  const member = async (handle: string, publicName?: string): Promise<Member> => {
     const user = newChatUser((n) => randomBytes(n));
     const did =
       `did:plc:${[...randomBytes(24)].map((b) => "abcdefghijklmnopqrstuvwxyz234567"[b % 32]).join("")}` as Did;
     const created = await chatAdmin.createAccount(user, handle as Handle);
     if (created.kind !== "created") throw new Error(`chat account not created: ${created.kind}`);
+    if (publicName !== undefined) db.addContact(did, user, publicName);
     const made = { did, user, userId: `@${user}:unset.cc`, handle };
     members.set(handle, made);
     return made;

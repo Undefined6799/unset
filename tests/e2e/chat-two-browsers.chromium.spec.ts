@@ -91,7 +91,7 @@ async function send(page: Page, text: string): Promise<void> {
  */
 async function talking(browser: Browser) {
   const alice = await stack.member(`alice${Date.now()}.unset.name`);
-  const bob = await stack.member(`bob${Date.now()}.unset.name`);
+  const bob = await stack.member(`bob${Date.now()}.unset.name`, "Bob \u202ERamos");
   const a = await browserFor(browser, alice.handle);
   const b = await browserFor(browser, bob.handle);
   await a.page.goto(`https://unset.cc/?with=${encodeURIComponent(bob.userId)}`);
@@ -109,8 +109,17 @@ async function talking(browser: Browser) {
   await expect(request.locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
   await request.getByRole("button", { name: "Accept" }).click();
   // Sent while Bob was only invited, and readable by him once he joined: the key went to his device as an invitee.
+  // Bob has a public page, so Alice sees his name over his handle, cleaned of the bidi control (ADR 0096); Alice has
+  // none, so Bob sees her handle alone, in the list and in the header.
+  const bobName = conversation(a.page).locator("h2 [data-person]");
+  await expect(bobName.locator("[data-name]")).toHaveText("Bob Ramos", { timeout: 30_000 });
+  await expect(bobName.locator("[data-handle]")).toHaveText(bob.handle);
+  const aliceItem = b.page.locator(`[data-conversation="${alice.userId}"] [data-person]`);
+  await expect(aliceItem).toHaveAttribute("data-person", "handle", { timeout: 30_000 });
+  await expect(aliceItem).toHaveText(alice.handle);
   await b.page.locator(`[data-conversation="${alice.userId}"]`).click();
   await expect(messages(b.page)).toContainText("hello before you accept", { timeout: 60_000 });
+  await expect(conversation(b.page).locator("h2")).toHaveText(alice.handle);
   // Alice's device is signed by her own keys, so no message carries the unconfirmed-device warning (ADR 0093). Bob's
   // browser may read the message before it knows her device; the mark goes once his device list has it.
   await expect(unconfirmed(b.page)).toHaveCount(0, { timeout: 30_000 });

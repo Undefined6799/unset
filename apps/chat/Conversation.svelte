@@ -33,13 +33,21 @@ import { Button } from "./lib/components/ui/button/index.js";
 import { Checkbox } from "./lib/components/ui/checkbox/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
 import { Label } from "./lib/components/ui/label/index.js";
+import PersonName from "./PersonName.svelte";
 
 let {
   conversations,
   id,
   onBack,
+  names,
   unsent = null,
-}: { conversations: Conversations; id: ConversationId; onBack: () => void; unsent?: string | null } = $props();
+}: {
+  conversations: Conversations;
+  id: ConversationId;
+  onBack: () => void;
+  names: (chatId: string) => Promise<string | null>;
+  unsent?: string | null;
+} = $props();
 
 let view = $state<ConversationView | null>(null);
 let loaded = $state(false);
@@ -134,7 +142,9 @@ async function accept() {
   <div class="flex items-center gap-2">
     <Button variant="ghost" size="icon" onclick={onBack}><Icon name="back" label="Back to conversations" /></Button>
     {#if view !== null}
-      <h2 class="min-w-0 flex-1 truncate font-medium">{view.conversation.with.name}</h2>
+      <h2 class="min-w-0 flex-1 font-medium">
+        <PersonName chatId={view.conversation.with.id} handle={view.conversation.with.name} {names} />
+      </h2>
       {#if view.conversation.kind === "encrypted"}
         <span class="flex items-center gap-1 text-xs" data-mark="encrypted"><Icon name="private" size={16} />Encrypted</span>
       {:else}

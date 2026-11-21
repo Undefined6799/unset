@@ -525,6 +525,14 @@
         }
       }
     },
+    "door.chat_name": {
+      "chat_auth": {
+        "columns": {
+          "chat_user": ["SELECT"],
+          "display_name": ["SELECT"]
+        }
+      }
+    },
     "door.push": {
       "chat_auth": {
         "columns": {

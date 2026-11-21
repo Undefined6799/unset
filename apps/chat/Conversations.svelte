@@ -1,9 +1,9 @@
 <!--
   The conversation list, part of the chat page's shell (ADR 0088; ADR 0055 point 2: the shell may lay out with Tailwind,
   everything else is a stock component). Requests (someone asked to talk; the invite is the request) come first with
-  Accept; each conversation shows the other person's name, its unread count, and a lock when it is encrypted or a
-  "Not encrypted" mark when it is not (ADR 0085). The start route `/?with=<chat ID>` (core/conversations.ts
-  startTarget), where a profile's Message link lands, opens the conversation with that person if there is one, and
+  Accept; each conversation shows the other person (PersonName.svelte: their public name over their handle), its
+  unread count, and a lock when it is encrypted or a "Not encrypted" mark when it is not (ADR 0085). The start route
+  `/?with=<chat ID>` (core/conversations.ts startTarget), where a profile's Message link lands, opens the conversation with that person if there is one, and
   otherwise a composer for a new one that makes nothing: no room and no request until the member's first Send (Alex,
   2026-11-21), so following a link from any site tells nobody anything. A conversation that is not one-to-one and
   private (core/conversations.ts availableOf) is listed as unavailable, with no name, no Accept and nothing to open.
@@ -24,8 +24,13 @@ import { Icon } from "./lib/components/icon/index.js";
 import * as Alert from "./lib/components/ui/alert/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
+import PersonName from "./PersonName.svelte";
 
-let { conversations, me }: { conversations: Conversations; me: string } = $props();
+let {
+  conversations,
+  names,
+  me,
+}: { conversations: Conversations; names: (chatId: string) => Promise<string | null>; me: string } = $props();
 
 let list: readonly Item[] = $state([]);
 let open: ConversationId | null = $state(null);
@@ -83,7 +88,7 @@ function leaveDraft() {
 </script>
 
 {#if open !== null}
-  <Conversation {conversations} id={open} {unsent} onBack={() => ((open = null), (unsent = null))} />
+  <Conversation {conversations} {names} id={open} {unsent} onBack={() => ((open = null), (unsent = null))} />
 {:else if draft !== null}
   <section class="flex flex-col gap-4" data-screen="new-conversation">
     <div class="flex items-center gap-2">
@@ -136,13 +141,13 @@ function leaveDraft() {
           <li>
             <Button
               variant="ghost"
-              class="w-full justify-between"
+              class="h-auto w-full justify-between py-2"
               data-conversation={talk.with.id}
               onclick={() => (open = talk.id)}
             >
               <span class="flex min-w-0 items-center gap-2">
                 {@render mark(talk)}
-                <span class="truncate">{talk.with.name}</span>
+                <PersonName chatId={talk.with.id} handle={talk.with.name} {names} />
               </span>
               {#if talk.unread > 0}
                 <span class="bg-primary text-primary-foreground rounded-full px-2 text-xs" data-unread={talk.unread}>

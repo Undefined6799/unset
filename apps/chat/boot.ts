@@ -6,6 +6,7 @@
 // would only loop. A Message link's path is turned into the start route once signed in (core/contact.ts).
 import type { ChatState } from "./core/chat.ts";
 import { dmTarget, startPathFor } from "./core/contact.ts";
+import { publicNames } from "./core/public-name.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
 import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
@@ -57,6 +58,7 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
     },
     pushKey: () => askPushKey(door, session.deviceId, deadline()),
     signOut: () => signOutDevice(door, session.deviceId, deadline()),
+    names: publicNames(door, session.deviceId, deadline),
     onState: (state) => {
       if (state.kind === "logging_out") leaving = true;
       onState(state);

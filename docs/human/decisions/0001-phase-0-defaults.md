@@ -795,3 +795,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   signed in through unset.sh that has not entered the recovery key still receives new room keys, so the recovery key
   protects history only; anyone who can create a device can read new messages with no warning to the sender. Unset's
   own 2FA/TOTP layer is the later mitigation. Amends ADR 0093's Consequences. Accepted by Alex 2026-11-21 22:18:09Z.
+- **Chat shows a partner's public name (P6.10, 2026-11-21; own record:
+  [0096](0096-chat-shows-a-partners-public-name.md)):** chat_auth reads `door.chat_name`, a read-only view of shown
+  members' public profile names by chat user, and the door's `/chat-name` answers any browser signed in to chat. The
+  page shows the name over the handle. A chat ID becomes linkable to a public name for signed-in members, as
+  `/chat-id` already allows the other way. View approved on the decision card at 22:20:53Z; the lookup for any
+  signed-in member accepted by Alex 2026-11-21 22:32:17Z.

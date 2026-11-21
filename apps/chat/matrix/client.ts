@@ -54,6 +54,8 @@ export type ChatOptions = {
   readonly pushKey: () => Promise<PushTarget | null>;
   /** The door's Log out for this device (core/sign-out.ts): true once the device and its lock key are gone. */
   readonly signOut: () => Promise<boolean>;
+  /** The door's public name for a chat partner (core/public-name.ts, ADR 0096), passed on to the page as is. */
+  readonly names: (chatId: string) => Promise<string | null>;
 };
 
 /**
@@ -173,7 +175,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     if (phase === "ready") void registerOnce();
     tell(
       phase === "ready"
-        ? { kind: "ready", conversations, me: session.userId, logOut: leave }
+        ? { kind: "ready", conversations, names: options.names, me: session.userId, logOut: leave }
         : { kind: "locked", unlock: tryKey, logOut: leave },
     );
   };
