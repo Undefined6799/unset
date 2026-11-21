@@ -85,12 +85,12 @@ test.describe("no script", () => {
     await expect(headline).toHaveValue(typed);
   });
 
-  test("the_readme_text_area_stops_at_the_lexicon_limit", async ({ page }) => {
+  test("the_readme_text_area_stops_at_the_editor_limit", async ({ page }) => {
     expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
     const panel = page.locator("#card-editor");
     await page.getByRole("link", { name: "Add card" }).click();
     await panel.getByRole("link", { name: /^Text/ }).click();
-    await expect(panel.getByRole("textbox", { name: "Text" })).toHaveAttribute("maxlength", "20000");
+    await expect(panel.getByRole("textbox", { name: "Text" })).toHaveAttribute("maxlength", "10000");
   });
 });
 
