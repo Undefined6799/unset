@@ -27,6 +27,7 @@ import {
   createNotificationStore,
   createOAuthSessionStore,
   createPool,
+  createSignInStore,
   migrate,
   withClient,
   withTransaction,
@@ -271,8 +272,8 @@ const MEMBERS: Record<
   account: { did: ACCOUNT.did as Did, step: "done" },
   // Done, but accepted an older privacy notice, so the shell shows the changed-notice banner (P2.12b).
   notice: { did: didOf("f"), step: "notice" },
-  // Done, with more notifications than the page's list shows at once (P2.27b): the notifications spec reads them and
-  // dismisses none, so the list scrolls and a cut-off title can be lifted.
+  // Done, with more notifications and sign-ins than the pages' lists show at once (P2.27b, P2.27c): the notifications
+  // spec reads them and deletes none, so the lists scroll and a cut-off title can be lifted.
   inbox: { did: didOf("g"), step: "inbox" },
 };
 
@@ -283,6 +284,12 @@ async function seedInbox(pool: ReturnType<typeof createPool>, did: Did): Promise
     const notification =
       n % 3 === 0 ? { reason: "privacy_notice" as const, topic: `e2e-${n}` } : { reason: "sign_in" as const };
     await withClient(pool, null, (db) => inbox.insert(db, did, notification));
+    await new Promise((done) => setTimeout(done, 2));
+  }
+  // As many sign-ins in the Sign-in history tab (P2.27c), so its list scrolls too.
+  const history = createSignInStore();
+  for (let n = 0; n < INBOX_SIZE; n += 1) {
+    await withClient(pool, null, (db) => history.record(db, did));
     await new Promise((done) => setTimeout(done, 2));
   }
 }
