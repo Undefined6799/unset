@@ -17,6 +17,8 @@ let { data } = $props();
   </Card.Header>
   <Card.Content>
     <p>You sign in on <strong>{data.pdsHost}</strong>, our sign-in server. It is the only place you type your password.</p>
+    <!-- P2.10r: sign-up is invite only for now, so a visitor with no account asks for an invite (ADR 0080). -->
+    <p>No account yet? <a href="/request-invite">Request an invite</a></p>
   </Card.Content>
   <Card.Footer>
     <form method="POST">

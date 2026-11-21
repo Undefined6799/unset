@@ -110,7 +110,7 @@ export async function schemaSettings(
       continue;
     }
     const settings = Object.entries(schema.fields).map(([key, raw]): Setting => {
-      const field = raw as { kind: string; allowed?: string; default?: unknown };
+      const field = raw as { kind: string; allowed?: string; default?: unknown; optional?: true };
       const secret = SECRET_KINDS.has(field.kind);
       const source = definedIn(root, entry.file, key, candidates);
       if (source === undefined) problems.push(`${entry.process}: cannot find where ${key} is defined`);
@@ -118,7 +118,7 @@ export async function schemaSettings(
         key,
         kind: field.kind,
         allowed: field.allowed ?? (field.kind === "str" ? "text (pattern in source)" : "see source"),
-        fallback: secret ? "required" : formatValue(field.default),
+        fallback: secret ? (field.optional === true ? "optional" : "required") : formatValue(field.default),
         secret,
         source: source ?? "not found",
         stacks: stackValues(stacks, entry.service, key, secret),
