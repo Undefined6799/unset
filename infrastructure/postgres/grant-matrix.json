@@ -279,6 +279,16 @@
         }
       }
     },
+    "app.image_record": {
+      "web": {
+        "columns": {
+          "record_uri": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "settled_rev": ["SELECT", "INSERT", "UPDATE"],
+          "removed": ["SELECT", "INSERT", "UPDATE"]
+        }
+      }
+    },
     "app.notification": {
       "web": {
         "columns": {

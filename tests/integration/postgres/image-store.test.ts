@@ -204,6 +204,33 @@ describe("image store", () => {
     }
   });
 
+  test("image.settle_fence: a write that leaves no picture, or a delete, still fences older settling", async () => {
+    // The card shows A. Save 1 writes B (rev ...b) and stalls; save 2 makes it a text card (rev ...c), or the card is
+    // deleted, and settles first. Save 1 settling late must not give B a use (Codex review of #1860).
+    for (const last of ["text", "delete"] as const) {
+      const did = await member();
+      const [a, b] = [await stored(did), await stored(did)];
+      const [A, B] = [
+        "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe",
+        "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
+      ];
+      await store.addUse(did, a, record(did), null);
+      await store.notePublished(did, a, A, null);
+      await store.settleUse(did, record(did), "3kcommit2aaaa", A, [], null);
+      const one = await store.addUse(did, b, record(did), null);
+      await store.notePublished(did, b, B, null);
+      if (last === "text") await store.settleUse(did, record(did), "3kcommit2cccc", null, [], null);
+      else await store.dropUses(did, record(did), null);
+      await store.settleUse(did, record(did), "3kcommit2bbbb", B, [{ id: b, lease: String(one?.lease) }], null);
+      expect(await sql("SELECT 1 FROM app.image_use WHERE record_uri = $1", [record(did)])).toHaveLength(0);
+      const rows = await sql<{ unused: boolean }>(
+        "SELECT unused_since IS NOT NULL AS unused FROM app.image WHERE id = ANY($1::uuid[])",
+        [[a, b]],
+      );
+      expect(rows).toEqual([{ unused: true }, { unused: true }]);
+    }
+  });
+
   test("image.release_lease: a failed save takes back its use only if nothing touched it since", async () => {
     const did = await member();
     const id = await stored(did);

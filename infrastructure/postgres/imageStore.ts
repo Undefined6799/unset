@@ -210,10 +210,11 @@ export function createImageStore(pool: Pool) {
     /**
      * A write of the record landed as commit `rev`, showing the member's image published as `shownCid` (null: no
      * picture). Writes of one record are settled one at a time, in revision order (a TID sorts by time;
-     * https://atproto.com/specs/tid): one older than a revision the record's uses already hold changes nothing but
-     * takes back the uses it made (`mine`). A newer one leaves the record exactly the shown image's use, stamped with
-     * its revision, and takes back older settled uses and its own; uses other saves still have in flight stay (their
-     * own write settles them). An image left with no use has its copies deleted 7 days later.
+     * https://atproto.com/specs/tid): one not newer than the record's last settled write (`app.image_record`), or
+     * after the record was deleted, changes nothing but takes back the uses it made (`mine`). A newer one becomes the
+     * last settled write and leaves the record exactly the shown image's use, stamped with its revision, taking back
+     * older settled uses and its own; uses other saves still have in flight stay (their own write settles them). An
+     * image left with no use has its copies deleted 7 days later.
      */
     settleUse: (
       did: Did,
@@ -226,6 +227,19 @@ export function createImageStore(pool: Pool) {
       withTransaction(pool, deadline, async (tx) => {
         if (!ownRecord(did, recordUri)) return;
         await tx.query("SELECT pg_advisory_xact_lock(hashtext('image_use:' || $1::text))", [recordUri]);
+        const fence = await tx.query<{ settled: string | null; removed: boolean }>(
+          `SELECT settled_rev AS settled, removed FROM app.image_record WHERE record_uri = $1 AND did = $2 FOR UPDATE`,
+          [recordUri, did],
+        );
+        const last = fence.rows[0];
+        const newer = last !== undefined && (last.removed || (last.settled !== null && last.settled >= rev));
+        if (!newer) {
+          await tx.query(
+            `INSERT INTO app.image_record (record_uri, did, settled_rev) VALUES ($1, $2, $3)
+             ON CONFLICT (record_uri) DO UPDATE SET settled_rev = $3`,
+            [recordUri, did, rev],
+          );
+        }
         const ids = mine.map((use) => use.id);
         const leases = mine.map((use) => use.lease);
         const uses = await tx.query<{ id: string; settled: string | null; mine: boolean }>(
@@ -245,7 +259,6 @@ export function createImageStore(pool: Pool) {
                   [did, shownCid],
                 )
               ).rows.map((row) => row.id);
-        const newer = uses.rows.some((use) => use.settled !== null && use.settled >= rev);
         const gone = uses.rows
           .filter((use) =>
             newer
@@ -279,12 +292,18 @@ export function createImageStore(pool: Pool) {
       }),
 
     /**
-     * The record is gone: its uses go, and an image left with no use has its copies deleted 7 days later. Each image
-     * is locked as removeUse locks it.
+     * The record is gone: it is marked deleted, so no write settled later gives it a use again; its uses go, and an
+     * image left with no use has its copies deleted 7 days later. Each image is locked as removeUse locks it.
      */
     dropUses: (did: Did, recordUri: string, deadline: AbortSignal | null): Promise<void> =>
       withTransaction(pool, deadline, async (tx) => {
+        if (!ownRecord(did, recordUri)) return;
         await tx.query("SELECT pg_advisory_xact_lock(hashtext('image_use:' || $1::text))", [recordUri]);
+        await tx.query(
+          `INSERT INTO app.image_record (record_uri, did, removed) VALUES ($1, $2, true)
+           ON CONFLICT (record_uri) DO UPDATE SET removed = true`,
+          [recordUri, did],
+        );
         const { rows } = await tx.query<{ id: string }>(
           `SELECT i.id::text AS id FROM app.image i JOIN app.image_use u ON u.image_id = i.id
             WHERE i.did = $1 AND u.record_uri = $2
