@@ -7,7 +7,7 @@ import { parseRequesterEmail } from "@unset/domains-identity";
 import { parseSmtpUrl } from "@unset/infrastructure-email";
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
-import { sealFields } from "@unset/infrastructure-seal";
+import { type Keyring, keyringFile, sealFields } from "@unset/infrastructure-seal";
 import {
   bool,
   type Config,
@@ -108,6 +108,18 @@ const objectStoreConfig = {
 };
 
 /**
+ * The draft link keys (book P2.19; ADR 0070 point 5): web signs the owner's preview links with the active one and media
+ * checks them, so both mount the same keyring file (`draft_url_keyring`). It shares no key with the seal keyring, so
+ * a link key can never open or forge a sealed value, nor the other way round; boot fails otherwise.
+ */
+const draftLinkConfig = {
+  DRAFT_URL_KEYRING: withRule(
+    keyringFile(),
+    (config) => !(config.DRAFT_URL_KEYRING as Keyring).sharesKeyWith(config.SEAL_KEYRING as Keyring),
+  ),
+};
+
+/**
  * The review process (ADR 0070 point 2.2): its one internal origin on `review_web`, where web sends a member's picture
  * through net-guard's `review` policy and gets the versions back. No secret: review holds none and trusts web's network.
  */
@@ -178,6 +190,7 @@ export const schema = defineEntrypointConfig({
   ...inviteConfig,
   ...inviteRequestConfig,
   ...objectStoreConfig,
+  ...draftLinkConfig,
   ...reviewConfig,
   ...searchConfig,
   ...legalConfig,

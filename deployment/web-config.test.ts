@@ -30,6 +30,7 @@ const STANDIN: Record<string, () => string> = {
   web_pds_admin_key: () => generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
   pds_web_key: () => randomBytes(32).toString("hex"),
   objects_web: () => randomBytes(32).toString("hex"),
+  draft_url_keyring: () => JSON.stringify({ active: "d1", keys: { d1: randomBytes(32).toString("base64") } }),
 };
 
 /** web's environment from one compose file, every reference resolved and every secret file replaced by a stand-in. */
@@ -64,6 +65,7 @@ describe("web's environment against its config", () => {
         "web_pds_admin_key",
         "pds_web_key",
         "objects_web",
+        "draft_url_keyring",
       ]);
       const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
       const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));
@@ -71,6 +73,27 @@ describe("web's environment against its config", () => {
       expect(() => loadConfig(config, env, { onUnknownKeys: () => undefined })).not.toThrow();
     });
   }
+});
+
+describe("draft link keys (book P2.19)", () => {
+  // config.draft_keys_distinct: a link key that is also a seal key would let whoever holds one forge the other's
+  // values, so web refuses to boot, whatever the kids are called.
+  test("web_refuses_draft_keys_that_share_a_seal_key", async () => {
+    const { env } = webEnv("compose.local.yaml");
+    const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
+    const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));
+    const load = (draft: string) => {
+      const path = join(STANDINS, "shared-draft-keys");
+      writeFileSync(path, draft);
+      return () => loadConfig(config, { ...env, DRAFT_URL_KEYRING_FILE: path }, { onUnknownKeys: () => undefined });
+    };
+    const seal = JSON.parse(readFileSync(env.SEAL_KEYRING_FILE ?? "", "utf8")) as { keys: Record<string, string> };
+    const sealKey = Object.values(seal.keys)[0] ?? "";
+    expect(load(JSON.stringify({ active: "d1", keys: { d1: sealKey } }))).toThrow(/DRAFT_URL_KEYRING/);
+    const own = randomBytes(32).toString("base64");
+    expect(load(JSON.stringify({ active: "d1", keys: { d1: own, d2: sealKey } }))).toThrow(/DRAFT_URL_KEYRING/);
+    expect(load(JSON.stringify({ active: "d1", keys: { d1: own } }))).not.toThrow();
+  });
 });
 
 describe("search and AI listing on the stacks", () => {

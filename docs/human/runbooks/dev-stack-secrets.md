@@ -75,6 +75,7 @@ keeps every other host account out:
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
 | `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
 | `objects_web` | `65532:65532` | web, every stack | 64 hex characters: the secret key of web's identity `unset-web` in `objects_s3`; web will not start without it (P2.21a) |
+| `draft_url_keyring` | `65532:65532` | web, every stack (media too, when it joins a stack) | the draft link keys (P2.19): a JSON keyring like `web_seal_keyring` but with keys of its own; web will not start without it, nor if any key is also a seal key |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -92,6 +93,9 @@ other two are web's alone. Make each with `umask 077`, then `chown 65532:65532` 
 - `web_seal_keyring`: a JSON keyring, one 32-byte key by id (`infrastructure/seal/keyring.ts`):
   `printf '{"active":"k1","keys":{"k1":"%s"}}' "$(openssl rand -base64 32)" > web_seal_keyring`.
   Rotating it is `unset-rewrap` (P1.14d), never an edit in place: a value sealed with a key that is gone cannot open.
+- `draft_url_keyring` (P2.19): the same format with a fresh key, never one from `web_seal_keyring`:
+  `printf '{"active":"d1","keys":{"d1":"%s"}}' "$(openssl rand -base64 32)" > draft_url_keyring`. To rotate, add the
+  new key, make it active, and drop the old one ten minutes later, once every link signed with it has expired.
 - `web_oauth_client_keys`: a JSON array of private ES256 JWKs, each with a `kid` (1 to 4 keys; `oauth/oauth-client.ts`
   `parseClientKeys`). With Node 26 on your machine:
   `node -e 'const {generateKeyPairSync}=require("node:crypto");const jwk=generateKeyPairSync("ec",{namedCurve:"P-256"}).privateKey.export({format:"jwk"});process.stdout.write(JSON.stringify([{...jwk,kid:process.argv[1],alg:"ES256"}]))' web-2026-10 > web_oauth_client_keys`.

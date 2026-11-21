@@ -72,6 +72,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_SECRET` | secretFile | at least 32 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
+| `DRAFT_URL_KEYRING` | secretFile | see source | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `REVIEW_URL` | origin | http: | required | `http://review:8082` | `http://review:8082` | `interfaces/web/src/lib/server/config.ts` |
 | `SEARCH_LISTING` | oneOf | on, off | `off` | `off` | `off` | `interfaces/web/src/lib/server/config.ts` |
 | `PRIVACY_OFFICER_TITLE` | str | text (pattern in source) | required | `[to fill: PRIVACY_OFFICER_TITLE]` | `Privacy Officer` | `interfaces/web/src/lib/server/legal.ts` |

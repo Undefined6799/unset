@@ -217,6 +217,9 @@ function folders(): void {
   const webStoreSecret = randomBytes(32).toString("hex");
   secret(1000, "objects_s3", objectsIdentities({ keyId: v.pdsStoreKeyId, secret: v.pdsStoreSecret }, webStoreSecret));
   secret(65532, "objects_web", webStoreSecret);
+  // P2.19: the draft link keys, never a seal key (web refuses to boot otherwise).
+  const draftKey = randomBytes(32).toString("base64");
+  secret(65532, "draft_url_keyring", JSON.stringify({ active: "d1", keys: { d1: draftKey } }));
   // pds-admin's copy of the PDS admin password is pds.env's, so its boot probe passes (runbook "pds-admin's files").
   secret(65532, "pds_admin_password", v.adminPassword);
   secret(65532, "pds_admin_keys", v.pdsAdminKeys);
