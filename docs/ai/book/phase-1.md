@@ -4917,7 +4917,13 @@ Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; a
 Follow-up booked (review of #1857, 2026-11-21): after a Save, the page settles unsaved edits and offered drafts on the
 version the refresh reads, not the one applyWrites answered. If the member's other device writes the card in that gap,
 a later Save from this page could overwrite those words without a conflict. Return each written card's new CID in the
-`?/saveAll` answer and settle on it.
+`?/saveAll` answer and settle on it. Done in the P1.21v follow-up PR: the answer names each written card's CID
+(`versions`), and unsaved edits and offered drafts settle on that CID only.
+
+Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
+raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
+the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
+click before the editor mounts on idle is lost; both are fixed in slice 3.
 
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
