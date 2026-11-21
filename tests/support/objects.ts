@@ -59,9 +59,14 @@ export async function startObjects(
   chmodSync(join(dir, "s3.json"), 0o644);
   const name = `unset-objects-${process.pid}-${randomBytes(4).toString("hex")}`;
   STARTED.add(name);
+  // The image's `server` entrypoint passes -volume.max=0 and a 1 GB volume size, so the store makes one volume per GB
+  // free on /data, and each bucket's first write grows 7 (deployment/images/objects.Dockerfile). On Docker's own disk
+  // that made the tests depend on its free space: below about 21 GB a third bucket got a 500 (P1.38w). A 40 GB tmpfs,
+  // the size objects.image.test.ts gives the stack's image, holds 39 volumes on any machine; it takes memory only for
+  // what is written.
   run(
     ["run", "-d", "--rm", "--name", name, "--label", `${OWNER_LABEL}=${process.pid}`, "-p", "127.0.0.1::8333"]
-      .concat(["-v", `${dir}:/etc/seaweedfs-test:ro`, OBJECTS_IMAGE])
+      .concat(["--tmpfs", "/data:size=40g", "-v", `${dir}:/etc/seaweedfs-test:ro`, OBJECTS_IMAGE])
       .concat(["server", "-s3", "-s3.config=/etc/seaweedfs-test/s3.json", "-dir=/data"]),
   );
   const port = run(["port", name, "8333/tcp"]).split("\n")[0]?.split(":").at(-1) ?? "";
