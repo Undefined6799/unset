@@ -480,8 +480,10 @@ services:
     networks:
       chat_synapse_db:
       chat_mas:
+        ipv4_address: 10.250.38.2
       chat_count:
       chat_edge_synapse:
+        ipv4_address: 10.250.38.51
       chat_admin_synapse:
         ipv4_address: 10.250.38.35
     mem_limit: 1g
@@ -675,7 +677,7 @@ networks:
   # Synapse's database: Postgres and Synapse only.
   chat_synapse_db:
     internal: true
-  # Synapse to MAS's discovery, oauth and health listener at .3, and MAS to Synapse.
+  # Synapse to MAS's discovery, oauth and health listener at .3, and MAS to Synapse's client listener at .2.
   chat_mas:
     internal: true
     ipam:
@@ -711,9 +713,12 @@ networks:
     ipam:
       config:
         - subnet: 10.250.38.40/29
-  # The edge to Synapse's client listener, for the chat site's /_matrix/client/ (ADR 0081 decision 6).
+  # The edge to Synapse's client listener at .51, for the chat site's /_matrix/client/ (ADR 0081 decision 6).
   chat_edge_synapse:
     internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.48/29
 volumes:
   pgdata:
   pdsdata:
