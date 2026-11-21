@@ -579,6 +579,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
 | P2.12b | Show the privacy notice once | [SEC] | P2.12 | `phase-2.md` |
 | P2.12c | Close the welcome axe gaps | — | P2.12a | `phase-2.md` |
+| P2.27 | Notifications: the inbox, the send call, the bell and the page | [SEC] | P2.12b, P2.13c | `phase-2.md` |
+| P2.27a | Keep read notifications for 30 days | [SEC] | P2.27 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13d | Keep next and handle after a sign-in theme change | [SEC] | P1.25f | `phase-2.md` |
@@ -1584,6 +1586,7 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.09 | Minimal `pds-admin` (`invite.issue` only) | [SEC] | P2.09k, P1.27, P1.29t, P1.34 | `phase-2.md` |
 | P2.09d | `pds-admin` in the dev stack (split from P2.09, SE-6) | [SEC] | P2.09 | `phase-2.md` |
 | P2.10 | Invites and `/join?invite=` | [SEC] | P2.09d, P2.09, P2.05, P1.14, P1.14d | `phase-2.md` |
+| P2.10r | Request an invite: the owner gets one mail per visitor address (ADR 0080) | [SEC] | P2.10 | `phase-2.md` |
 | P2.14 | Module identity seam | [SEC] | P1.16, P2.03 | `phase-2.md` |
 | P2.16b | PDQ hasher (one module for images and video frames) | [SEC] | P1.01 | `phase-2.md` |
 | P2.16 | Image fingerprint stage (interface, local PDQ, fake check) | [SEC] [MOD] | P2.16b, P1.02, P1.12, P1.15 | `phase-2.md` |

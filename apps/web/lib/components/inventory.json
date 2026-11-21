@@ -407,6 +407,16 @@
         "origin": "ours",
         "purpose": "Settings › Privacy's search result preview (P1.21y): the title, description and address the public page publishes, with the letter avatar until the media origin serves pictures; labelled as an example."
       }
+    },
+    "notifications": {
+      "mark-all-read.svelte": {
+        "origin": "ours",
+        "purpose": "The notifications' Mark all as read form: names the newest sign-in and the notice version listed, posted to /notifications?/readAll (P2.27)."
+      },
+      "notification-list.svelte": {
+        "origin": "ours",
+        "purpose": "The notifications as rows for the bell and the page: each a plain form button posting to /notifications?/open, times in UTC until script shows the device's zone (P2.27)."
+      }
     }
   }
 }

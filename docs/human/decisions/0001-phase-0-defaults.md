@@ -724,3 +724,10 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **One profile layout (P1.21x, 2026-11-20; own record: [0077](0077-one-profile-layout.md)):** every profile page
   shows the header above the cards; the side column, the layout choice and the unpublished `layout` field are
   removed. Supersedes 0072 when accepted; 0072 is not edited. Proposed, awaiting Alex.
+- **ADR 0077 accepted (Alex, 2026-11-21 00:02Z, against af83763; own record: [0077](0077-one-profile-layout.md)):**
+  every profile page shows the header above the cards, and the unpublished `layout` field is removed; 0072 is
+  superseded.
+- **Notifications in core (P2.27, 2026-11-20; own record: [0079](0079-notifications-in-core.md)):** a member's
+  notifications are one inbox with one send call and one reason table, gone once opened and at 30 days; a new
+  sign-in's entry only the member's older browsers can clear, keeping its time only, which amends the "no sign-in
+  records" rule for this one kind. Proposed, awaiting Alex.
