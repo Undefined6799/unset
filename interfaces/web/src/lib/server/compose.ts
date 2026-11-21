@@ -7,6 +7,7 @@
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
+// P2.27: the member's notification inbox and the one way to send into it (ADR 0079).
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
@@ -19,6 +20,7 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
+import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import {
   createNetGuard,
@@ -44,12 +46,14 @@ import {
   createImageStore,
   createInviteStore,
   createLockPool,
+  createNotificationStore,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type Db,
   type DiscoverabilityStore,
   type ImageStore,
   type InviteStore,
@@ -132,6 +136,16 @@ export type Services = {
     readonly store: InviteStore;
     readonly issue: (did: Did, deadline?: AbortSignal) => Promise<IssueInviteResult>;
     readonly denied: (did: Did, deadline: AbortSignal) => Promise<void>;
+  };
+  /**
+   * P2.27 (ADR 0079): the member's inbox as this browser may see it, and the one way a source sends into it. `sendIn`
+   * runs on the caller's transaction, for a source that must send with its own write (a new sign-in).
+   */
+  readonly notifications: {
+    readonly inbox: (did: Did, idHash: Buffer, deadline: AbortSignal) => Inbox;
+    readonly send: (did: Did, notification: Notification, deadline: AbortSignal) => Promise<NotifyResult>;
+    readonly sendIn: (db: Db, did: Did, notification: Notification) => Promise<NotifyResult>;
+    readonly withdraw: (did: Did, dedupeKey: string, deadline: AbortSignal) => Promise<void>;
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
@@ -308,6 +322,19 @@ async function build(): Promise<Services> {
     denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
   };
 
+  const inboxRows = createNotificationStore();
+  const notifications: Services["notifications"] = {
+    inbox: (did, idHash, deadline) => ({
+      list: (limit) => withClient(pool, deadline, (db) => inboxRows.list(db, did, idHash, limit)),
+      open: (id) => withClient(pool, deadline, (db) => inboxRows.open(db, did, idHash, id)),
+      openUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.openUpTo(db, did, idHash, upTo)),
+    }),
+    send: (did, notification, deadline) =>
+      withClient(pool, deadline, (db) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification)),
+    sendIn: (db, did, notification) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification),
+    withdraw: (did, dedupeKey, deadline) => withClient(pool, deadline, (db) => inboxRows.withdraw(db, did, dedupeKey)),
+  };
+
   // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
   const drafts = createObjectStore({
     origin: config.OBJECT_STORE_URL,
@@ -332,6 +359,7 @@ async function build(): Promise<Services> {
       { job: "sweep.invite", run: () => invites.store.clearExpired() },
       // ADR 0070 point 6: pictures no save used after a day, and copies a week after their last use.
       { job: "sweep.image", run: () => sweepImages(images.store, drafts) },
+      { job: "sweep.notification", run: () => withClient(pool, null, (db) => inboxRows.sweep(db)) },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -375,6 +403,7 @@ async function build(): Promise<Services> {
     email,
     setEmailConfirmed,
     invites,
+    notifications,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,

@@ -141,13 +141,6 @@ describe("planCommit", () => {
     expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { pronouns: "she/her" } });
   });
 
-  test("index.keeps_a_profile_layout_known_or_not", () => {
-    for (const layout of ["compact", "magazine"]) {
-      const plan = planCommit(active, "3jzfcijpj2z2c", [profile({ layout })]);
-      expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { layout } });
-    }
-  });
-
   // ADR 0078: the page and the sitemap read who sees the page from the indexed record, so the index keeps it as sent.
   test("index.keeps_a_profile_visibility_known_or_not", () => {
     for (const visibility of ["ownerOnly", "friends"]) {

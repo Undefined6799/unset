@@ -22,9 +22,9 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 - `profile.ts`: the four profile fields (`PROFILE_FIELDS`), `parseProfileFields`, `readProfileRecord` and
   `toProfileRecord` for the `sh.unset.profile` record, and `withCardOrder` for its `cards` list. `APP_LIMITS` sit
   under the lexicon's limits, which are permanent once published (ADR 0051 point 5).
-- `profile.ts` also reads and writes the optional page `layout` (ADR 0072): absent or unknown reads as sidebar;
-  a save takes only sidebar or compact, and sidebar clears the field. apps/web draws compact with
-  `profile-header.svelte` (a native popover for the details, so it works on the script-free public page).
+- One page layout (ADR 0077, superseding 0072's choice): apps/web draws `profile-header.svelte` above the cards, the
+  avatar opening a native popover About panel (handle, details) with no hover, so it works the same on the
+  script-free public page. A stored `layout` field from before is an undefined field the merge keeps.
 - `cards.ts`: reading profile cards, one `sh.unset.section` record each (ADR 0051). Lenient: a card that does not
   validate or whose kind is unknown is hidden, and an address that is not plain http(s) is dropped.
   Optional `surface` (ADR 0068) reads as filled when absent or unknown; the editor offers filled, outlined and plain.

@@ -26,7 +26,7 @@ and the relays (https://atproto.com/specs/repository).
    and `ownerOnly`. Absent means `public`, so every stored profile keeps its page. An unknown valid value reads as
    `ownerOnly`, the most closed level, so a newer client's choice is never shown more widely than its owner meant
    (`domains/profile` `readProfileVisibility`). A save writes only a known value; choosing `public` removes the field;
-   a save that does not send it keeps the stored value (as ADR 0072 does for `layout`).
+   a save that does not send it keeps the stored value.
 2. Settings › Privacy holds one form with the choice as native radios and, under Public, the Search and AI fields
    (ADR 0062), shown only while Public is ticked (Alex, 20:26Z), by CSS from the checked radio, so it works with no
    script. It posts to `POST /settings/search-and-ai`, the path ADR 0062 named: the choice is written to the profile

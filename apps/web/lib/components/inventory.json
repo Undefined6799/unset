@@ -317,7 +317,7 @@
       },
       "avatar-editor.svelte": {
         "origin": "ours",
-        "purpose": "The owner's avatar as a button opening the stock Dialog that saves its shape (round or rounded square)."
+        "purpose": "The owner's Shape button beside the name, opening the stock Dialog that saves the avatar's shape (round or rounded square)."
       },
       "card-controls.svelte": {
         "origin": "ours",
@@ -357,15 +357,11 @@
       },
       "profile-layout.svelte": {
         "origin": "ours",
-        "purpose": "The member page's frame: notices on top, then the side column and the cards, two columns on wide screens; or the compact header above one card area (ADR 0072)."
+        "purpose": "The member page's frame: the profile header, then the notices, then one centred card area (ADR 0077)."
       },
       "profile-header.svelte": {
         "origin": "ours",
-        "purpose": "The compact profile header (ADR 0072): avatar, name and handle, and a native popover under the avatar with the profile's details; not a shadcn component, since the public page runs no script."
-      },
-      "profile-side.svelte": {
-        "origin": "ours",
-        "purpose": "The profile's side column: the avatar in its shape, name with the owner's edit pen, handle, headline and details."
+        "purpose": "The profile header (ADR 0072, ADR 0077): avatar and name, and a native popover under the avatar with the profile's About panel (handle and details); not a shadcn component, since the public page runs no script."
       },
       "readme.svelte": {
         "origin": "ours",
@@ -400,6 +396,16 @@
       "search-preview.svelte": {
         "origin": "ours",
         "purpose": "Settings › Privacy's search result preview (P1.21y): the title, description and address the public page publishes, with the letter avatar until the media origin serves pictures; labelled as an example."
+      }
+    },
+    "notifications": {
+      "mark-all-read.svelte": {
+        "origin": "ours",
+        "purpose": "The notifications' Mark all as read form: names the newest sign-in and the notice version listed, posted to /notifications?/readAll (P2.27)."
+      },
+      "notification-list.svelte": {
+        "origin": "ours",
+        "purpose": "The notifications as rows for the bell and the page: each a plain form button posting to /notifications?/open, times in UTC until script shows the device's zone (P2.27)."
       }
     }
   }

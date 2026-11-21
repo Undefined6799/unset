@@ -20,7 +20,6 @@ import {
   pageCards,
   pageShownTo,
   readAvatarShape,
-  readProfileLayout,
   readProfileRecord,
   readProfileVisibility,
   type Viewer,
@@ -88,11 +87,10 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     headline: fields.headline,
     location: fields.location,
     website: websiteLink(fields.website),
-    layout: readProfileLayout(found.record),
     // At most what the owner's own page reads (infrastructure/pds card-records.ts MAX_CARDS): the index may hold up to
     // twice that (MAX_SECTIONS_PER_ACCOUNT), and a visitor never sees more cards than the member does.
     cards,
-    // The compact header's panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
+    // The header's About panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
     contact: contactAction(cards),
   };
 };

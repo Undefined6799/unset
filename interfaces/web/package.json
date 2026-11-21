@@ -23,6 +23,7 @@
     "@unset/apps-web": "*",
     "@unset/domains-content": "*",
     "@unset/domains-identity": "*",
+    "@unset/domains-notifications": "*",
     "@unset/domains-profile": "*",
     "@unset/infrastructure-audit": "*",
     "@unset/infrastructure-image": "*",

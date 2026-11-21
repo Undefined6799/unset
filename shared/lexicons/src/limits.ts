@@ -7,7 +7,6 @@ export const LIMITS = {
     headline: 200,
     avatarMaxSize: 2_000_000,
     avatarShapeBytes: 32,
-    layoutBytes: 32,
     visibilityBytes: 32,
     location: 100,
     websiteBytes: 2000,
