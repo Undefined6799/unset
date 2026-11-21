@@ -2,7 +2,7 @@
 // (navigator.locks, added in Node v24.5.0, doc/api/globals.md), which follows the browser API's semantics; each call
 // below stands for one tab of the same origin. No double: it is the real lock implementation.
 import { describe, expect, test } from "vitest";
-import { holdTabLock, TAB_LOCK } from "./tab-lock.ts";
+import { announceHop, holdTabLock, TAB_LOCK } from "./tab-lock.ts";
 
 let n = 0;
 /** A lock name of its own per test, since a held lock is never released while the "page" lives. */
@@ -78,4 +78,51 @@ describe("holdTabLock", () => {
   test("chat.tab_no_locks: a browser without the lock API does not run chat (fail closed)", async () => {
     expect(await holdTabLock(undefined, "if_free", unheard, { name: fresh() })).toBe("unavailable");
   });
+
+  test("chat.tabs_restored_together: two tabs restored at once, the first hopping inside the second's grace, hop once", async () => {
+    // A browser restoring two chat tabs starts both pages together. The first takes the lock and leaves for the sign-in
+    // hop, which lets the lock go (its page goes) inside the second's grace. Were the second to take it and hop too,
+    // the two hops would share the one __Host-chat-state cookie: the first tab's return would redeem against the second
+    // one's state (chat.state_mismatch, an error card) and the second's would meet that card's lock (open elsewhere),
+    // leaving chat open nowhere. So at most one tab hops, and neither ends on an error card.
+    const name = fresh();
+    const channel = `${name}:hop`;
+    const graceMs = 400;
+    let hops = 0;
+    /** One tab's page, started as boot() starts it: hold the lock, then hop unless this is the hop's return. */
+    const start = async (returning: boolean) => {
+      const tab = page();
+      const hopsHeard = new BroadcastChannel(channel);
+      const outcome = await holdTabLock(tab.locks, "if_free", unheard, { name, graceMs, hops: hopsHeard });
+      if (outcome === "held" && !returning) {
+        hops++;
+        announceHop(hopsHeard);
+        await nextTurn();
+        tab.leave(); // the navigation to the hop ends this page, and with it its lock
+      }
+      if (outcome !== "held" || !returning) hopsHeard.close();
+      return outcome;
+    };
+    const [first, second] = await Promise.all([start(false), start(false)]);
+    expect(hops).toBe(1);
+    expect(first).toBe("held");
+    // The second tab shows "open in another tab", with Use here: a live choice, never an error.
+    expect(second).toBe("elsewhere");
+    // The first tab's return finds the lock free and signs in.
+    expect(await start(true)).toBe("held");
+    expect(hops).toBe(1);
+  });
 });
+
+/** One page of a tab. Its locks go when the page goes, as the browser lets a page's locks go (W3C Web Locks,
+ * "Termination of Locks"); `leave` is that navigation. Everything else is Node's real LockManager. */
+function page(): { locks: LockManager; leave: () => void } {
+  let leave: () => void = unheard;
+  const left = new Promise<void>((resolve) => (leave = resolve));
+  const locks = {
+    request: (name: string, options: LockOptions, callback: LockGrantedCallback<unknown>) =>
+      navigator.locks.request(name, options, (lock) => Promise.race([callback(lock), left])),
+    query: () => navigator.locks.query(),
+  } as LockManager;
+  return { locks, leave };
+}

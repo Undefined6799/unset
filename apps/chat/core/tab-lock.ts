@@ -22,32 +22,68 @@ export const TAB_GRACE_MS = 1_000;
 
 export type TabLock = "held" | "elsewhere" | "unavailable";
 
+/** The message a tab sends on `HOP_CHANNEL` as it leaves for the sign-in hop it comes back from. */
+const HOP = "hop";
+/** The channel tabs of the chat origin tell each other on that they leave for the hop (HTML "Broadcasting"). */
+export const HOP_CHANNEL = "unset-chat:hop";
+
 /**
  * Take this origin's chat lock and hold it for the page's life. "if_free" waits up to the grace for it and gives up
  * its place in the queue then ("elsewhere"); "take_over" takes it from the tab that holds it, which is told through its
  * own `onLost`. A browser without the API, or one that refuses the request, gets "unavailable" and must not run chat
  * (fail closed).
+ *
+ * A lock let go inside the grace is a reload's or a hop's old page in this tab, or another tab leaving for its hop,
+ * which comes straight back for the lock. Two tabs restored at once meet the second way: had the waiter taken the lock
+ * and hopped too, the two hops would share the one hop-state cookie and neither tab would end signed in. So a waiter
+ * that hears a hop on `hops` (announceHop) while it waits, or by the next task after it is granted the lock, counts the
+ * lock as held elsewhere and lets it go at once. That the message reaches the waiter before the lock does is
+ * unverified: the HTML Living Standard's "Broadcasting to other browsing contexts" (postMessage queues a task for each
+ * other channel when called, so before the hopping page goes) could not be read from here (the spec host is blocked),
+ * and no browser test runs this yet; the extra task is margin for the two arriving on different task queues.
  */
 export function holdTabLock(
   locks: LockManager | undefined,
   how: "if_free" | "take_over",
   onLost: () => void,
-  { name = TAB_LOCK, graceMs = TAB_GRACE_MS }: { readonly name?: string; readonly graceMs?: number } = {},
+  {
+    name = TAB_LOCK,
+    graceMs = TAB_GRACE_MS,
+    hops,
+  }: { readonly name?: string; readonly graceMs?: number; readonly hops?: BroadcastChannel } = {},
 ): Promise<TabLock> {
   if (locks === undefined) return Promise.resolve("unavailable");
   return new Promise((resolve) => {
     let granted = false;
-    const grace = AbortSignal.timeout(graceMs);
+    let hopHeard = false;
+    const gaveUp = new AbortController();
+    const heard = (event: MessageEvent) => {
+      if (event.data !== HOP) return;
+      hopHeard = true;
+      gaveUp.abort();
+    };
+    if (how === "if_free") hops?.addEventListener("message", heard);
+    const stopListening = () => hops?.removeEventListener("message", heard);
+    const grace = AbortSignal.any([AbortSignal.timeout(graceMs), gaveUp.signal]);
     const options: LockOptions = how === "take_over" ? { steal: true } : { signal: grace };
     locks
-      .request(name, options, () => {
+      .request(name, options, async () => {
+        if (how === "if_free") await new Promise((next) => setTimeout(next, 0));
+        stopListening();
+        if (hopHeard) return resolve("elsewhere"); // let go at once: the hopping tab comes back for it
         granted = true;
         resolve("held");
         return new Promise<never>(() => undefined); // held until the page goes or another tab takes it
       })
       .catch(() => {
+        stopListening();
         if (granted) return onLost();
         resolve(how === "if_free" && grace.aborted ? "elsewhere" : "unavailable");
       });
   });
+}
+
+/** Tell the other chat tabs this one leaves for the sign-in hop, just before it goes (holdTabLock's `hops`). */
+export function announceHop(channel: BroadcastChannel | undefined): void {
+  channel?.postMessage(HOP);
 }

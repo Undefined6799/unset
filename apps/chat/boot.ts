@@ -21,7 +21,7 @@ import {
   signOutDevice,
   signOutHere,
 } from "./core/sign-out.ts";
-import { holdTabLock } from "./core/tab-lock.ts";
+import { announceHop, HOP_CHANNEL, holdTabLock } from "./core/tab-lock.ts";
 import { openChat, openToLogOut } from "./matrix/client.ts";
 
 const DOOR_DEADLINE_MS = 10_000;
@@ -30,7 +30,12 @@ const TOO_SOON_MS = 60_000;
 const MAX_TIMER_MS = 2 ** 31 - 1;
 
 const here = () => `${window.location.pathname}${window.location.search}`;
-const hop = () => window.location.assign(hopPath(here()));
+/** Where this tab tells the others it leaves for the hop, so one waiting for the lock does not hop too (tab-lock.ts). */
+const hops = new BroadcastChannel(HOP_CHANNEL);
+const hop = () => {
+  announceHop(hops);
+  window.location.assign(hopPath(here()));
+};
 
 export async function boot(onState: (state: ChatState) => void): Promise<void> {
   // The ticket leaves the address bar first, whatever comes next (core/sign-in.ts).
@@ -49,12 +54,14 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
   const useHere = async () => {
     const outcome = await holdTabLock(navigator.locks, "take_over", lost);
     if (outcome !== "held") return onState({ kind: "error", code: "chat.tab_lock_unavailable" });
+    announceHop(hops);
     window.location.assign(hopPath(returning ? "/" : here()));
   };
-  const outcome = await holdTabLock(navigator.locks, "if_free", lost);
+  const outcome = await holdTabLock(navigator.locks, "if_free", lost, { hops });
   if (outcome === "unavailable") return onState({ kind: "error", code: "chat.tab_lock_unavailable" });
   if (outcome === "elsewhere") return openElsewhere();
   if (!returning) {
+    announceHop(hops);
     window.location.replace(hopPath(here()));
     return;
   }
