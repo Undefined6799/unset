@@ -1,0 +1,259 @@
+// C36 (P6.02; ADR 0086): the chat servers' config files hold the build plan's step 1 values, and a stack that runs
+// Synapse or MAS reads exactly the reviewed file, with no setting riding in beside it.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "vitest";
+import { parse } from "yaml";
+import { parseCompose } from "../compose-parse.ts";
+import { c36, masProblem, synapseProblem } from "./chat.ts";
+import type { Env, Inputs } from "./types.ts";
+
+const CHAT = join(import.meta.dirname, "../../chat/dev");
+const text = (file: string) => readFileSync(join(CHAT, file), "utf8");
+const SERVER = "staging.unset.cc";
+type Doc = Record<string, unknown>;
+const synapse = () => parse(text("homeserver.yaml")) as Doc;
+const mas = () => parse(text("mas.yaml")) as Doc;
+
+/** The document with the value at `path` replaced, or removed when `value` is undefined. */
+function edited(doc: Doc, path: string, value: unknown): Doc {
+  const copy = structuredClone(doc);
+  const keys = path.split(".");
+  let at = copy as Record<string, unknown>;
+  for (const key of keys.slice(0, -1)) at = at[key] as Record<string, unknown>;
+  const last = keys.at(-1) as string;
+  if (value === undefined) delete at[last];
+  else at[last] = value;
+  return copy;
+}
+
+describe("C36 the chat servers' settings", () => {
+  test("committed_dev_configs_pass", () => {
+    expect(synapseProblem(synapse(), SERVER)).toBeNull();
+    expect(masProblem(mas(), SERVER)).toBeNull();
+  });
+
+  test("each_wrong_synapse_value_is_refused", () => {
+    const cases: [string, unknown][] = [
+      ["server_name", "unset.cc"],
+      ["public_baseurl", "https://unset.cc/"],
+      ["federation_domain_whitelist", ["matrix.org"]],
+      ["federation_domain_whitelist", undefined],
+      ["enable_registration", true],
+      ["allow_guest_access", true],
+      ["encryption_enabled_by_default_for_room_type", "invite"],
+      ["enable_set_displayname", true],
+      ["enable_set_avatar_url", true],
+      ["allow_per_room_profiles", true],
+      ["require_auth_for_profile_requests", false],
+      ["limit_profile_requests_to_users_who_share_rooms", false],
+      ["allow_profile_lookup_over_federation", true],
+      ["user_directory", { enabled: true }],
+      ["url_preview_enabled", true],
+      ["user_ips_max_age", "28d"],
+      ["report_stats", true],
+      ["trusted_key_servers", [{ server_name: "matrix.org" }]],
+      ["log_config", "/data/log.yaml"],
+      ["matrix_authentication_service", { enabled: false }],
+      ["matrix_authentication_service.endpoint", "http://elsewhere:8080/"],
+    ];
+    for (const [path, value] of cases) {
+      const top = path.split(".")[0];
+      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBe(
+        `homeserver.yaml: ${top} is not its reviewed value`,
+      );
+    }
+  });
+
+  test("synapse_listener_is_one_client_listener_without_forwarded_trust", () => {
+    const [listener] = synapse().listeners as Doc[];
+    for (const change of [
+      { x_forwarded: true },
+      { resources: [{ names: ["client", "federation"], compress: false }] },
+      { resources: [{ names: ["client", "openid"], compress: false }] },
+      { type: "metrics" },
+    ]) {
+      expect(synapseProblem(edited(synapse(), "listeners", [{ ...listener, ...change }]), SERVER)).toBe(
+        "homeserver.yaml: listeners is not its reviewed value",
+      );
+    }
+    const second = { ...listener, port: 8448, resources: [{ names: ["federation"] }] };
+    expect(synapseProblem(edited(synapse(), "listeners", [listener, second]), SERVER)).toBe(
+      "homeserver.yaml: listeners is not its reviewed value",
+    );
+  });
+
+  test("synapse_refuses_unreviewed_settings_and_inline_secrets", () => {
+    for (const key of ["modules", "oidc_providers", "app_service_config_files", "macaroon_secret_key", "form_secret"]) {
+      expect(synapseProblem(edited(synapse(), key, "x"), SERVER), key).toBe(
+        "homeserver.yaml: a setting the preflight does not allow",
+      );
+    }
+    const inline = edited(synapse(), "matrix_authentication_service.secret", "s");
+    expect(synapseProblem(inline, SERVER)).toBe(
+      "homeserver.yaml: matrix_authentication_service is not its reviewed value",
+    );
+    expect(synapseProblem(edited(synapse(), "database.args.password", "p"), SERVER)).toBe(
+      "homeserver.yaml: database holds a password; it comes from a passfile",
+    );
+    expect(synapseProblem(edited(synapse(), "database.name", "sqlite3"), SERVER)).toBe(
+      "homeserver.yaml: database is not Postgres",
+    );
+    expect(synapseProblem(edited(synapse(), "form_secret_path", "/config/form"), SERVER)).toBe(
+      "homeserver.yaml: form_secret_path is not a mounted secret",
+    );
+  });
+
+  test("each_wrong_mas_value_is_refused", () => {
+    const cases: [string, unknown][] = [
+      ["passwords", { enabled: true }],
+      ["account", { displayname_change_allowed: true, account_deactivation_allowed: false }],
+      ["account", { displayname_change_allowed: false, account_deactivation_allowed: true }],
+      ["matrix.homeserver", "unset.cc"],
+      ["matrix.endpoint", "http://elsewhere:8008/"],
+      ["matrix.secret", "inline"],
+      ["http.trusted_proxies", undefined],
+      ["http.trusted_proxies", ["10.0.0.0/8"]],
+      ["http.public_base", "https://mas.unset.cc/"],
+    ];
+    for (const [path, value] of cases) {
+      const top = path.split(".")[0];
+      expect(masProblem(edited(mas(), path, value), SERVER), path).toBe(`mas.yaml: ${top} is not its reviewed value`);
+    }
+  });
+
+  test("mas_has_internal_listeners_only", () => {
+    const [forSynapse, forAdmin] = (mas().http as Doc).listeners as [Doc, Doc];
+    const listeners = (a: unknown, b: unknown) => edited(mas(), "http.listeners", [a, b]);
+    const reason = "mas.yaml: http is not its reviewed value";
+    // A login page, the GraphQL API, assets or the compatibility layer mounted anywhere.
+    for (const extra of ["human", "graphql", "assets", "compat"]) {
+      const more = { ...forSynapse, resources: [...(forSynapse.resources as Doc[]), { name: extra }] };
+      expect(masProblem(listeners(more, forAdmin), SERVER), extra).toBe(reason);
+    }
+    // The admin API on Synapse's listener, or a listener on every address.
+    const admin = { ...forSynapse, resources: [...(forSynapse.resources as Doc[]), { name: "adminapi" }] };
+    expect(masProblem(listeners(admin, forAdmin), SERVER)).toBe(reason);
+    expect(masProblem(listeners(forSynapse, { ...forAdmin, binds: [{ address: "[::]:8081" }] }), SERVER)).toBe(reason);
+    expect(masProblem(edited(mas(), "http.listeners", [forSynapse]), SERVER)).toBe(reason);
+  });
+
+  test("mas_has_one_admin_client_and_no_way_to_log_in", () => {
+    for (const key of ["upstream_oauth2", "email", "experimental", "captcha"]) {
+      expect(masProblem(edited(mas(), key, {}), SERVER), key).toBe("mas.yaml: a setting the preflight does not allow");
+    }
+    const [client] = mas().clients as Doc[];
+    const other = { ...client, client_id: "01M7XSE66CYPNSDBAK0KZR45NN" };
+    expect(masProblem(edited(mas(), "clients", [client, other]), SERVER)).toBe(
+      "mas.yaml: clients is not one admin client",
+    );
+    expect(masProblem(edited(mas(), "clients", [{ ...client, client_secret: "s" }]), SERVER)).toBe(
+      "mas.yaml: clients is not one admin client",
+    );
+    expect(masProblem(edited(mas(), "clients", [{ ...client, client_auth_method: "none" }]), SERVER)).toBe(
+      "mas.yaml: clients is not one admin client",
+    );
+    expect(masProblem(edited(mas(), "policy.data.admin_clients", [other.client_id]), SERVER)).toBe(
+      "mas.yaml: policy is not exactly the admin client",
+    );
+    expect(masProblem(edited(mas(), "policy.data.admin_clients", [client?.client_id, other.client_id]), SERVER)).toBe(
+      "mas.yaml: policy is not exactly the admin client",
+    );
+  });
+
+  test("mas_secrets_come_from_files", () => {
+    expect(masProblem(edited(mas(), "database.password", "p"), SERVER)).toBe(
+      "mas.yaml: database is not its reviewed shape",
+    );
+    expect(masProblem(edited(mas(), "database.uri", "postgresql://u:p@h/d"), SERVER)).toBe(
+      "mas.yaml: database is not its reviewed shape",
+    );
+    expect(masProblem(edited(mas(), "secrets.encryption", "00"), SERVER)).toBe("mas.yaml: secrets is not file-only");
+    expect(masProblem(edited(mas(), "secrets.keys", [{ key: "PEM" }]), SERVER)).toBe(
+      "mas.yaml: secrets is not file-only",
+    );
+  });
+
+  test("synapse_access_log_is_dropped", () => {
+    const log = parse(text("log.yaml")) as { loggers: Record<string, Doc>; root: Doc };
+    expect(log.loggers["synapse.access.http"]).toEqual({ handlers: [], propagate: false });
+    expect(log.root.level).toBe("WARNING");
+  });
+});
+
+const SYNAPSE_SERVICE = [
+  "  synapse:",
+  "    image: s",
+  "    environment:",
+  "      SYNAPSE_CONFIG_PATH: /config/homeserver.yaml",
+  "    volumes:",
+  "      - ./chat/dev/homeserver.yaml:/config/homeserver.yaml:ro",
+  "",
+].join("\n");
+const MAS_SERVICE = [
+  "  mas:",
+  "    image: m",
+  "    environment:",
+  "      MAS_CONFIG: /config/mas.yaml",
+  "    volumes:",
+  "      - ./chat/dev/mas.yaml:/config/mas.yaml:ro",
+  "",
+].join("\n");
+const OTHER = "  web:\n    image: w\n";
+
+const run = (services: string, env: Env = "dev") => {
+  const compose = parseCompose(`name: unset-dev\nservices:\n${services}`, "/repo/deployment/c.yaml");
+  // As loadCompose hands them over: each bind source resolved against the project directory (inputs.ts).
+  for (const service of compose.services)
+    service.mounts = service.mounts.map((m) =>
+      m.type === "bind" && m.source !== null ? { ...m, source: join(CHAT, "../..", m.source) } : m,
+    );
+  const readRegular = (path: string) => {
+    try {
+      return readFileSync(path, "utf8");
+    } catch {
+      return null;
+    }
+  };
+  return c36.run({ env, compose, readRegular } as unknown as Inputs, AbortSignal.timeout(1000));
+};
+
+describe("C36 the chat services", () => {
+  test("a_stack_with_the_reviewed_files_or_no_chat_passes", async () => {
+    expect(await run(SYNAPSE_SERVICE + MAS_SERVICE + OTHER)).toEqual({ pass: true, reason: "ok" });
+    expect(await run(OTHER)).toEqual({ pass: true, reason: "ok" });
+    expect(await run(OTHER, "local")).toEqual({ pass: true, reason: "ok" });
+  });
+
+  test("a_chat_service_without_a_ruled_server_name_fails", async () => {
+    expect(await run(SYNAPSE_SERVICE, "local")).toEqual({
+      pass: false,
+      reason: "no chat server name is ruled for this environment",
+    });
+    // The dev files name the staging server, so the production name refuses them.
+    expect((await run(SYNAPSE_SERVICE, "prod")).reason).toBe("homeserver.yaml: server_name is not its reviewed value");
+  });
+
+  test("the_config_is_the_one_mounted_file_and_no_override_rides_in", async () => {
+    const extra = SYNAPSE_SERVICE.replace(
+      "    volumes:",
+      "      SYNAPSE_WORKER: synapse.app.generic_worker\n    volumes:",
+    );
+    expect(await run(extra)).toEqual({ pass: false, reason: "synapse sets a name other than its config path" });
+    const override = MAS_SERVICE.replace("    volumes:", '      MAS_PASSWORDS_ENABLED: "true"\n    volumes:');
+    expect(await run(override)).toEqual({ pass: false, reason: "mas sets a name other than its config path" });
+    const two = MAS_SERVICE.replace("MAS_CONFIG: /config/mas.yaml", "MAS_CONFIG: /config/mas.yaml:/config/more.yaml");
+    expect(await run(two)).toEqual({ pass: false, reason: "mas does not read exactly its reviewed config path" });
+    const envFile = MAS_SERVICE.replace("    volumes:", "    env_file: ./mas.env\n    volumes:");
+    expect(await run(envFile)).toEqual({ pass: false, reason: "mas reads an env file" });
+    const unmounted = SYNAPSE_SERVICE.replace(
+      "      - ./chat/dev/homeserver.yaml:/config/homeserver.yaml:ro\n",
+      "      - ./x:/x:ro\n",
+    );
+    expect(await run(unmounted)).toEqual({ pass: false, reason: "synapse does not mount its config read-only once" });
+    const writable = SYNAPSE_SERVICE.replace("homeserver.yaml:ro", "homeserver.yaml");
+    expect(await run(writable)).toEqual({ pass: false, reason: "synapse does not mount its config read-only once" });
+    const absent = SYNAPSE_SERVICE.replace("./chat/dev/homeserver.yaml:", "./chat/dev/none.yaml:");
+    expect((await run(absent)).reason).toMatch(/^input missing: /);
+  });
+});
