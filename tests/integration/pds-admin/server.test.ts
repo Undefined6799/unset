@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DurabilityLost } from "@unset/shared-admin-envelope";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { openRequestLog, verifyLog } from "../../../interfaces/pds-admin/log.ts";
-import { DurabilityLost } from "../../../interfaces/pds-admin/state-file.ts";
 import {
   ALICE,
   type FakePds,

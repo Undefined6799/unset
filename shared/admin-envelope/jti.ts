@@ -1,6 +1,6 @@
 // The replay guard (P2.09 step 7; ADR 0060 decision 3): each envelope's `jti` is accepted once, across restarts and
-// concurrent requests. The set is filled synchronously before the first await and the line is fsynced before the PDS
-// call, so a crash burns a `jti` rather than freeing it.
+// concurrent requests. The set is filled synchronously before the first await and the line is fsynced before the
+// service acts, so a crash burns a `jti` rather than freeing it. Shared by pds-admin and chat-admin (ADR 0081).
 import { appendLine, readLines, replaceLines } from "./state-file.ts";
 
 /** How long past its `exp` a `jti` is kept (seconds); an expired envelope fails the time check before this one. */

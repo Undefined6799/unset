@@ -3,9 +3,9 @@
 //   node cli.ts check-reserved      for each reserved label, whether <label>.<HANDLE_DOMAIN> resolves on our PDS
 //                                   (exit 1 if any answer was neither a DID nor HandleNotFound)
 import { existsSync, readFileSync } from "node:fs";
+import { readLines } from "@unset/shared-admin-envelope";
 import { verifyLog } from "./log.ts";
 import { createPds, type PdsAnswer } from "./pds.ts";
-import { readLines } from "./state-file.ts";
 
 type Reserved = { labels: string[] };
 
