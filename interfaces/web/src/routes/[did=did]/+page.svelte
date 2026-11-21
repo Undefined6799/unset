@@ -196,12 +196,16 @@ async function save() {
   await returnToWords();
 }
 
-/** The way back into the Text card the member last typed in (card-text.svelte `onfocus`). */
+/** The way back into the Text card the member last typed in: its editor (card-text.svelte `onfocus`) or its Markdown field. */
 let lastWords: (() => void) | undefined;
 /**
  * After a Save the caret goes back where the member was typing, unless they have moved on: a press on Save leaves
  * focus on the bar, or on nothing once the bar goes, and the next keys would otherwise go nowhere.
  */
+/** A card's Markdown field as the page draws it now: a Save redraws the cards, so a field found before may be gone. */
+const markdownField = (key: string) =>
+  document.querySelector<HTMLTextAreaElement>(`textarea[data-card-markdown="${CSS.escape(key)}"]`);
+
 async function returnToWords() {
   await tick();
   const active = document.activeElement;
@@ -363,6 +367,8 @@ function dropDrafts() {
               rows={12}
               maxlength={data.cardEditLimits.text}
               oninput={(event) => change(card.key, { fields: { text: event.currentTarget.value } })}
+              data-card-markdown={card.key}
+              onfocus={() => (lastWords = () => markdownField(card.key)?.focus())}
             />
           {:else}
             <!-- Remounted on Discard, drafts brought back, or new stored words under it (remounts). -->
