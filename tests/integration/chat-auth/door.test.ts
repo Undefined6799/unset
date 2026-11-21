@@ -166,10 +166,12 @@ describe("POST /sign-in/redeem", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const body = (await res.json()) as Record<string, string>;
+    expect(body.newDevice).toBe(true);
     expect(Object.keys(body).sort()).toEqual([
       "accessToken",
       "deviceId",
       "expiresAt",
+      "newDevice",
       "returnTo",
       "storageKey",
       "userId",
@@ -198,6 +200,7 @@ describe("POST /sign-in/redeem", () => {
       string
     >;
     expect([again.deviceId, again.storageKey]).toEqual([first.deviceId, first.storageKey]);
+    expect([first.newDevice, again.newDevice]).toEqual([true, false]);
     expect(again.accessToken).not.toBe(first.accessToken);
     expect(activeOn(first.deviceId ?? "")).toHaveLength(1);
   });
