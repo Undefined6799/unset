@@ -140,6 +140,14 @@ export function draftAfterSend(sent: string, now: string, delivered: boolean): s
   return delivered && now === sent ? "" : now;
 }
 
+/**
+ * What a new conversation's composer opens with once its first message was started: what the member typed while it
+ * went (draftAfterSend), marked failed when the first message did not go.
+ */
+export function composerAfterStart(sent: string, now: string, delivered: boolean): { text: string; failed: boolean } {
+  return { text: draftAfterSend(sent, now, delivered), failed: !delivered };
+}
+
 /** The messages selection mode gives a checkbox: those Delete is offered on (actionsOf). */
 export function selectable(messages: readonly Message[], composer: Composer): string[] {
   return messages.filter((m) => actionsOf(m, composer).includes("delete")).map((m) => m.id);

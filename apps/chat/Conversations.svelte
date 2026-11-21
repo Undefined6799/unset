@@ -17,6 +17,7 @@ import {
   type ChatId,
   type ConversationId,
   type Conversations,
+  composerAfterStart,
   type Conversation as Item,
   startTarget,
 } from "./core/conversations.ts";
@@ -38,7 +39,8 @@ let open: ConversationId | null = $state(null);
 let draft: ChatId | null = $state(null);
 let first = $state("");
 let starting = $state(false);
-let unsent: string | null = $state(null);
+/** What the opened conversation's composer starts with, once a new conversation's first message was started. */
+let carried: { text: string; failed: boolean } | null = $state(null);
 let problem: string | null = $state(null);
 const requests = $derived(list.filter((c) => c.available && c.request));
 const talks = $derived(list.filter((c) => c.available && !c.request));
@@ -67,14 +69,16 @@ async function startDraft(event: SubmitEvent) {
   event.preventDefault();
   if (draft === null || starting || first.trim() === "") return;
   starting = true;
-  const started = await conversations.start(draft, first);
+  // The field stays open while the start goes, as the composer's does: what the member types meanwhile is kept.
+  const sent = first;
+  const started = await conversations.start(draft, sent);
   starting = false;
   if (started === null) {
     problem = "The conversation could not be started. Try again in a moment.";
     return;
   }
   problem = null;
-  unsent = started.sent ? null : first;
+  carried = composerAfterStart(sent, first, started.sent);
   first = "";
   draft = null;
   open = started.id;
@@ -88,7 +92,14 @@ function leaveDraft() {
 </script>
 
 {#if open !== null}
-  <Conversation {conversations} {names} id={open} {unsent} onBack={() => ((open = null), (unsent = null))} />
+  <Conversation
+    {conversations}
+    {names}
+    id={open}
+    typed={carried?.text ?? ""}
+    unsent={carried?.failed === true}
+    onBack={() => ((open = null), (carried = null))}
+  />
 {:else if draft !== null}
   <section class="flex flex-col gap-4" data-screen="new-conversation">
     <div class="flex items-center gap-2">

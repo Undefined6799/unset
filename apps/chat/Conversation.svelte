@@ -7,8 +7,9 @@
   message the other person has read (ADR 0103 decision 4). The composer is text only and stays off until
   encryption is on for the conversation in this browser (core/conversations.ts composerOf); while the other person has
   not accepted it is pending and still sends, for them to read once they do. A conversation that is not encrypted is
-  never sent in from this page (ADR 0097 decision 4). `unsent` is a first message that did not go: it stays in the
-  field with the failure shown.
+  never sent in from this page (ADR 0097 decision 4). `typed` is what the field opens with: for a new conversation,
+  what the member typed while its first message went; `unsent` marks that the first message did not go, so the field
+  keeps it with the failure shown.
   Deleting (ADR 0103 decision 2; Alex, 2026-11-21 20:42Z): Delete on one message, or Select and then "Delete N" on
   several of one's own, asks once to confirm, with "Don't ask me again", which this browser keeps
   (conversation-service.ts); once it is set Delete acts at once. Any not deleted are reported; the rest still go.
@@ -40,23 +41,25 @@ let {
   id,
   onBack,
   names,
-  unsent = null,
+  typed = "",
+  unsent = false,
 }: {
   conversations: Conversations;
   id: ConversationId;
   onBack: () => void;
   names: (chatId: string) => Promise<string | null>;
-  unsent?: string | null;
+  typed?: string;
+  unsent?: boolean;
 } = $props();
 
 let view = $state<ConversationView | null>(null);
 let loaded = $state(false);
-// The first message that did not go, once, when the conversation opens; the field is the member's from then on.
+// What the field opens with, once, when the conversation opens; the field is the member's from then on.
 // svelte-ignore state_referenced_locally
-let text = $state(unsent ?? "");
+let text = $state(typed);
 let sending = $state(false);
 // svelte-ignore state_referenced_locally
-let failed = $state(unsent !== null);
+let failed = $state(unsent);
 const sends = $derived(view !== null && canSend(view.composer));
 
 $effect(() =>

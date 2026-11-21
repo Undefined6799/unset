@@ -6,6 +6,7 @@ import {
   actionsOf,
   availableOf,
   canSend,
+  composerAfterStart,
   composerOf,
   draftAfterSend,
   isQuickReaction,
@@ -181,5 +182,14 @@ describe("draftAfterSend", () => {
     expect(draftAfterSend("hello", "", true)).toBe("");
     expect(draftAfterSend("hello", "hello", false)).toBe("hello");
     expect(draftAfterSend("hello", "hello again", false)).toBe("hello again");
+  });
+});
+
+describe("composerAfterStart", () => {
+  test("chat.start_keeps_typed: a new conversation's composer keeps what was typed while its first message went", () => {
+    expect(composerAfterStart("hello", "hello", true)).toEqual({ text: "", failed: false });
+    expect(composerAfterStart("hello", "hello, and more", true)).toEqual({ text: "hello, and more", failed: false });
+    expect(composerAfterStart("hello", "hello", false)).toEqual({ text: "hello", failed: true });
+    expect(composerAfterStart("hello", "hello again", false)).toEqual({ text: "hello again", failed: true });
   });
 });
