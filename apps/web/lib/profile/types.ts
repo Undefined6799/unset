@@ -44,13 +44,15 @@ export type CardContent =
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
+  | { readonly kind: "break" }
   | { readonly kind: "strong"; readonly children: readonly Inline[] }
   | { readonly kind: "em"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: string; readonly children: readonly Inline[] };
 
 export type Block =
   | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
-  | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
+  | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
+  | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "rule" };
