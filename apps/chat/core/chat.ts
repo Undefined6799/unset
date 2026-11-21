@@ -10,6 +10,9 @@ export type ChatSession = {
   readonly expiresAtMs: number;
   /** The 32-byte lock key of this browser's local key store (ADR 0083 decision 4). */
   readonly storageKey: Uint8Array;
+  /** The door made this device for this browser just now: whatever the browser kept for the account is from an ended
+   * device and is wiped before the store opens (ADR 0083 decision 5). */
+  readonly newDevice: boolean;
 };
 
 /** What an unlock with a typed key came to (ADR 0083 decision 3): a wrong key is said plainly and asked again. */
@@ -22,6 +25,8 @@ export type UnlockOutcome = "unlocked" | "wrong_key" | "unfinished" | "failed";
  * - setup_elsewhere: another browser of the account is setting up right now.
  * - locked: encryption runs, but this browser cannot read history yet; `unlock` tries a typed recovery key.
  * - ready: this browser is cross-signed and can read history; `conversations` is what the screens use (step 9).
+ * - logging_out: Log out runs: the key backup catches up, then the door ends this device (ADR 0083 decision 5).
+ * - logged_out: the device is ended and this account's stores are gone from this browser.
  * - signed_out: the server no longer takes the token.
  * - error: a fixed catalog code, never a message from elsewhere.
  */
@@ -30,7 +35,18 @@ export type ChatState =
   | { readonly kind: "setting_up" }
   | { readonly kind: "save_key"; readonly key: string; readonly save: () => void }
   | { readonly kind: "setup_elsewhere" }
-  | { readonly kind: "locked"; readonly unlock: (typed: string) => Promise<UnlockOutcome> }
-  | { readonly kind: "ready"; readonly conversations: Conversations; readonly me: string }
+  | {
+      readonly kind: "locked";
+      readonly unlock: (typed: string) => Promise<UnlockOutcome>;
+      readonly logOut: () => void;
+    }
+  | {
+      readonly kind: "ready";
+      readonly conversations: Conversations;
+      readonly me: string;
+      readonly logOut: () => void;
+    }
+  | { readonly kind: "logging_out" }
+  | { readonly kind: "logged_out" }
   | { readonly kind: "signed_out" }
   | { readonly kind: "error"; readonly code: string };

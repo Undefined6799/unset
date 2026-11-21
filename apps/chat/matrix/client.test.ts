@@ -22,6 +22,7 @@ describe("chatClient", () => {
       deviceId: "DEVICEAAAA",
       expiresAtMs: 0,
       storageKey: new Uint8Array(32),
+      newDevice: false,
     };
     const client = chatClient(session, "http://127.0.0.1:9", {});
     expect(client.http.opts.localTimeoutMs).toBe(REQUEST_DEADLINE_MS);

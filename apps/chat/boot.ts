@@ -9,6 +9,7 @@ import { dmTarget, startPathFor } from "./core/contact.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
 import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
+import { signOutDevice } from "./core/sign-out.ts";
 import { openChat } from "./matrix/client.ts";
 
 const DOOR_DEADLINE_MS = 10_000;
@@ -42,7 +43,10 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
     );
     window.history.replaceState(null, "", next);
   }
-  window.setTimeout(hop, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
+  // Renewal, unless the member has logged out by then.
+  let leaving = false;
+  const renew = () => leaving || hop();
+  window.setTimeout(renew, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
   const door = window.fetch.bind(window);
   const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);
   await openChat(session, {
@@ -52,8 +56,13 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
       release: async () => void (await releaseSetup(door, session.deviceId, deadline())),
     },
     pushKey: () => askPushKey(door, session.deviceId, deadline()),
-    onState,
+    signOut: () => signOutDevice(door, session.deviceId, deadline()),
+    onState: (state) => {
+      if (state.kind === "logging_out") leaving = true;
+      onState(state);
+    },
     onSignedOut: () => {
+      if (leaving) return;
       if (Date.now() - signedInAt < TOO_SOON_MS) return onState({ kind: "error", code: "chat.session_refused" });
       onState({ kind: "signed_out" });
       hop();
