@@ -381,32 +381,36 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   const word = `cold${Date.now()}`;
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `- first item\n\n${word} start` });
-  const url = page.url();
-  // Every script of the page held, as a cold load on a slow line: the words are drawn and nothing listens yet.
-  await page.route("**/_app/immutable/**/*.js", async (route) => {
+  // Every script of the page held, as a cold load on a slow line: the words are drawn and nothing listens yet. A
+  // new page, as WebKit serves this page's own scripts again from its memory cache without asking the route.
+  const cold = await page.context().newPage();
+  await cold.route("**/_app/immutable/**/*.js", async (route) => {
     await new Promise((done) => setTimeout(done, 1500));
     return route.continue();
   });
-  await page.goto(url, { waitUntil: "commit" });
-  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await cold.goto(page.url(), { waitUntil: "commit" });
+  const card = cold.locator('[data-slot="card"]', { hasText: word });
   const line = card.getByText(`${word} start`);
   await expect(line).toBeVisible();
-  await expect(page.locator("[data-text-in-place][data-listening]")).toHaveCount(0);
+  await expect(cold.locator("[data-text-in-place][data-listening]")).toHaveCount(0);
   const box = await line.boundingBox();
   if (box === null) throw new Error("no line");
   // At the end of the line, as the tester clicked at the end of a sentence.
-  await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
-  const { editor } = await editorHolding(page, word);
+  await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  const { editor } = await editorHolding(cold, word);
   await expect(editor).toBeFocused();
   // The editor draws the words where they were (the list's items and the space between blocks as the page draws
-  // them), so nothing moves when it takes their place and the click's point is the same words in both.
-  expect((await editor.locator(":scope > p").boundingBox())?.y).toBe(box.y);
-  await page.keyboard.type("Q");
+  // them), so nothing moves when it takes their place and the click's point is the same words in both. Within a
+  // pixel: Firefox puts one of the two lines on a half pixel (331.5 against 331).
+  const drawn = (await editor.locator(":scope > p").boundingBox())?.y ?? Number.NaN;
+  expect(Math.abs(drawn - box.y)).toBeLessThanOrEqual(1);
+  await cold.keyboard.type("Q");
   await expect(editor.locator(":scope > p")).toHaveText(`${word} startQ`);
   await expect(editor.locator("li")).toHaveText("first item");
-  await page.unroute("**/_app/immutable/**/*.js");
-  await bar(page).getByRole("button", { name: "Discard" }).click();
-  await removeCard(page, word);
+  await cold.unroute("**/_app/immutable/**/*.js");
+  await bar(cold).getByRole("button", { name: "Discard" }).click();
+  await removeCard(cold, word);
+  await cold.close();
 });
 
 /**
@@ -543,9 +547,12 @@ test("letters_typed_straight_after_pressing_save_stay_in_the_words", async ({ pa
     await new Promise((done) => setTimeout(done, 1000));
     return route.continue();
   });
+  const saved = page.waitForResponse(/\?\/saveAll$/);
   await bar(page).getByRole("button", { name: "Save" }).click();
   await page.keyboard.type(" two");
   await expect(editor).toHaveText(`${word} start one two`);
+  // Once the Save has answered (a Discard while it is out would cancel it), " two" is what is left unsaved.
+  await saved;
   await expect(bar(page)).toContainText("1 card has unsaved changes.");
   await page.unroute(/\?\/saveAll$/);
   await bar(page).getByRole("button", { name: "Discard" }).click();
