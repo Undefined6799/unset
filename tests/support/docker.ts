@@ -18,6 +18,13 @@ export type Call = {
 const MARGIN_MS = 5_000;
 
 /**
+ * The label every container a test starts carries, valued with the pid of the process that started it; test images
+ * and the edge test's volumes carry it too, so whatever a killed run leaked can be found with
+ * `--filter label=sh.unset.test-owner` (P1.11i).
+ */
+export const OWNER_LABEL = "sh.unset.test-owner";
+
+/**
  * A call's kill budget inside a test or hook of `budgetMs`: just under it, so the kill fires first and names the call.
  */
 export function killBefore(budgetMs: number): number {

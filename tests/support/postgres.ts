@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPool, migrate, type Pool, type PoolOptions } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
-import { cleanUpAll, docker, failAfterCleanup } from "./docker.ts";
+import { cleanUpAll, docker, failAfterCleanup, OWNER_LABEL } from "./docker.ts";
 
 type LockEntry = { ref: string; tag: string; digest: string };
 
@@ -56,7 +56,6 @@ export interface InitExit {
 const STARTED = new Set<string>();
 const DIRS = new Set<string>();
 const INIT_COMPLETE = "PostgreSQL init process complete";
-const OWNER_LABEL = "sh.unset.test-owner";
 // One docker call (ps, run -d, logs, exec, port, rm) may queue behind CI's parallel image builds (P1.29z), but never
 // for a minute: it is killed at 60 s, so a hung daemon fails the calling test with a named message instead of
 // blocking the event loop until scripts/test/run.ts kills the whole run at 600 s (P1.27k). Every caller's budget holds

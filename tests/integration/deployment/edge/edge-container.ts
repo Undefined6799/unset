@@ -8,13 +8,12 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http"; // guard-allow: egress local edge test only
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { docker, failAfterCleanup } from "../../../support/docker.ts";
+import { docker, failAfterCleanup, OWNER_LABEL } from "../../../support/docker.ts";
 import { buildTestImage, removeTestImage } from "../../../support/image-build.ts";
 import { CALL_MS, type Edge, edgeHandle, PDS_HOST, type Seen } from "./edge-handle.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 export const EDGE = join(REPOSITORY, "deployment", "edge");
-const OWNER_LABEL = "sh.unset.test-owner";
 // The pull and the build share beforeAll's 600 s with the start (edge-suite.ts); every other docker call is killed
 // at CALL_MS (edge-handle.ts).
 const BUILD_MS = 300_000;
