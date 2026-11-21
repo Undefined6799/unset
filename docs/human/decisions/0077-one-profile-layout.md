@@ -1,9 +1,9 @@
 # 0077 — The profile page has one layout
 
 Status: Accepted by Alex, 2026-11-21 00:02Z, against af83763 (his line naming that head, given after it was reviewed;
-merged as 7185403). This status paragraph, 0072's status line, the index rows and the ADR 0001 acceptance line were
-added afterwards in #1855. Supersedes [0072](0072-profile-page-layout.md): 0072's status line became "Superseded by
-0077" and nothing else in it changed.
+merged as 7185403). This status paragraph, the index rows and the ADR 0001 acceptance line were added afterwards in
+#1855. Supersedes [0072](0072-profile-page-layout.md). 0072's own status line is left as it was until the ADR check can
+mark a status that runs over several lines as superseded; the index and the ADR 0001 log record the supersession.
 
 ## Context
 
