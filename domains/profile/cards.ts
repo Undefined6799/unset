@@ -6,6 +6,8 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { isWebAddress } from "./web-address.ts";
 
+export type Obj = Readonly<Record<string, unknown>>;
+
 declare const cardKey: unique symbol;
 /** A record key of one of the member's sh.unset.section records. */
 export type CardKey = string & { readonly [cardKey]: true };
@@ -25,7 +27,20 @@ export type CardEntry = {
 export type CardButton =
   | { readonly kind: "email"; readonly address: string }
   | { readonly kind: "link"; readonly preset: LinkPreset; readonly uri: string; readonly label: string };
-export type CardContent =
+export type CardFit = "contain" | "fill";
+declare const draftImage: unique symbol;
+/** A member's uploaded image not yet in their PDS (domains/content's library row id), as the editor names it. */
+export type DraftImageId = string & { readonly [draftImage]: true };
+/**
+ * A picture card's picture: one the member just picked (a draft web publishes before the write), the card's own
+ * picture kept as it is, or one published to the member's PDS (its blob ref and pixel size, ADR 0070 point 5).
+ */
+export type CardPicture =
+  | { readonly kind: "draft"; readonly id: DraftImageId }
+  | { readonly kind: "kept" }
+  | { readonly kind: "published"; readonly blob: Obj; readonly width: number; readonly height: number };
+/** What a page shows of a card. */
+export type ShownCardContent =
   | { readonly kind: "readme"; readonly text: string }
   | { readonly kind: "links"; readonly title: string; readonly layout: CardLayout; readonly items: readonly CardLink[] }
   | {
@@ -40,13 +55,23 @@ export type CardContent =
       readonly text: string;
       readonly buttons: readonly CardButton[];
     };
+/** What the editor writes: any shown kind, and a picture card, which pages draw from P2.19c. */
+export type CardContent =
+  | ShownCardContent
+  | {
+      readonly kind: "image";
+      readonly picture: CardPicture;
+      readonly alt: string;
+      readonly caption: string;
+      readonly fit: CardFit;
+    };
 export type CardKind = CardContent["kind"];
 export type Card = {
   readonly key: CardKey;
   readonly width: CardWidth;
   readonly surface: CardSurface;
   readonly createdAt: string;
-  readonly content: CardContent;
+  readonly content: ShownCardContent;
 };
 
 export type CardError =
@@ -67,14 +92,15 @@ export type Failed = { readonly ok: false; readonly code: CardError; readonly fi
 export const NSID = "sh.unset.section";
 /** The most cards a member keeps: the profile's `cards` order holds this many, and the page reads this many. */
 export const CARDS_MAX = LIMITS.profile.cardsMax;
-const KINDS: readonly CardKind[] = ["readme", "links", "collection", "buttons"];
+/** The kinds a page shows; a picture card stays hidden until P2.19c draws it (book P2.19a). */
+const KINDS: readonly ShownCardContent["kind"][] = ["readme", "links", "collection", "buttons"];
+export const FITS: readonly CardFit[] = ["contain", "fill"];
 export const SURFACES: readonly CardSurface[] = ["filled", "outlined", "plain"];
 export const WIDTHS: readonly CardWidth[] = ["full", "half"];
 export const LAYOUTS: readonly CardLayout[] = ["list", "carousel", "grid"];
 export const PRESETS: readonly LinkPreset[] = ["bookCall", "hire", "subscribe", "custom"];
 export const DEFAULT_LAYOUT = { links: "list", collection: "carousel" } as const;
 
-export type Obj = Readonly<Record<string, unknown>>;
 export const isObject = (value: unknown): value is Obj =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 export const oneOf = <T extends string>(list: readonly T[], value: unknown): value is T =>
@@ -86,6 +112,13 @@ const bytes = (value: string) => new TextEncoder().encode(value).length;
 export function parseCardKey(raw: unknown): CardKey | null {
   if (typeof raw !== "string" || raw === "." || raw === "..") return null;
   return /^[A-Za-z0-9._:~-]{1,512}$/.test(raw) ? (raw as CardKey) : null;
+}
+
+/** A library row id as Postgres writes a UUID: lowercase, hyphenated (RFC 9562 section 4). */
+export function parseDraftImageId(raw: unknown): DraftImageId | null {
+  return typeof raw === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(raw)
+    ? (raw as DraftImageId)
+    : null;
 }
 
 declare const cardVersion: unique symbol;
@@ -120,7 +153,7 @@ function readButton(value: unknown): CardButton | null {
   return { kind: "link", preset, uri: text(value.uri), label: text(value.label) };
 }
 
-function readContent(content: Obj): CardContent | null {
+function readContent(content: Obj): ShownCardContent | null {
   const prefix = `${NSID}#`;
   const type = text(content.$type);
   const kind = type.startsWith(prefix) ? type.slice(prefix.length) : "";
