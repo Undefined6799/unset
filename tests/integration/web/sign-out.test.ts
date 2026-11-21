@@ -41,6 +41,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "./built-server.ts";
+import { readyMember } from "./members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const provided = inject("postgres");
@@ -480,12 +481,12 @@ describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () =>
   const browsers = createBrowserListStore(doorPool, createSealer(keyring));
   let d = 0;
   /** The door's entry for `owner` on a new browser, signed in by `ref`; its device. */
-  async function chatEntry(owner: Did, ref: SessionRef): Promise<DeviceId> {
+  async function chatEntry(owner: Did, ref: SessionRef, user = `u${"w".repeat(20)}` as ChatUser): Promise<DeviceId> {
     const device = `WEB${String(d++).padStart(7, "0")}` as DeviceId;
     const entry = {
       id: randomUUID(),
       did: owner,
-      user: `u${"w".repeat(20)}` as ChatUser,
+      user,
       device,
       lockKey: randomBytes(32) as unknown as LockKey,
     };
@@ -526,5 +527,92 @@ describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () =>
     expect((await signOutEverywhere(here)).status).toBe(303);
     const queued = await queuedDevices();
     for (const device of devices) expect(queued).toContain(device);
+  });
+
+  // Alex, 2026-11-21: no Log out on the chat page; unset.sh's Log out drives it in the browser that signed chat in.
+  /** `owner` onboarded, with the chat account the queued job then creates; its chat user. */
+  async function readyChat(owner: Did): Promise<ChatUser> {
+    await readyMember(pool, owner, true);
+    const { rows } = await pool.query<{ chat_user: ChatUser }>(
+      "UPDATE app.chat_account SET state = 'ready' WHERE did = $1 RETURNING chat_user",
+      [owner],
+    );
+    if (rows[0] === undefined) throw new Error("no chat account queued");
+    return rows[0].chat_user;
+  }
+  const CHAT_COOKIE = "__Host-chat_sign_out";
+  const DOOR = "https://staging.unset.cc";
+  /** The payload of the ticket in a /sign-out/return address. */
+  const payloadOf = (location: string) => {
+    const ticket = new URLSearchParams(new URL(location).hash.slice(1)).get("ticket") ?? "";
+    return (JSON.parse(Buffer.from(ticket, "base64url").toString("utf8")) as { payload: Record<string, unknown> })
+      .payload;
+  };
+
+  test("log_out_with_chat_here_goes_through_the_chat_page: a ticket for the ended session, once", async () => {
+    const owner = newDid();
+    const cookie = await signIn(owner);
+    const [ref] = await refsOf(owner);
+    const user = await readyChat(owner);
+    await chatEntry(owner, ref as SessionRef, user);
+    const response = await signOut(cookie);
+    expect(response.status).toBe(303);
+    // Chromium applies form-action 'self' to a form's redirects, so the door is reached from a page of ours.
+    expect(response.headers.get("location")).toBe("/logout/chat");
+    const line = response.headers.getSetCookie().find((each) => each.startsWith(`${CHAT_COOKIE}=`)) ?? "";
+    const parts = line.split(";").map((part) => part.trim().toLowerCase());
+    for (const part of ["path=/", "secure", "httponly", "samesite=strict", "max-age=60"]) expect(parts).toContain(part);
+    expect(parts.some((part) => part.startsWith("domain="))).toBe(false);
+    const carried = `${CHAT_COOKIE}=${cookieValue(response, CHAT_COOKIE)}`;
+    const page = await web.fetch("/logout/chat", { headers: headers({ cookie: carried }) });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("cache-control")).toContain("no-store");
+    expect(page.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(page.headers.getSetCookie().some((each) => each.startsWith(`${CHAT_COOKIE}=;`))).toBe(true);
+    const html = await page.text();
+    const refresh = /<meta http-equiv="refresh" content="0;url=([^"]+)"/.exec(html)?.[1]?.replaceAll("&amp;", "&");
+    expect(refresh?.startsWith(`${DOOR}/sign-out/return#ticket=`)).toBe(true);
+    const payload = payloadOf(refresh ?? "");
+    expect([payload.verb, payload.did, payload.user, payload.sid]).toEqual(["session.mint", owner, user, ref]);
+    expect(payload.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(logsName(owner)).toBe(false);
+    // Spent: the page without its cookie is the signed-out page.
+    const again = await web.fetch("/logout/chat", { headers: headers() });
+    expect(again.status).toBe(303);
+    expect(again.headers.get("location")).toBe("/signed-out");
+  });
+
+  test("log_out_without_chat_here_goes_straight_to_signed_out", async () => {
+    const owner = newDid();
+    const first = await signIn(owner);
+    const [firstRef] = await refsOf(owner);
+    await signIn(owner);
+    const secondRef = (await refsOf(owner)).find((ref) => ref !== firstRef) as SessionRef;
+    // The member has chat, but only another browser's session signed it in.
+    await chatEntry(owner, secondRef, await readyChat(owner));
+    const response = await signOut(first);
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.getSetCookie().some((each) => each.startsWith(`${CHAT_COOKIE}=`))).toBe(false);
+  });
+
+  test("log_out_gives_the_chat_page_time: the queued end is not due at once", async () => {
+    const owner = newDid();
+    const cookie = await signIn(owner);
+    const [ref] = await refsOf(owner);
+    const device = await chatEntry(owner, ref as SessionRef, await readyChat(owner));
+    expect((await signOut(cookie)).status).toBe(303);
+    expect(await queuedDevices()).toContain(device);
+    const due = await pool.query<{ device_id: string }>("SELECT device_id FROM app.claim_chat_session_end(100, 60)");
+    expect(due.rows.map((r) => r.device_id)).not.toContain(device);
+  });
+
+  test("the_signed_out_page_after_chat_keeps_the_issuer: the carried issuer is sent on the door's way back", async () => {
+    const owner = newDid();
+    const cookie = await signIn(owner);
+    const response = await signOut(cookie);
+    const line = response.headers.getSetCookie().find((each) => each.startsWith("__Host-signed_out_issuer=")) ?? "";
+    // The door's 303 to /signed-out is a cross-site navigation, which carries Lax cookies and never Strict ones
+    // (RFC 6265bis-22 section 5.2, "Same-site and Cross-site Requests").
+    expect(line.split(";").map((part) => part.trim().toLowerCase())).toContain("samesite=lax");
   });
 });

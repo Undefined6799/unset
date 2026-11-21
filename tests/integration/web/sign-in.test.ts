@@ -277,7 +277,7 @@ describe("the callback", () => {
     expectHostOnly(cookies.get("__Host-sid"), "Lax", 2_592_000);
     expectHostOnly(cookies.get("__Host-oauth_nonce"), "Lax", 0);
     expectHostOnly(cookies.get("__Host-signed_out"), "Lax", 0);
-    expectHostOnly(cookies.get("__Host-signed_out_issuer"), "Strict", 0);
+    expectHostOnly(cookies.get("__Host-signed_out_issuer"), "Lax", 0);
     // The session row carries the issuer the library verified (ADR 0048).
     const { rows } = await pool.query<{ issuer_origin: string }>(
       "SELECT issuer_origin FROM app.session WHERE did = $1",
@@ -395,7 +395,7 @@ describe("signing out", () => {
     const cookies = setCookies(response);
     expectHostOnly(cookies.get("__Host-sid"), "Lax", 0);
     expectHostOnly(cookies.get("__Host-signed_out"), "Lax", 2_592_000);
-    expectHostOnly(cookies.get("__Host-signed_out_issuer"), "Strict", 600);
+    expectHostOnly(cookies.get("__Host-signed_out_issuer"), "Lax", 600);
     expectHostOnly(cookies.get("__Host-login_target"), "Strict", 0);
     // The session is gone: the same cookie no longer signs the browser in.
     const after = await web.fetch("/login", { headers: headers({ cookie: `__Host-sid=${sid}` }) });
@@ -407,7 +407,7 @@ describe("signing out", () => {
     const body = await page.text();
     expect(body).toContain(`href="${PDS}/account"`);
     expect(body).toContain('rel="noopener noreferrer"');
-    expectHostOnly(setCookies(page).get("__Host-signed_out_issuer"), "Strict", 0);
+    expectHostOnly(setCookies(page).get("__Host-signed_out_issuer"), "Lax", 0);
   });
 
   test("the_next_sign_in_after_a_sign_out_asks_for_the_password", async () => {

@@ -1,5 +1,5 @@
 // GET and POST /signed-out (P2.08, P2.08b, P2.08s, P2.05s). Signing out of unset.sh does not end the session on the
-// sign-in server, so the page points there, at the issuer recorded at sign-in (carried in a single-use Strict cookie
+// sign-in server, so the page points there, at the issuer recorded at sign-in (carried in a single-use cookie
 // that only our own POST /logout writes, re-checked here), or at our PDS. "No thanks" posts: it clears the signed-out
 // marker, so the next sign-in no longer asks for the password.
 import { type Actions, redirect, type ServerLoad } from "@sveltejs/kit";

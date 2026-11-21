@@ -120,10 +120,11 @@ const ROOM_SWEEP_MS = 3_600_000;
 /** A claim's lease: above one job's handle check (identity timeouts, at most 10 s each) and its 8 s chat-admin call. */
 const CHAT_LEASE_S = 120;
 /**
- * How long after Log out the devices that session signed in are due to end (ADR 0083 decision 5). At once for now; a
- * later step that runs the wipe on unset.cc before ending the device gives itself time here.
+ * How long after Log out the devices that session signed in are due to end (ADR 0083 decision 5): time for the tab to
+ * reach unset.cc's sign-out page, wait up to 15 s for the key backup (apps/chat log-out.ts BACKUP_WAIT_MS) and log the
+ * device out itself (chat-sign-out.ts). A tab that never arrives is ended by the queue then.
  */
-const LOGOUT_CHAT_AFTER_S = 0;
+const LOGOUT_CHAT_AFTER_S = 120;
 /** Under the health check's 1 s bound (shared/http/health.ts), so the probe is ended, not left behind. */
 const READINESS_MS = 900;
 
