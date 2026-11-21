@@ -288,11 +288,11 @@ async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount)
   if (plan.kind === "unsigned") return count(tx, "ingest_unsigned");
   if (plan.kind === "inactive") await count(tx, "ingest_inactive");
   else {
-    // Deletes first, so a section created in the same commit as one is deleted finds room under the cap. Order changes
-    // nothing else: the reader proves every op against the commit's one signed tree and refuses the frame if any op
-    // is unproven (infrastructure/firehose, commitFrame), so a put and a delete of the same path cannot both arrive.
-    const ordered = [...plan.writes].sort((a, b) => Number(b.kind === "delete") - Number(a.kind === "delete"));
-    for (const write of ordered) await applyWrite(tx, frame.did, plan.rev, write);
+    // Order changes nothing else: the reader proves every op against the commit's one signed tree and refuses the frame
+    // if any op is unproven (infrastructure/firehose, commitFrame), so a put and a delete of the same path cannot both
+    // arrive.
+    for (const write of await inApplyOrder(tx, frame.did, plan.writes))
+      await applyWrite(tx, frame.did, plan.rev, write);
     if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
   }
   await tx.query(
@@ -356,6 +356,29 @@ export async function queueJob(tx: PoolClient, did: string, kind: JobKind): Prom
      ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
     [did, kind],
   );
+}
+
+/**
+ * A commit's writes in the order they are applied, so each one is judged with room the others make: deletes first,
+ * then the profile, then sections by how much each changes the account's size, the ones that shrink first. A commit
+ * that keeps the account within MAX_PAGE_BYTES then never passes it partway (the sizes in between only fall, then
+ * rise to the commit's own total), so a Save that grows one card and shrinks another is indexed whole (Codex review of
+ * #1911).
+ */
+export async function inApplyOrder(tx: PoolClient, did: string, writes: readonly IndexWrite[]): Promise<IndexWrite[]> {
+  const sections = writes.filter((write) => write.kind === "section");
+  const { rows } = await tx.query(
+    `SELECT rkey, coalesce(bytes, octet_length(record::text)) AS bytes
+       FROM idx.section WHERE did = $1 AND rkey = ANY($2::text[])`,
+    [did, sections.map((write) => write.rkey)],
+  );
+  const stored = new Map(rows.map((row) => [String(row.rkey), Number(row.bytes)]));
+  const change = (write: (typeof sections)[number]) => write.bytes - (stored.get(write.rkey) ?? 0);
+  return [
+    ...writes.filter((write) => write.kind === "delete"),
+    ...writes.filter((write) => write.kind === "profile"),
+    ...sections.sort((a, b) => change(a) - change(b)),
+  ];
 }
 
 export async function applyWrite(tx: PoolClient, did: string, rev: string, write: IndexWrite): Promise<void> {

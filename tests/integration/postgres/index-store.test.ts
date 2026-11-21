@@ -310,6 +310,33 @@ describe("index store", () => {
     expect(Number(stat("ingest_over_budget"))).toBe(before + 2);
   });
 
+  test("index.a_commit_within_the_budget_is_indexed_whole_whichever_card_comes_first", async () => {
+    // Codex review of #1911: a Save that grows one card and shrinks another, near the budget, keeps both.
+    const J = "did:plc:jjjjjjjjjjjjjjjjjjjjjjjj";
+    track(J, true);
+    await commit(J, rev(3), [section(CARD_1)]);
+    sql(
+      `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, bytes, indexed_at)
+       VALUES ('at://${J}/sh.unset.section/${CARD_2}', '${J}', '${CARD_2}', '${CID}', '${rev(3)}', '{}',
+               ${MAX_PAGE_BYTES - 1_000}, now())`,
+    );
+    const grown: IndexChange = {
+      kind: "put",
+      collection: "sh.unset.section",
+      rkey: CARD_1,
+      cid: CID,
+      record: {
+        $type: "sh.unset.section",
+        content: { $type: "sh.unset.section#readme", text: "a".repeat(2_000) },
+        createdAt: T,
+      },
+    };
+    const before = Number(stat("ingest_over_budget"));
+    await commit(J, rev(4), [grown, section(CARD_2)]);
+    expect(lines(`SELECT rkey FROM idx.section WHERE did = '${J}' ORDER BY rkey`)).toEqual([CARD_1, CARD_2]);
+    expect(Number(stat("ingest_over_budget"))).toBe(before);
+  });
+
   test("index.active_status_is_only_queued_for_confirmation", async () => {
     track(C, false);
     await store.apply({ kind: "account", seq: ++seq, did: C, active: true, status: null });
