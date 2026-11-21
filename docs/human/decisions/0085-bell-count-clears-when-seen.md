@@ -69,5 +69,6 @@ member's own laptop and phone. So the mark is kept per browser, not per account.
 `tests/integration/postgres/notification-store.test.ts` holds the mark: this browser's only, never moving back, and
 nothing for a later browser's or another member's id; the session read brings `seen` with the bell.
 `tests/integration/web/app/notifications.test.ts` holds the routes: the page clears its own browser's count and not
-another's, a newer entry counts again, a cross-site, header-less or prefetch visit marks nothing, the `seen` form from the alert's new browser or another site clears nothing.
+another's, a newer entry counts again, a cross-site, header-less or prefetch visit marks nothing, the `seen` form from
+the alert's new browser or another site clears nothing.
 Acceptance is Alex's line on the pull request that adds this record.
