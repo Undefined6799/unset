@@ -111,6 +111,7 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
 1. The mirror must hold the Python base and MAS (`deployment/mirror.list.json`; `mirror.yml` copies and signs them on a
    push to main), and `deployment/images.lock.json` must name MAS's mirror digest, or C2 refuses `mas`.
 2. The files above and the two databases exist.
-3. Pangolin has a resource for `staging.unset.cc` to the edge, and the dev leaf names `staging.unset.cc`
-   (`dev-stack-secrets.md`, the dev leaf).
+3. The edge has no `staging.unset.cc` site yet: how that name is published (Pangolin or not, with which login bypass
+   for `/_matrix/client/`) is Alex's call, since ADR 0025 gives it no address record. Until then the services start
+   but no browser reaches the door or Synapse.
 
