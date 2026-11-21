@@ -23,6 +23,9 @@ const RETURN_PATH = "/sign-in/return";
 /** A profile's Message link, `/dm/<did>` (ADR 0082 decision 6): the page, which asks for the chat ID once signed in. */
 const DM_PREFIX = "/dm/";
 const DM_ROUTE = "/dm/*";
+/** The page for signup's chat step (ADR 0083 decision 2): it sets up chat, then sends the tab back through WELCOME_DONE. */
+const WELCOME_PATH = "/welcome";
+const WELCOME_DONE = "/welcome/done";
 
 export type DoorLog = { route: string; method: string; status: number; reason?: string };
 
@@ -45,7 +48,7 @@ export type DoorDeps = {
   readonly random?: (bytes: number) => Buffer;
   readonly log: (line: DoorLog) => void;
   readonly deadlineMs?: number;
-  /** The chat page (ADR 0088): its document at "/" and RETURN_PATH, its built files under ASSETS. */
+  /** The chat page (ADR 0088): its document at "/", RETURN_PATH and WELCOME_PATH, its built files under ASSETS. */
   readonly page: ChatPage;
   readonly posts: Readonly<Record<string, PostRoute>>;
 };
@@ -111,12 +114,22 @@ const pageFile: GetRoute = (url, deps) => {
 const dmPage: GetRoute = (url, deps) =>
   parseDid(url.pathname.slice(DM_PREFIX.length)) === null ? refuse(404, "not_found") : pageDocument(url, deps);
 
+/** Back to web's onboarding chat step, a fixed address: nothing in the request picks where it goes. */
+const welcomeDone: GetRoute = (_url, deps) => ({
+  response: new Response(null, {
+    status: 303,
+    headers: { ...BASE, ...NO_REFERRER, location: `${deps.webOrigin}/welcome/chat` },
+  }),
+});
+
 type GetRoute = (url: URL, deps: DoorDeps) => DoorAnswer;
 const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   "/health": { limit: "default", handle: () => ({ response: json(200, { ok: true }) }) },
   "/sign-in": { limit: "sign-in", handle: startSignIn },
   "/": { limit: "default", handle: pageDocument },
   [RETURN_PATH]: { limit: "default", handle: pageDocument },
+  [WELCOME_PATH]: { limit: "default", handle: pageDocument },
+  [WELCOME_DONE]: { limit: "default", handle: welcomeDone },
   [ASSETS]: { limit: "default", handle: pageFile },
   [DM_ROUTE]: { limit: "default", handle: dmPage },
 };

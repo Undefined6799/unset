@@ -1,6 +1,7 @@
 // The door's count port (build step 10; ADR 0082 decisions 3 and 5, ADR 0090 decision 2): a listener of its own on the
-// network only Synapse and web share, with two routes and nothing of the public door. Synapse's pusher posts the
-// member's number to the push gateway path; web reads it back by DID. Neither route takes a browser's cookie or runs
+// network only Synapse and web share, with three routes and nothing of the public door. Synapse's pusher posts the
+// member's number to the push gateway path; web reads it back by DID, and reads whether the member has set up chat
+// (a browser of theirs took a key) for its onboarding chat step (ADR 0083 decision 2). Neither route takes a browser's cookie or runs
 // a CSRF gate, and the public listener answers 404 for both. Each answer is one log line of route template, method,
 // status and a fixed reason word: never a DID, pushkey or number (SE-7).
 //
@@ -10,11 +11,20 @@
 // (https://spec.matrix.org/v1.18/push-gateway-api/#post_matrixpushv1notify): only `devices` is required, and the
 // answer's `rejected` lists the pushkeys the gateway does not know, which Synapse then removes (httppusher.py:377-392).
 import { parseDid } from "@unset/domains-identity";
-import { chatCount, MAX_COUNT, type PushKey, type PushKeys, parsePushKey, recordCount } from "@unset/domains-messaging";
+import {
+  chatCount,
+  chatSetUp,
+  MAX_COUNT,
+  type PushKey,
+  type PushKeys,
+  parsePushKey,
+  recordCount,
+} from "@unset/domains-messaging";
 import { type DoorAnswer, type DoorLog, json } from "./door.ts";
 
 export const NOTIFY_PATH = "/_matrix/push/v1/notify";
 const COUNT_PATH = "/count";
+const SET_UP_PATH = "/set-up";
 /** Synapse sends one device per pusher; a few more are allowed, as the spec's list form permits. */
 const MAX_DEVICES = 16;
 const MAX_PUSHKEY = 512;
@@ -72,14 +82,26 @@ async function notify(request: Request, deps: CountDoorDeps, deadline: AbortSign
   return { response: json(200, { rejected: [...asked.foreign, ...rejected] }) };
 }
 
-async function count(url: URL, deps: CountDoorDeps, deadline: AbortSignal): Promise<DoorAnswer> {
+/** The query's one `did` and nothing else, or null. */
+function didOf(url: URL) {
   const dids = url.searchParams.getAll("did");
-  const did = dids.length === 1 && [...url.searchParams.keys()].length === 1 ? parseDid(dids[0] ?? "") : null;
+  return dids.length === 1 && [...url.searchParams.keys()].length === 1 ? parseDid(dids[0] ?? "") : null;
+}
+
+async function count(url: URL, deps: CountDoorDeps, deadline: AbortSignal): Promise<DoorAnswer> {
+  const did = didOf(url);
   if (did === null) return refuse(400, "push.bad_did");
   return { response: json(200, { unread: await chatCount(deps, did, deadline) }) };
 }
 
-const ROUTES: Readonly<Record<string, string>> = { [NOTIFY_PATH]: "POST", [COUNT_PATH]: "GET" };
+/** web's onboarding chat step (ADR 0083 decision 2): whether a browser of the member got ready and took a key. */
+async function setUp(url: URL, deps: CountDoorDeps, deadline: AbortSignal): Promise<DoorAnswer> {
+  const did = didOf(url);
+  if (did === null) return refuse(400, "push.bad_did");
+  return { response: json(200, { setUp: await chatSetUp(deps, did, deadline) }) };
+}
+
+const ROUTES: Readonly<Record<string, string>> = { [NOTIFY_PATH]: "POST", [COUNT_PATH]: "GET", [SET_UP_PATH]: "GET" };
 
 export function createCountDoor(deps: CountDoorDeps) {
   const deadlineMs = deps.deadlineMs ?? 5000;
@@ -89,7 +111,8 @@ export function createCountDoor(deps: CountDoorDeps) {
     if (method === undefined) return refuse(404, "not_found");
     if (request.method !== method) return refuse(405, "http.method_not_allowed");
     const deadline = AbortSignal.timeout(deadlineMs);
-    return url.pathname === NOTIFY_PATH ? notify(request, deps, deadline) : count(url, deps, deadline);
+    if (url.pathname === NOTIFY_PATH) return notify(request, deps, deadline);
+    return url.pathname === COUNT_PATH ? count(url, deps, deadline) : setUp(url, deps, deadline);
   }
 
   return async (request: Request): Promise<Response> => {

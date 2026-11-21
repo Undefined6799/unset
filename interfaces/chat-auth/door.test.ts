@@ -102,7 +102,7 @@ describe("the chat page", () => {
     `font-src ${ORIGIN}/assets/; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; ` +
     "form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types svelte-trusted-html";
 
-  test.each([["/"], ["/sign-in/return"]])(
+  test.each([["/"], ["/sign-in/return"], ["/welcome"]])(
     "door.page_document: %s is the page, with its CSP, no referrer and no-store",
     async (path) => {
       const res = await door().get(path);
@@ -115,6 +115,19 @@ describe("the chat page", () => {
       expect(await res.text()).toBe(PAGE.html);
     },
   );
+
+  test("door.welcome_done: the onboarding page's way back is a fixed 303 to web's chat step, whatever the query", async () => {
+    const { get, lines } = door();
+    for (const path of ["/welcome/done", "/welcome/done?next=https%3A%2F%2Fevil.example%2F"]) {
+      const res = await get(path);
+      expect(res.status).toBe(303);
+      expect(res.headers.get("location")).toBe(`${WEB}/welcome/chat`);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(res.headers.getSetCookie()).toEqual([]);
+    }
+    expect(lines.at(-1)).toEqual({ route: "/welcome/done", method: "GET", status: 303 });
+  });
 
   test("door.page_files: a built file is served with its type, cached for good, under the door's default CSP", async () => {
     const res = await door().get("/assets/index-abc.js");

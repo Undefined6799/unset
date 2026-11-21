@@ -14,6 +14,10 @@ const RECORD = `UPDATE door.push SET unread = coalesce($2, unread),
 const LATEST = `SELECT p.unread FROM door.push p JOIN door.browser b ON b.id = p.browser_id
  WHERE b.did = $1 AND p.counted_at IS NOT NULL ORDER BY p.counted_at DESC LIMIT 1`;
 
+// Any key on any browser entry of the member (ADR 0083 decision 2: web's onboarding chat step), through the same index.
+const REGISTERED = `SELECT EXISTS (SELECT 1 FROM door.push p JOIN door.browser b ON b.id = p.browser_id WHERE b.did = $1)
+  AS registered`;
+
 export function createPushKeyStore(pool: Pool): PushKeys {
   return {
     async issue(entry, hash, deadline) {
@@ -26,6 +30,10 @@ export function createPushKeyStore(pool: Pool): PushKeys {
     async latest(did, deadline) {
       const { rows } = await withClient(pool, deadline, (db) => db.query<{ unread: number }>(LATEST, [did]));
       return rows[0]?.unread ?? null;
+    },
+    async registered(did, deadline) {
+      const { rows } = await withClient(pool, deadline, (db) => db.query<{ registered: boolean }>(REGISTERED, [did]));
+      return rows[0]?.registered === true;
     },
   };
 }

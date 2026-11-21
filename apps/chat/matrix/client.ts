@@ -147,14 +147,17 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const conversations = createConversations(client, crypto, session.userId);
   // While a setup or an unlock runs its own steps, the trust events it causes do not repaint the page.
   let busy = false;
-  // The count's pusher, registered once per sign-in when the page is first ready. A failure leaves chat as it is: the
-  // count on unset.sh then shows no number, or the last one, until the next sign-in (ADR 0082 Consequences).
-  let pusherAsked = false;
-  const registerOnce = async () => {
-    if (pusherAsked) return;
-    pusherAsked = true;
-    const target = await options.pushKey();
-    if (target !== null && !stopped) await registerPusher(client, target);
+  // The count's pusher, registered once per sign-in when the page is first ready, and waited for before the page says
+  // ready, so signup's chat step (book P6.17) never sends the tab back before it is registered (ADR 0082
+  // Consequences: the count starts once a member has opened chat). A failure leaves chat as it is: the count on
+  // unset.sh then shows no number, or the last one, until the next sign-in.
+  let pusher: Promise<void> | undefined;
+  const registerOnce = () => {
+    pusher ??= (async () => {
+      const target = await options.pushKey();
+      if (target !== null && !stopped) await registerPusher(client, target);
+    })();
+    return pusher;
   };
   /**
    * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
@@ -183,7 +186,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     if (facts === null) return void fail(UNAVAILABLE);
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
-    if (phase === "ready") void registerOnce();
+    if (phase === "ready") await registerOnce();
     tell(
       phase === "ready"
         ? { kind: "ready", conversations, me: session.userId, logOut: leave }

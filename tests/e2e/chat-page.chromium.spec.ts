@@ -12,7 +12,8 @@
 // it as direct; the start route makes exactly the room our server accepts, keeps the composer off until the other
 // person has joined, then sends only ciphertext; a second start finds the same room; a bad chat ID starts nothing.
 // The count (build step 10; ADR 0090): once ready the page registers one pusher with the door's key, and a refused
-// pusher leaves chat as it is.
+// pusher leaves chat as it is. Signup's chat step (book P6.17): opened at /welcome, the page saves the key on two
+// cards, registers the pusher, then offers the way back to unset.sh through the door.
 // Chromium only, by its name (playwright.config.ts ignores *chromium.spec.ts for Firefox and WebKit): the CSP check
 // reads Chromium's console wording, as csp.spec.ts does.
 import { text as readText } from "node:stream/consumers";
@@ -227,10 +228,11 @@ test("chat_page.refused_soon: a token refused right after sign-in shows a fixed 
   expect(redeems).toHaveLength(1);
 });
 
-/** Runs setup in `page` to the end and returns the key it showed. */
+/** Runs setup in `page` to the end and returns the key it showed: the first card shows it, the second checks its end. */
 async function saveKey(page: Page): Promise<string> {
   await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
   const key = await page.locator("#recovery-key").inputValue();
+  await page.getByRole("button", { name: "I have saved my key" }).click();
   await page.locator("#key-end").fill(key.replaceAll(" ", "").slice(-4));
   await page.getByRole("button", { name: "Continue" }).click();
   await expect.poll(() => state(page), { timeout: 30_000 }).toBe("ready");
@@ -278,6 +280,13 @@ test("chat_page.setup_saves_key: the key is shown to save and download, checked,
   // Nothing is stored before the check passes.
   const vaultWrites = () =>
     stack.homeserver.seen.filter((c) => c.method === "PUT" && /account_data\/m\.secret_storage/.test(c.url)).length;
+  // The second card hides the key and asks for its end; "Show my key again" goes back to it, the same key.
+  await page.getByRole("button", { name: "I have saved my key" }).click();
+  await expect(page.locator("#recovery-key")).toHaveCount(0);
+  expect(await page.content()).not.toContain(key);
+  await page.getByRole("button", { name: "Show my key again" }).click();
+  expect(await page.locator("#recovery-key").inputValue()).toBe(key);
+  await page.getByRole("button", { name: "I have saved my key" }).click();
   await page.locator("#key-end").fill("xxxx");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.locator("#key-end-wrong")).toBeVisible();
@@ -419,12 +428,18 @@ test("chat_page.unlock_before_setup_done: a browser whose account is half set up
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`chat_page.axe_${scheme}: the save and unlock cards have no accessibility violation`, async ({ browser }) => {
+  test(`chat_page.axe_${scheme}: the save, check and unlock cards have no accessibility violation`, async ({
+    browser,
+  }) => {
     test.setTimeout(90_000);
     const first = await open(browser, scheme);
     await first.page.goto("https://unset.cc/");
     await expect.poll(() => state(first.page), { timeout: 30_000 }).toBe("save_key");
     expect((await new AxeBuilder({ page: first.page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+    await first.page.getByRole("button", { name: "I have saved my key" }).click();
+    await expect(first.page.locator("#key-end")).toBeVisible();
+    expect((await new AxeBuilder({ page: first.page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+    await first.page.getByRole("button", { name: "Show my key again" }).click();
     await saveKey(first.page);
     const second = await open(browser, scheme);
     await second.page.goto("https://unset.cc/");
@@ -562,6 +577,22 @@ test("chat_page.pusher_once: once ready the page registers one pusher with the d
   // A later trust change repaints the page but registers nothing more.
   await page.waitForTimeout(1000);
   expect(stack.homeserver.pushers).toHaveLength(1);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.signup_step: from signup's chat step the page saves the key, registers the pusher, then goes back", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, problems } = await open(browser);
+  await page.goto("https://unset.cc/welcome");
+  await saveKey(page);
+  // Ready is said only once the pusher is registered, so the way back never comes before the count works.
+  expect(stack.homeserver.pushers).toHaveLength(1);
+  expect(new URL(page.url()).pathname).toBe("/welcome");
+  await expect(page.getByRole("heading", { name: "Your messages are set up" })).toBeVisible();
+  await page.getByRole("link", { name: "Continue" }).click();
+  await page.waitForURL("https://unset.sh/welcome/chat");
   expect(problems).toEqual([]);
 });
 

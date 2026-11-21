@@ -9,11 +9,21 @@
 // posts the envelope to chat-admin; chat-admin checks web's signature and burns the jti. With no value (the member
 // had to sign in first, which keeps only the path) the tab goes back to the door's root to start again; a value of
 // the wrong form is refused. Nothing here is logged but the route's own line, which carries no query.
+//
+// Who gets a ticket: a member the app gate lets in, or a member at signup's chat step (book P6.17; ADR 0083 decision
+// 2) whose chat is not set up yet, who sets it up before the app opens and before their email is confirmed. So the
+// route's policy skips the gate (`session: "onboarding"`) and admit() runs it here for everyone else, with the same
+// redirects. The step stays "chat" until the member presses Continue, so once the door's /set-up says chat is set up
+// (the same read that gates Continue), or gives no clear answer, the member must finish signup first (review N6).
+import { type RequestEvent, redirect } from "@sveltejs/kit";
 import type { Did } from "@unset/domains-identity";
 import { type DoorState, parseDoorState, signIn } from "@unset/domains-messaging";
 import type { Session } from "@unset/infrastructure-session";
+import { openApp } from "./app-gate.ts";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
+import { gateSession } from "./session.ts";
+import { stepOf } from "./welcome.ts";
 
 /** The door's path that takes the ticket (the door step builds to it). */
 export const DOOR_RETURN_PATH = "/sign-in/return";
@@ -30,13 +40,25 @@ function stateOf(query: URLSearchParams): DoorState | null | "bad" {
   return values.length === 1 ? (parseDoorState(values[0] ?? null) ?? "bad") : "bad";
 }
 
-export async function chatSignIn(
-  session: Session | undefined,
-  query: URLSearchParams,
-  deadline: AbortSignal,
-): Promise<Response> {
+/**
+ * A member at signup's chat step whose chat the door says is not set up yet passes; anyone else passes the app gate or
+ * is sent where it says (a thrown 303). No clear answer from the door counts as set up (fail closed).
+ */
+async function admit(event: RequestEvent, session: Session): Promise<void> {
+  const { deadline, deadlineAt } = event.locals;
+  if ((await stepOf(session, deadline)) === "chat") {
+    if ((await services().chat.setUp(session.did, deadline)) === false) return;
+    redirect(303, "/welcome/chat");
+  }
+  await openApp({ cookies: event.cookies, deadline, deadlineAt }, session, "/chat/sign-in");
+}
+
+export async function chatSignIn(event: RequestEvent): Promise<Response> {
+  const session = gateSession(event);
   if (session === undefined) return plain(401, "auth.required"); // the gate already sent a visitor to sign in
-  const state = stateOf(query);
+  const { deadline } = event.locals;
+  await admit(event, session);
+  const state = stateOf(event.url.searchParams);
   if (state === null) return redirectTo(`${config.CHAT_DOOR_ORIGIN}/`);
   if (state === "bad") return plain(400, "chat.bad_state");
   const { chat } = services();

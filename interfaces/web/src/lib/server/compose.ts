@@ -184,6 +184,8 @@ export type Services = {
     readonly signTicket: SignInPorts["sign"];
     /** Build step 10 (ADR 0090 decision 2): the member's chat count from the door's count port, or null. */
     readonly count: ChatCountClient["count"];
+    /** P6.17 (ADR 0083 decision 2): whether the member has set up chat on unset.cc, or null with no clear answer. */
+    readonly setUp: ChatCountClient["setUp"];
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
@@ -524,6 +526,7 @@ async function build(): Promise<Services> {
     lockDid: signIn.exclusive,
     dropTokenSet: (did, deadline) => tokenSets.del(did, { signal: deadline }),
   };
+  const chatDoor = createChatCountClient(guard, config.CHAT_COUNT_URL);
   return {
     log,
     pool,
@@ -546,7 +549,8 @@ async function build(): Promise<Services> {
     chat: {
       readyUser: (did, deadline) => chatAccounts.readyUser(did, deadline),
       signTicket: chatAdmin.signTicket,
-      count: createChatCountClient(guard, config.CHAT_COUNT_URL).count,
+      count: chatDoor.count,
+      setUp: chatDoor.setUp,
     },
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
