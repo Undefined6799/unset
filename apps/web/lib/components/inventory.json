@@ -399,13 +399,17 @@
       }
     },
     "notifications": {
-      "mark-all-read.svelte": {
+      "dismiss-all.svelte": {
         "origin": "ours",
-        "purpose": "The notifications' Mark all as read form: names the newest sign-in and the notice version listed, posted to /notifications?/readAll (P2.27)."
+        "purpose": "The notifications' Dismiss all form: names the newest entry listed, posted to /notifications?/dismissAll, for the bell and the page (P2.27, ADR 0081)."
+      },
+      "inbox.svelte": {
+        "origin": "ours",
+        "purpose": "The notifications page (P2.27b, ADR 0081): fills the window below the header; a list with checkboxes and Dismiss selected beside the chosen entry's detail, a split the member drags between 2/5 and 3/5, a cut-off row lifted above the detail on hover; plain forms and links with no script; the detail as its own screen on a phone."
       },
       "notification-list.svelte": {
         "origin": "ours",
-        "purpose": "The notifications as rows for the bell and the page: each a plain form button posting to /notifications?/open, times in UTC until script shows the device's zone (P2.27)."
+        "purpose": "The bell's notifications as rows: each a plain link to its detail on /notifications, times in UTC until script shows the device's zone (P2.27, ADR 0081)."
       }
     }
   }

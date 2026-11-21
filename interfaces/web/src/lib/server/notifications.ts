@@ -32,7 +32,7 @@ export function inboxOf(event: RequestEvent): Inbox | undefined {
 const viewOf = (list: NotificationList): NotificationsView => ({
   state: "ready",
   entries: list.entries.map((e: Entry) => ({ id: e.id, reason: e.reason, sentAt: e.sentAt.toISOString() })),
-  unread: list.unread,
+  count: list.count,
   more: list.more,
 });
 

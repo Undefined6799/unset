@@ -357,8 +357,8 @@ async function build(): Promise<Services> {
   const notifications: Services["notifications"] = {
     inbox: (did, idHash, deadline) => ({
       list: (limit) => withClient(pool, deadline, (db) => inboxRows.list(db, did, idHash, limit)),
-      open: (id) => withClient(pool, deadline, (db) => inboxRows.open(db, did, idHash, id)),
-      openUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.openUpTo(db, did, idHash, upTo)),
+      dismiss: (ids) => withClient(pool, deadline, (db) => inboxRows.dismiss(db, did, idHash, ids)),
+      dismissUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.dismissUpTo(db, did, idHash, upTo)),
     }),
     send: (did, notification, deadline) =>
       withClient(pool, deadline, (db) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification)),

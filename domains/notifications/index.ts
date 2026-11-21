@@ -1,9 +1,10 @@
-// Notifications (P2.27, ADR 0079): the member's inbox. Sources send with `notify`; the screens list, open and mark all
-// as read through `Inbox`, and none of that changes when a source is added.
+// Notifications (P2.27, ADR 0079 and 0081): the member's inbox. Sources send with `notify`; the screens list and
+// dismiss through `Inbox`, and none of that changes when a source is added.
 export {
   BELL_LIMIT,
   BELL_READ,
   COUNT_CAP,
+  DISMISS_MAX,
   type Entry,
   type Inbox,
   inboxList,
@@ -17,6 +18,7 @@ export {
   type Outbox,
   PAGE_LIMIT,
   parseNotificationId,
+  parseNotificationIds,
   REASONS,
   type Reason,
   readSize,

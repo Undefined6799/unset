@@ -113,11 +113,11 @@ describe("notification store", () => {
     expect(await reasons(did, laptop)).toEqual(["sign_in"]);
     expect(await list(did, thief)).toEqual([]);
     expect(await list(did, later)).toEqual([]);
-    // The browser it is about cannot open or clear it, by id or by marking all.
+    // The browser it is about cannot dismiss it, by id or by dismissing all.
     const [entry] = await list(did, laptop);
     if (entry === undefined) throw new Error("no entry");
-    expect(await db((c) => store.open(c, did, thief, entry.id))).toBeNull();
-    await db((c) => store.openUpTo(c, did, thief, entry.id));
+    expect(await db((c) => store.dismiss(c, did, thief, [entry.id]))).toEqual([]);
+    await db((c) => store.dismissUpTo(c, did, thief, entry.id));
     expect(await list(did, laptop)).toHaveLength(1);
   });
 
@@ -132,30 +132,33 @@ describe("notification store", () => {
     expect(await list(did, gone)).toEqual([]);
   });
 
-  test("notifications.opening_deletes_only_that_entry_and_only_once", async () => {
+  test("notifications.dismissing_deletes_only_the_named_entries_and_only_once", async () => {
     const did = await member();
     const me = await browser(did);
     await send(did, { reason: "privacy_notice", topic: "v3", dedupeKey: "privacy_notice:v3" });
     await send(did, { reason: "sign_in" });
-    const [newest, older] = await list(did, me);
-    if (newest === undefined || older === undefined) throw new Error("two entries expected");
-    expect((await db((c) => store.open(c, did, me, older.id)))?.reason).toBe("privacy_notice");
-    expect(await db((c) => store.open(c, did, me, older.id))).toBeNull();
+    await send(did, { reason: "sign_in" });
+    const [newest, middle, older] = await list(did, me);
+    if (newest === undefined || middle === undefined || older === undefined) throw new Error("three entries expected");
+    const gone = await db((c) => store.dismiss(c, did, me, [older.id, middle.id]));
+    expect(gone.map((e) => e.reason).sort()).toEqual(["privacy_notice", "sign_in"]);
+    expect(await db((c) => store.dismiss(c, did, me, [older.id, middle.id]))).toEqual([]);
+    expect(await db((c) => store.dismiss(c, did, me, []))).toEqual([]);
     expect((await list(did, me)).map((e) => e.id)).toEqual([newest.id]);
   });
 
-  test("notifications.another_members_id_opens_nothing", async () => {
+  test("notifications.another_members_id_dismisses_nothing", async () => {
     const [alice, bob] = [await member(), await member()];
     const [aliceBrowser, bobBrowser] = [await browser(alice), await browser(bob)];
     await send(alice, { reason: "sign_in" });
     const [entry] = await list(alice, aliceBrowser);
     if (entry === undefined) throw new Error("no entry");
-    expect(await db((c) => store.open(c, bob, bobBrowser, entry.id))).toBeNull();
-    await db((c) => store.openUpTo(c, bob, bobBrowser, entry.id));
+    expect(await db((c) => store.dismiss(c, bob, bobBrowser, [entry.id]))).toEqual([]);
+    await db((c) => store.dismissUpTo(c, bob, bobBrowser, entry.id));
     expect(await list(alice, aliceBrowser)).toHaveLength(1);
   });
 
-  test("notifications.mark_all_covers_the_list_and_none_sent_after_it", async () => {
+  test("notifications.dismiss_all_covers_the_list_and_none_sent_after_it", async () => {
     const did = await member();
     const me = await browser(did);
     await send(did, { reason: "sign_in" });
@@ -164,10 +167,10 @@ describe("notification store", () => {
     if (newest === undefined) throw new Error("no entry");
     await new Promise((done) => setTimeout(done, 2));
     await send(did, { reason: "privacy_notice", topic: "v4", dedupeKey: "privacy_notice:v4" });
-    await db((c) => store.openUpTo(c, did, me, newest.id));
+    await db((c) => store.dismissUpTo(c, did, me, newest.id));
     expect(await reasons(did, me)).toEqual(["privacy_notice"]);
     // Again, or with an id already gone: nothing more.
-    await db((c) => store.openUpTo(c, did, me, newest.id));
+    await db((c) => store.dismissUpTo(c, did, me, newest.id));
     expect(await reasons(did, me)).toEqual(["privacy_notice"]);
   });
 
