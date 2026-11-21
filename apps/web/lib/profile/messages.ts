@@ -108,7 +108,7 @@ export const CARD_EDIT = {
     "card.url_invalid": "Use an http or https address, such as https://example.com.",
     "card.email_invalid": "That email address does not look right.",
     "card.too_long": "This is too long. Shorten it and save again.",
-    "card.invalid": "This could not be read. Check it and save again.",
+    "card.invalid": "This could not be read. Remove any hidden characters, check it and save again.",
   } as Readonly<Record<string, string>>,
 } as const;
 

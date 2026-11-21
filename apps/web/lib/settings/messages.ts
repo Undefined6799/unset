@@ -47,7 +47,7 @@ export const PROFILE_SETTINGS = {
   fieldError: {
     "profile.url_invalid": "Use an http or https address, such as https://example.com.",
     "profile.name_required": "Add a name before you save.",
-    "profile.invalid": "This could not be read. Use one line and save again.",
+    "profile.invalid": "This could not be read. Use one line of plain text, with no hidden characters, and save again.",
   } as Readonly<Record<string, string>>,
   unavailableTitle: "Your profile could not be loaded",
   unavailable: "Your sign-in server did not answer just now. Reload the page to try again.",

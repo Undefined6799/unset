@@ -16798,6 +16798,25 @@ its folder (today only `RENDER_ENTRIES.admin`) is listed there with its reason.
 
 ---
 
+### P1.38y — Refuse profile text the public page cannot show
+Tags: —            Depends on: —
+`domains/profile/` (member-text.ts, profile.ts, card-edit.ts) and the two refusal messages; staging break test
+2026-11-21, items 1, 4 and 5.
+
+**What:** a NUL in the profile's location was saved ("Profile saved."), and the index then left the whole record out,
+as `index-plan.ts` does with any string Postgres jsonb refuses (a NUL or a lone surrogate), so `/@handle` answered
+404 while the owner's own page still showed. Every profile field and card text field now refuses control characters
+(Unicode Cc; multi-line card text keeps line breaks and tabs) and lone surrogates when it is saved, and a stored
+field another client wrote with one reads as unset. The display name also refuses the bidirectional embeddings,
+overrides and isolates and the characters that draw nothing (UTS #36 spoofing); the joiners U+200C and U+200D stay,
+as Persian, the Indic scripts and emoji need them. Item 5 is the same gap: a 95 KB Text card saved (the lexicon allows
+100,000 bytes of text) but the index keeps records of at most 64 KiB (`MAX_RECORD_BYTES`), so the card never showed
+publicly. The save now checks every profile and card record it writes with the index's own `fitsIndex`, so what the
+owner can save and see is what the public page shows; a longer card is refused as too long. A tightening, so nothing
+is needed from Alex.
+
+---
+
 ### P1.38 — Phase 1 exit
 
 **Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
