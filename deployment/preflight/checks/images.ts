@@ -54,10 +54,14 @@ export const c2: Check = {
 
 /**
  * deployment/images/vendor.ts's VENDOR_IMAGES, which the preflight may not import (dependency-cruiser row
- * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z) and Newt (ADR 0030 Decision 2,
- * P1.37v). compose.dev.test.ts preflight_vendor_images_match keeps the two equal.
+ * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z), Newt (ADR 0030 Decision 2,
+ * P1.37v) and MAS (ADR 0098 Decision 1, P6.02). compose.dev.test.ts preflight_vendor_images_match keeps the two equal.
  */
-export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds", "docker.io/fosrl/newt"]);
+export const VENDOR_IMAGES: ReadonlySet<string> = new Set([
+  "ghcr.io/bluesky-social/pds",
+  "docker.io/fosrl/newt",
+  "ghcr.io/element-hq/matrix-authentication-service",
+]);
 
 /** Newt runs only under dev (P1.37v): a local stack has no tunnel, so its image may not stand in for any service. */
 const DEV_ONLY_VENDOR = "docker.io/fosrl/newt";

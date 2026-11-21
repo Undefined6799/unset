@@ -33,15 +33,18 @@ COPY --from=deps /app/shared /app/shared
 # The OAuth client the server composes (P2.04c) and what it stands on: the identity domain, the atproto adapter,
 # Postgres, sealing and net-guard, the session store sign-in writes to (P2.06), the audit writer the age gate
 # calls (P2.12), the profile domain the profile page and save route call (P2.20s), the notifications domain the
-# bell and its page call (P2.27), and the record validator.
+# bell and its page call (P2.27), the messaging domain and the chat-admin client chat sign-in and the queued
+# account create use (P6.05), and the record validator.
 # web_image_copies_every_workspace_the_server_reaches fails when one of them is missing.
 COPY --from=deps /app/domains/content /app/domains/content
 COPY --from=deps /app/domains/identity /app/domains/identity
+COPY --from=deps /app/domains/messaging /app/domains/messaging
 COPY --from=deps /app/domains/notifications /app/domains/notifications
 COPY --from=deps /app/domains/profile /app/domains/profile
 COPY --from=deps /app/infrastructure/audit /app/infrastructure/audit
 COPY --from=deps /app/infrastructure/email /app/infrastructure/email
 COPY --from=deps /app/infrastructure/image /app/infrastructure/image
+COPY --from=deps /app/infrastructure/matrix /app/infrastructure/matrix
 COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard
 COPY --from=deps /app/infrastructure/pds /app/infrastructure/pds
 COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres

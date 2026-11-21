@@ -114,7 +114,11 @@ export function devSiteMounts(compose: Compose, edgeDir: string): SiteMount[] | 
   const absent = sites.find((site) => !sourceExists(site.source));
   if (absent !== undefined) return missing(absent.source);
   if (sites.length === 0) return missing(`the edge's site mounts in ${SITES_TARGET}`);
-  return siteMountsProblem(sites, edgeDir, "dev") ?? sites;
+  const chat = sites.some((site) => site.name === CHAT_SITE);
+  if (chat && !CHAT_EDGE_NETWORKS.every((network) => edge.networks.includes(network))) {
+    return fail(`the chat site is mounted on an edge outside ${CHAT_EDGE_NETWORKS.join(" and ")}`);
+  }
+  return siteMountsProblem(sites, edgeDir, chat ? "dev-chat" : "dev") ?? sites;
 }
 
 /** The built docs, relative to the repository root: the Hugo site's output folder (docs/site/README.md). */
@@ -336,16 +340,26 @@ type SiteMount = { source: string; name: string };
 
 /** The dev edge's three sites, each from deployment/edge/dev/ under its own name (ADR 0032 Decision 3; P1.21w). */
 const DEV_SITES = ["app.caddy", "docs.caddy", "pds.caddy"];
+/**
+ * The chat site (P6.02), a fourth from dev/ on the source stack alone, whose edge joins the two networks its upstreams
+ * sit on (compose.dev.source.yaml; ADR 0093 decision 6). An edge on neither would dial the door's and Synapse's fixed
+ * addresses through its one outside network.
+ */
+const CHAT_SITE = "chat.caddy";
+const CHAT_EDGE_NETWORKS = ["chat_edge", "chat_edge_synapse"];
 /** The app site a local edge mounts from deployment/edge/local/ beside the shipped sites (P1.34a). */
 const LOCAL_APP_SITE = "app.caddy";
+/** Which sites a non-shipped edge mounts: local's, dev's three, or dev's with the chat site. */
+type SiteMode = "local" | "dev" | "dev-chat";
 
 /**
  * The folder under deployment/edge/ each site a local or dev edge mounts comes from, by the site's name, or why it
- * cannot be said: under dev exactly DEV_SITES from dev/; under local every sites/*.caddy from sites/ and the app site
- * from local/ (P1.34q; local-gaps Amendment 3 S2).
+ * cannot be said: under dev exactly DEV_SITES from dev/, with CHAT_SITE on the source stack; under local every
+ * sites/*.caddy from sites/ and the app site from local/ (P1.34q; local-gaps Amendment 3 S2).
  */
-function expectedSites(root: string, mode: "local" | "dev"): Map<string, string> | Outcome {
+function expectedSites(root: string, mode: SiteMode): Map<string, string> | Outcome {
   if (mode === "dev") return new Map(DEV_SITES.map((name) => [name, "dev"]));
+  if (mode === "dev-chat") return new Map([...DEV_SITES, CHAT_SITE].map((name) => [name, "dev"]));
   const expected = new Map<string, string>();
   for (const name of EDGE_FILES.list(join(root, "sites")).filter((n) => n.endsWith(".caddy"))) {
     expected.set(name, "sites");
@@ -360,7 +374,7 @@ function expectedSites(root: string, mode: "local" | "dev"): Map<string, string>
  * no name is mounted twice, and none is left out. The reader's mountedSites held this until P1.39e; it is a rule
  * about the compose file, so it stays C18's when the reader goes (ADR 0046, "C18's mount-source rules stay").
  */
-function siteMountsProblem(sites: readonly SiteMount[], edgeDir: string, mode: "local" | "dev"): Outcome | null {
+function siteMountsProblem(sites: readonly SiteMount[], edgeDir: string, mode: SiteMode): Outcome | null {
   const root = EDGE_FILES.realpath(edgeDir);
   if (root === null) return missing(edgeDir);
   const expected = expectedSites(root, mode);
@@ -369,7 +383,7 @@ function siteMountsProblem(sites: readonly SiteMount[], edgeDir: string, mode: "
   for (const { source, name } of sites) {
     if (EDGE_FILES.kind(source).type !== "file") return fail(`${name}: the mount is not one regular file`);
     const folder = expected.get(name);
-    if (folder === undefined) return fail(`${name}: not a site the ${mode} stack mounts`);
+    if (folder === undefined) return fail(`${name}: not a site the ${mode === "local" ? "local" : "dev"} stack mounts`);
     if (EDGE_FILES.realpath(source) !== join(root, folder, name)) {
       return fail(`${name}: not mounted from ${folder}/${name}`);
     }

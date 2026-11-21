@@ -1,0 +1,46 @@
+# The dev stack's chat site (P6.02; ADR 0025's chat name; ADR 0093 decision 6; ADR 0099; Alex 2026-11-21, "Yes, behind
+# Pangolin"): published like the app site, through Pangolin's login and Newt, so it binds the newt_edge address only,
+# serves the dev leaf (dev/tls.caddy) and is never indexed. Exactly two kinds of path go anywhere, each judged on the
+# request's decoded path before Caddy cleans it ({http.request.uri.path}, Caddy v2.11.9 replacer.go:186), so no dot
+# segment, empty segment or other spelling can name one upstream's path and reach the other's:
+#   - the Matrix client API, /_matrix/client/..., to Synapse's client listener (10.250.38.51:8008 on chat_edge_synapse;
+#     its only resource is `client`, deployment/chat/dev/homeserver.yaml). No /_synapse/, no federation, no media
+#     repository outside the client API, no /.well-known/: nothing routes to MAS or chat-admin (ADR 0093 decision 6).
+#   - the door's own routes (interfaces/chat-auth/door.ts GETS and compose.ts posts; ADR 0099 decision 1): the page at
+#     / and /sign-in/return, its built files under /assets/, a Message link /dm/<did>, the hop's /sign-in, and the
+#     POST routes, to the door's public listener (10.250.38.43:8090 on chat_edge). Its /health is not public. Also the
+#     routes the door gains on other branches: /welcome and /welcome/done (#1939, P6.17), /sign-out/return,
+#     POST /sign-out/redeem and /sign-out/done (#1950, P6.16); until they land the door answers its own 404 there.
+# Everything else is the edge's own 404. Only the edge's address reaches either upstream, as on every site.
+#
+# The door sets its own CSP on every answer (the page's in interfaces/chat-auth/page.ts pageCsp, the strict one on the
+# rest); Synapse sets one on its media and HTML. Any response that carries none, Synapse's JSON or the edge's 404,
+# gets strict-csp-default, so nothing on this origin is served without a policy. One read-only file bind at
+# /etc/caddy/sites/enabled/chat.caddy (ADR 0032 Decision 3).
+{$CHAT_HOST} {
+	bind 10.250.37.3
+	import tls
+	import access-log
+	import security-headers
+	import strict-csp-default
+	import too-many-tries
+	import noindex
+	route {
+		import chat-ratelimit
+		@matrix vars_regexp {http.request.uri.path} ^/_matrix/client(?:/[^/]*[^/.][^/]*)+/?$
+		route @matrix {
+			# No cookie reaches Synapse (review finding N3; ADR 0105 decision 6): the page sends its Matrix calls with
+			# same-origin credentials for Pangolin's login, which Pangolin checks before the edge, and that also sends the
+			# door's Path=/ cookies (interfaces/chat-auth/cookies.ts:21). Synapse reads only the bearer token. Caddy
+			# v2.11.9 request_header removes the field from the request before the proxy copies it
+			# (caddyfile/directives/request_header.md).
+			request_header -Cookie
+			import upstream {$MATRIX_UPSTREAM}
+		}
+		@door vars_regexp {http.request.uri.path} ^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$
+		route @door {
+			import upstream {$CHAT_UPSTREAM}
+		}
+		respond 404
+	}
+}

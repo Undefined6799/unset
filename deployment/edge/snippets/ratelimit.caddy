@@ -255,3 +255,29 @@
 		disable_metrics
 	}
 }
+
+# The dev chat site's zones (P6.02; dev/chat.caddy): new names, so no state is shared with another site. chat_signin
+# counts the two requests of each sign-in hop, GET /sign-in and POST /sign-in/redeem, and each sign-out hop's ticket,
+# POST /sign-out/redeem (#1950; ADR 0095 decision 5); chat_global, with no matcher, counts everything, the page, its
+# files and the Matrix client API alike. Behind the edge the door and Synapse see only the edge's address, so these are the per-client limits. Values as limits.json chatRateLimitZones
+# (edge_ratelimit_matches_limits; limits.budget.test.ts says why they fit).
+(chat-ratelimit) {
+	rate_limit {
+		zone chat_signin {
+			match {
+				path /sign-in /sign-in/redeem /sign-out/redeem
+			}
+			key {client_ip}
+			ipv6_prefix 64
+			events 20
+			window 5m
+		}
+		zone chat_global {
+			key {client_ip}
+			ipv6_prefix 64
+			events 6000
+			window 5m
+		}
+		disable_metrics
+	}
+}

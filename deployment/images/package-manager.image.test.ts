@@ -351,6 +351,18 @@ const DATABASE_BY_KIND = new Map([
     "objects",
     { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
   ],
+  // P6.02: the synapse kind's distroless base has no dpkg and keeps one status file, and one md5sums file, per package
+  // in status.d (gcr.io/distroless/python3-debian13 at 6c4cb3bf, read 2026-11-21); Trivy reads them there. libc6 is
+  // in every distroless Debian base, so its file stands for the index.
+  [
+    "synapse",
+    {
+      root: "/var/lib/dpkg",
+      data: /^status\.d\/(?![^/]*\.(?:preinst|postinst|prerm|postrm|config)$)[a-z0-9][a-z0-9.+-]*$/,
+      index: "status.d/libc6",
+      names: /^Package: /m,
+    },
+  ],
 ]);
 
 /** Every way a kind's package database holds more than inert data, or no longer names a package. */
@@ -385,6 +397,8 @@ const PRIVILEGES_BY_KIND = new Map<string, readonly string[]>([
   ["postgres", []],
   // objects.Dockerfile removes fuse, whose /bin/fusermount is the SeaweedFS base's only setuid file (4.53, checked).
   ["objects", []],
+  // The distroless Python base ships no setuid or setgid file (find -perm /6000 on 6c4cb3bf, 2026-11-21; P6.02).
+  ["synapse", []],
 ]);
 
 /** Every privilege in a listing: setuid and setgid files, and every member's extended attributes. */
@@ -610,6 +624,34 @@ describe("image package managers", () => {
     const linked = [...apk, ["hrw-r--r--", "lib/apk/db/triggers", " link to lib/apk/db/installed"] as const];
     expect(databaseProblems("edge", { entries: files(linked), text: () => "P:musl\n" })).toEqual([
       "/lib/apk/db/triggers is not on the edge list",
+    ]);
+    // P6.02: the synapse kind's distroless base keeps one status file and one md5sums file per package in status.d
+    // (gcr.io/distroless/python3-debian13 at 6c4cb3bf, read 2026-11-21), and its libc6 file names libc6.
+    const distroless = [
+      line("drwxr-xr-x", "var/lib/dpkg/"),
+      line("drwxr-xr-x", "var/lib/dpkg/status.d/"),
+      line("-rw-r--r--", "var/lib/dpkg/status.d/libc6"),
+      line("-rw-r--r--", "var/lib/dpkg/status.d/libc6.md5sums"),
+      line("-rw-r--r--", "var/lib/dpkg/status.d/python3.13-minimal"),
+      line("-rw-r--r--", "var/lib/dpkg/status.d/tzdata-legacy"),
+    ];
+    const libc6 = (text: string) => (path: string) => (path === "/var/lib/dpkg/status.d/libc6" ? text : "");
+    expect(databaseProblems("synapse", { entries: files(distroless), text: libc6("Package: libc6\n") })).toEqual([]);
+    expect(
+      databaseProblems("synapse", {
+        entries: files([
+          ...distroless,
+          line("-rw-r--r--", "var/lib/dpkg/status"),
+          line("-rwxr-xr-x", "var/lib/dpkg/status.d/x.postinst"),
+          line("-rw-r--r--", "var/lib/dpkg/status.d/sub/x"),
+        ]),
+        text: libc6(""),
+      }),
+    ).toEqual([
+      "/var/lib/dpkg/status is not on the synapse list",
+      "/var/lib/dpkg/status.d/x.postinst is not on the synapse list",
+      "/var/lib/dpkg/status.d/sub/x is not on the synapse list",
+      "/var/lib/dpkg/status.d/libc6 names no package",
     ]);
     expect(databaseProblems("other", { entries: [], text: () => "" })).toEqual([
       "the other kind has no package-database list",

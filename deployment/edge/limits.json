@@ -86,5 +86,15 @@
       "events": 6000,
       "window": "5m"
     }
+  },
+  "chatRateLimitZones": {
+    "chat_signin": {
+      "events": 20,
+      "window": "5m"
+    },
+    "chat_global": {
+      "events": 6000,
+      "window": "5m"
+    }
   }
 }

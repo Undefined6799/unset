@@ -23,12 +23,17 @@ const limits = JSON.parse(readFileSync(join(import.meta.dirname, "limits.json"),
   rateLimitZones: Record<string, Zone>;
   appRateLimitZones: Record<string, Zone>;
   docsRateLimitZones: Record<string, Zone>;
+  chatRateLimitZones: Record<string, Zone>;
 };
 
 const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
 
 function zone(name: string): { events: number; windowMs: number } {
-  const found = limits.appRateLimitZones[name] ?? limits.rateLimitZones[name] ?? limits.docsRateLimitZones[name];
+  const found =
+    limits.appRateLimitZones[name] ??
+    limits.rateLimitZones[name] ??
+    limits.docsRateLimitZones[name] ??
+    limits.chatRateLimitZones[name];
   const parts = found?.window.match(/^(\d+)([smh])$/);
   if (found === undefined || parts === null || parts === undefined) throw new Error(`no zone ${name} in limits.json`);
   return { events: found.events, windowMs: Number(parts[1]) * (UNIT_MS[parts[2] ?? ""] ?? Number.NaN) };
@@ -216,4 +221,48 @@ describe("docs_global", () => {
   });
 
   test("a_flood_one_past_docs_global_is_refused", () => expectFloodRefused("docs_global"));
+});
+
+// The chat site (P6.02; dev/chat.caddy): chat_global counts every request to staging.unset.cc, the page, its files and
+// the Matrix client API; chat_signin the two requests of each sign-in hop, GET /sign-in and POST /sign-in/redeem, and
+// the one of each sign-out hop, POST /sign-out/redeem (one per unset.sh Log out, well inside the 20). The
+// door and Synapse see only the edge's address, so these are the only per-client limits in front of them.
+//
+// What one member's browser sends, estimated high (not measured): a cold page is the document and its content-hashed
+// files (apps/chat's Vite build: scripts, the stylesheet, the crypto WASM and the fonts; 8 here), then the client
+// starts (apps/chat/matrix/client.ts, matrix-js-sdk 43.0.0 startClient with lazyLoadMembers): versions, capabilities,
+// push rules, the filter, the first sync, the crypto's key upload and query, the backup version and account data, 20
+// here. After that the sync is a long poll of 30 s (matrix-js-sdk 43.0.0 src/sync.ts:189, pollTimeout) that answers
+// early whenever something arrives, so a busy conversation costs about one request per message received and, per
+// message sent, the send itself, two typing notices and a read receipt.
+describe("chat zones", () => {
+  const COLD_START = 28;
+  /** One member: a cold start, then `minutes` of a conversation with a message each way every `everyMs`. */
+  const member = (minutes: number, everyMs: number, from = 0) => {
+    const start = Array(COLD_START).fill(from) as number[];
+    const turns = Math.round((minutes * 60_000) / everyMs);
+    const talk = Array.from({ length: turns }, (_, k) => {
+      const at = from + 2_000 + k * everyMs;
+      return [at, at + 100, at + 200, at + 300, at + 400, at + 500, at + 600];
+    }).flat();
+    return [...start, ...talk];
+  };
+
+  test("a_member_chatting_fast_for_five_minutes_after_a_cold_start_passes", () => {
+    // A message each way every two seconds: 150 turns of seven requests.
+    expect(refusedIn("chat_global", member(5, 2_000))).toBe(0);
+  });
+
+  test("five_people_behind_one_address_each_chatting_every_three_seconds_pass", () => {
+    const office = [0, 700, 1_400, 2_100, 2_800].map((offset) => member(5, 3_000, offset));
+    expect(refusedIn("chat_global", together(...office))).toBe(0);
+  });
+
+  test("five_people_behind_one_address_each_reloading_the_page_twice_in_five_minutes_pass", () => {
+    // A reload loses the session and runs the hop again (ADR 0099 consequences): GET /sign-in, then the redeem.
+    const person = (offset: number) => [offset, offset + 1_000, offset + 120_000, offset + 121_000];
+    expect(refusedIn("chat_signin", together(...[0, 10_000, 20_000, 30_000, 40_000].map(person)))).toBe(0);
+  });
+
+  test.each(["chat_global", "chat_signin"])("a_flood_one_past_%s_is_refused", (name) => expectFloodRefused(name));
 });

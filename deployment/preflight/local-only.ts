@@ -40,6 +40,45 @@ export const SOURCE_ONLY_NETWORKS: ReadonlySet<string> = new Set([
   "review_web",
 ]);
 
+/**
+ * The chat servers and processes (P6.02 part 4; ADRs 0093, 0098, 0102) and their networks: staging runs them from the
+ * checkout only. Local has no chat server until its name is ruled (ADR 0098 Decision 2, so C36 refuses one there),
+ * and none of the four has a locked image, so they are in compose.dev.source.yaml alone: neither the image stack nor
+ * the local stack may run one. C17 leaves these rows and members out under dev without --source and under local, as
+ * it leaves the source-only ones out of the image stack; compose.dev.source.test.ts holds the source file to that.
+ */
+export const CHAT_SERVICES: ReadonlySet<string> = new Set(["synapse", "mas", "chat-admin", "chat-auth"]);
+export const CHAT_NETWORKS: ReadonlySet<string> = new Set([
+  "chat_db",
+  "chat_synapse_db",
+  "chat_mas",
+  "chat_admin_mas",
+  "chat_count",
+  "chat_admin",
+  "chat_admin_synapse",
+  "chat_edge",
+  "chat_edge_synapse",
+]);
+/** The secrets only the chat services and Postgres's chat-databases.sh read, so only the source file names them. */
+export const CHAT_SECRETS: ReadonlySet<string> = new Set([
+  "pg_synapse_password",
+  "pg_mas_password",
+  "synapse_pgpass",
+  "synapse_signing_key",
+  "synapse_macaroon_secret_key",
+  "synapse_form_secret",
+  "synapse_mas_secret",
+  "mas_pg_password",
+  "mas_synapse_secret",
+  "mas_chat_admin_client_secret",
+  "mas_encryption",
+  "mas_signing_key",
+  "chat_admin_client_secret",
+  "chat_admin_keys",
+  "chat_auth_seal_keyring",
+  "chat_auth_chat_admin_key",
+]);
+
 /** Whether a network belongs to the local stack alone: on the list, or named like the PLC's. */
 export const isLocalOnlyNetwork = (name: string): boolean => LOCAL_ONLY_NETWORKS.has(name) || name.startsWith("plc_");
 

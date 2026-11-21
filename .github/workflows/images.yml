@@ -154,6 +154,11 @@ jobs:
             const { generateKeyPairSync } = require("node:crypto");
             const key = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" });
             process.stdout.write(key);' > "$secrets/pds_admin_web_key"
+          # Build step 5: web's chat-admin signing key, Ed25519 PKCS#8 PEM; no chat-admin answers here.
+          docker run --rm --network none --entrypoint node "$APP_IMAGE" -e '
+            const { generateKeyPairSync } = require("node:crypto");
+            const key = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" });
+            process.stdout.write(key);' > "$secrets/chat_admin_web_key"
           # P1.21j: web's mark on its own PDS calls, 64 hex characters; no edge reads it here.
           openssl rand -hex 32 | tr -d '\n' > "$secrets/pds_web_key"
           # P2.21a: web's secret key for the draft image store, 64 hex characters; no store answers here.
@@ -175,6 +180,7 @@ jobs:
             -e PG_PASSWORD_FILE=/run/secrets/pg_password -e SEAL_KEYRING_FILE=/run/secrets/seal_keyring
             -e OAUTH_CLIENT_KEYS_FILE=/run/secrets/oauth_client_keys -e OAUTH_ACTIVE_KID=ci
             -e PDS_ADMIN_WEB_KEY_FILE=/run/secrets/pds_admin_web_key -e PDS_WEB_KEY_FILE=/run/secrets/pds_web_key
+            -e CHAT_ADMIN_WEB_KEY_FILE=/run/secrets/chat_admin_web_key
             -e OBJECT_STORE_SECRET_FILE=/run/secrets/objects_web)
           id="$(docker run -d "${app[@]}" "$APP_IMAGE")"
           for _ in $(seq 20); do
