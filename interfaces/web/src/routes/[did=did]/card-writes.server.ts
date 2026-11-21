@@ -246,10 +246,13 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
   ): Promise<{ ok: true; edits: CardEdit[] } | { ok: false; failed: CardWrite }> => {
     const out: CardEdit[] = [];
     for (const edit of edits) {
-      const published = await publish(edit.content, edit.key).catch(async (error: unknown) => {
+      let published: Awaited<ReturnType<typeof publish>>;
+      try {
+        published = await publish(edit.content, edit.key);
+      } catch (error) {
         await settle(held, [], false);
         throw error;
-      });
+      }
       if (!published.ok) {
         const refusal = published.failed;
         return { ok: false, failed: refusal.kind === "failed" ? { ...refusal, card: edit.key } : refusal };
