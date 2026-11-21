@@ -741,3 +741,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0081](0081-notifications-stay-until-dismissed.md)):** looking at a notification no longer deletes it; a member
   dismisses one, the selected or all, and every entry still goes at 30 days. Amends 0079 point 3. Proposed, awaiting
   Alex.
+- **Accounts domain split from identity (P2.00, 2026-11-21; own record:
+  [0087](0087-accounts-domain-split-from-identity.md)):** the membership rules (account record, onboarding, email
+  gate, legal versions, invites) move to `domains/accounts`; `domains/identity` keeps DID and handle verification,
+  and never imports `accounts`. Refactoring only, in small PRs. Proposed, awaiting Alex.
