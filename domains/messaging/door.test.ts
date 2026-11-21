@@ -47,7 +47,7 @@ function ticketFor(did = ALICE, user = USER_A, overrides: Record<string, unknown
 
 /** An in-memory browser list and a chat-admin that answers `mint` and records every call. */
 function ports(mint: MintOutcome | ((device: DeviceId | null) => MintOutcome) = { kind: "unavailable" }) {
-  const rows: { browser: BrowserKey; entry: BrowserEntry }[] = [];
+  const rows: { browser: BrowserKey; entry: BrowserEntry; sid: SessionRef }[] = [];
   const calls: string[] = [];
   let keys = 0;
   const same = (a: Uint8Array, b: Uint8Array) => Buffer.from(a).equals(Buffer.from(b));
@@ -55,12 +55,17 @@ function ports(mint: MintOutcome | ((device: DeviceId | null) => MintOutcome) = 
     find: async (browser, did) => rows.find((r) => same(r.browser, browser) && r.entry.did === did)?.entry ?? null,
     findDevice: async (browser, device) =>
       rows.find((r) => same(r.browser, browser) && r.entry.device === device)?.entry ?? null,
-    add: async (browser, entry) => {
+    add: async (browser, entry, sid) => {
       if (rows.some((r) => same(r.browser, browser) && r.entry.did === entry.did)) return "taken";
-      rows.push({ browser, entry });
+      rows.push({ browser, entry, sid });
       return "added";
     },
-    renew: async (entry) => rows.some((r) => r.entry.id === entry.id),
+    renew: async (entry, sid) => {
+      const row = rows.find((r) => r.entry.id === entry.id);
+      if (row !== undefined) row.sid = sid;
+      return row !== undefined;
+    },
+    signedInFrom: async (entry, sid) => rows.some((r) => r.entry.id === entry.id && r.sid === sid),
     remove: async (entry) => {
       const at = rows.findIndex((r) => r.entry.id === entry.id);
       if (at >= 0) rows.splice(at, 1);
@@ -305,6 +310,16 @@ describe("redeemForSignOut", () => {
   test("door.sign_out_redeem_other_user: a ticket naming another chat user for this member is refused", async () => {
     const { door, calls } = await signedInBrowser((device) => minted(device ?? "DEVICEAAAA"));
     expect(await redeemForSignOut(door, { ticket: ticketFor(ALICE, USER_B), browser: BROWSER, deadline })).toEqual({
+      kind: "refused",
+      code: "chat.ticket_refused",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  test("door.sign_out_redeem_other_session: a ticket from a session that did not sign this entry in is refused", async () => {
+    const { door, calls } = await signedInBrowser((device) => minted(device ?? "DEVICEAAAA"));
+    const ticket = ticketFor(ALICE, USER_A, { sid: "o".repeat(43) });
+    expect(await redeemForSignOut(door, { ticket, browser: BROWSER, deadline })).toEqual({
       kind: "refused",
       code: "chat.ticket_refused",
     });

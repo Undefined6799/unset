@@ -27,6 +27,7 @@ const ADD = `INSERT INTO door.browser (id, browser_hash, did, chat_user, web_ses
   VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (browser_hash, did) DO NOTHING`;
 const RENEW = `UPDATE door.browser SET web_session = $4, last_used_at = now()
  WHERE id = $1 AND did = $2 AND device_id = $3`;
+const SIGNED_IN_FROM = "SELECT 1 FROM door.browser WHERE id = $1 AND did = $2 AND web_session = $3";
 const REMOVE = "DELETE FROM door.browser WHERE id = $1 AND did = $2";
 const ANY = "SELECT 1 FROM door.browser WHERE browser_hash = $1 LIMIT 1";
 
@@ -68,6 +69,11 @@ export function createBrowserListStore(pool: Pool, sealer: Sealer): BrowserList 
     async renew(entry, sid, deadline) {
       const values = [entry.id, entry.did, entry.device, sid];
       const { rowCount } = await withClient(pool, deadline, (db) => db.query(RENEW, values));
+      return rowCount === 1;
+    },
+    async signedInFrom(entry, sid, deadline) {
+      const values = [entry.id, entry.did, sid];
+      const { rowCount } = await withClient(pool, deadline, (db) => db.query(SIGNED_IN_FROM, values));
       return rowCount === 1;
     },
     async remove(entry, deadline) {
