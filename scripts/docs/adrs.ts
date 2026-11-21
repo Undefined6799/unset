@@ -1,14 +1,15 @@
 // ADR records (P1.38y; ADR 0083). Each ADR file is the only text a pull request edits by hand for its decision: an
 // ADR from 0083 on carries its status in front matter, and each ADR from before has one frozen row in
-// legacy-index.md. The index is generated from both and never committed, so two ADR pull requests share no file.
+// legacy-index.yaml. The index is generated from both and never committed, so two ADR pull requests share no file.
 // `npm run adr:index` prints it.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 
 export const DECISIONS = "docs/human/decisions";
-/** The rows of the ADRs that came before front matter, copied once from the old index (ADR 0083); never edited. */
-export const LEGACY_INDEX = "legacy-index.md";
+/** The rows of the ADRs that came before front matter, copied once from the old index (ADR 0083); never edited.
+ * The docs site reads the same file (docs/site/layouts/_shortcodes/adr-index.html). */
+export const LEGACY_INDEX = "legacy-index.yaml";
 
 const STATUSES = ["Proposed", "Accepted", "Rejected"];
 const KEYS = ["status", "date", "step", "supersedes", "amends", "accepted"];
@@ -104,13 +105,18 @@ export function parseFrontMatter(
   return found.length > 0 ? { problems: found } : { value: doc as FrontMatter, problems: [] };
 }
 
-/** The frozen rows, by ADR number: the old README table, `| [NNNN](file) | decision | status |`, copied verbatim. */
+/** The frozen rows, by ADR number: a YAML list of `{adr, file, decision, status}`, each a string. */
 export function legacyRows(root: string): Map<string, LegacyRow> {
-  const text = readFileSync(join(root, DECISIONS, LEGACY_INDEX), "utf8");
-  const rows = [...text.matchAll(/^\| \[(\d{4})\]\(([^)]+)\) \| (.*) \| (.*) \|$/gm)];
-  return new Map(
-    rows.map(([, adr = "", file = "", decision = "", status = ""]) => [adr, { adr, file, decision, status }]),
+  const doc: unknown = parse(readFileSync(join(root, DECISIONS, LEGACY_INDEX), "utf8"));
+  const rows = Array.isArray(doc) ? doc : [];
+  const valid = rows.filter(
+    (r): r is LegacyRow =>
+      isRecord(r) &&
+      Object.keys(r).join() === "adr,file,decision,status" &&
+      [r.adr, r.file, r.decision, r.status].every((v) => typeof v === "string"),
   );
+  if (!Array.isArray(doc) || valid.length !== rows.length) throw new Error(`${LEGACY_INDEX} is not a list of rows`);
+  return new Map(valid.map((r) => [r.adr, r]));
 }
 
 /** The ADR files, `NNNN-title.md`, in number order. */

@@ -31,17 +31,18 @@ against 79.
    Accepted, `accepted` with `at` (UTC time), `head` (the commit Alex's line named), `line` (his line) and
    optionally `merged`. The file then has no `Status:` line: the front matter is the one place for it. The title is
    the `# NNNN — ` heading. `scripts/docs/adrs.ts` parses it, and the docs test refuses any other key or value.
-2. **The index is generated, not committed.** `npm run adr:index` prints it from the files. `README.md` keeps the
-   process text only and stops changing per ADR. The docs site page links to the folder and the command instead of
-   copying the table.
+2. **The index is generated, not committed.** `npm run adr:index` prints it from the files, and the docs site's
+   Decisions page builds the same table at each Hugo build (shortcode `adr-index`, reading the folder through two
+   mounts in `docs/site/hugo.yaml`), so publishing it needs no new step. `README.md` keeps the process text only and
+   stops changing per ADR.
 3. **The ADRs before 0083 keep one frozen row each.** Their index rows, statuses and notes, as they stood when this
-   landed, are in `legacy-index.md`. That file never changes again, and the check refuses any edit to it. An older
+   landed, are in `legacy-index.yaml`. That file never changes again, and the check refuses any edit to it. An older
    ADR still Proposed is accepted by adding front matter to its own file, which then wins over its row.
 4. **Supersession is written once, in the later ADR.** Once an ADR with `supersedes` or `amends` is accepted, the
    index shows it on the rows it names. The older file is not edited. The one-line "Status: Superseded by NNNN."
    edit of an older accepted ADR stays allowed as before; an accepted or rejected ADR with front matter never
    changes at all.
-5. **The 0001 log is closed.** Its last entry says so. From the commit where `legacy-index.md` first exists, the
+5. **The 0001 log is closed.** Its last entry says so. From the commit where `legacy-index.yaml` first exists, the
    check refuses any change to ADR 0001.
 6. **Acceptance records touch one file.** The pull request after Alex's line fills in the `accepted` block of that
    one ADR. Nothing else changes for the typed line: a new ADR still needs Alex's line naming the reviewed head.
@@ -61,9 +62,10 @@ against 79.
 ## Consequences
 
 - Two ADR pull requests share no file, so a clean merge of main keeps its review.
-- Reading the index is a command, not a page on GitHub. The folder listing still shows every ADR by number and
-  title. The docs site can show the generated table once its publish has a build step; today it runs Hugo alone on
-  the staging host (docs/human/runbooks/docs-site.md), and a Node step there would be a new hand step for Alex.
+- The index is read on docs.unset.sh or with the command, no longer as a table on GitHub; the folder listing still
+  shows every ADR by number and title.
+- Two readers build the table: `adrIndex` in TypeScript (tested) and the Hugo shortcode. They read the same files
+  and apply the same rules; a change to one is made in the other in the same pull request.
 - A pull request that still edits the README table or appends to 0001 after this lands fails the docs test. Its
   author moves the row into the ADR's front matter instead.
 - The decision history that the 0001 log held is now kept in each ADR's own front matter.

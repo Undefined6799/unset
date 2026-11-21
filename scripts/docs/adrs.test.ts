@@ -30,7 +30,7 @@ function fixture(files: Record<string, string>): string {
   return root;
 }
 const legacy = (...rows: [string, string, string, string][]) =>
-  `# Frozen rows\n\n| # | Decision | Status |\n| --- | --- | --- |\n${rows.map(([n, file, decision, status]) => `| [${n}](${file}) | ${decision} | ${status} |\n`).join("")}`;
+  rows.map(([adr, file, decision, status]) => `- ${JSON.stringify({ adr, file, decision, status })}\n`).join("");
 const base = (extra: Record<string, string> = {}) =>
   fixture({
     [LEGACY_INDEX]: legacy(
@@ -95,7 +95,7 @@ describe("ADR set", () => {
   test("adr_set_refused", () => {
     const problems = (files: Record<string, string>) => adrProblems(base(files));
     expect(problems({ "0003-new.md": adr("0003", "New", null, "Status: Proposed.\n") })).toEqual([
-      "0003-new.md has no front matter and no row in legacy-index.md (ADR 0083)",
+      "0003-new.md has no front matter and no row in legacy-index.yaml (ADR 0083)",
     ]);
     expect(problems({ "0003-new.md": adr("0003", "New", PROPOSED, "Status: Proposed.\n") })).toEqual([
       "0003-new.md has a Status line as well as front matter",
@@ -114,9 +114,12 @@ describe("ADR set", () => {
       "two ADR files have the number 0003",
     ]);
     expect(problems({ notes: "x" })).toEqual(["notes is not named NNNN-title.md"]);
+    expect(problems({ [LEGACY_INDEX]: '- {adr: "0002", decision: "Old rule"}\n' })).toEqual([
+      "legacy-index.yaml is not a list of rows",
+    ]);
     const orphan = base();
     rmSync(join(orphan, DECISIONS, "0002-old.md"));
-    expect(adrProblems(orphan)).toEqual(["legacy-index.md row 0002 links 0002-old.md, which is not its file"]);
+    expect(adrProblems(orphan)).toEqual(["legacy-index.yaml row 0002 links 0002-old.md, which is not its file"]);
   });
 });
 

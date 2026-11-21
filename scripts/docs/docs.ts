@@ -9,6 +9,7 @@ import {
   frontMatterStatus,
   frontMatterText,
   LEGACY_INDEX,
+  type LegacyRow,
   legacyRows,
   parseFrontMatter,
 } from "./adrs.ts";
@@ -91,14 +92,19 @@ export function top15Problems(root: string): string[] {
 
 /**
  * Every ADR is `NNNN-title.md` with a number of its own and the DO-1 shape (0001 aside). An ADR from before 0083 has a
- * frozen row in legacy-index.md and a Status line; a later one carries valid front matter instead (ADR 0083).
+ * frozen row in legacy-index.yaml and a Status line; a later one carries valid front matter instead (ADR 0083).
  */
 export function adrProblems(root: string): string[] {
   const all = readdirSync(join(root, DECISIONS)).filter((f) => f !== "README.md" && f !== LEGACY_INDEX);
   const files = adrFiles(root);
   const numbers = files.map((f) => f.slice(0, 4));
   const adrs = new Set(numbers);
-  const legacy = legacyRows(root);
+  let legacy: Map<string, LegacyRow>;
+  try {
+    legacy = legacyRows(root);
+  } catch (error) {
+    return [(error as Error).message];
+  }
   const found = [
     ...all.filter((f) => !files.includes(f)).map((f) => `${f} is not named NNNN-title.md`),
     ...[...adrs]
@@ -163,14 +169,14 @@ export function adrChangeProblem(
     : `${file}: an accepted ADR may only change its status to "Superseded by NNNN" (an existing ADR)`;
 }
 
-/** legacy-index.md against its base text: added once by the cut-over (ADR 0083), then never changed or removed. */
+/** legacy-index.yaml against its base text: added once by the cut-over (ADR 0083), then never changed or removed. */
 export function legacyIndexProblem(before: string | null, after: string | null): string | null {
   return before === null || after === before ? null : `${LEGACY_INDEX} may not change (ADR 0083)`;
 }
 
 /**
  * Every ADR changed in the working tree since it left `base` (a git ref), checked with adrChangeProblem, and the
- * frozen legacy rows with legacyIndexProblem. The 0001 log counts as closed once the base holds legacy-index.md.
+ * frozen legacy rows with legacyIndexProblem. The 0001 log counts as closed once the base holds legacy-index.yaml.
  */
 export function adrImmutableProblems(root: string, base: string): string[] {
   const git = (...args: string[]) =>
