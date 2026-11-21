@@ -553,12 +553,11 @@ describe("C36 the door's and chat-admin's listeners", () => {
     "",
   ].join("\n");
   const NETWORKS = [
-    CHAT_NETWORKS,
-    "  chat_count:",
-    "    internal: true",
-    "    ipam:",
-    "      config:",
-    "        - subnet: 10.250.38.16/29",
+    // CHAT_NETWORKS already names chat_count (Synapse's networks); here it also carries its subnet.
+    CHAT_NETWORKS.replace(
+      "  chat_count:\n    internal: true\n",
+      "  chat_count:\n    internal: true\n    ipam:\n      config:\n        - subnet: 10.250.38.16/29\n",
+    ),
     "  chat_admin:",
     "    internal: true",
     "    ipam:",
@@ -626,10 +625,29 @@ describe("C36 the door's and chat-admin's listeners", () => {
 describe("C36 Synapse's networks", () => {
   // ADR 0091 decision 8 and ADR 0086 Decision 4: each client listener binds Synapse's fixed address on its networks.
   const EDGE = "  edge:\n    image: e\n    networks: [chat_edge_synapse]\n";
-  const ADMIN = "  chat-admin:\n    image: a\n    networks: [chat_admin_synapse, chat_admin_mas]\n";
+  // chat-admin also holds its own listener's address on chat_admin (the door's and chat-admin's listener check).
+  const ADMIN = [
+    "  chat-admin:",
+    "    image: a",
+    "    environment:",
+    "      LISTEN_ADDRESS: 10.250.38.27",
+    "    networks:",
+    "      chat_admin_synapse:",
+    "      chat_admin_mas:",
+    "      chat_admin:",
+    "        ipv4_address: 10.250.38.27",
+    "",
+  ].join("\n");
+  const ADMIN_NETWORK =
+    "  chat_admin:\n    internal: true\n    ipam:\n      config:\n        - subnet: 10.250.38.24/29\n";
 
   test("synapse_holds_each_listener_address_on_its_internal_network", async () => {
-    expect(await run(SYNAPSE_SERVICE + MAS_SERVICE + EDGE + ADMIN + OTHER)).toEqual({ pass: true, reason: "ok" });
+    expect(
+      await run(SYNAPSE_SERVICE + MAS_SERVICE + EDGE + ADMIN + OTHER, "dev", CHAT_NETWORKS + ADMIN_NETWORK),
+    ).toEqual({
+      pass: true,
+      reason: "ok",
+    });
     for (const [from, to, network] of [
       ["10.250.38.35", "10.250.38.36", "chat_admin_synapse"],
       ["10.250.38.51", "10.250.38.50", "chat_edge_synapse"],
