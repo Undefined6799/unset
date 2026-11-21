@@ -731,3 +731,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   notifications are one inbox with one send call and one reason table, gone once opened and at 30 days; a new
   sign-in's entry only the member's older browsers can clear, keeping its time only, which amends the "no sign-in
   records" rule for this one kind. Proposed, awaiting Alex.
+- **ADR 0079 accepted** (2026-11-21 00:38Z): Alex's line "Merge 1855 at e8dcaa5", given after that head was reviewed;
+  merged as d4e3599. Its status, index row and this line were added in the P2.27b pull request.
+- **Notifications stay until dismissed (P2.27b, 2026-11-21; own record:
+  [0081](0081-notifications-stay-until-dismissed.md)):** looking at a notification no longer deletes it; a member
+  dismisses one, the selected or all, and every entry still goes at 30 days. Amends 0079 point 3. Proposed, awaiting
+  Alex.

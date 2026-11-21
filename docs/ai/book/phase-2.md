@@ -2549,6 +2549,25 @@ in-place editing), email, push, live updates.
 Tags: [SEC]            Depends on: P2.27
 **What:** ADR 0079 point 5: the Settings › Privacy choice to keep opened notifications for 30 days instead of deleting
 them on open (a read time on the row, shown as read), inside the same 30-day ceiling.
+Overtaken by P2.27b (2026-11-21): under ADR 0081 opening deletes nothing, so every entry already stays until it is
+dismissed or 30 days old, and there is no choice left to offer. Not to be built unless Alex asks again.
+
+### P2.27b — Notifications: stay until dismissed, the full-window page
+Tags: [SEC]            Depends on: P2.27
+Alex 2026-11-21 00:15Z to 00:36Z, on the mock-up (https://claude.ai/artifact/QS2ByLohscteWE1HG4psPV): "perfect implement
+that". ADR 0081, Proposed; carries ADR 0079's acceptance record.
+
+**What:** opening a notification deletes nothing. `/notifications` fills the window below the header (the footer
+only on scrolling): dense rows with checkboxes beside the chosen entry's detail (when, kind, what to do, the reason's
+button, Dismiss). Dismiss selected and Dismiss all; `?/open` and `?/readAll` become `?/dismiss` (one or the ticked,
+at most 50) and `?/dismissAll`; the page's form limit 4 KB. With script: showing a row without a round trip, a split
+dragged or moved by arrow keys between 2/5 and 3/5 and kept on the device, a cut-off row lifted over the detail after
+0.4 s, never within 40 px of the split. Phone: the detail is its own screen at `?n=`. The bell's rows link to the
+detail; its count is what is waiting.
+**Tests:** the store and route tests rewritten for dismissing (denial, the new browser, the largest form, double and
+stale posts, the notice seen on dismiss), the domain's id parsing, tests/e2e/notifications.spec.ts (a seeded
+"inbox" member), the no-script page.
+**Not in this step:** the Sign-in history tab (P2.27c).
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
