@@ -122,18 +122,19 @@ test.describe("the bell's count", () => {
     member: "bell",
   };
 
-  test("comes_back_when_marking_it_seen_fails", async ({ page }) => {
-    // Every mark fails, as on a dropped connection, so this member's count is never stored as seen.
-    await page.route("**/notifications?/seen", (route) => route.abort("failed"));
-    const marked = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("?/seen"));
+  test("comes_back_when_marking_it_seen_fails", async ({ page, context }) => {
     expect((await openPage(page, BELL))?.status()).toBe(200);
     const bell = page.getByRole("button", { name: `Notifications, ${BELL_SIZE} waiting` });
     await page.waitForLoadState("networkidle"); // the client has run, so opening the bell marks it
+    // The browser loses its connection, so the mark it posts fails and nothing is stored. No request is intercepted
+    // (rule TE-2): the browser is only offline (Playwright BrowserContext.setOffline).
+    await context.setOffline(true);
+    const failed = page.waitForEvent("requestfailed", (request) => request.url().endsWith("?/seen"));
     await bell.click();
-    await marked;
-    // The mark was not stored, so the badge is back, and the next opening tries again.
-    await page.keyboard.press("Escape");
+    await failed;
+    // The badge is back, and the next opening tries again.
     await expect(bell).toBeVisible();
+    await context.setOffline(false);
   });
 });
 
