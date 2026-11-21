@@ -7,11 +7,17 @@
   to hand over a change still waiting for its frame, which the page runs before it builds a Save, and `onfocus` hands
   the page the way back into this card once the member types in it, so the page can return there after a Save.
   The editor's script loads as soon as the page is up; a press on the card before the editor is drawn opens it at
-  once, and the caret goes where the press was, with the keys typed meanwhile (P1.21r). A press on the card around
+  once, and the caret goes where the press was, with the keys typed meanwhile (P1.21r): only the card pressed last
+  keeps them, a press or focus anywhere else lets go, and the first key it cannot replay ends them. A press on the card around
   the words (its padding, below the last line) puts the caret at the nearest words. If the editor cannot load the
   blocks stay, with a line that says so. The parent remounts this component to throw the member's changes away
   (Discard).
 -->
+<script lang="ts" module>
+/** The one card holding an early press, and how to make it let go: a press on another card takes the press over. */
+let holder: (() => void) | undefined;
+</script>
+
 <script lang="ts">
 import { onDestroy, onMount, tick } from "svelte";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
@@ -44,8 +50,33 @@ let failed = $state(false);
 let listening = $state(false);
 let closed = false;
 let opening: Promise<void> | undefined;
-/** A press on the card before the editor was drawn, and the keys typed since: carried into the editor once it is. */
-let early: { x: number; y: number; typed: string } | undefined;
+/**
+ * A press on the card before the editor was drawn, and the keys typed since: carried into the editor once it is.
+ * `ended` is set by the first key it cannot replay; keys after that are not kept, so what reaches the editor is only
+ * ever what the member typed, in order.
+ */
+let early: { x: number; y: number; typed: string; ended: boolean } | undefined;
+
+/** Lets go of the early press: the member pressed or moved somewhere else, so nothing typed belongs to this card. */
+function letGo() {
+  early = undefined;
+  if (holder === letGo) holder = undefined;
+}
+
+/** Takes the early press for this card, so that only the card pressed last keeps keys. */
+function hold(x: number, y: number) {
+  if (holder !== letGo) holder?.();
+  holder = letGo;
+  early = { x, y, typed: "", ended: false };
+}
+
+/** A press or a move of focus outside this card ends its early press. */
+function elsewhere(event: Event) {
+  if (early === undefined || !(event.target instanceof Node)) return;
+  if (!(cardOf()?.contains(event.target) ?? false)) letGo();
+}
+
+const cardOf = () => host?.closest<HTMLElement>("[data-slot='card']") ?? host?.parentElement ?? undefined;
 
 /** Once the browser has nothing else to do: the page's own work and first paint come before the editor is drawn. */
 function whenIdle(run: () => void): () => void {
@@ -81,7 +112,7 @@ async function mount() {
   } catch {
     // The blocks stay, and the card's own form still edits it; the line says why the words cannot be typed in.
     failed = true;
-    early = undefined;
+    letGo();
   }
 }
 
@@ -93,7 +124,7 @@ const open = () => {
 function carryEarly(mounted: MarkdownEditor) {
   if (early === undefined) return;
   const { x, y, typed } = early;
-  early = undefined;
+  letGo();
   mounted.focusAt(x, y);
   if (typed !== "") mounted.type(typed);
 }
@@ -107,7 +138,7 @@ function pressed(event: PointerEvent) {
   if (editor === undefined) {
     if (event.target.closest("a") !== null) return;
     event.preventDefault();
-    early = { x: event.clientX, y: event.clientY, typed: "" };
+    hold(event.clientX, event.clientY);
     void open();
     return;
   }
@@ -116,9 +147,24 @@ function pressed(event: PointerEvent) {
   editor.focusAt(event.clientX, event.clientY);
 }
 
-/** Keys typed between an early press and the editor being drawn: letters and spaces, kept for the editor. */
+/** Keys a person types with no modifier that the editor gets back as typed: a character, a space. */
+const replayable = (event: KeyboardEvent) =>
+  event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing;
+
+/** Keys that change nothing on their own (a Shift held for a capital) and so neither end nor join the kept keys. */
+const MODIFIERS = new Set(["Shift", "CapsLock"]);
+
+/**
+ * Keys typed between an early press and the editor being drawn. A character is kept; the first key that is not one
+ * (Backspace, Enter, an arrow, a shortcut) ends the kept keys, since replaying the characters around it would give
+ * words the member never typed.
+ */
 function typedEarly(event: KeyboardEvent) {
-  if (early === undefined || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
+  if (early === undefined || early.ended || MODIFIERS.has(event.key)) return;
+  if (!replayable(event)) {
+    early.ended = true;
+    return;
+  }
   event.preventDefault();
   early.typed += event.key;
 }
@@ -128,13 +174,18 @@ onMount(() => {
   // The script is fetched now; the editor is drawn when the browser is idle, or at once when the member presses.
   void import("../../editor/milkdown.ts").catch(() => undefined);
   cancel = whenIdle(() => void open());
-  const card = host?.closest<HTMLElement>("[data-slot='card']") ?? host?.parentElement ?? undefined;
+  const card = cardOf();
   card?.addEventListener("pointerdown", pressed);
   addEventListener("keydown", typedEarly);
+  addEventListener("pointerdown", elsewhere, true);
+  addEventListener("focusin", elsewhere);
   listening = true;
   return () => {
     card?.removeEventListener("pointerdown", pressed);
     removeEventListener("keydown", typedEarly);
+    removeEventListener("pointerdown", elsewhere, true);
+    removeEventListener("focusin", elsewhere);
+    letGo();
   };
 });
 // Also on the server, where only `closed` matters: nothing else was set up there.

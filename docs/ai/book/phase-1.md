@@ -4933,7 +4933,9 @@ Found on staging in Brave and WebKit after #1857 deployed. The owner's public pa
 plain link back to the page they edit (/did); it runs no script, and the owner's copy is private and never stored, so
 no visitor's copy carries the link. The editor's script loads as soon as the page is up, and a press on a Text card
 before the editor is drawn opens it at once, with the caret where the press was and the keys typed meanwhile. A press
-before the page's own script runs stays the browser's. A press on the card around the words puts the caret at the
+before the page's own script runs stays the browser's. Only the card pressed last keeps those keys, a press or focus
+anywhere else lets go of them, and the first key it cannot replay (Backspace, Enter, an arrow) ends them (Codex on
+#1909). A press on the card around the words puts the caret at the
 nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
 member was typing. Tabbing into the words shows the same focus ring as every other field.
 

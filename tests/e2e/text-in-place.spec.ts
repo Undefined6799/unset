@@ -374,6 +374,64 @@ test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }
   await removeCard(page, word);
 });
 
+/** The own page opened while the editor's script is held, with every Text card listening and none drawn yet. */
+async function openHeld(page: Page) {
+  await holdEditorScript(page, { ms: 1500 });
+  // Not openOwnPage: its wait for a quiet network would wait out the held script.
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await expect(page.locator("[data-text-in-place]:not([data-listening])")).toHaveCount(0);
+  await expect(page.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+}
+
+// Codex on 46550e5: only the card pressed last takes the keys typed before the editors open, and a card lets go of
+// them once the member presses anywhere else.
+test("keys_typed_before_the_editor_opens_go_only_to_the_card_pressed_last", async ({ page }) => {
+  const first = `firstcard${Date.now()}`;
+  const second = `secondcard${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${first} start` });
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${second} start` });
+  await openHeld(page);
+  await page.getByText(`${first} start`).click();
+  await page.getByText(`${second} start`).click();
+  await page.keyboard.type("XY");
+  const one = await editorHolding(page, first);
+  const two = await editorHolding(page, second);
+  await expect(two.editor).toContainText("XY");
+  await expect(one.editor).toHaveText(`${first} start`);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  // A press outside every card lets go too.
+  await openHeld(page);
+  await page.getByText(`${first} start`).click();
+  await page.locator("main").click({ position: { x: 2, y: 2 } });
+  await page.keyboard.type("Z");
+  await expect((await editorHolding(page, first)).editor).toHaveText(`${first} start`);
+  await expect(page.getByText("unsaved changes")).toHaveCount(0);
+  await page.unroute("**/_app/immutable/**/*.js");
+  await removeCard(page, first);
+  await removeCard(page, second);
+});
+
+// Codex on 46550e5: a key the card cannot replay (Backspace, Enter, an arrow) ends the keys it keeps, so the words
+// that reach the editor are only ever ones the member typed in that order: "ab", Backspace, "c" never becomes "abc".
+test("a_key_typed_before_the_editor_opens_that_cannot_be_replayed_ends_the_kept_keys", async ({ page }) => {
+  const word = `replay${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openHeld(page);
+  await page.getByText(`${word} start`).click();
+  await page.keyboard.type("ab");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("c");
+  const { editor } = await editorHolding(page, word);
+  await expect(editor).toContainText("ab");
+  await expect(editor).not.toContainText("c");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await page.unroute("**/_app/immutable/**/*.js");
+  await removeCard(page, word);
+});
+
 test("a_click_on_the_card_around_the_words_puts_the_caret_in_them", async ({ page }) => {
   const word = `around${Date.now()}`;
   await openOwnPage(page);
