@@ -6,7 +6,11 @@
 //   DMRoomMap.getUserIdForRoomId, apps/web/src/utils/DMRoomMap.ts:172-192).
 // - An existing conversation with someone: as Element's findDMForUser (apps/web/src/utils/dm/findDMForUser.ts:30-95),
 //   a room from m.direct where this member has joined and exactly two people are joined or invited, one of them the
-//   other person; the most recently active wins.
+//   other person, and that is available (below); the most recently active wins.
+// - One-to-one and private (core/conversations.ts availableOf): the m.room.join_rules event itself, not
+//   Room.getJoinRule, which assumes `invite` when the event is missing (src/models/room-state.ts:1045-1049); and
+//   getInvitedAndJoinedMemberCount, which takes sync's room summary when there is one, so members lazy loading has
+//   not sent still count (room-state.ts:243-268; spec v1.18 #_matrixclientv3sync `summary`).
 // - Room kind (ADR 0085): encrypted when the room's m.room.encryption names Megolm (src/models/room.ts:4022-4026 reads
 //   the event; the algorithm check is ours, as src/rust-crypto/rust-crypto.ts:1811-1817 ignores any other).
 // - Messages: decrypted in place by the SDK, so an m.room.encrypted event either becomes its clear m.room.message or
@@ -16,6 +20,7 @@
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { EventType, type MatrixEvent, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
 import {
+  availableOf,
   type Conversation,
   type ConversationId,
   type ConversationKind,
@@ -58,6 +63,15 @@ export function kindOf(room: Room): ConversationKind {
   return encryption?.getContent().algorithm === MEGOLM ? "encrypted" : "not_encrypted";
 }
 
+/** Whether `room` is one-to-one and private, read from its join rule event and its member counts. */
+export function isAvailable(room: Room): boolean {
+  const joinRule: unknown = room.currentState.getStateEvents(EventType.RoomJoinRules, "")?.getContent().join_rule;
+  return availableOf({
+    joinRule: typeof joinRule === "string" ? joinRule : undefined,
+    people: room.getInvitedAndJoinedMemberCount(),
+  });
+}
+
 /** A direct room this member is in or invited to, as our Conversation; null for any other room. */
 export function toConversation(room: Room, direct: ReadonlyMap<string, string>): Conversation | null {
   const mine = room.getMyMembership();
@@ -68,14 +82,19 @@ export function toConversation(room: Room, direct: ReadonlyMap<string, string>):
     id: room.roomId as ConversationId,
     with: { id: other, name: nameOf(room.getMember(other)?.rawDisplayName, other) },
     kind: kindOf(room),
+    available: isAvailable(room),
     request: mine === KnownMembership.Invite,
     unread: room.getUnreadNotificationCount(NotificationCountType.Total),
     lastActiveAt: room.getLastActiveTimestamp(),
   };
 }
 
-export const otherJoined = (room: Room, other: string): boolean =>
-  room.getMember(other)?.membership === KnownMembership.Join;
+/** Where the other person stands in the room: joined, invited, or out (left, refused, banned, or never there). */
+export function otherMembership(room: Room, other: string): "join" | "invite" | "out" {
+  const membership = room.getMember(other)?.membership;
+  if (membership === KnownMembership.Join) return "join";
+  return membership === KnownMembership.Invite ? "invite" : "out";
+}
 
 const present = (membership: string | undefined) =>
   membership === KnownMembership.Join || membership === KnownMembership.Invite;
@@ -90,6 +109,7 @@ export function findDirect(
     .filter(([, userId]) => userId === other)
     .map(([roomId]) => getRoom(roomId))
     .filter((room): room is Room => room !== null && room.getMyMembership() === KnownMembership.Join)
+    .filter(isAvailable)
     .filter((room) => {
       const people = room.currentState.getMembers().filter((m) => present(m.membership));
       return people.length === 2 && people.some((m) => m.userId === other);

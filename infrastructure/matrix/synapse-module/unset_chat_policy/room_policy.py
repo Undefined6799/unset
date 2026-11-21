@@ -33,9 +33,20 @@ and spam_checker_callbacks.md):
   is cleartext), or exactly {msgtype: m.text, body}. A room of neither kind
   accepts nothing.
 
-Not covered, by Synapse's design: membership events (invite `reason`, extra
-content keys) go through room_member.py, which calls no spam callback; a server
-admin skips `user_may_create_room`, so may upgrade a room (room.py:1236).
+A room is for two people, for good. `on_create_room` takes exactly one invitee
+and only the private presets (private_chat, trusted_private_chat: join rule
+invite, spec v1.18 createRoom), so nobody can join uninvited. Membership
+reaches two spam callbacks (handlers/room_member.py): `user_may_invite` for
+every local invite, those in /createRoom included (:921), and
+`user_may_join_room` for every join but the creator's own (:1082). Both refuse
+a third person: anyone who has never had a membership event in the room, once
+two people have. Counting leave and ban too keeps a room that one person left
+from taking a new person who would then see its history.
+
+Not covered, by Synapse's design: the content of membership events (invite
+`reason`, extra keys) reaches no callback; a server admin skips
+`user_may_create_room`, `user_may_invite` and `user_may_join_room`, so may
+upgrade a room or add a person (room.py:1236); no chat account is an admin.
 Synapse never purges a room's newest event (storage/databases/main/
 purge_events.py:188), so a plain room keeps its newest expired message until a
 later one expires; the docs say it is hidden from clients after 30 days.
@@ -52,6 +63,9 @@ MEGOLM = "m.megolm.v1.aes-sha2"
 MEGOLM_REQUIRED = frozenset({"algorithm", "ciphertext", "session_id"})
 MEGOLM_OPTIONAL = frozenset({"sender_key", "device_id"})
 CREATE_ROOM_KEYS = frozenset({"preset", "is_direct", "invite", "initial_state"})
+PRIVATE_PRESETS = frozenset({"private_chat", "trusted_private_chat"})
+MEMBER = "m.room.member"
+ROOM_SIZE = 2
 PLAIN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
 RETENTION = "m.room.retention"
 ENCRYPTION = "m.room.encryption"
@@ -111,6 +125,8 @@ class RoomPolicy:
         api.register_spam_checker_callbacks(
             check_event_for_spam=self.check_event_for_spam,
             user_may_create_room=self.user_may_create_room,
+            user_may_invite=self.user_may_invite,
+            user_may_join_room=self.user_may_join_room,
         )
 
     async def on_create_room(
@@ -118,6 +134,11 @@ class RoomPolicy:
     ) -> None:
         if not frozenset(request_content) <= CREATE_ROOM_KEYS:
             raise refuse("only preset, is_direct, invite and initial_state are allowed")
+        if request_content.get("preset") not in PRIVATE_PRESETS:
+            raise refuse("a room is private_chat or trusted_private_chat")
+        invite = request_content.get("invite")
+        if not isinstance(invite, list) or len(invite) != 1 or not isinstance(invite[0], str):
+            raise refuse("a room starts with exactly one invitee")
         initial_state = request_content.get("initial_state", [])
         if initial_state == []:
             encryption = {"type": ENCRYPTION, "state_key": "", "content": {"algorithm": MEGOLM}}
@@ -130,6 +151,18 @@ class RoomPolicy:
         if not frozenset(room_config) <= CREATE_ROOM_KEYS:
             return Codes.FORBIDDEN
         return NOT_SPAM
+
+    async def user_may_invite(self, inviter: str, invitee: str, room_id: str) -> Verdict:
+        return await self.within_two(room_id, invitee)
+
+    async def user_may_join_room(self, user: str, room: str, is_invited: bool) -> Verdict:
+        return await self.within_two(room, user)
+
+    async def within_two(self, room_id: str, user: str) -> Verdict:
+        """Refuses `user` if they would be a third person with a membership event in the room."""
+        state = await self.api.get_room_state(room_id, [(MEMBER, None)])
+        people = {state_key for (kind, state_key) in state if kind == MEMBER} | {user}
+        return NOT_SPAM if len(people) <= ROOM_SIZE else Codes.FORBIDDEN
 
     async def check_event_for_spam(self, event: EventBase) -> Verdict:
         if event.is_state() or event.type == "m.room.redaction":

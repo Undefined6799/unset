@@ -81,7 +81,10 @@ async function send(page: Page, text: string): Promise<void> {
   await expect(messages(page)).toContainText(text);
 }
 
-/** Two members with keys saved, a conversation Alice started and Bob accepted, and one message each way. */
+/**
+ * Two members with keys saved, a conversation Alice started with a first message before Bob accepted (Alex,
+ * 2026-11-21: the asker writes along with the request), which Bob reads once he has, and one message each way after.
+ */
 async function talking(browser: Browser) {
   const alice = await stack.member(`alice${Date.now()}.unset.name`);
   const bob = await stack.member(`bob${Date.now()}.unset.name`);
@@ -91,13 +94,20 @@ async function talking(browser: Browser) {
   const aliceKey = await saveKey(a.page);
   await b.page.goto("https://unset.cc/");
   await saveKey(b.page);
-  await expect(conversation(a.page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 60_000 });
+  // The link opened a composer and made nothing; Alice's first Send makes the room and the request.
+  await expect(a.page.locator("[data-screen=new-conversation]")).toBeVisible({ timeout: 60_000 });
+  await a.page.locator("#message").fill("hello before you accept");
+  await a.page.getByRole("button", { name: "Send" }).click();
+  await expect(conversation(a.page)).toHaveAttribute("data-composer", "pending", { timeout: 60_000 });
+  await expect(messages(a.page)).toContainText("hello before you accept");
   const request = b.page.locator(`[data-request="${alice.userId}"]`);
   await expect(request).toContainText(alice.handle, { timeout: 60_000 });
   await expect(request.locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
   await request.getByRole("button", { name: "Accept" }).click();
-  await send(a.page, "hello from alice");
+  // Sent while Bob was only invited, and readable by him once he joined: the key went to his device as an invitee.
   await b.page.locator(`[data-conversation="${alice.userId}"]`).click();
+  await expect(messages(b.page)).toContainText("hello before you accept", { timeout: 60_000 });
+  await send(a.page, "hello from alice");
   await expect(messages(b.page)).toContainText("hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
@@ -127,8 +137,8 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   const timeline = chunk.filter(
     (e) => !e.type.startsWith("m.room.") || e.type === "m.room.encrypted" || e.type === "m.room.message",
   );
-  expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted"]);
-  expect(JSON.stringify(chunk)).not.toContain("hello from");
+  expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted", "m.room.encrypted"]);
+  expect(JSON.stringify(chunk)).not.toContain("hello");
   // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup,
   // opened at once: the first browser may not have uploaded the room's keys yet (it waits up to 10 s, matrix-js-sdk
   // 43.0.0 src/rust-crypto/backup.ts:70), and the page asks the backup again once it has (matrix/recovery.ts).

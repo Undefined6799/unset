@@ -2,24 +2,41 @@
   One conversation, part of the chat page's shell (ADR 0088; ADR 0055 point 2). The live timeline as the adapter maps
   it (matrix/conversations.ts toMessages): text, and a plain line for a message this browser cannot decrypt. Older
   messages load on request; the newest is marked read as it is shown. The composer is text only and stays off until
-  the other person has joined and encryption is on for the conversation in this browser (core/conversations.ts
-  composerOf); a conversation that is not encrypted is never sent in from this page (ADR 0085 decision 4).
+  encryption is on for the conversation in this browser (core/conversations.ts composerOf); while the other person has
+  not accepted it is pending and still sends, for them to read once they do. A conversation that is not encrypted is
+  never sent in from this page (ADR 0085 decision 4). `unsent` is a first message that did not go: it stays in the
+  field with the failure shown.
   Message text is the sender's own: Svelte escapes it, and nothing here renders markup.
 -->
 <script lang="ts">
-import type { Composer, ConversationId, Conversations, ConversationView } from "./core/conversations.ts";
+import {
+  type Composer,
+  type ConversationId,
+  type Conversations,
+  type ConversationView,
+  canSend,
+} from "./core/conversations.ts";
 import { Icon } from "./lib/components/icon/index.js";
 import * as Alert from "./lib/components/ui/alert/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
 
-let { conversations, id, onBack }: { conversations: Conversations; id: ConversationId; onBack: () => void } = $props();
+let {
+  conversations,
+  id,
+  onBack,
+  unsent = null,
+}: { conversations: Conversations; id: ConversationId; onBack: () => void; unsent?: string | null } = $props();
 
-let view: ConversationView | null = $state(null);
+let view = $state<ConversationView | null>(null);
 let loaded = $state(false);
-let text = $state("");
+// The first message that did not go, once, when the conversation opens; the field is the member's from then on.
+// svelte-ignore state_referenced_locally
+let text = $state(unsent ?? "");
 let sending = $state(false);
-let failed = $state(false);
+// svelte-ignore state_referenced_locally
+let failed = $state(unsent !== null);
+const sends = $derived(view !== null && canSend(view.composer));
 
 $effect(() =>
   conversations.watch(id, (next) => {
@@ -32,7 +49,8 @@ const WAITING: Record<Exclude<Composer, "on">, (name: string) => string> = {
   request: (name) => `${name} wants to talk. Accept to reply.`,
   gone: () => "You left this conversation.",
   not_encrypted: () => "This conversation is not encrypted, so you cannot send messages in it here.",
-  waiting_for_them: (name) => `You can write once ${name} accepts your request.`,
+  pending: (name) => `${name} has not accepted yet. They can read your messages once they do.`,
+  they_left: (name) => `${name} is not in this conversation.`,
   waiting_for_encryption: () => "Securing this conversation…",
 };
 
@@ -98,11 +116,11 @@ const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digi
       <Input
         id="message"
         autocomplete="off"
-        disabled={view.composer !== "on"}
+        disabled={!sends}
         aria-describedby={view.composer === "on" ? undefined : "composer-off"}
         bind:value={text}
       />
-      <Button type="submit" disabled={view.composer !== "on" || sending}>Send</Button>
+      <Button type="submit" disabled={!sends || sending}>Send</Button>
     </form>
     {#if view.composer !== "on"}
       <p id="composer-off" class="text-muted-foreground text-sm">{WAITING[view.composer](view.conversation.with.name)}</p>

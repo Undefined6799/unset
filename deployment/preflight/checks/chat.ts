@@ -54,6 +54,9 @@ function synapseSettings(serverName: string): Doc {
     limit_profile_requests_to_users_who_share_rooms: true,
     user_directory: { enabled: false },
     url_preview_enabled: false,
+    // No uploads: the media repository is off, so no media endpoint is served (config_documentation.md
+    // `enable_media_repo` at v1.165.0).
+    enable_media_repo: false,
     user_ips_max_age: "1d",
     // Build step 10 (ADR 0090 decision 2): the door's count port is the one private address a pusher may reach, and a
     // push names no body or sender; its count is of rooms (config_documentation.md `ip_range_whitelist`, `push`).
@@ -71,6 +74,8 @@ function synapseSettings(serverName: string): Doc {
 }
 const SYNAPSE_SECRET_PATHS = ["signing_key_path", "macaroon_secret_key_path", "form_secret_path"];
 const SYNAPSE_OTHER = ["database", "media_store_path", ...SYNAPSE_SECRET_PATHS];
+/** The connection and pool keys homeserver.yaml uses (config_documentation.md `database` at v1.165.0); no other. */
+const SYNAPSE_DATABASE_ARGS = ["host", "dbname", "user", "passfile", "sslmode", "cp_min", "cp_max"];
 
 /** MAS 1.26.0's settings that must be exactly these (build plan step 1, MAS table; ADR 0086 for the binds). */
 function masSettings(serverName: string): Doc {
@@ -124,6 +129,8 @@ export function synapseProblem(doc: unknown, serverName: string): string | null 
   if (!isDoc(database) || database.name !== "psycopg2" || !isDoc(database.args)) return why("database is not Postgres");
   if ("password" in database.args || !SECRET.test(String(database.args.passfile)))
     return why("database holds a password; it comes from a passfile");
+  if (keysOutside(database, ["name", "args"]) || keysOutside(database.args, SYNAPSE_DATABASE_ARGS))
+    return why("database is not its reviewed shape");
   return typeof doc.media_store_path === "string" ? null : why("media_store_path is not a path");
 }
 

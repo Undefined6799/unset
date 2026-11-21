@@ -1,8 +1,8 @@
 // The page's own rules for conversations (build step 9), as values: which chat ID the start route takes, and when the
-// composer is on. The composer stays off until the other person has joined and encryption is on in this browser's
-// crypto (the spike of 2026-11-20 sent plaintext right after createRoom otherwise).
+// composer is on. The composer stays off until encryption is on in this browser's crypto (the spike of 2026-11-20 sent
+// plaintext right after createRoom otherwise); while the other person is only invited it is pending and still sends.
 import { describe, expect, test } from "vitest";
-import { composerOf, nameOf, parseChatId, startTarget } from "./conversations.ts";
+import { availableOf, canSend, composerOf, nameOf, parseChatId, startTarget } from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -49,10 +49,14 @@ describe("startTarget", () => {
 });
 
 describe("composerOf", () => {
-  const on = { mine: "join", otherJoined: true, kind: "encrypted", encryptionOn: true } as const;
+  const on = { mine: "join", other: "join", kind: "encrypted", encryptionOn: true } as const;
 
   test("chat.composer_on: joined, the other person joined, an encrypted room with encryption on here", () => {
     expect(composerOf(on)).toBe("on");
+  });
+
+  test("chat.composer_pending: the other person is still invited, and messages may be sent for them to read", () => {
+    expect(composerOf({ ...on, other: "invite" })).toBe("pending");
   });
 
   test.each([
@@ -60,11 +64,35 @@ describe("composerOf", () => {
     [{ ...on, mine: "leave" }, "gone"],
     [{ ...on, kind: "not_encrypted" }, "not_encrypted"],
     [{ ...on, kind: "not_encrypted", encryptionOn: false }, "not_encrypted"],
-    [{ ...on, otherJoined: false }, "waiting_for_them"],
+    [{ ...on, kind: "not_encrypted", other: "invite" }, "not_encrypted"],
+    [{ ...on, other: "out" }, "they_left"],
+    [{ ...on, other: "out", encryptionOn: false }, "they_left"],
     [{ ...on, encryptionOn: false }, "waiting_for_encryption"],
-    [{ ...on, otherJoined: false, encryptionOn: false }, "waiting_for_them"],
+    [{ ...on, other: "invite", encryptionOn: false }, "waiting_for_encryption"],
   ] as const)("chat.composer_off: %o is %s", (facts, composer) => {
     expect(composerOf(facts)).toBe(composer);
+  });
+
+  test("chat.composer_sends: only on and pending send", () => {
+    const all = ["on", "pending", "request", "gone", "not_encrypted", "they_left", "waiting_for_encryption"] as const;
+    expect(all.filter(canSend)).toEqual(["on", "pending"]);
+  });
+});
+
+describe("availableOf", () => {
+  test("chat.available_one_to_one: two people at most, joined or invited, in a room only an invite lets in", () => {
+    expect(availableOf({ joinRule: "invite", people: 2 })).toBe(true);
+    expect(availableOf({ joinRule: "invite", people: 1 })).toBe(true);
+  });
+
+  test.each([
+    [{ joinRule: "invite", people: 3 }, "a third person"],
+    [{ joinRule: "public", people: 2 }, "a public room"],
+    [{ joinRule: "knock", people: 2 }, "a room one may knock on"],
+    [{ joinRule: "restricted", people: 2 }, "a room another room's members may join"],
+    [{ joinRule: undefined, people: 2 }, "no join rule seen"],
+  ] as const)("chat.available_refused: %o (%s) is unavailable", (facts, _reason) => {
+    expect(availableOf(facts)).toBe(false);
   });
 });
 
