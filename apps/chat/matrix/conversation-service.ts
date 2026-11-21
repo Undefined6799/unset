@@ -292,6 +292,8 @@ export function createConversations(
       });
       page.addEventListener("visibilitychange", readIfSeen);
       return () => {
+        latest++; // a read still under way paints nothing and marks nothing once the member has left
+        shown = false;
         stop();
         page.removeEventListener("visibilitychange", readIfSeen);
       };

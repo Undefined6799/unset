@@ -17,6 +17,8 @@ const OTHER = "@ucccccccccccccccccccc:unset.cc";
 const AWAY = "@udddddddddddddddddddd:unset.cc";
 const ROOM = "!a:unset.cc";
 const HIDDEN = "!h:unset.cc";
+const LEFT = "@ueeeeeeeeeeeeeeeeeeee:unset.cc";
+const LEAVES = "!l:unset.cc";
 const DELETES = "!d:unset.cc";
 
 const FAILS = "$refused";
@@ -86,8 +88,9 @@ beforeAll(async () => {
   storeRoom(ROOM, THEM, [event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body: "hi" } })]);
   storeRoom(DELETES, OTHER, [text("$mine1", ME), text("$theirs1", OTHER), text(FAILS, ME)]);
   storeRoom(HIDDEN, AWAY, [text("$away1", AWAY)]);
+  storeRoom(LEAVES, LEFT, [text("$left1", LEFT)]);
   client.store.storeAccountDataEvents([
-    event({ type: "m.direct", content: { [THEM]: [ROOM], [OTHER]: [DELETES], [AWAY]: [HIDDEN] } }),
+    event({ type: "m.direct", content: { [THEM]: [ROOM], [OTHER]: [DELETES], [AWAY]: [HIDDEN], [LEFT]: [LEAVES] } }),
   ]);
 }, 20_000);
 afterAll(() => client.stopClient());
@@ -132,6 +135,18 @@ describe("watch", () => {
     await expect.poll(() => receiptsIn(HIDDEN)).toBe(1);
     expect(requests.findLast((r) => r.path.includes("/receipt/"))?.path).toContain(encodeURIComponent("$away2"));
     stop();
+  });
+  test("chat.read_after_stop: a read still under way when the member leaves paints nothing and marks nothing", async () => {
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    const conversations = createConversations(client, crypto, ME, memory(), page("visible"));
+    let views = 0;
+    // The first read awaits the crypto's answers; the member leaves before they come.
+    const stop = conversations.watch(LEAVES as ConversationId, () => void views++);
+    stop();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(views).toBe(0);
+    expect(receiptsIn(LEAVES)).toBe(0);
   });
 });
 
