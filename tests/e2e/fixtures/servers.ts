@@ -230,6 +230,8 @@ function indexedMember(): string {
     displayName: "Public Member",
     headline: "On the open web",
     createdAt: at,
+    // The profile lists its card, so it shows (ADR 0086 point 3).
+    cards: [{ uri: `at://${INDEXED.did}/sh.unset.card/3jzfcijpj2z2a` }],
   };
   const did = INDEXED.did;
   return `
