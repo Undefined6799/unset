@@ -9,7 +9,10 @@ import { SENTINELS } from "./adapted.ts";
 import {
   type AdaptedEnv,
   adaptedProblems,
+  CHAT_DOOR_PATH,
+  CHAT_MATRIX_PATH,
   DEV_APP,
+  DEV_CHAT,
   DEV_DOCS,
   DEV_LISTENER,
   DEV_PROXY_ADDRESS,
@@ -28,15 +31,21 @@ const a = (value: Json | undefined): Json[] => value as Json[];
 const copy = (value: Json): Json => JSON.parse(JSON.stringify(value)) as Json;
 
 const PDS = { PDS_HOST: "pds.example.org", PDS_UPSTREAM: "pds:3000" } as const;
-const ENVS: Readonly<Record<EdgeMode, AdaptedEnv>> = {
+/** The envs with a reviewed config: each mode, and dev-chat, the source stack's dev edge with the chat site (P6.02). */
+type Case = EdgeMode | "dev-chat";
+const ENVS: Readonly<Record<Case, AdaptedEnv>> = {
   shipped: { ...PDS, ACME_EMAIL: "edge@example.org" },
   local: { ...PDS, APP_HOST: "app.example.org", APP_UPSTREAM: "web:8080" },
   dev: { ...PDS, ...DEV_APP, ...DEV_DOCS },
+  "dev-chat": { ...PDS, ...DEV_APP, ...DEV_DOCS, ...DEV_CHAT },
 };
-const FILES: Readonly<Record<EdgeMode, string>> = { shipped: "prod", local: "local", dev: "dev" };
+const FILES: Readonly<Record<Case, string>> = { shipped: "prod", local: "local", dev: "dev", "dev-chat": "dev-chat" };
+/** The mode the rules judge a case in: dev-chat is dev with the chat site's values set. */
+const modeOf = (each: Case): EdgeMode => (each === "dev-chat" ? "dev" : each);
+const CASES = ["shipped", "local", "dev", "dev-chat"] as const;
 
 /** What Caddy adapts for `mode` with ENVS' values: the reviewed text with each sentinel replaced. */
-function adapted(mode: EdgeMode): Json {
+function adapted(mode: Case): Json {
   const text = readFileSync(join(EDGE, "adapted", `${FILES[mode]}.generated.json`), "utf8");
   const names = Object.keys(ENVS[mode]) as EnvName[];
   return JSON.parse(names.reduce((out, name) => out.replaceAll(SENTINELS[name], ENVS[mode][name] as string), text));
@@ -81,7 +90,7 @@ const respond = (status: number): Json => ({ handler: "static_response", status_
 const routeNamed = (config: Json, host: string, text: string): number =>
   inner(config, host).findIndex((route) => JSON.stringify(route).includes(text));
 
-type Red = readonly [what: string, mode: EdgeMode, change: (config: Json) => void, reason: string];
+type Red = readonly [what: string, mode: Case, change: (config: Json) => void, reason: string];
 
 // The too-many-tries error route of a site (snippets/too-many-tries.caddy), and the three routes inside it: the
 // navigation's Content-Type, the headers every 429 gets, and the page.
@@ -1241,6 +1250,118 @@ const DOCS_REDS: readonly Red[] = [
   ],
 ];
 
+/**
+ * The chat site (P6.02; ADR 0081 decision 6, ADR 0088): its headers, its zones, the Matrix client API to Synapse and
+ * the door's routes to the door, each whole, and the edge's own 404 for everything else.
+ */
+const CHAT = DEV_CHAT.CHAT_HOST;
+const chatRoute = (c: Json, at: number): Obj => o(inner(c, CHAT)[at]);
+const chatPattern = (c: Json, at: number): Obj =>
+  o(o(o(a(chatRoute(c, at).match)[0]).vars_regexp)["{http.request.uri.path}"]);
+const chatProxy = (c: Json, at: number): Obj => o(a(o(a(o(a(chatRoute(c, at).handle)[0]).routes)[0]).handle)[0]);
+const CHAT_REDS: readonly Red[] = [
+  [
+    "a chat site that routes all of /_matrix/",
+    "dev-chat",
+    (c) => void Object.assign(chatPattern(c, 1), { pattern: "^/_matrix/" }),
+    "{$CHAT_HOST}: the Matrix route is not the ruled one",
+  ],
+  [
+    "a chat site that routes /_synapse/ to Synapse",
+    "dev-chat",
+    (c) => void Object.assign(chatPattern(c, 1), { pattern: "^/_(?:matrix/client|synapse)(?:/[^/]*[^/.][^/]*)+/?$" }),
+    "{$CHAT_HOST}: the Matrix route is not the ruled one",
+  ],
+  [
+    "a chat site that cleans the Matrix path before it matches",
+    "dev-chat",
+    (c) => void Object.assign(chatRoute(c, 1), { match: [{ path: ["/_matrix/client/*"] }] }),
+    "{$CHAT_HOST}: the Matrix route is not the ruled one",
+  ],
+  [
+    "a chat site that sends the door's paths to Synapse",
+    "dev-chat",
+    (c) => void Object.assign(chatProxy(c, 2), { upstreams: [{ dial: DEV_CHAT.MATRIX_UPSTREAM }] }),
+    "{$CHAT_HOST}: the door route is not the ruled one",
+  ],
+  [
+    "a chat site that opens the door's health route",
+    "dev-chat",
+    (c) =>
+      void Object.assign(chatPattern(c, 2), {
+        pattern: String(chatPattern(c, 2).pattern).replace("chat-id", "chat-id|health"),
+      }),
+    "{$CHAT_HOST}: the door route is not the ruled one",
+  ],
+  [
+    "a chat upstream that passes the client address",
+    "dev-chat",
+    (c) => void delete o(o(chatProxy(c, 1).headers).request).delete,
+    "{$CHAT_HOST}: the Matrix route is not the ruled one",
+  ],
+  [
+    "a chat upstream that passes the client address header",
+    "dev-chat",
+    (c) => void a(o(o(chatProxy(c, 2).headers).request).delete).shift(),
+    "{$CHAT_HOST}: the door route is not the ruled one",
+  ],
+  [
+    "a chat site that sends everything else to the door",
+    "dev-chat",
+    (c) => void inner(c, CHAT).splice(3, 1, { handle: [copy(chatProxy(c, 2))] }),
+    "{$CHAT_HOST}: the route is not the zones, the Matrix route, the door route, then 404",
+  ],
+  [
+    "a chat site with a fifth route",
+    "dev-chat",
+    (c) => void inner(c, CHAT).splice(3, 0, { handle: [respond(200)] }),
+    "{$CHAT_HOST}: the route is not the zones, the Matrix route, the door route, then 404",
+  ],
+  [
+    "a chat site that skips its zones",
+    "dev-chat",
+    (c) => void inner(c, CHAT).shift(),
+    "{$CHAT_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a chat zone that counts less",
+    "dev-chat",
+    (c) => void Object.assign(o(zones(c, CHAT).chat_global), { max_events: 30 }),
+    "{$CHAT_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a chat site without the default policy",
+    "dev-chat",
+    (c) => void site(c, CHAT).splice(2, 1),
+    "{$CHAT_HOST}: the site's headers are not the ruled ones",
+  ],
+  [
+    "a chat site without noindex",
+    "dev-chat",
+    (c) => void site(c, CHAT).splice(3, 1),
+    "{$CHAT_HOST}: the site's headers are not the ruled ones",
+  ],
+  [
+    "a chat site that sets its own policy over the door's",
+    "dev-chat",
+    (c) =>
+      void Object.assign(o(site(c, CHAT)[2]), { response: { set: { "Content-Security-Policy": ["default-src *"] } } }),
+    "{$CHAT_HOST}: the site's headers are not the ruled ones",
+  ],
+  [
+    "the chat default policy on the app site",
+    "dev-chat",
+    (c) => void site(c, APP_DEV).unshift(copy(site(c, CHAT)[2] as Json)),
+    "changes a Content-Security-Policy outside pds-fonts",
+  ],
+  [
+    "the chat host on a local edge",
+    "local",
+    (c) => void Object.assign(siteRoute(c, APP_LOCAL), { match: [{ host: [DEV_CHAT.CHAT_HOST] }] }),
+    "the public server holds a site other than the env's own",
+  ],
+];
+
 const REDS: readonly Red[] = [
   ...REVIEW,
   ...SHAPE,
@@ -1253,17 +1374,18 @@ const REDS: readonly Red[] = [
   ...TOO_MANY_TRIES,
   ...STRAY,
   ...DOCS_REDS,
+  ...CHAT_REDS,
 ];
 const changed = ([, mode, change]: Red): string[] => {
   const config = adapted(mode);
   change(config);
-  return adaptedProblems(config, mode, ENVS[mode]);
+  return adaptedProblems(config, modeOf(mode), ENVS[mode]);
 };
 
 describe("edge rules on the adapted config (P1.39b)", () => {
   test("rules_pass_each_reviewed_config", () => {
-    for (const mode of ["shipped", "local", "dev"] as const) {
-      expect(adaptedProblems(adapted(mode), mode, ENVS[mode]), mode).toEqual([]);
+    for (const mode of CASES) {
+      expect(adaptedProblems(adapted(mode), modeOf(mode), ENVS[mode]), mode).toEqual([]);
     }
   });
 
@@ -1271,13 +1393,13 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     // The page's words (Alex 2026-11-19, "yes good idea with adding a page"): wait, a way home, and no number, so it
     // tells nobody a zone's size or window. The same page on every site of every env, so the words fit every zone:
     // app_burst frees in seconds (P1.20o: a member pressing Settings and Profile fast met it), app_signin in minutes.
-    const bodies = (["shipped", "local", "dev"] as const).flatMap((mode) =>
+    const bodies = CASES.flatMap((mode) =>
       errorRoutes(adapted(mode)).map((route) =>
         String(page(adapted(mode), String(a(o(a(o(route).match)[0]).host)[0])).body),
       ),
     );
-    // One site under prod, two under local, three under dev (the docs site, P1.21w).
-    expect(bodies.length).toBe(6);
+    // One site under prod, two under local, three under dev (the docs site, P1.21w), four with the chat site (P6.02).
+    expect(bodies.length).toBe(10);
     expect(new Set(bodies).size).toBe(1);
     const words = String(bodies[0])
       .replace(/<style>[^<]*<\/style>/, "")
@@ -1292,7 +1414,7 @@ describe("edge rules on the adapted config (P1.39b)", () => {
   test("too_many_tries_csp_allows_exactly_the_page_style", () => {
     // The rules judge the CSP's shape; here its hash is the SHA-256 of the reviewed page's one style (CSP Level 3,
     // "hash-source"), so the browser applies that style and nothing else, on every site of every env.
-    for (const mode of ["shipped", "local", "dev"] as const) {
+    for (const mode of CASES) {
       const config = adapted(mode);
       for (const route of errorRoutes(config)) {
         const host = String(a(o(a(o(route).match)[0]).host)[0]);
@@ -1306,11 +1428,11 @@ describe("edge rules on the adapted config (P1.39b)", () => {
   });
 
   test("rules_pass_whatever_order_caddy_gives_the_two_sites", () => {
-    for (const mode of ["local", "dev"] as const) {
+    for (const mode of ["local", "dev", "dev-chat"] as const) {
       const config = adapted(mode);
       a(publicServer(config).routes).reverse();
       a(o(o(a(publicServer(config).tls_connection_policies)[0]).match).sni).reverse();
-      expect(adaptedProblems(config, mode, ENVS[mode]), mode).toEqual([]);
+      expect(adaptedProblems(config, modeOf(mode), ENVS[mode]), mode).toEqual([]);
     }
   });
 
@@ -1319,6 +1441,10 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     expect(adaptedProblems(adapted("shipped"), "local", ENVS.local)).not.toEqual([]);
     expect(adaptedProblems(adapted("local"), "dev", ENVS.local)).not.toEqual([]);
     expect(adaptedProblems(adapted("dev"), "local", ENVS.dev)).not.toEqual([]);
+    // The chat site without its values in the env (P6.02): a site other than the env's own.
+    expect(adaptedProblems(adapted("dev-chat"), "dev", ENVS.dev)).toContain(
+      "the public server holds a site other than the env's own",
+    );
   });
 
   test("rules_fail_values_that_do_not_fit", () => {
@@ -1333,6 +1459,26 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     fails("local", { ...ENVS.local, APP_UPSTREAM: PDS.PDS_UPSTREAM }, "{$APP_UPSTREAM} equals {$PDS_UPSTREAM}");
     fails("dev", { ...ENVS.dev, APP_HOST: "app.example.org" }, "{$APP_HOST} is not the dev app site's ruled value");
     fails("dev", { ...ENVS.dev, APP_UPSTREAM: "web:8081" }, "{$APP_UPSTREAM} is not the dev app site's ruled value");
+    const chat = ENVS["dev-chat"];
+    fails("dev", { ...chat, CHAT_HOST: "chat.example.org" }, "{$CHAT_HOST} is not the dev chat site's ruled value");
+    fails(
+      "dev",
+      { ...chat, CHAT_UPSTREAM: "chat-auth:8090" },
+      "{$CHAT_UPSTREAM} is not the dev chat site's ruled value",
+    );
+    fails(
+      "dev",
+      { ...chat, MATRIX_UPSTREAM: "synapse:8008" },
+      "{$MATRIX_UPSTREAM} is not the dev chat site's ruled value",
+    );
+    fails(
+      "dev",
+      { ...ENVS.dev, CHAT_UPSTREAM: DEV_CHAT.CHAT_UPSTREAM },
+      "{$CHAT_HOST} and its two upstreams are not set together",
+    );
+    fails("local", { ...ENVS.local, ...DEV_CHAT }, "{$CHAT_HOST} is set outside dev");
+    // The chat site's values with the plain dev config: the env names a site the config does not hold.
+    fails("dev", chat, "{$CHAT_HOST}: no site");
     // The sentinels the reviewed files hold are no dev app values either.
     fails("dev", { ...ENVS.dev, APP_HOST: SENTINELS.APP_HOST }, "{$APP_HOST} is not the dev app site's ruled value");
   });
@@ -1385,6 +1531,66 @@ describe("edge rules on the adapted config (P1.39b)", () => {
         "{$DOCS_HOST}: the site's headers are not the ruled ones",
       );
     }
+  });
+
+  test("chat_paths_reach_only_the_ruled_upstream", () => {
+    // P6.02 (ADR 0081 decision 6, ADR 0088): each pattern is judged on the decoded path before Caddy cleans it, so a
+    // dot segment or an empty segment never names a path under /_matrix/client/ that Synapse would read as another.
+    // Both are RE2 in Caddy and plain here; neither uses a feature where the two differ.
+    const matrix = new RegExp(CHAT_MATRIX_PATH);
+    const door = new RegExp(CHAT_DOOR_PATH);
+    const toSynapse = [
+      "/_matrix/client/versions",
+      "/_matrix/client/v3/sync",
+      "/_matrix/client/v3/rooms/!r:staging.unset.cc/send/m.room.encrypted/t1",
+      "/_matrix/client/v3/rooms/!r:staging.unset.cc/state/m.room.encryption/",
+      "/_matrix/client/v1/media/download/staging.unset.cc/abc",
+      "/_matrix/client/v3/keys/query",
+    ];
+    const toDoor = [
+      "/",
+      "/sign-in",
+      "/sign-in/return",
+      "/sign-in/redeem",
+      "/sign-out",
+      "/setup/claim",
+      "/setup/release",
+      "/push/key",
+      "/chat-id",
+      "/assets/index-AbC_12.js",
+      "/assets/matrix_sdk_crypto_wasm_bg-Xy9.wasm",
+      "/dm/did:plc:abcdefghijklmnopqrstuvwx",
+      "/dm/did:web:example.com:8080",
+    ];
+    const nowhere = [
+      "/health",
+      "/_synapse/admin/v1/users",
+      "/_synapse/client/new_user_consent",
+      "/_synapse/mas/is_localpart_available",
+      "/_matrix/federation/v1/version",
+      "/_matrix/key/v2/server",
+      "/_matrix/media/v3/download/staging.unset.cc/abc",
+      "/_matrix/client",
+      "/_matrix/client/",
+      "/_matrix/client/../../_synapse/admin/v1/users",
+      "/_matrix/client/v3/../../../_synapse/admin",
+      "/_matrix/client/./v3/sync",
+      "/_matrix/client//v3/sync",
+      "/.well-known/matrix/client",
+      "/.well-known/matrix/server",
+      "/sign-in/",
+      "/sign-in/other",
+      "/assets/",
+      "/assets/../sign-out",
+      "/assets/a/b.js",
+      "/dm/",
+      "/dm/did:plc:a/../../sign-out",
+      "/SIGN-IN",
+      "/oauth/callback",
+    ];
+    for (const path of toSynapse) expect([matrix.test(path), door.test(path)], path).toEqual([true, false]);
+    for (const path of toDoor) expect([matrix.test(path), door.test(path)], path).toEqual([false, true]);
+    for (const path of nowhere) expect([matrix.test(path), door.test(path)], path).toEqual([false, false]);
   });
 
   test("rules_reds_are_named_once", () => {

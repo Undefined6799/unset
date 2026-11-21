@@ -169,6 +169,10 @@ services:
       - ./edge/dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro
       - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
       - ../docs/site/public:/srv/docs:ro
+      # The chat site, this stack's alone (P6.02; ADR 0081 decision 6, ADR 0088): staging.unset.cc behind the same
+      # Pangolin login, its Matrix client API to Synapse's client listener and the door's routes to the door, each at
+      # the fixed address the edge reaches on chat_edge_synapse and chat_edge (deployment/edge/dev/chat.caddy).
+      - ./edge/dev/chat.caddy:/etc/caddy/sites/enabled/chat.caddy:ro
       - edgedata:/data
       - edgeconfig:/config
     secrets: [dev_tls_cert, dev_tls_key, pds_web_key]
@@ -179,6 +183,9 @@ services:
       APP_HOST: ${APP_HOST}
       APP_UPSTREAM: web:8080
       DOCS_HOST: docs.unset.sh
+      CHAT_HOST: staging.unset.cc
+      CHAT_UPSTREAM: 10.250.38.43:8090
+      MATRIX_UPSTREAM: 10.250.38.51:8008
     depends_on:
       pds:
         condition: service_started

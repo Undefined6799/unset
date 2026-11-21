@@ -57,6 +57,9 @@ function withoutSourceOnly(text: string): string {
     // A network in a block-form list (the edge's), with its address if it has one.
     rest = rest.replaceAll(new RegExp(`^      ${entry(name)}:\\n(?:^ {8}.*\\n)*`, "gm"), "");
   }
+  // The edge's chat site (P6.02): its mount, with the comment above it, and its three values.
+  rest = rest.replace(/(?:^ {6}#.*\n)*^ {6}- \.\/edge\/dev\/chat\.caddy:.*\n/m, "");
+  rest = rest.replaceAll(/^ {6}(?:CHAT_HOST|CHAT_UPSTREAM|MATRIX_UPSTREAM): .*\n/gm, "");
   // A chat secret in another service's list (Postgres's two, for chat-databases.sh).
   for (const name of CHAT_SECRETS) {
     rest = rest.replaceAll(new RegExp(`(^    secrets: \\[.*), ${entry(name)}(?=[,\\]])`, "gm"), "$1");
@@ -151,6 +154,36 @@ describe("compose.dev.source.yaml against compose.dev.yaml (P1.37y)", () => {
           other.networks.some((n) => n.name === name),
           name,
         ).toBe(false);
+    }
+  });
+
+  test("chat_site_is_on_the_source_stacks_edge_alone", () => {
+    // P6.02 (ADR 0081 decision 6; Alex 2026-11-21, "Yes, behind Pangolin"): the source stack's edge serves
+    // staging.unset.cc from dev/chat.caddy with the ruled values (deployment/edge/adapted-rules.ts DEV_CHAT), on the two
+    // chat networks; the image stack's edge, on neither, has no chat site and none of its values.
+    const site = "./edge/dev/chat.caddy";
+    const edgeOf = (file: string) => parse(file).services.find((s) => s.name === "edge");
+    const env = (file: string) => Object.fromEntries(edgeOf(file)?.environment ?? []);
+    expect(edgeOf(SOURCE)?.mounts).toContainEqual({
+      type: "bind",
+      source: site,
+      target: "/etc/caddy/sites/enabled/chat.caddy",
+      readOnly: true,
+    });
+    expect(env(SOURCE)).toMatchObject({
+      CHAT_HOST: { literal: "staging.unset.cc" },
+      CHAT_UPSTREAM: { literal: "10.250.38.43:8090" },
+      MATRIX_UPSTREAM: { literal: "10.250.38.51:8008" },
+    });
+    for (const file of ["compose.dev.yaml", "compose.local.yaml"]) {
+      expect(
+        edgeOf(file)?.mounts.some((m) => m.source === site),
+        file,
+      ).toBe(false);
+      expect(
+        Object.keys(env(file)).filter((name) => /CHAT|MATRIX/.test(name)),
+        file,
+      ).toEqual([]);
     }
   });
 

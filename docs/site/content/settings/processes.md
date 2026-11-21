@@ -226,7 +226,10 @@ Services we run as shipped or without a settings schema: the keys each stack set
 | `ACME_EMAIL` | from env file: `EDGE_ACME_EMAIL` | from env file: `EDGE_ACME_EMAIL` |
 | `APP_HOST` | from env file: `APP_HOST` | from env file: `APP_HOST` |
 | `APP_UPSTREAM` | `web:8080` | `web:8080` |
+| `CHAT_HOST` | not set | `staging.unset.cc` |
+| `CHAT_UPSTREAM` | not set | `10.250.38.43:8090` |
 | `DOCS_HOST` | not set | `docs.unset.sh` |
+| `MATRIX_UPSTREAM` | not set | `10.250.38.51:8008` |
 | `PDS_HOST` | from env file: `PDS_HOSTNAME` | from env file: `PDS_HOSTNAME` |
 | `PDS_UPSTREAM` | `pds:3000` | `pds:3000` |
 
