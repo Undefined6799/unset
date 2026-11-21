@@ -182,6 +182,42 @@ describe("chat session end store", () => {
     expect(browserRows(m.did)).toBe(1);
   });
 
+  test("chat.session_end_rebound_then_logout: a browser signed in again, then logged out again, is still ended", async () => {
+    const m = member(2);
+    const mine = entry(m.did, m.user);
+    await list.add(browser(), mine, m.refs[0] as never, deadline());
+    const later = createChatSessionEndStore(web, { leaseS: 60, logoutAfterS: 3600 });
+    await withTransaction(web, null, (tx) => later.queueForSession(tx, m.ids[0] as Buffer));
+    // Within the grace the same browser signs chat in through the second session, which then logs out too.
+    expect(await list.renew(mine, m.refs[1] as never, deadline())).toBe(true);
+    await withTransaction(web, null, (tx) => queue.queueForSession(tx, m.ids[1] as Buffer));
+    expect((await queue.claim(100)).map((j) => j.device)).toContain(mine.device);
+  });
+
+  test("chat.session_end_rebound_new_grace: the second Log out's grace replaces the first's", async () => {
+    const m = member(2);
+    const mine = entry(m.did, m.user);
+    await list.add(browser(), mine, m.refs[0] as never, deadline());
+    await withTransaction(web, null, (tx) => queue.queueForSession(tx, m.ids[0] as Buffer));
+    expect(await list.renew(mine, m.refs[1] as never, deadline())).toBe(true);
+    // The browser's own sign-out page needs the second session's grace to back up keys and log out.
+    const later = createChatSessionEndStore(web, { leaseS: 60, logoutAfterS: 3600 });
+    await withTransaction(web, null, (tx) => later.queueForSession(tx, m.ids[1] as Buffer));
+    expect((await queue.claim(100)).map((j) => j.device)).not.toContain(mine.device);
+    expect(queued()).toContain(`${m.user} ${mine.device}`);
+  });
+
+  test("chat.session_end_did_kept: a Log out after a revoked grant keeps the device's unconditional end", async () => {
+    const m = member(2);
+    const mine = entry(m.did, m.user);
+    await list.add(browser(), mine, m.refs[0] as never, deadline());
+    await withTransaction(web, null, (tx) => queue.queueForDid(tx, m.did));
+    const later = createChatSessionEndStore(web, { leaseS: 60, logoutAfterS: 3600 });
+    await withTransaction(web, null, (tx) => later.queueForSession(tx, m.ids[0] as Buffer));
+    expect(await list.renew(mine, m.refs[1] as never, deadline())).toBe(false);
+    expect((await queue.claim(100)).map((j) => j.device)).toContain(mine.device);
+  });
+
   test("chat.session_end_hold_this_browser: after sign out everywhere, the browser that pressed it gets the grace", async () => {
     const m = member(2);
     const mine = entry(m.did, m.user);
