@@ -61,7 +61,11 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     return {
       shell: SHELL,
       ...who,
-      limited: { signIn: shown.signIn ? `/login?next=${encodeURIComponent(canonical)}` : null },
+      limited: {
+        signIn: shown.signIn ? `/login?next=${encodeURIComponent(canonical)}` : null,
+        // Joining would show the page too, so the card offers it while visitors may ask for an invite (ADR 0080).
+        signUp: shown.signIn && services().inviteRequests !== null ? "/request-invite" : null,
+      },
     };
   }
   const listed = shown.crawlable && found.discoverability.searchEngines;
