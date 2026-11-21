@@ -785,3 +785,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   sender's device list still decrypts, and a message from a device its owner has not confirmed shows a warning.
   Device proofs (a second factor) come later. Amends decision 13 above, ADR 0083 decision 1 and ADR 0088 decision 3.
   Accepted by Alex 2026-11-21 19:12Z.
+- **ADR 0086 accepted (Alex, 2026-11-21 19:30Z, in substance; own record:
+  [0086](0086-chat-servers-layout.md)):** with one change he chose on the decision card at 19:37Z, "Guard only the
+  security settings": while the chat servers' settings are tuned, preflight C36 holds only security settings to their
+  reviewed value, lets the named tuning settings change, and still refuses any other key. The full exact-match check
+  is turned back on when Alex says the settings are final.

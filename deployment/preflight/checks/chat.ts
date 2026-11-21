@@ -44,51 +44,84 @@ function clientListener(bindAddresses: readonly string[]): Doc {
   };
 }
 
-/** Synapse 1.165.0's settings that must be exactly these (build plan step 1, Synapse table). */
-function synapseSettings(serverName: string): Doc {
+/**
+ * How C36 holds a config's settings while they are tuned (Alex, 2026-11-21 19:37Z, "Guard only the security settings";
+ * ADR 0086 decision 2): `security` exactly, always; `tuning` by name, with any value or none; `nested` a mapping whose
+ * own keys are split the same way. A key in none of them is refused, so a new tuning setting is one name added here.
+ */
+type Settings = {
+  readonly security: Doc;
+  readonly tuning: readonly string[];
+  readonly nested: Readonly<Record<string, Settings>>;
+};
+
+/**
+ * Synapse's rate limits a tuning may set (Synapse 1.165.0 synapse/config/ratelimiting.py); rc_login and rc_federation
+ * are left out, as MAS does the logins and there is no federation.
+ */
+const SYNAPSE_RATE_LIMITS = [
+  "rc_message",
+  "rc_room_creation",
+  "rc_joins",
+  "rc_joins_per_room",
+  "rc_invites",
+  "rc_profile",
+  "rc_admin_redaction",
+  "rc_key_requests",
+];
+
+/**
+ * Synapse 1.165.0's settings (build plan step 1, Synapse table). Security beyond the coordinator's list, failing closed:
+ * log_config and report_stats (what leaves the server), retention (ADR 0085's 30-day deletion), the profile-lookup
+ * limits, user_directory and user_ips_max_age (who can find whom; how long addresses are kept), enable_media_repo.
+ */
+function synapseSettings(serverName: string): Settings {
   return {
-    server_name: serverName,
-    public_baseurl: `https://${serverName}/`,
-    listeners: [
-      clientListener(SYNAPSE_NETWORKS.filter((n) => n.name !== "chat_admin_synapse").map((n) => n.address)),
-      clientListener([SYNAPSE_ADMIN_ADDRESS]),
-    ],
-    log_config: "/config/log.yaml",
-    report_stats: false,
-    trusted_key_servers: [],
-    federation_domain_whitelist: [],
-    allow_profile_lookup_over_federation: false,
-    enable_registration: false,
-    allow_guest_access: false,
-    // The rule encrypts every room not asked for as plain; "all" would encrypt the plain kind too (P6.10a).
-    encryption_enabled_by_default_for_room_type: "off",
-    enable_search: false,
-    // Exactly the cap and one unbounded job; a default_policy would purge encrypted history (config_documentation.md
-    // `retention` at v1.165.0).
-    retention: { enabled: true, allowed_lifetime_max: "30d", purge_jobs: [{ interval: "12h" }] },
-    enable_set_displayname: false,
-    enable_set_avatar_url: false,
-    allow_per_room_profiles: false,
-    require_auth_for_profile_requests: true,
-    limit_profile_requests_to_users_who_share_rooms: true,
-    user_directory: { enabled: false },
-    url_preview_enabled: false,
-    // No uploads: the media repository is off, so no media endpoint is served (config_documentation.md
-    // `enable_media_repo` at v1.165.0).
-    enable_media_repo: false,
-    user_ips_max_age: "1d",
-    // Build step 10 (ADR 0090 decision 2): the door's count port is the one private address a pusher may reach, and a
-    // push names no body or sender; its count is of rooms (config_documentation.md `ip_range_whitelist`, `push`).
-    ip_range_whitelist: [DOOR_COUNT_ADDRESS],
-    push: { enabled: true, include_content: false, group_unread_count_by_room: true },
-    matrix_authentication_service: {
-      enabled: true,
-      endpoint: "http://mas:8080/",
-      secret_path: "/run/secrets/synapse_mas_secret",
+    tuning: ["enable_set_displayname", "enable_set_avatar_url", "allow_per_room_profiles", ...SYNAPSE_RATE_LIMITS],
+    nested: {
+      // A push names no body or sender (ADR 0090 decision 2); whether pushes run and how unread is counted are tuning.
+      push: { security: { include_content: false }, tuning: ["enabled", "group_unread_count_by_room"], nested: {} },
     },
-    // The server rule and nothing else (P6.10a; ADR 0085), the only guarantee that rooms are encrypted: it refuses
-    // any config, so none is given.
-    modules: [{ module: "unset_chat_policy.RoomPolicy", config: {} }],
+    security: {
+      server_name: serverName,
+      public_baseurl: `https://${serverName}/`,
+      listeners: [
+        clientListener(SYNAPSE_NETWORKS.filter((n) => n.name !== "chat_admin_synapse").map((n) => n.address)),
+        clientListener([SYNAPSE_ADMIN_ADDRESS]),
+      ],
+      log_config: "/config/log.yaml",
+      report_stats: false,
+      trusted_key_servers: [],
+      federation_domain_whitelist: [],
+      allow_profile_lookup_over_federation: false,
+      enable_registration: false,
+      allow_guest_access: false,
+      // The rule encrypts every room not asked for as plain; "all" would encrypt the plain kind too (P6.10a).
+      encryption_enabled_by_default_for_room_type: "off",
+      enable_search: false,
+      // Exactly the cap and one unbounded job; a default_policy would purge encrypted history (config_documentation.md
+      // `retention` at v1.165.0).
+      retention: { enabled: true, allowed_lifetime_max: "30d", purge_jobs: [{ interval: "12h" }] },
+      require_auth_for_profile_requests: true,
+      limit_profile_requests_to_users_who_share_rooms: true,
+      user_directory: { enabled: false },
+      url_preview_enabled: false,
+      // No uploads: the media repository is off, so no media endpoint is served (config_documentation.md
+      // `enable_media_repo` at v1.165.0).
+      enable_media_repo: false,
+      user_ips_max_age: "1d",
+      // Build step 10 (ADR 0090 decision 2): the door's count port is the one private address a pusher may reach
+      // (config_documentation.md `ip_range_whitelist`, `push`).
+      ip_range_whitelist: [DOOR_COUNT_ADDRESS],
+      matrix_authentication_service: {
+        enabled: true,
+        endpoint: "http://mas:8080/",
+        secret_path: "/run/secrets/synapse_mas_secret",
+      },
+      // The server rule and nothing else (P6.10a; ADR 0085), the only guarantee that rooms are encrypted: it refuses
+      // any config, so none is given.
+      modules: [{ module: "unset_chat_policy.RoomPolicy", config: {} }],
+    },
   };
 }
 const SYNAPSE_SECRET_PATHS = ["signing_key_path", "macaroon_secret_key_path", "form_secret_path"];
@@ -97,51 +130,77 @@ const SYNAPSE_OTHER = ["database", "media_store_path", ...SYNAPSE_SECRET_PATHS];
 const SYNAPSE_DATABASE_ARGS = ["host", "dbname", "user", "passfile", "sslmode", "cp_min", "cp_max"];
 
 /** MAS 1.26.0's settings that must be exactly these (build plan step 1, MAS table; ADR 0086 for the binds). */
-function masSettings(serverName: string): Doc {
+function masSettings(serverName: string): Settings {
   return {
-    http: {
-      public_base: "http://mas:8080/",
-      trusted_proxies: [],
-      listeners: [
-        {
-          name: "synapse",
-          resources: [{ name: "discovery" }, { name: "oauth" }, { name: "health" }],
-          binds: [{ address: "10.250.38.3:8080" }],
+    tuning: [],
+    nested: {
+      // Who may sign up, delete an account outside the door's erasure, or change the email: security. A display name
+      // is tuning.
+      account: {
+        security: {
+          account_deactivation_allowed: false,
+          password_registration_enabled: false,
+          email_change_allowed: false,
         },
-        {
-          name: "chat-admin",
-          resources: [{ name: "oauth" }, { name: "adminapi" }],
-          binds: [{ address: "10.250.38.11:8081" }],
-        },
-      ],
+        tuning: ["displayname_change_allowed"],
+        nested: {},
+      },
     },
-    matrix: {
-      kind: "synapse",
-      homeserver: serverName,
-      endpoint: "http://synapse:8008/",
-      secret_file: "/run/secrets/mas_synapse_secret",
-    },
-    passwords: { enabled: false },
-    account: {
-      displayname_change_allowed: false,
-      account_deactivation_allowed: false,
-      password_registration_enabled: false,
-      email_change_allowed: false,
+    security: {
+      http: {
+        public_base: "http://mas:8080/",
+        trusted_proxies: [],
+        listeners: [
+          {
+            name: "synapse",
+            resources: [{ name: "discovery" }, { name: "oauth" }, { name: "health" }],
+            binds: [{ address: "10.250.38.3:8080" }],
+          },
+          {
+            name: "chat-admin",
+            resources: [{ name: "oauth" }, { name: "adminapi" }],
+            binds: [{ address: "10.250.38.11:8081" }],
+          },
+        ],
+      },
+      matrix: {
+        kind: "synapse",
+        homeserver: serverName,
+        endpoint: "http://synapse:8008/",
+        secret_file: "/run/secrets/mas_synapse_secret",
+      },
+      passwords: { enabled: false },
     },
   };
 }
 const MAS_OTHER = ["database", "clients", "policy", "secrets"];
 const MAS_DATABASE_KEYS = ["host", "port", "username", "database", "password_file", "ssl_mode"];
 
+/**
+ * Why `doc` does not hold `settings` (Settings), or null; `other` names keys checked by their own rules, and `at` is
+ * the path of a nested mapping, for the reason.
+ */
+function settingsProblem(doc: Doc, settings: Settings, other: readonly string[], at = ""): string | null {
+  const inside = (key: string) => (at === "" ? key : `${at}.${key}`);
+  const allowed = [...Object.keys(settings.security), ...settings.tuning, ...Object.keys(settings.nested), ...other];
+  if (keysOutside(doc, allowed)) return `a setting the preflight does not allow${at === "" ? "" : ` in ${at}`}`;
+  for (const [key, expected] of Object.entries(settings.security))
+    if (!isDeepStrictEqual(doc[key], expected)) return `${inside(key)} is not its reviewed value`;
+  for (const [key, nested] of Object.entries(settings.nested)) {
+    const value = doc[key];
+    if (!isDoc(value)) return `${inside(key)} is not a mapping`;
+    const problem = settingsProblem(value, nested, [], inside(key));
+    if (problem !== null) return problem;
+  }
+  return null;
+}
+
 /** Why a Synapse config is not the reviewed one, or null. */
 export function synapseProblem(doc: unknown, serverName: string): string | null {
   const why = (text: string) => `homeserver.yaml: ${text}`;
   if (!isDoc(doc)) return why("is not a mapping");
-  const settings = synapseSettings(serverName);
-  const unknown = keysOutside(doc, [...Object.keys(settings), ...SYNAPSE_OTHER]);
-  if (unknown) return why("a setting the preflight does not allow");
-  for (const [key, expected] of Object.entries(settings))
-    if (!isDeepStrictEqual(doc[key], expected)) return why(`${key} is not its reviewed value`);
+  const problem = settingsProblem(doc, synapseSettings(serverName), SYNAPSE_OTHER);
+  if (problem !== null) return why(problem);
   for (const key of SYNAPSE_SECRET_PATHS)
     if (!SECRET.test(String(doc[key]))) return why(`${key} is not a mounted secret`);
   const database = doc.database;
@@ -157,10 +216,8 @@ export function synapseProblem(doc: unknown, serverName: string): string | null 
 export function masProblem(doc: unknown, serverName: string): string | null {
   const why = (text: string) => `mas.yaml: ${text}`;
   if (!isDoc(doc)) return why("is not a mapping");
-  const settings = masSettings(serverName);
-  if (keysOutside(doc, [...Object.keys(settings), ...MAS_OTHER])) return why("a setting the preflight does not allow");
-  for (const [key, expected] of Object.entries(settings))
-    if (!isDeepStrictEqual(doc[key], expected)) return why(`${key} is not its reviewed value`);
+  const problem = settingsProblem(doc, masSettings(serverName), MAS_OTHER);
+  if (problem !== null) return why(problem);
   const { database, clients, policy, secrets } = doc;
   if (!isDoc(database) || keysOutside(database, MAS_DATABASE_KEYS) || !SECRET.test(String(database.password_file)))
     return why("database is not its reviewed shape");

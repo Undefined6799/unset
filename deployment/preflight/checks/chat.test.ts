@@ -56,9 +56,6 @@ describe("C36 the chat servers' settings", () => {
       ["retention.allowed_lifetime_min", "1d"],
       ["retention.purge_jobs", undefined],
       ["retention.purge_jobs", [{ interval: "12h", shortest_max_lifetime: "3d" }]],
-      ["enable_set_displayname", true],
-      ["enable_set_avatar_url", true],
-      ["allow_per_room_profiles", true],
       ["require_auth_for_profile_requests", false],
       ["limit_profile_requests_to_users_who_share_rooms", false],
       ["allow_profile_lookup_over_federation", true],
@@ -142,14 +139,10 @@ describe("C36 the chat servers' settings", () => {
       expect(synapseProblem(edited(synapse(), "ip_range_whitelist", value), SERVER), JSON.stringify(value)).toBe(
         ranges,
       );
-    const push = "homeserver.yaml: push is not its reviewed value";
-    for (const [path, value] of [
-      ["push", undefined],
-      ["push.include_content", true],
-      ["push.group_unread_count_by_room", false],
-      ["push.enabled", false],
-    ] as const)
-      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBe(push);
+    expect(synapseProblem(edited(synapse(), "push", undefined), SERVER)).toBe("homeserver.yaml: push is not a mapping");
+    expect(synapseProblem(edited(synapse(), "push.include_content", true), SERVER)).toBe(
+      "homeserver.yaml: push.include_content is not its reviewed value",
+    );
     expect(synapse().ip_range_whitelist).toEqual(["10.250.38.19"]);
   });
 
@@ -205,8 +198,10 @@ describe("C36 the chat servers' settings", () => {
   test("each_wrong_mas_value_is_refused", () => {
     const cases: [string, unknown][] = [
       ["passwords", { enabled: true }],
-      ["account", { displayname_change_allowed: true, account_deactivation_allowed: false }],
-      ["account", { displayname_change_allowed: false, account_deactivation_allowed: true }],
+      ["account.account_deactivation_allowed", true],
+      ["account.password_registration_enabled", true],
+      ["account.email_change_allowed", true],
+      ["account.password_registration_enabled", undefined],
       ["matrix.homeserver", "unset.cc"],
       ["matrix.endpoint", "http://elsewhere:8008/"],
       ["matrix.secret", "inline"],
@@ -215,9 +210,53 @@ describe("C36 the chat servers' settings", () => {
       ["http.public_base", "https://mas.unset.cc/"],
     ];
     for (const [path, value] of cases) {
-      const top = path.split(".")[0];
-      expect(masProblem(edited(mas(), path, value), SERVER), path).toBe(`mas.yaml: ${top} is not its reviewed value`);
+      // A nested tuned mapping (account) names the setting itself; the others name their top-level key.
+      const named = path.startsWith("account.") ? path : path.split(".")[0];
+      expect(masProblem(edited(mas(), path, value), SERVER), path).toBe(`mas.yaml: ${named} is not its reviewed value`);
     }
+  });
+
+  // Alex, 2026-11-21 19:37Z (ADR 0086 decision 2): while settings are tuned, only security settings are held exact; a
+  // tuning setting takes any value, and a setting in neither list is still refused.
+  test("a_changed_tuning_value_passes", () => {
+    for (const [path, value] of [
+      ["enable_set_displayname", true],
+      ["enable_set_avatar_url", true],
+      ["allow_per_room_profiles", true],
+      ["enable_set_displayname", undefined],
+      ["push.enabled", false],
+      ["push.group_unread_count_by_room", false],
+      ["rc_message", { per_second: 1, burst_count: 20 }],
+      ["rc_room_creation", { per_second: 0.1, burst_count: 3 }],
+    ] as const) {
+      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBeNull();
+    }
+    expect(masProblem(edited(mas(), "account.displayname_change_allowed", true), SERVER)).toBeNull();
+  });
+
+  test("a_changed_security_value_fails_even_inside_a_tuned_setting", () => {
+    expect(synapseProblem(edited(synapse(), "push.include_content", true), SERVER)).toBe(
+      "homeserver.yaml: push.include_content is not its reviewed value",
+    );
+    expect(synapseProblem(edited(synapse(), "push.include_content", undefined), SERVER)).toBe(
+      "homeserver.yaml: push.include_content is not its reviewed value",
+    );
+    expect(synapseProblem(edited(synapse(), "push", true), SERVER)).toBe("homeserver.yaml: push is not a mapping");
+    expect(masProblem(edited(mas(), "account", "yes"), SERVER)).toBe("mas.yaml: account is not a mapping");
+  });
+
+  test("an_unknown_setting_fails_at_the_top_and_inside_a_tuned_setting", () => {
+    for (const key of ["rc_login", "rc_federation", "auto_join_rooms", "presence"]) {
+      expect(synapseProblem(edited(synapse(), key, {}), SERVER), key).toBe(
+        "homeserver.yaml: a setting the preflight does not allow",
+      );
+    }
+    expect(synapseProblem(edited(synapse(), "push.jitter_delay", "10s"), SERVER)).toBe(
+      "homeserver.yaml: a setting the preflight does not allow in push",
+    );
+    expect(masProblem(edited(mas(), "account.login_with_email_allowed", true), SERVER)).toBe(
+      "mas.yaml: a setting the preflight does not allow in account",
+    );
   });
 
   test("mas_has_internal_listeners_only", () => {
