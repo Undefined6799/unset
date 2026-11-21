@@ -14,12 +14,19 @@ import {
   CryptoEvent,
   OnlySignedDevicesIsolationMode,
 } from "matrix-js-sdk/lib/crypto-api/index.js";
-import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
+import {
+  ClientEvent,
+  createClient,
+  HttpApiEvent,
+  type MatrixClient,
+  RoomEvent,
+  SyncState,
+} from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations } from "./conversation-service.ts";
-import { BACKUP_WAIT_MS, backupSettled } from "./log-out.ts";
+import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
   createKeyHolder,
@@ -45,10 +52,21 @@ const FIRST_SYNC_MS = 30_000;
  */
 export const storePrefix = (userId: string): string => `unset-chat:${userId}`;
 
-export type Chat = { readonly stop: () => void };
+/** How a Log out ended: done, the door unreachable (the store stays, locked), or chat taken over by another tab. */
+export type LogOutOutcome = "logged_out" | "door_unavailable" | "taken_over";
+export type Chat = {
+  readonly stop: () => void;
+  /**
+   * Log out of this browser (logOutOf below): the backup catches up, the door ends the device, the stores go. There is
+   * no Log out on the page; unset.sh's Log out runs it (core/sign-out.ts signOutHere, through openToLogOut).
+   */
+  readonly logOut: () => Promise<LogOutOutcome>;
+};
 export type ChatOptions = {
   /** The page's own origin: the edge sends /_matrix/client/* to the homeserver (ADR 0081 decision 6). */
   readonly baseUrl: string;
+  /** Aborted when another tab takes chat over (core/tab-lock.ts): the client stops, and this store is left alone. */
+  readonly takenOver: AbortSignal;
   readonly onState: (state: ChatState) => void;
   /** The server stopped taking the token (HttpApiEvent.SessionLoggedOut, src/http-api/fetch.ts:183-196). */
   readonly onSignedOut: () => void;
@@ -89,14 +107,22 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
   let restoreAgain: ReturnType<typeof setTimeout> | undefined;
-  const chat = {
+  // While a setup, an unlock or a Log out runs its own steps, the trust events it causes do not repaint the page.
+  let busy = false;
+  const chat: Chat = {
     stop: () => {
       stopped = true;
       clearTimeout(restoreAgain);
       client.stopClient();
     },
+    logOut: () => {
+      busy = true;
+      return logOutOf({ client, backup, prefix: cryptoDatabasePrefix, stop: chat.stop, ...options });
+    },
   };
+  options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
   const tell = (state: ChatState) => stopped || options.onState(state);
+  const backup = followBackup(client);
   client.on(HttpApiEvent.SessionLoggedOut, () => {
     chat.stop();
     options.onSignedOut();
@@ -109,12 +135,16 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const cryptoDatabasePrefix = storePrefix(session.userId);
   // A device new to this browser cannot open a store left by an ended one (its lock key is gone): that store is wiped,
   // as Log out would have (ADR 0083 decision 5). clearStores names the same two databases (src/client.ts:1614-1669).
+  // Another tab may have taken chat over while this one started: the store is then that tab's alone.
+  if (options.takenOver.aborted) return chat;
   if (session.newDevice) await client.clearStores({ cryptoDatabasePrefix });
+  if (options.takenOver.aborted) return chat;
   try {
     await client.initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix });
   } catch {
     return fail("chat.keys_unavailable"); // IndexedDB refused, WASM blocked, or a store this key cannot open
   }
+  if (options.takenOver.aborted) return chat;
   const crypto = client.getCrypto();
   if (crypto === undefined) return fail("chat.keys_unavailable");
   crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode());
@@ -122,8 +152,6 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
   const keys: Keys = { client, crypto, holder };
   const conversations = createConversations(client, crypto, session.userId);
-  // While a setup or an unlock runs its own steps, the trust events it causes do not repaint the page.
-  let busy = false;
   // The count's pusher, registered once per sign-in when the page is first ready. A failure leaves chat as it is: the
   // count on unset.sh then shows no number, or the last one, until the next sign-in (ADR 0082 Consequences).
   let pusherAsked = false;
@@ -133,22 +161,6 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     const target = await options.pushKey();
     if (target !== null && !stopped) await registerPusher(client, target);
   };
-  /**
-   * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
-   * apps/web/src/Lifecycle.ts onLoggedOut, clearStorage): the backup catches up, the client stops, the door ends the
-   * device and deletes its lock key, and only then are this account's stores deleted. If the door cannot, nothing is
-   * deleted: the store stays locked by a key only the door holds, and the page says so.
-   */
-  const logOut = async () => {
-    busy = true;
-    tell({ kind: "logging_out" });
-    await backupSettled(client, BACKUP_WAIT_MS);
-    chat.stop();
-    if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
-    await client.clearStores({ cryptoDatabasePrefix });
-    options.onState({ kind: "logged_out" });
-  };
-  const leave = () => void logOut();
   const report = async () => {
     if (busy) return;
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
@@ -157,11 +169,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
     if (phase === "ready") void registerOnce();
-    tell(
-      phase === "ready"
-        ? { kind: "ready", conversations, me: session.userId, logOut: leave }
-        : { kind: "locked", unlock: tryKey, logOut: leave },
-    );
+    tell(phase === "ready" ? { kind: "ready", conversations, me: session.userId } : { kind: "locked", unlock: tryKey });
   };
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;
@@ -200,6 +208,83 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   client.on(CryptoEvent.DevicesUpdated, (users) => users.includes(session.userId) && void report());
   await report();
   return chat;
+}
+
+type LogOutParts = Pick<ChatOptions, "takenOver" | "signOut"> & {
+  readonly client: MatrixClient;
+  readonly backup: BackupWatch;
+  readonly prefix: string;
+  readonly stop: () => void;
+};
+
+/**
+ * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
+ * apps/web/src/Lifecycle.ts onLoggedOut, clearStorage): the backup catches up, the client stops, the door ends the
+ * device and deletes its lock key, and only then are this account's stores deleted. If the door cannot, nothing is
+ * deleted: the store stays locked by a key only the door holds.
+ */
+async function logOutOf({ client, backup, prefix, stop, takenOver, signOut }: LogOutParts): Promise<LogOutOutcome> {
+  await backup.settled(BACKUP_WAIT_MS);
+  stop();
+  // Chat moved to another tab meanwhile: this browser's device stays, for that tab.
+  if (takenOver.aborted) return "taken_over";
+  if (!(await signOut())) return "door_unavailable";
+  // A tab that took chat over meanwhile owns the store now; its new device wipes it (ADR 0083 decision 5).
+  if (takenOver.aborted) return "taken_over";
+  await client.clearStores({ cryptoDatabasePrefix: prefix });
+  return "logged_out";
+}
+
+/**
+ * The client unset.sh's Log out needs on /sign-out/return (core/sign-out.ts signOutHere): this browser's store opened
+ * on the session the door minted for its own device, and the key backup checked, so `logOut` waits for whatever the
+ * last tab had not uploaded. Nothing else runs: no sync, no setup, no screen. The backup's enable is awaited, as
+ * RustCrypto starts the check at init without it (src/rust-crypto/rust-crypto.ts:229-230) and the watch counts as
+ * pending only once KeyBackupStatus true is out (src/rust-crypto/backup.ts:398-409). A store that will not open is
+ * still logged out: the door ends the device and the stores are deleted.
+ */
+export async function openToLogOut(
+  session: ChatSession,
+  options: Pick<ChatOptions, "baseUrl" | "takenOver" | "signOut">,
+): Promise<Chat> {
+  const client = chatClient(session, options.baseUrl, {});
+  const backup = followBackup(client);
+  const prefix = storePrefix(session.userId);
+  const stop = () => client.stopClient();
+  const chat: Chat = { stop, logOut: () => logOutOf({ client, backup, prefix, stop, ...options }) };
+  options.takenOver.addEventListener("abort", stop, { once: true });
+  if (options.takenOver.aborted) return chat;
+  const opened = await client
+    .initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix: prefix })
+    .then(() => true)
+    .catch(() => false); // IndexedDB refused, WASM blocked, or a store this key cannot open
+  if (opened)
+    await client
+      .getCrypto()
+      ?.checkKeyBackupAndEnable()
+      .catch(() => null);
+  return chat;
+}
+
+/**
+ * To-device types that carry a room key to this device (Matrix spec v1.16,
+ * https://spec.matrix.org/v1.16/client-server-api/#mroom_key and #mforwarded_room_key).
+ */
+const ROOM_KEY_TYPES = new Set(["m.room_key", "m.forwarded_room_key"]);
+
+/**
+ * The backup's own events, and the new room keys it has to upload, fed to Log out's watch (log-out.ts) from before the
+ * crypto starts, so the enable at start is seen. The to-device message arrives decrypted (src/sync.ts:2041-2093,
+ * src/sync-accumulator.ts:171-179); a local echo is this browser sending, which makes or uses its room key
+ * (src/models/room.ts:2846, re-emitted on the client, src/sync.ts:1964-1970).
+ */
+function followBackup(client: MatrixClient): BackupWatch {
+  const watch = watchBackup();
+  client.on(CryptoEvent.KeyBackupStatus, watch.enabled);
+  client.on(CryptoEvent.KeyBackupSessionsRemaining, watch.remaining);
+  client.on(ClientEvent.ReceivedToDeviceMessage, ({ message }) => ROOM_KEY_TYPES.has(message.type) && watch.keyMade());
+  client.on(RoomEvent.LocalEchoUpdated, () => watch.keyMade());
+  return watch;
 }
 
 /** Resolves true on the first PREPARED or SYNCING (src/sync.ts:80-92), false at the deadline. */

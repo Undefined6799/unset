@@ -83,6 +83,19 @@ describe("browser list store", () => {
     expect(await list.renew(added, sid("u"), deadline())).toBe(false);
   });
 
+  test("door.browser_signed_in_from: an entry names the web session that last added or renewed it, and no other", async () => {
+    const mine = browser();
+    const added = entry(A);
+    await list.add(mine, added, sid("s"), deadline());
+    expect(await list.signedInFrom(added, sid("s"), deadline())).toBe(true);
+    expect(await list.signedInFrom(added, sid("t"), deadline())).toBe(false);
+    await list.renew(added, sid("t"), deadline());
+    expect(await list.signedInFrom(added, sid("t"), deadline())).toBe(true);
+    expect(await list.signedInFrom(added, sid("s"), deadline())).toBe(false);
+    await list.remove(added, deadline());
+    expect(await list.signedInFrom(added, sid("t"), deadline())).toBe(false);
+  });
+
   test("door.browser_remove: remove deletes the entry and its key, and a second remove is no error", async () => {
     const mine = browser();
     const added = entry(A);

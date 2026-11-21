@@ -42,10 +42,16 @@ const COOKIES = {
   target: { name: "__Host-login_target", sameSite: "strict", maxAge: 120 },
   /**
    * P2.08b: the issuer origin recorded at sign-in, for the signed-out page's account link. The last browser's sign-out
-   * deletes the token set that records it, so POST /logout carries it here: Strict, because only our own 303 leads to
-   * /signed-out, and short-lived. Never a query parameter, which any site could link with another origin.
+   * deletes the token set that records it, so POST /logout carries it here: Strict, because only our own pages lead to
+   * /signed-out (our 303, or GET /logout/done's same-site refresh after unset.cc's sign-out page), and short-lived.
+   * Never a query parameter, which any site could link with another origin.
    */
   issuer: { name: "__Host-signed_out_issuer", sameSite: "strict", maxAge: 600 },
+  /**
+   * Alex 2026-11-21 (ADR 0083 decision 5): web's ticket that lets unset.cc wipe chat in this browser after POST /logout,
+   * waiting for GET /logout/chat. Strict, because only our own 303 leads there; 60 s, the ticket's own life.
+   */
+  chatSignOut: { name: "__Host-chat_sign_out", sameSite: "strict", maxAge: 60 },
 } as const;
 
 export function appStateOf(state: AppState): string {
@@ -100,6 +106,12 @@ export function targetFromCookies(header: string | null): string | null {
   const encoded = cookieValue(header, COOKIES.target.name);
   if (encoded === null || !BASE64URL.test(encoded)) return null;
   return Buffer.from(encoded, "base64url").toString("utf8");
+}
+
+/** The carried chat sign-out ticket (base64url), or null when it is missing, doubled or not base64url. */
+export function chatTicketFromCookies(header: string | null): string | null {
+  const ticket = cookieValue(header, COOKIES.chatSignOut.name);
+  return ticket !== null && BASE64URL.test(ticket) ? ticket : null;
 }
 
 /** `origin`, already checked with `issuerOrigin`, as the issuer cookie carries it. */

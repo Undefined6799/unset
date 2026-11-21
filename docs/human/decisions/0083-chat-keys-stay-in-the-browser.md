@@ -71,3 +71,15 @@ What the pinned SDK does (matrix-js-sdk 43.0.0, `lib/crypto-api/index.d.ts`, `li
 - Build step 11: tests that expiry leaves the store locked and reopens it with no unlock, that Log out leaves no
   IndexedDB database of that account and no lock key, and that a second account on the same browser cannot open the
   first one's store.
+
+## Notes appended after acceptance
+- **2026-11-21, decision 5 as built:** no Log out on the chat page; unset.sh logout drives it (Alex, 2026-11-21); new
+  door route POST /sign-out/redeem. POST /logout ends the web session and queues the chat devices it signed in; when
+  it queued one, this browser holds it, and the tab goes through GET /logout/chat to `/sign-out/return#ticket=…` with
+  a ticket for the ended session. The door spends it only on the entry this browser already holds (no new device, no
+  renewal), the page takes the tab lock over and runs Log out as above, then returns to unset.sh through GET
+  /logout/done, a stateless page whose meta refresh is a same-site navigation to /signed-out, so the issuer cookie
+  stays Strict (RFC 6265bis-22 section 5.2). The queued end fires after 120 s if the page never finishes. The ticket's
+  session must be the one that last signed the entry in (migration 0045), so it cannot log out another browser of the
+  same member. Sign out everywhere queues every device at once and runs the same hop for the browser that pressed it,
+  whose devices wait the 120 s instead (migration 0046); a revoked grant has no browser and only queues.

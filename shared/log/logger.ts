@@ -109,6 +109,9 @@ const EVENTS = [
   // ADR 0083 decision 5, ADR 0084 decision 7: chat devices still not ended after about a day of tries this run
   // (`count`), for an operator; they keep retrying. No DID, chat user or device.
   "chat.session_end_stuck",
+  // Alex 2026-11-21 (ADR 0083 decision 5): POST /logout could not sign the ticket that wipes chat in this browser
+  // (`kind`, an error class); the queued end still ends the device. No DID or chat user.
+  "chat.sign_out_ticket_failed",
   // Build step 11, idle plain chats (ADR 0091): how many rooms one sweep deleted (`count`), and a sweep with rooms it
   // could not finish (`count`) or that did not run (`reason` "unavailable"). Never a room, user or token.
   "chat.rooms_swept",

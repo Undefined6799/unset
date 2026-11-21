@@ -1,5 +1,5 @@
 // The door's composition root (build step 6; rule AB-2): the one place its parts are built. Its limits are its own:
-// a sign-in bucket spent once per page load (by redeem), and a looser bucket for the hop's start, the chat page, its
+// a sign-in bucket spent once per page load (by either redeem), and a looser bucket for the hop's start, the chat page, its
 // files, health, Log out, the setup claim and the pushkey; the count port has none, since only Synapse and web reach
 // it. Before it answers anything the pool must fit the role's connection limit across replicas, and the door's key
 // must be Ed25519, or it does not start.
@@ -25,7 +25,15 @@ import { createCountDoor, NOTIFY_PATH } from "./count.ts";
 import { createDoor, type DoorLog } from "./door.ts";
 import { createListener } from "./listener.ts";
 import type { ChatPage } from "./page.ts";
-import { chatIdRoute, pushKeyRoute, redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
+import {
+  chatIdRoute,
+  pushKeyRoute,
+  redeemRoute,
+  setupClaimRoute,
+  setupReleaseRoute,
+  signOutRedeemRoute,
+  signOutRoute,
+} from "./routes.ts";
 
 /** The largest body the door reads: a redeem's ticket, about 600 bytes of JSON, with room to spare. */
 const BODY_CAP = 4096;
@@ -96,6 +104,7 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
     page,
     posts: {
       "/sign-in/redeem": redeemRoute({ ports, serverName: config.CHAT_SERVER_NAME }),
+      "/sign-out/redeem": signOutRedeemRoute({ ports, serverName: config.CHAT_SERVER_NAME }),
       "/sign-out": signOutRoute({ ports }),
       "/setup/claim": setupClaimRoute(setup),
       "/setup/release": setupReleaseRoute(setup),

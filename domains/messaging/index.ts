@@ -57,7 +57,9 @@ export {
   type RedeemRefusal,
   readTicket,
   redeem,
+  redeemForSignOut,
   type SignOutOutcome,
+  type SignOutRedeemOutcome,
   signOut,
   type Ticket,
 } from "./door.ts";

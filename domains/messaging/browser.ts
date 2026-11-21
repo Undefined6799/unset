@@ -42,6 +42,8 @@ export type BrowserList = {
   add(browser: BrowserKey, entry: BrowserEntry, sid: SessionRef, deadline: AbortSignal): Promise<"added" | "taken">;
   /** Records a renewal on the entry's own device from web session `sid`; false when the entry is gone or changed. */
   renew(entry: BrowserEntry, sid: SessionRef, deadline: AbortSignal): Promise<boolean>;
+  /** Whether web session `sid` is the one that last added or renewed the entry; false when the entry is gone. */
+  signedInFrom(entry: BrowserEntry, sid: SessionRef, deadline: AbortSignal): Promise<boolean>;
   /** Deletes the entry and its lock key; deleting one already gone is no error. */
   remove(entry: BrowserEntry, deadline: AbortSignal): Promise<void>;
   /** Whether `browser` still holds any entry. */

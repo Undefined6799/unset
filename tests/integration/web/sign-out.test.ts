@@ -41,6 +41,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "./built-server.ts";
+import { readyMember } from "./members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const provided = inject("postgres");
@@ -480,12 +481,12 @@ describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () =>
   const browsers = createBrowserListStore(doorPool, createSealer(keyring));
   let d = 0;
   /** The door's entry for `owner` on a new browser, signed in by `ref`; its device. */
-  async function chatEntry(owner: Did, ref: SessionRef): Promise<DeviceId> {
+  async function chatEntry(owner: Did, ref: SessionRef, user = `u${"w".repeat(20)}` as ChatUser): Promise<DeviceId> {
     const device = `WEB${String(d++).padStart(7, "0")}` as DeviceId;
     const entry = {
       id: randomUUID(),
       did: owner,
-      user: `u${"w".repeat(20)}` as ChatUser,
+      user,
       device,
       lockKey: randomBytes(32) as unknown as LockKey,
     };
@@ -526,5 +527,124 @@ describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () =>
     expect((await signOutEverywhere(here)).status).toBe(303);
     const queued = await queuedDevices();
     for (const device of devices) expect(queued).toContain(device);
+  });
+
+  // Alex, 2026-11-21: no Log out on the chat page; unset.sh's Log out drives it in the browser that signed chat in.
+  /** `owner` onboarded, with the chat account the queued job then creates; its chat user. */
+  async function readyChat(owner: Did): Promise<ChatUser> {
+    await readyMember(pool, owner, true);
+    const { rows } = await pool.query<{ chat_user: ChatUser }>(
+      "UPDATE app.chat_account SET state = 'ready' WHERE did = $1 RETURNING chat_user",
+      [owner],
+    );
+    if (rows[0] === undefined) throw new Error("no chat account queued");
+    return rows[0].chat_user;
+  }
+  const CHAT_COOKIE = "__Host-chat_sign_out";
+  const DOOR = "https://staging.unset.cc";
+  /** The payload of the ticket in a /sign-out/return address. */
+  const payloadOf = (location: string) => {
+    const ticket = new URLSearchParams(new URL(location).hash.slice(1)).get("ticket") ?? "";
+    return (JSON.parse(Buffer.from(ticket, "base64url").toString("utf8")) as { payload: Record<string, unknown> })
+      .payload;
+  };
+
+  test("log_out_with_chat_here_goes_through_the_chat_page: a ticket for the ended session, once", async () => {
+    const owner = newDid();
+    const cookie = await signIn(owner);
+    const [ref] = await refsOf(owner);
+    const user = await readyChat(owner);
+    await chatEntry(owner, ref as SessionRef, user);
+    const response = await signOut(cookie);
+    expect(response.status).toBe(303);
+    // Chromium applies form-action 'self' to a form's redirects, so the door is reached from a page of ours.
+    expect(response.headers.get("location")).toBe("/logout/chat");
+    const line = response.headers.getSetCookie().find((each) => each.startsWith(`${CHAT_COOKIE}=`)) ?? "";
+    const parts = line.split(";").map((part) => part.trim().toLowerCase());
+    for (const part of ["path=/", "secure", "httponly", "samesite=strict", "max-age=60"]) expect(parts).toContain(part);
+    expect(parts.some((part) => part.startsWith("domain="))).toBe(false);
+    const carried = `${CHAT_COOKIE}=${cookieValue(response, CHAT_COOKIE)}`;
+    const page = await web.fetch("/logout/chat", { headers: headers({ cookie: carried }) });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("cache-control")).toContain("no-store");
+    expect(page.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(page.headers.getSetCookie().some((each) => each.startsWith(`${CHAT_COOKIE}=;`))).toBe(true);
+    const html = await page.text();
+    const refresh = /<meta http-equiv="refresh" content="0;url=([^"]+)"/.exec(html)?.[1]?.replaceAll("&amp;", "&");
+    expect(refresh?.startsWith(`${DOOR}/sign-out/return#ticket=`)).toBe(true);
+    const payload = payloadOf(refresh ?? "");
+    expect([payload.verb, payload.did, payload.user, payload.sid]).toEqual(["session.mint", owner, user, ref]);
+    expect(payload.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(logsName(owner)).toBe(false);
+    // Spent: the page without its cookie is the signed-out page.
+    const again = await web.fetch("/logout/chat", { headers: headers() });
+    expect(again.status).toBe(303);
+    expect(again.headers.get("location")).toBe("/signed-out");
+  });
+
+  test("log_out_without_chat_here_goes_straight_to_signed_out", async () => {
+    const owner = newDid();
+    const first = await signIn(owner);
+    const [firstRef] = await refsOf(owner);
+    await signIn(owner);
+    const secondRef = (await refsOf(owner)).find((ref) => ref !== firstRef) as SessionRef;
+    // The member has chat, but only another browser's session signed it in.
+    await chatEntry(owner, secondRef, await readyChat(owner));
+    const response = await signOut(first);
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.getSetCookie().some((each) => each.startsWith(`${CHAT_COOKIE}=`))).toBe(false);
+  });
+
+  test("log_out_gives_the_chat_page_time: the queued end is not due at once", async () => {
+    const owner = newDid();
+    const cookie = await signIn(owner);
+    const [ref] = await refsOf(owner);
+    const device = await chatEntry(owner, ref as SessionRef, await readyChat(owner));
+    expect((await signOut(cookie)).status).toBe(303);
+    expect(await queuedDevices()).toContain(device);
+    const due = await pool.query<{ device_id: string }>("SELECT device_id FROM app.claim_chat_session_end(100, 60)");
+    expect(due.rows.map((r) => r.device_id)).not.toContain(device);
+  });
+
+  test("sign_out_everywhere_with_chat_here_goes_through_the_chat_page: other browsers keep the end due now", async () => {
+    const owner = newDid();
+    const here = await signIn(owner);
+    const [hereRef] = await refsOf(owner);
+    await signIn(owner);
+    const thereRef = (await refsOf(owner)).find((ref) => ref !== hereRef) as SessionRef;
+    const user = await readyChat(owner);
+    const mine = await chatEntry(owner, hereRef as SessionRef, user);
+    const theirs = await chatEntry(owner, thereRef, user);
+    web.setStandIns(pdsFixture(owner));
+    const response = await signOutEverywhere(here);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/logout/chat");
+    const carried = `${CHAT_COOKIE}=${cookieValue(response, CHAT_COOKIE)}`;
+    const page = await web.fetch("/logout/chat", { headers: headers({ cookie: carried }) });
+    const html = await page.text();
+    const refresh = /<meta http-equiv="refresh" content="0;url=([^"]+)"/.exec(html)?.[1]?.replaceAll("&amp;", "&");
+    const payload = payloadOf(refresh ?? "");
+    expect([payload.verb, payload.did, payload.user, payload.sid]).toEqual(["session.mint", owner, user, hereRef]);
+    const due = await pool.query<{ device_id: string }>("SELECT device_id FROM app.claim_chat_session_end(100, 60)");
+    expect(due.rows.map((r) => r.device_id)).toContain(theirs);
+    expect(due.rows.map((r) => r.device_id)).not.toContain(mine);
+    expect(await queuedDevices()).toContain(mine);
+    expect(logsName(owner)).toBe(false);
+  });
+
+  test("log_out_done_bounces_same_site: unset.cc's way back reaches /signed-out from a page of ours", async () => {
+    // The issuer cookie stays Strict; the door sends the tab here, and this page's own navigation is same-site.
+    const owner = newDid();
+    const line =
+      (await signOut(await signIn(owner))).headers
+        .getSetCookie()
+        .find((each) => each.startsWith("__Host-signed_out_issuer=")) ?? "";
+    expect(line.split(";").map((part) => part.trim().toLowerCase())).toContain("samesite=strict");
+    const page = await web.fetch("/logout/done", { headers: headers({ cookie: "__Host-signed_out_issuer=x" }) });
+    expect(page.status).toBe(200);
+    expect(page.headers.get("cache-control")).toContain("no-store");
+    expect(page.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(page.headers.getSetCookie()).toEqual([]);
+    expect(await page.text()).toContain('<meta http-equiv="refresh" content="0;url=/signed-out"');
   });
 });

@@ -4,7 +4,9 @@
 // (chat-admin's harness) and the homeserver, which answers the client-server API calls the page makes as Synapse would,
 // keys included, for one account (https://spec.matrix.org/v1.18/client-server-api/). One TLS listener plays the
 // edge: unset.cc's /_matrix/client/* to the homeserver, the rest of unset.cc to the door, and unset.sh's /chat/sign-in
-// to web's half of the hop. The browser reaches it through a CONNECT proxy of its own, as the rest of the harness
+// to web's half of the hop, /logout to web's Log out ticket for that session, /logout/done to web's bounce and /signed-out to a page
+// that says whether the Strict issuer cookie arrived. The
+// browser reaches it through a CONNECT proxy of its own, as the rest of the harness
 // reaches unset.test (fixtures/servers.ts): the browser may run in Playwright's image (e2e.yml, P0.07n), where no
 // launch flag of ours applies, so the names are mapped by the proxy, not by --host-resolver-rules.
 import { execFileSync } from "node:child_process";
@@ -30,6 +32,14 @@ import { migrateAsMigrator, randomPassword, startPostgres, stopAllPostgres } fro
 import { fakeRooms } from "./chat-rooms.ts";
 
 const ROOT = join(import.meta.dirname, "../../..");
+const ISSUER_COOKIE = "__Host-signed_out_issuer";
+const ISSUER_VALUE = Buffer.from("https://pds.example").toString("base64url");
+const HTML = {
+  "content-type": "text/html; charset=utf-8",
+  "cache-control": "no-store",
+  "referrer-policy": "no-referrer",
+};
+const BOUNCE = '<title>Signing out</title><meta http-equiv="refresh" content="0;url=/signed-out">';
 const ALICE = `did:plc:${"a".repeat(24)}` as Did;
 
 /** A folder for this run's files, removed when the process ends. */
@@ -366,8 +376,35 @@ export async function startChatStack(db: ChatDatabase, pageDir: string, dir: str
     const ticket = await web.signTicket({ user, did: ALICE, sid: sessionRef(Buffer.alloc(32, 1)), state });
     res.writeHead(303, { location: `https://unset.cc/sign-in/return#${new URLSearchParams({ ticket })}` }).end();
   };
+  // web's POST /logout for that session, through GET /logout/chat (interfaces/web chat-sign-out.ts): a ticket for the
+  // ended session with a random one-time value, then the door's sign-out page. One GET stands for both.
+  const logOut = async (res: ServerResponse) => {
+    const state = parseDoorState(randomBytes(32).toString("base64url"));
+    if (state === null) return res.writeHead(500).end();
+    const ticket = await web.signTicket({ user, did: ALICE, sid: sessionRef(Buffer.alloc(32, 1)), state });
+    res
+      .writeHead(303, {
+        location: `https://unset.cc/sign-out/return#${new URLSearchParams({ ticket })}`,
+        // POST /logout's carried issuer (interfaces/web sign-in-state.ts): Strict, as web sets it.
+        "set-cookie": `${ISSUER_COOKIE}=${ISSUER_VALUE}; Path=/; Max-Age=600; Secure; HttpOnly; SameSite=Strict`,
+      })
+      .end();
+  };
+  const unsetSh = (req: IncomingMessage, res: ServerResponse) => {
+    const path = new URL(req.url ?? "/", "https://unset.sh").pathname;
+    if (path === "/logout") return void logOut(res);
+    // GET /logout/done as web renders it (interfaces/web routes/logout/done): a same-site meta refresh, no state.
+    if (path === "/logout/done") return void res.writeHead(200, HTML).end(BOUNCE);
+    // /signed-out links the carried issuer only when the Strict cookie arrived (routes/signed-out/+page.server.ts).
+    if (path === "/signed-out") {
+      const carried = (req.headers.cookie ?? "").includes(`${ISSUER_COOKIE}=${ISSUER_VALUE}`);
+      const link = carried ? "your sign-in server (pds.example)" : "Your account on our server";
+      return void res.writeHead(200, HTML).end(`<title>Signed out</title><a id="account">${link}</a>`);
+    }
+    return void signIn(req, res);
+  };
   const edge = createTlsServer(certificate(dir), (req, res) => {
-    if (req.headers.host === "unset.sh") return void signIn(req, res);
+    if (req.headers.host === "unset.sh") return unsetSh(req, res);
     if (req.url?.startsWith("/_matrix/client/")) return homeserver.handle(req, res);
     door.listener(req, res);
   });

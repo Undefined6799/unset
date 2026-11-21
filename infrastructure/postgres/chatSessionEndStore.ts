@@ -14,12 +14,18 @@ export type ChatSessionEndStore = {
   queueForSession(db: Db, idHash: Uint8Array): Promise<number>;
   /** Every device of `did`, and every session of `did` marked ended: before its sessions are ended. */
   queueForDid(db: Db, did: Did): Promise<number>;
+  /**
+   * After `queueForDid`: the queued devices this web session signed in wait the Log out grace instead (migration
+   * 0046), for the chat page in the browser that signed out everywhere. How many it held.
+   */
+  holdForSession(db: Db, idHash: Uint8Array): Promise<number>;
   claim(limit: number): Promise<ChatSessionEndJob[]>;
   finish(job: ChatSessionEndJob): Promise<boolean>;
   retry(job: ChatSessionEndJob, inS: number): Promise<boolean>;
 };
 
 const QUEUE = "SELECT app.end_chat_sessions($1::text[], $2, $3) AS queued";
+const HOLD = "SELECT app.hold_chat_session_end($1, $2) AS held";
 const SESSIONS = "SELECT id_hash FROM app.session WHERE did = $1";
 const CLAIM = "SELECT chat_user, device_id, attempts, lease FROM app.claim_chat_session_end($1, $2)";
 const FINISH = "SELECT app.finish_chat_session_end($1, $2, $3::uuid) AS finished";
@@ -55,6 +61,10 @@ export function createChatSessionEndStore(pool: Pool, options: ChatSessionEndOpt
       const refs = sessions.map((s) => sessionRef(s.id_hash));
       const { rows } = await db.query(QUEUE, [refs, did, 0]);
       return queued(rows);
+    },
+    async holdForSession(db, idHash) {
+      const { rows } = await db.query<{ held: number }>(HOLD, [sessionRef(idHash), options.logoutAfterS]);
+      return Number(rows[0]?.held ?? 0);
     },
     claim: async (limit) => (await run(CLAIM, [limit, options.leaseS])).rows.map(jobOf),
     finish: async (job) => (await run(FINISH, [job.user, job.device, job.lease])).rows[0]?.finished === true,

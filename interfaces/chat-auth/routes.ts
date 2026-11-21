@@ -1,7 +1,8 @@
 // The door's POST routes (build step 6; ADR 0081 decision 4, ADR 0083 decisions 2, 4 and 5; ADR 0089), behind
 // door.ts's Host, CSRF and rate-limit checks. Redeem reads exactly `{ ticket }`, takes the hop's one-time value and return path from
 // their cookies and clears both whatever happens, and answers the chat page's session: the token, the member's chat
-// ID, the device and its lock key. Log out, the setup claim and its release, and the pushkey (ADR 0090) read exactly
+// ID, the device and its lock key. Its Log out twin, /sign-out/redeem, answers the same for the device the browser
+// already holds, and nothing else. Log out, the setup claim and its release, and the pushkey (ADR 0090) read exactly
 // `{ deviceId }` and need the browser cookie. Each refusal is
 // a catalog code; none carries a ticket, token, key, DID or chat user (SE-3, SE-7).
 import { createHash, randomBytes } from "node:crypto";
@@ -20,6 +21,7 @@ import {
   type RedeemRefusal,
   readTicket,
   redeem,
+  redeemForSignOut,
   releaseSetup,
   type SetupClaims,
   signOut,
@@ -135,6 +137,36 @@ export function redeemRoute({ ports, serverName, random = randomBytes }: RouteSe
         },
         headers,
       );
+    },
+  };
+}
+
+/**
+ * POST /sign-out/redeem: unset.sh's Log out reaching this browser (ADR 0083 decision 5). web's ticket for the ended
+ * session buys a session on the device this browser already holds for the member, and its lock key, so the page can
+ * wait for the key backup and then Log out at POST /sign-out. Nothing is created or renewed, no cookie is set, and the
+ * ticket's one-time value is not read: web made it at random, as no browser started this hop.
+ */
+export function signOutRedeemRoute({ ports, serverName }: Omit<RouteSettings, "random">): PostRoute {
+  return {
+    limit: "sign-in",
+    async handle(request, deadline) {
+      const raw = await onlyField(request, "ticket", MAX_TICKET);
+      const ticket = raw === null ? null : readTicket(raw);
+      if (ticket === null) return answer(400, { error: "chat.bad_ticket" });
+      const browser = browserOf(request);
+      if (browser === null) return answer(401, { error: "chat.no_session" });
+      const outcome = await redeemForSignOut(ports, { ticket, browser: browser.key, deadline });
+      if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
+      if (outcome.kind === "refused") return answer(STATUS[outcome.code], { error: outcome.code });
+      const { entry, token, expiresAtS } = outcome;
+      return answer(200, {
+        accessToken: token,
+        userId: `@${entry.user}:${serverName}`,
+        deviceId: entry.device,
+        expiresAt: new Date(expiresAtS * 1000).toISOString(),
+        storageKey: Buffer.from(entry.lockKey).toString("base64url"),
+      });
     },
   };
 }

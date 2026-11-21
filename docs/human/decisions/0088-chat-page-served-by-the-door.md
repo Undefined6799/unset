@@ -91,3 +91,9 @@ until a bump re-runs them. `npm audit` lists nothing for the new packages.
 Chromium against the door, real Postgres, real chat-admin and a stand-in homeserver: hop, redeem, locked card, no
 CSP violation, nothing kept in storage or the address, renewal for the same device and key, no loop, axe in both
 themes. dependency-cruiser's `vendor-sdk-one-adapter` row for matrix-js-sdk.
+
+## Notes appended after acceptance
+- **2026-11-21:** the door also serves the page at `/sign-out/return`, where unset.sh's Log out sends the tab with a
+  ticket (ADR 0083's note of the same day: no Log out on the chat page; unset.sh logout drives it, Alex 2026-11-21;
+  new door route POST /sign-out/redeem), and `GET /sign-out/done` sends the tab back to unset.sh's `/signed-out`. The
+  page's `ChatState` gains `signing_out`; this ADR never described a Log out button.

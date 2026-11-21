@@ -25,9 +25,9 @@ export type UnlockOutcome = "unlocked" | "wrong_key" | "unfinished" | "failed";
  * - setup_elsewhere: another browser of the account is setting up right now.
  * - locked: encryption runs, but this browser cannot read history yet; `unlock` tries a typed recovery key.
  * - ready: this browser is cross-signed and can read history; `conversations` is what the screens use (step 9).
- * - logging_out: Log out runs: the key backup catches up, then the door ends this device (ADR 0083 decision 5).
- * - logged_out: the device is ended and this account's stores are gone from this browser.
+ * - signing_out: unset.sh's Log out runs here (core/sign-out.ts signOutHere); the page then leaves for unset.sh.
  * - signed_out: the server no longer takes the token.
+ * - open_elsewhere: another tab of this browser holds chat (core/tab-lock.ts); `useHere` takes it over.
  * - error: a fixed catalog code, never a message from elsewhere.
  */
 export type ChatState =
@@ -35,18 +35,9 @@ export type ChatState =
   | { readonly kind: "setting_up" }
   | { readonly kind: "save_key"; readonly key: string; readonly save: () => void }
   | { readonly kind: "setup_elsewhere" }
-  | {
-      readonly kind: "locked";
-      readonly unlock: (typed: string) => Promise<UnlockOutcome>;
-      readonly logOut: () => void;
-    }
-  | {
-      readonly kind: "ready";
-      readonly conversations: Conversations;
-      readonly me: string;
-      readonly logOut: () => void;
-    }
-  | { readonly kind: "logging_out" }
-  | { readonly kind: "logged_out" }
+  | { readonly kind: "locked"; readonly unlock: (typed: string) => Promise<UnlockOutcome> }
+  | { readonly kind: "ready"; readonly conversations: Conversations; readonly me: string }
+  | { readonly kind: "signing_out" }
   | { readonly kind: "signed_out" }
+  | { readonly kind: "open_elsewhere"; readonly useHere: () => void }
   | { readonly kind: "error"; readonly code: string };
