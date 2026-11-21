@@ -1,12 +1,15 @@
 // The unset.cc door's entry point (build step 6; ADR 0081 decision 4): settings first (exit 78 when invalid), then the
-// door (compose.ts), which checks its database budget and key before it listens. Each answer is one log line of route
+// chat page from apps/chat's build (ADR 0088; the door does not start without it), then the door (compose.ts), which
+// checks its database budget and key before it listens. Each answer is one log line of route
 // template, method, status and reason (SE-7). SIGTERM stops taking requests and exits once the listener has closed.
 import { createServer } from "node:http"; // guard-allow: egress inbound listener only; the door sends nothing out here
+import { fileURLToPath } from "node:url";
 import { bootOrExit } from "@unset/shared-config";
 import { exitOnSignals } from "@unset/shared-http";
 import { createLogger, type LogFields } from "@unset/shared-log";
 import { compose } from "./compose.ts";
 import { schema } from "./config.ts";
+import { loadChatPage } from "./page.ts";
 
 const config = bootOrExit(schema);
 const log = createLogger({ service: "chat-auth", commit: config.UNSET_COMMIT, env: config.UNSET_ENV });
@@ -18,13 +21,20 @@ process.on("uncaughtException", (error: unknown) => {
 /** The methods the log may name; any other is logged without one. */
 const METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
-const door = await compose(config, {
-  request: ({ route, method, status, reason }) => {
-    const named = METHODS.has(method) ? { method: method as NonNullable<LogFields["method"]> } : {};
-    log.info("door.request", { route, status, ...named, ...(reason ? { reason } : {}) });
+/** Where `npm run build -w @unset/apps-chat` writes the page (apps/chat/vite.config.ts), beside this folder. */
+const PAGE_DIR = new URL("../../apps/chat/dist/page/", import.meta.url);
+
+const door = await compose(
+  config,
+  {
+    request: ({ route, method, status, reason }) => {
+      const named = METHODS.has(method) ? { method: method as NonNullable<LogFields["method"]> } : {};
+      log.info("door.request", { route, status, ...named, ...(reason ? { reason } : {}) });
+    },
+    untrustedPeer: () => log.warn("proxy.untrusted_peer", {}),
   },
-  untrustedPeer: () => log.warn("proxy.untrusted_peer", {}),
-});
+  loadChatPage(fileURLToPath(PAGE_DIR)),
+);
 const server = createServer({ requestTimeout: 15_000, headersTimeout: 10_000, maxHeaderSize: 16_384 }, door.listener);
 server.listen(config.LISTEN_PORT, () => log.info("door.started", {}));
 exitOnSignals(async () => {

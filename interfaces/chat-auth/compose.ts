@@ -1,5 +1,5 @@
 // The door's composition root (build step 6; rule AB-2): the one place its parts are built. Its limits are its own:
-// a sign-in hop per client every few seconds, and a looser bucket for the page, its script, health and Log out. Before
+// a sign-in hop per client every few seconds, and a looser bucket for the chat page, its files, health and Log out. Before
 // it answers anything the pool must fit the role's connection limit across replicas, and the door's key must be
 // Ed25519, or it does not start.
 import { createPrivateKey, randomBytes, randomUUID } from "node:crypto";
@@ -19,6 +19,7 @@ import { createClientIpResolver, createRateLimiter, definePolicies } from "@unse
 import type { schema } from "./config.ts";
 import { createDoor, type DoorLog } from "./door.ts";
 import { createListener } from "./listener.ts";
+import type { ChatPage } from "./page.ts";
 import { redeemRoute, signOutRoute } from "./routes.ts";
 
 /** The largest body the door reads: a redeem's ticket, about 600 bytes of JSON, with room to spare. */
@@ -41,7 +42,8 @@ function doorKey(pem: string) {
   return key;
 }
 
-export async function compose(config: DoorConfig, logs: Logs) {
+/** `page` is the chat page main.ts loaded from apps/chat's build (ADR 0088 decision 1). */
+export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
   const pool = createPool({
     connection: connectionOf(config),
     service: "chat-auth",
@@ -75,6 +77,7 @@ export async function compose(config: DoorConfig, logs: Logs) {
     clientIp: createClientIpResolver(config, logs.untrustedPeer),
     log: logs.request,
     deadlineMs: config.REQUEST_DEADLINE_MS,
+    page,
     posts: {
       "/sign-in/redeem": redeemRoute({ ports, serverName: config.CHAT_SERVER_NAME }),
       "/sign-out": signOutRoute({ ports }),

@@ -1,6 +1,6 @@
 // The adapter's own decisions, as values (ADR 0088 decision 3): which store an account opens, and when this browser
 // counts as locked. The SDK calls themselves run in a real browser against a stand-in homeserver
-// (tests/integration/chat-auth/chat-page.test.ts), the homeserver being the unmanaged dependency (TE-1).
+// (tests/e2e/chat-page.chromium.spec.ts), the homeserver being the unmanaged dependency (TE-1).
 import { describe, expect, test } from "vitest";
 import { lockOf, storePrefix } from "./client.ts";
 

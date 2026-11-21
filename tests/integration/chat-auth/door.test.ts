@@ -18,6 +18,8 @@ import { compose } from "../../../interfaces/chat-auth/compose.ts";
 import { schema } from "../../../interfaces/chat-auth/config.ts";
 import { type FakeMas, fakeMas, startService } from "../chat-admin/harness.ts";
 
+/** The redeem routes need no page; the page itself is tests/e2e/chat-page.chromium.spec.ts's. */
+const PAGE = { html: "<!doctype html>", files: new Map() };
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
 const ORIGIN = "https://unset.cc";
@@ -73,10 +75,14 @@ beforeEach(async () => {
     CHAT_ADMIN_DOOR_KID: service.door.kid,
     CHAT_SERVER_NAME: "staging.unset.cc",
   };
-  door = await compose(loadConfig(schema, env), {
-    request: (line) => logs.push(JSON.stringify(line)),
-    untrustedPeer: () => undefined,
-  });
+  door = await compose(
+    loadConfig(schema, env),
+    {
+      request: (line) => logs.push(JSON.stringify(line)),
+      untrustedPeer: () => undefined,
+    },
+    PAGE,
+  );
 });
 afterEach(async () => {
   await door.close();
