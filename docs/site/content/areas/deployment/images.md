@@ -32,8 +32,11 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5051` | runtime |
 | `newt` | `docker.io/fosrl/newt` | `1.20.0` | runtime |
 | `seaweedfs` | `docker.io/chrislusf/seaweedfs` | `4.53` | runtime |
+| `seaweedfs-next` | `docker.io/chrislusf/seaweedfs` | `4.54` | runtime |
 
-`deployment/mirror.list.json` lists the same seven sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>` (`seaweedfs` is `ghcr.io/undefined6799/mirror/seaweedfs`).
+`seaweedfs-next` is mirror-only: no Dockerfile builds on it yet. It is listed so `mirror.yml` copies and signs 4.54 on `main` before `objects.Dockerfile` moves to it, and it goes when that move lands.
+
+`deployment/mirror.list.json` lists the same eight sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>` (`seaweedfs` is `ghcr.io/undefined6799/mirror/seaweedfs`).
 
 `deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock. While `recipeContract` returns a lock, both tests leave `pds/Dockerfile` out of that set. The load runs `recipeContract` through `execFileSync`. A missing or malformed member throws. Every other Dockerfile stays in the set.
 
