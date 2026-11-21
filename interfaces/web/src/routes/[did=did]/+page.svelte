@@ -145,9 +145,13 @@ const flushes = new Set<() => void>();
 
 const NO_VERSIONS: WrittenVersions = new Map();
 
-async function save() {
+async function save(pressed: MouseEvent) {
   // A press in the same frame as the last keystroke: those words reach `edits` first.
   for (const flush of flushes) flush();
+  // The keys typed straight after a click go on in the words, not to the Save button (staging, 2026-11-21). A press
+  // by keyboard (a click with detail 0 in Chromium, WebKit and Firefox, as the e2e test shows) leaves focus on Save:
+  // a member who reached it by Tab is not mid-word, and a second Enter or Space would go into the card.
+  if (pressed.detail > 0) backToWordsFromBar();
   const toSend = editsToSave(edits, data.cards);
   const previous = data.cards;
   const sent = toSend.map((card) => card.key);
@@ -206,11 +210,15 @@ let lastWords: (() => void) | undefined;
 const markdownField = (key: string) =>
   document.querySelector<HTMLTextAreaElement>(`textarea[data-card-markdown="${CSS.escape(key)}"]`);
 
-async function returnToWords() {
-  await tick();
+function backToWordsFromBar() {
   const active = document.activeElement;
   const onBar = active === null || active === document.body || active.closest("[data-unsaved-bar]") !== null;
   if (onBar) lastWords?.();
+}
+
+async function returnToWords() {
+  await tick();
+  backToWordsFromBar();
 }
 
 /** Each written card's draft goes, or moves to the new version when the card holds newer words. */
@@ -297,7 +305,7 @@ function dropDrafts() {
         {saving}
         message={said?.text}
         refused={said?.refused ?? false}
-        onsave={() => void save()}
+        onsave={(event) => void save(event)}
         ondiscard={discard}
       />
     {/if}
