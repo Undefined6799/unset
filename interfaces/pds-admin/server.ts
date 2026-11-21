@@ -2,13 +2,11 @@
 // is 404. A request runs the checks below in order, and every outcome is one log line. Issuing runs in one chain, so
 // two requests can never read the same quota (step 7a).
 import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
-import type { AdminPayload } from "@unset/shared-admin-envelope";
+import { type AdminPayload, DurabilityLost, type JtiStore } from "@unset/shared-admin-envelope";
 import { checkEnvelope, checkShape, type Expected, isRefusal, type ServiceKey } from "./envelope.ts";
 import { type IssueLimits, type IssueResult, issueInvite } from "./issue.ts";
-import type { JtiStore } from "./jti.ts";
 import type { LogFields, RequestLog } from "./log.ts";
 import type { Pds } from "./pds.ts";
-import { DurabilityLost } from "./state-file.ts";
 
 export type HandlerDeps = {
   readonly keys: readonly ServiceKey[];

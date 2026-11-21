@@ -3,9 +3,8 @@
 // lines linkable for an investigation and leaves nothing for eraseDid to reach. A PDS code has only ~50 bits
 // (@atproto/pds 0.5.51 src/api/com/atproto/server/util.ts, getRandomToken), so a bare hash of it could be brute-forced.
 import { createHash, createHmac } from "node:crypto";
-import { canonicalize } from "@unset/shared-admin-envelope";
+import { appendLine, canonicalize, readLines } from "@unset/shared-admin-envelope";
 import { utcMidnight } from "./quota.ts";
-import { appendLine, readLines } from "./state-file.ts";
 
 /** `reserved` is written, fsynced, before the PDS call and is what the daily cap counts, so a crash after the PDS
  * created a code can never leave that code uncounted. `issued` follows when the code is back. */
