@@ -6,6 +6,8 @@ import { type ChatUser, parseDoorState, sessionRef } from "@unset/domains-messag
 import { createChatAdminClient } from "@unset/infrastructure-matrix";
 import { createNetGuard } from "@unset/infrastructure-net-guard";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { createSynapse } from "../../../interfaces/chat-admin/synapse.ts";
+import { DAY_MS, ENCRYPTED_STATE, fakeSynapse, PLAIN_STATE } from "./fake-synapse.ts";
 import { type FakeMas, fakeMas, startService } from "./harness.ts";
 
 const USER = `u${"e".repeat(20)}` as ChatUser;
@@ -73,5 +75,17 @@ describe("web's chat-admin client", () => {
     const again = await service.post("/v1/session.mint", { ticket, device: null });
     expect(again.status).toBe(403);
     expect(service.logs.at(-1)).toMatchObject({ outcome: "denied", reason: "replay" });
+  });
+
+  test("chat.client_sweep_accepted: chat-admin takes web's sweep and deletes only the idle plain room", async () => {
+    const synapse = await fakeSynapse(mas);
+    await service.close();
+    service = await startService(mas, { synapse: createSynapse({ adminUrl: synapse.url }) });
+    const old = Date.now() - 31 * DAY_MS;
+    synapse.rooms.set("!plain", { encryption: null, state: PLAIN_STATE, newest: old });
+    synapse.rooms.set("!enc", { encryption: "m.megolm.v1.aes-sha2", state: ENCRYPTED_STATE, newest: old });
+    expect(await clientFor().sweepRooms()).toEqual({ kind: "swept", deleted: 1, kept: 1, failed: 0 });
+    expect([...synapse.rooms.keys()]).toEqual(["!enc"]);
+    await synapse.close();
   });
 });

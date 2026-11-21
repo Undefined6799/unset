@@ -12,6 +12,22 @@ export type { ChatAdminSettings } from "./chat-admin-call.ts";
 
 /** Under the job's lease and inside the envelope's own life. */
 const TIMEOUT_MS = 8000;
+/** The room sweep's wait: net-guard's longest; chat-admin starts no work after 25 s of it (ADR 0091 decision 6). */
+const SWEEP_TIMEOUT_MS = 30_000;
+
+/** What one room sweep did (ADR 0091), as counts only. */
+export type ChatRoomSweep =
+  | { readonly kind: "swept"; readonly deleted: number; readonly kept: number; readonly failed: number }
+  | { readonly kind: "unavailable" };
+
+const count = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+
+/** chat-admin's rooms.sweep answer (interfaces/chat-admin/sweep.ts SweepCounts); any other shape is unavailable. */
+function sweepOf(status: number, body: Record<string, unknown> | null): ChatRoomSweep {
+  const { deleted, kept, failed } = body ?? {};
+  if (status !== 200 || !count(deleted) || !count(kept) || !count(failed)) return { kind: "unavailable" };
+  return { kind: "swept", deleted, kept, failed };
+}
 
 /** chat-admin's account.create answers (interfaces/chat-admin/server.ts); any shape it does not expect is unavailable. */
 function creationOf(status: number, body: Record<string, unknown> | null): ChatAccountCreation {
@@ -71,7 +87,14 @@ export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettin
   const setLocked = (user: ChatUser, lock: boolean, deadline?: AbortSignal) =>
     changeAccount(user, lock ? "account.lock" : "account.unlock", deadline);
 
-  return { createAccount, changeAccount, deactivateAccount, setLocked, signTicket };
+  /** Asks chat-admin to delete idle plain rooms (ADR 0091). The command names nothing: chat-admin finds the rooms. */
+  async function sweepRooms(deadline?: AbortSignal): Promise<ChatRoomSweep> {
+    const envelope = sign({ verb: "rooms.sweep", user: "", name: "", device: "", did: "", sid: "", state: "" });
+    const answer = await postChatAdmin(guard, settings, "/v1/rooms.sweep", envelope, SWEEP_TIMEOUT_MS, deadline);
+    return answer === "unavailable" ? { kind: "unavailable" } : sweepOf(answer.status, answer.body);
+  }
+
+  return { createAccount, changeAccount, deactivateAccount, setLocked, signTicket, sweepRooms };
 }
 
 export type ChatAdminClient = ReturnType<typeof createChatAdminClient>;
