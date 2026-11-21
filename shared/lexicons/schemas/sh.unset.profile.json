@@ -47,6 +47,12 @@
             "maxLength": 2000,
             "description": "The member's website: an http or https URL. A reader drops any other scheme."
           },
+          "visibility": {
+            "type": "string",
+            "maxLength": 32,
+            "knownValues": ["public", "signedIn", "ownerOnly"],
+            "description": "Who unset.sh shows the page to: public (everyone), signedIn (people signed in to unset.sh), ownerOnly (only the account itself; others see that the account exists and nothing more). Absent means public; an unknown value is read as ownerOnly. A request to apps, not access control: the record stays readable by anyone on the network."
+          },
           "listed": {
             "type": "boolean",
             "description": "True: listed in the unset.sh directory. Absent or false: not listed; the page is still public at its URL."

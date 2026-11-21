@@ -7,7 +7,7 @@
 <script lang="ts">
 import "@unset/apps-web/app.css";
 import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
-import MarkAllRead from "@unset/apps-web/lib/components/notifications/mark-all-read.svelte";
+import DismissAll from "@unset/apps-web/lib/components/notifications/dismiss-all.svelte";
 import NotificationList from "@unset/apps-web/lib/components/notifications/notification-list.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
@@ -207,8 +207,8 @@ const panel =
 const account = $derived(shell.account ?? data.account);
 // The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
 const notes = $derived(data.notifications);
-const unread = $derived(notes?.state === "ready" ? notes.unread : 0);
-// The unread count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
+const waiting = $derived(notes?.state === "ready" ? notes.count : 0);
+// The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
 // drawn as a small badge.
 const badge =
   "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.6875rem] leading-4.5 font-semibold text-primary-foreground";
@@ -382,8 +382,8 @@ const row =
             popovertargetaction="toggle"
             class="{control} relative max-sm:hidden"
           >
-            <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(unread) : button.label} />
-            {#if button.id === NOTIFICATIONS && unread > 0}<span aria-hidden="true" class={badge}>{N.badge(unread)}</span>{/if}
+            <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
+            {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
           </Button>
         {/each}
         <Button
@@ -393,8 +393,8 @@ const row =
           popovertargetaction="toggle"
           class="{control} relative sm:hidden"
         >
-          <Icon name="more" size={20} label={unread > 0 ? `${T.moreActions}, ${N.bell(unread)}` : T.moreActions} />
-          {#if unread > 0}<span aria-hidden="true" class={badge}>{N.badge(unread)}</span>{/if}
+          <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
+          {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
         </Button>
         {#if account !== undefined}
           <Button
@@ -449,7 +449,7 @@ const row =
     </li>
   {/snippet}
   {#snippet notificationsBody()}
-    <!-- P2.27: the newest few, each a form that opens it, Mark all as read, and the page. A visitor is told to sign in
+    <!-- P2.27, ADR 0081: the newest few, each a link to its detail on the page, Dismiss all, and the page. A visitor is told to sign in
          (the header's Sign in button is the one link for it). A failed read says so; the empty text comes from a real,
          empty list. -->
     {#if notes === undefined}
@@ -461,7 +461,7 @@ const row =
         <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
       {:else}
         <NotificationList entries={notes.entries} />
-        <div class="flex justify-end px-1"><MarkAllRead entries={notes.entries} returnTo={page.url.pathname} /></div>
+        <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
       {/if}
       <ul class="flex flex-col gap-1 border-t pt-1">
         <li>
@@ -535,8 +535,8 @@ const row =
         <li>
           <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
             <Icon name={button.icon} size={20} /><span>{button.label}</span>
-            {#if button.id === NOTIFICATIONS && unread > 0}<span class="ml-auto text-xs text-muted-foreground"
-                ><span aria-hidden="true">{N.badge(unread)}</span><span class="sr-only">{N.bell(unread)}</span></span
+            {#if button.id === NOTIFICATIONS && waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
+                ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
               >{/if}
           </button>
         </li>

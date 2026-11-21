@@ -1,10 +1,20 @@
 // P3.12s: the public profile at /@<handle> and /@<DID> on the built web server, read from the index as `web` through
 // the views of migration 0030 (TE-2). The index is written as `indexer`, the role that writes it in production. No
 // network: the page never reads a PDS. Decision 35 D7 and rule SE-2: every account the page may not show, and every
-// path that is no actor, gets one 404 with the same bytes and headers.
-import { relative } from "node:path";
+// path that is no actor, gets one 404 with the same bytes and headers. ADR 0078 (P1.22a): a page shown to signed-in
+// members only, or only to its member, gives anyone it leaves out the limited page, never the 404, and is never offered
+// to search engines; the session is read when a cookie is sent.
+import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import { type Did, parseDid } from "@unset/domains-identity";
 import { CARDS_MAX, toCardRecord } from "@unset/domains-profile";
-import { createPool, withClient } from "@unset/infrastructure-postgres";
+import type { SavedSession } from "@unset/infrastructure-pds";
+import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import { createSessionStore } from "@unset/infrastructure-session";
+import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
 
@@ -19,6 +29,49 @@ const indexer = createPool({
   connectTimeoutMs: 5000,
 });
 
+const webPool = createPool({
+  connection: { ...pg, ssl: false },
+  service: "web-public-profile-session-test",
+  max: 2,
+  connectTimeoutMs: 5000,
+});
+const quiet = createLogger({ service: "web", commit: "c".repeat(40), env: "test", write: () => undefined });
+const sessions = createSessionStore({
+  withDb: async () => {
+    throw new Error("this file only creates sessions");
+  },
+  limits: { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 },
+  log: quiet,
+});
+const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }));
+if (keyring === undefined) throw new Error("test keyring did not parse");
+const tokenSets = createOAuthSessionStore<SavedSession>({ pool: webPool, sealer: createSealer(keyring), log: quiet });
+
+/** A signed-in browser for `owner`, as gate.test.ts makes one: a stored grant, then a session; returns the cookie. */
+async function signedIn(owner: string): Promise<string> {
+  const ownerDid = parseDid(owner) as Did;
+  const dpopJwk = {
+    ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
+    kid: "dpop",
+    alg: "ES256",
+  };
+  const issuer = "https://pds.unset.test";
+  await tokenSets.set(ownerDid, {
+    dpopJwk: dpopJwk as SavedSession["dpopJwk"],
+    authMethod: { method: "private_key_jwt", kid: "A" },
+    tokenSet: {
+      iss: issuer,
+      sub: owner as SavedSession["tokenSet"]["sub"],
+      aud: issuer,
+      scope: "atproto",
+      access_token: "a",
+      token_type: "DPoP",
+    },
+  });
+  const created = await withTransaction(webPool, null, (tx) => sessions.create(tx, ownerDid));
+  return `__Host-sid=${created.cookieValue}`;
+}
+
 const NOW = "2026-11-19T00:00:00.000Z";
 const SHOWN = `did:plc:${"p".repeat(24)}`;
 const NAMED = `did:plc:${"q".repeat(24)}`;
@@ -26,6 +79,10 @@ const HIDDEN = `did:plc:${"r".repeat(24)}`;
 const BARE = `did:plc:${"s".repeat(24)}`;
 const UNVERIFIED = `did:plc:${"t".repeat(24)}`;
 const MANY = `did:plc:${"u".repeat(24)}`;
+const MEMBERS = `did:plc:${"v".repeat(24)}`;
+const ONLY_ME = `did:plc:${"w".repeat(24)}`;
+const FUTURE = `did:plc:${"x".repeat(24)}`;
+const OTHER = `did:plc:${"y".repeat(24)}`;
 
 /** An account as the indexer leaves it once our PDS confirmed it, with a profile and one README card unless told. */
 async function indexed(
@@ -37,12 +94,19 @@ async function indexed(
     name?: string;
     profile?: boolean;
     surface?: "plain";
+    visibility?: string;
   } = {},
 ) {
   const { handle = null, status = "unresolved", active = true, name = "Member", profile = true } = opts;
   const card = toCardRecord({ kind: "readme", text: `Card of ${name}` }, "full", null, NOW, opts.surface);
   if (!card.ok) throw new Error(`seed card did not build: ${card.code}`);
-  const record = { $type: "sh.unset.profile", displayName: name, headline: "<b>Head</b>", createdAt: NOW };
+  const record = {
+    $type: "sh.unset.profile",
+    displayName: name,
+    headline: "<b>Head</b>",
+    createdAt: NOW,
+    ...(opts.visibility === undefined ? {} : { visibility: opts.visibility }),
+  };
   await withClient(indexer, null, async (c) => {
     await c.query("INSERT INTO idx.account (did, track_requested_at, updated_at) VALUES ($1, now(), now())", [did]);
     await c.query("UPDATE idx.account SET handle = $2, handle_status = $3, pds_active = $4 WHERE did = $1", [
@@ -82,6 +146,9 @@ async function moreCards(did: string, count: number) {
 }
 
 let web: RunningWeb;
+/** A server with invite requests on (ADR 0080), so the limited card offers Sign up. It never sends a mail here. */
+let inviting: RunningWeb;
+let secrets: string;
 beforeAll(async () => {
   buildOnce(provided.port);
   await indexed(SHOWN, { name: "Shown Member" });
@@ -91,11 +158,30 @@ beforeAll(async () => {
   await indexed(UNVERIFIED, { handle: "mallory.unset.org", status: "invalid", name: "Mallory" });
   await indexed(MANY, { name: "Many" });
   await moreCards(MANY, CARDS_MAX);
-  web = await startWeb(pg);
+  await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signedIn" });
+  await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "ownerOnly" });
+  await indexed(FUTURE, { name: "Future", visibility: "friendsOfFriends" });
+  secrets = mkdtempSync(join(tmpdir(), "public-profile-"));
+  const file = (name: string, text: string): string => {
+    const path = join(secrets, name);
+    writeFileSync(path, text, { mode: 0o600 });
+    return path;
+  };
+  [web, inviting] = await Promise.all([
+    startWeb(pg),
+    startWeb(pg, {
+      INVITE_REQUESTS: "on",
+      INVITE_REQUEST_SMTP_URL_FILE: file("smtp", ["smtps://user", "pass@localhost:1"].join(":")),
+      INVITE_REQUEST_TO_FILE: file("to", "owner@unset.example"),
+      INVITE_REQUEST_FROM: "noreply@unset.example",
+    }),
+  ]);
 }, 120_000);
 afterAll(async () => {
-  await web?.stop();
+  await Promise.all([web?.stop(), inviting?.stop()]);
+  rmSync(secrets, { recursive: true, force: true });
   await indexer.end();
+  await webPool.end();
 });
 
 const get = (path: string, init: { method?: string; cookie?: string } = {}) =>
@@ -114,7 +200,7 @@ describe("public profile", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("public, max-age=60");
     expect(response.headers.get("x-robots-tag")).toBe("noindex");
-    expect(response.headers.get("vary")).toBeNull();
+    expect(response.headers.get("vary")).toBe("Cookie"); // the session is read when sent (ADR 0078)
     const csp = response.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("default-src 'none'");
     expect(csp).not.toContain("script-src");
@@ -176,12 +262,13 @@ describe("public profile", () => {
     }
   });
 
-  test("no_cookie_changes_the_page", async () => {
+  test("a_cookie_that_is_no_session_reads_as_a_visitor", async () => {
     const plain = await get(`/@${SHOWN}`);
-    const withCookies = await get(`/@${SHOWN}`, { cookie: "__Host-sid=untrusted; __Host-theme=dark" });
-    expect(withCookies.headers.get("set-cookie")).toBeNull();
-    expect(kept(withCookies)).toEqual(kept(plain));
-    expect(await withCookies.text()).toBe(await plain.text());
+    const withCookie = await get(`/@${SHOWN}`, { cookie: "__Host-sid=untrusted" });
+    expect(withCookie.status).toBe(200);
+    // The gate clears a cookie it does not know, so this answer is never stored; it shows what a visitor sees.
+    expect(withCookie.headers.get("cache-control")).toBe("private, no-store");
+    expect(await withCookie.text()).toBe(await plain.text());
   });
 
   test("never_more_cards_than_the_owner_page_reads", async () => {
@@ -202,5 +289,78 @@ describe("public profile", () => {
       body: "a",
     });
     expect(post.status).toBe(405);
+  });
+});
+
+/** What a page that is not public must never carry: its cards, headline and link-preview tags. */
+function expectLimited(html: string, name: string) {
+  expect(html).toContain(`<title>${name}</title>`);
+  expect(html).toContain(name);
+  expect(html).not.toContain(`Card of ${name}`);
+  expect(html).not.toContain("Head");
+  expect(html).not.toContain("og:");
+  expect(html).not.toContain('rel="canonical"');
+  expect(html).toContain('<meta name="robots" content="noindex"');
+}
+
+describe("page visibility (ADR 0078)", () => {
+  test("signed_in_only_gives_a_visitor_the_limited_page_with_a_sign_in_link", async () => {
+    const response = await get("/@bea.unset.org");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    expect(response.headers.get("vary")).toBe("Cookie");
+    const html = await response.text();
+    expectLimited(html, "Bea");
+    expect(html).toContain('data-limited="signedIn"');
+    expect(html).toContain("data-limited-sign-in");
+    expect(html).toContain(`/login?next=${encodeURIComponent("/@bea.unset.org")}`);
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("data-limited-sign-up"); // invite requests are off on this server
+  });
+
+  test("signed_in_only_offers_a_visitor_sign_up_when_invite_requests_are_on", async () => {
+    const html = await (
+      await inviting.fetch("/@bea.unset.org", { headers: { "x-forwarded-for": clientAddress() } })
+    ).text();
+    expect(html).toContain("data-limited-sign-in");
+    expect(html).toContain('href="/request-invite" data-limited-sign-up');
+    const ownerOnly = await (
+      await inviting.fetch("/@cy.unset.org", { headers: { "x-forwarded-for": clientAddress() } })
+    ).text();
+    expect(ownerOnly).not.toContain("data-limited-sign-up"); // joining would not show it
+  });
+
+  test("signed_in_only_shows_a_member_the_whole_page_privately_and_never_indexed", async () => {
+    const response = await get("/@bea.unset.org", { cookie: await signedIn(OTHER) });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    const html = await response.text();
+    expect(html).toContain("Card of Bea");
+    expect(html).toContain('data-page-audience="signedIn"');
+    expect(html).not.toContain("og:");
+  });
+
+  test("only_me_gives_everyone_but_the_owner_the_limited_page_with_no_sign_in", async () => {
+    for (const cookie of [undefined, await signedIn(OTHER)]) {
+      const response = await get("/@cy.unset.org", cookie === undefined ? {} : { cookie });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-robots-tag")).toBe("noindex");
+      const html = await response.text();
+      expectLimited(html, "Cy");
+      expect(html).toContain('data-limited="ownerOnly"');
+      expect(html).not.toContain("data-limited-sign-in"); // signing in would not show it
+    }
+    const own = await get("/@cy.unset.org", { cookie: await signedIn(ONLY_ME) });
+    const html = await own.text();
+    expect(own.headers.get("cache-control")).toBe("private, no-store");
+    expect(html).toContain("Card of Cy");
+    expect(html).toContain('data-page-audience="ownerOnly"');
+  });
+
+  test("a_visibility_we_do_not_know_reads_as_only_me", async () => {
+    const html = await (await get(`/@${FUTURE}`)).text();
+    expectLimited(html, "Future");
+    expect(html).toContain('data-limited="ownerOnly"');
   });
 });

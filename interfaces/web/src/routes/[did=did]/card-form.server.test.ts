@@ -29,6 +29,18 @@ describe("readCardForm", () => {
     });
   });
 
+  test("a picture form is its kind, draft id, alt text, caption and fit, and no list", () => {
+    const fields: [string, string][] = [
+      ["kind", "image"],
+      ["image", "0b6a52d4-6c1f-4bde-9b8e-2a1f6d7c3e01"],
+      ["alt", "A lake"],
+      ["caption", "Morning"],
+      ["fit", "fill"],
+    ];
+    expect(read(fields)).toEqual(Object.fromEntries(fields));
+    expect(() => read([...fields.slice(0, 1), ["items.0.uri", "a.example"]])).toThrow("card.invalid");
+  });
+
   test("indexed rows become the list in index order, and blank rows are dropped", () => {
     const body = read([
       ["kind", "links"],

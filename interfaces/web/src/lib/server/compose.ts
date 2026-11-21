@@ -20,6 +20,7 @@ import {
   type OnboardingVersions,
   PRIVACY_VERSION,
   parseDid,
+  type SignInHistory,
   TERMS_VERSION,
 } from "@unset/domains-identity";
 import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
@@ -55,6 +56,7 @@ import {
   createPool,
   createPublicProfileStore,
   createRequestLock,
+  createSignInStore,
   createSingleUseStore,
   type Db,
   type DiscoverabilityStore,
@@ -75,6 +77,7 @@ import { createLogger, type Logger } from "@unset/shared-log";
 import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
+import { sweepOrphanImages } from "./image-orphans.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
 import { type AskWindow, createAskWindow, createPendingSends, type PendingSends } from "./invite-requests.ts";
 import { policiesFor } from "./limits.ts";
@@ -151,6 +154,14 @@ export type Services = {
     readonly sendIn: (db: Db, did: Did, notification: Notification) => Promise<NotifyResult>;
     readonly withdraw: (did: Did, dedupeKey: string, deadline: AbortSignal) => Promise<void>;
   };
+  /**
+   * P2.27c (ADR 0082): the member's sign-in history as this browser may see and delete it, and the write the OAuth
+   * callback makes on its own transaction.
+   */
+  readonly signIns: {
+    readonly history: (did: Did, deadline: AbortSignal) => SignInHistory;
+    readonly recordIn: (db: Db, did: Did) => Promise<void>;
+  };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
   /** The signed-in member's own Search and AI choices (ADR 0062). */
@@ -216,7 +227,7 @@ function reviewProcessor(guard: NetGuard): ImageProcessor {
 
 /**
  * The rows go first, all or nothing; then each image's objects. A delete that fails is counted and thrown after the
- * rest, so the sweep logs it; those objects stay until the orphan sweep (P2.19b follow-up) finds them.
+ * rest, so the sweep logs it; those objects stay until the orphan sweep (image-orphans.ts) finds them.
  */
 async function sweepImages(store: ImageStore, drafts: ObjectStore): Promise<void> {
   const swept = await store.sweep(null);
@@ -362,13 +373,23 @@ async function build(): Promise<Services> {
   const notifications: Services["notifications"] = {
     inbox: (did, idHash, deadline) => ({
       list: (limit) => withClient(pool, deadline, (db) => inboxRows.list(db, did, idHash, limit)),
-      open: (id) => withClient(pool, deadline, (db) => inboxRows.open(db, did, idHash, id)),
-      openUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.openUpTo(db, did, idHash, upTo)),
+      dismiss: (ids) => withClient(pool, deadline, (db) => inboxRows.dismiss(db, did, idHash, ids)),
+      dismissUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.dismissUpTo(db, did, idHash, upTo)),
     }),
     send: (did, notification, deadline) =>
       withClient(pool, deadline, (db) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification)),
     sendIn: (db, did, notification) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification),
     withdraw: (did, dedupeKey, deadline) => withClient(pool, deadline, (db) => inboxRows.withdraw(db, did, dedupeKey)),
+  };
+
+  const signInRows = createSignInStore();
+  const signIns: Services["signIns"] = {
+    history: (did, deadline) => ({
+      list: (limit) => withClient(pool, deadline, (db) => signInRows.list(db, did, limit)),
+      remove: (ids) => withClient(pool, deadline, (db) => signInRows.remove(db, did, ids)),
+      removeUpTo: (upTo) => withClient(pool, deadline, (db) => signInRows.removeUpTo(db, did, upTo)),
+    }),
+    recordIn: (db, did) => signInRows.record(db, did),
   };
 
   // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
@@ -395,7 +416,13 @@ async function build(): Promise<Services> {
       { job: "sweep.invite", run: () => invites.store.clearExpired() },
       // ADR 0070 point 6: pictures no save used after a day, and copies a week after their last use.
       { job: "sweep.image", run: () => sweepImages(images.store, drafts) },
+      // P2.19b: objects a failed delete left behind, once their rows are gone (image-orphans.ts).
+      {
+        job: "sweep.image_orphan",
+        run: () => sweepOrphanImages(drafts, { named: (ids) => images.store.named(ids, null) }),
+      },
       { job: "sweep.notification", run: () => withClient(pool, null, (db) => inboxRows.sweep(db)) },
+      { job: "sweep.sign_in", run: () => withClient(pool, null, (db) => signInRows.sweep(db)) },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -443,6 +470,7 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     invites,
     notifications,
+    signIns,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,

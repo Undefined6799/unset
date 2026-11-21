@@ -347,6 +347,14 @@
         "origin": "ours",
         "purpose": "The profile's cards in a two-column grid on the stock Card: Text, links, collection, buttons."
       },
+      "limited-profile.svelte": {
+        "origin": "ours",
+        "purpose": "The limited page (ADR 0078): one card centered on the page with only avatar, name, handle and DID and one sentence, for someone the member's page visibility leaves out; a sign-in button when signing in would show the page."
+      },
+      "page-audience.svelte": {
+        "origin": "ours",
+        "purpose": "The notice above a member page that is not public (ADR 0078): who else sees it."
+      },
       "profile-layout.svelte": {
         "origin": "ours",
         "purpose": "The member page's frame: the profile header, then the notices, then one centred card area (ADR 0077)."
@@ -377,9 +385,13 @@
         "origin": "ours",
         "purpose": "Settings › Profile's form: name, headline, place and website, posted to /profile, inline refusal with script."
       },
-      "search-ai-form.svelte": {
+      "search-ai-fields.svelte": {
         "origin": "ours",
-        "purpose": "Settings › Privacy's Search and AI form: two switches, search title and description under a native Advanced disclosure, their honest limits and the search result preview, posted to /settings/search-and-ai (ADR 0062); says when listing is off on the whole site (P1.21b)."
+        "purpose": "Settings › Privacy's Search and AI fields under Public (ADR 0062, ADR 0078): two switches, search title and description under a native Advanced disclosure, their honest limits and the search result preview; says when listing is off on the whole site (P1.21b)."
+      },
+      "privacy-form.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Privacy's one form (ADR 0078): Public, Signed-in members only or Only me as native radios, the Search and AI fields under Public shown by CSS while it is ticked, the disclaimer always shown, each choice's line in a native popover; posted to /settings/search-and-ai; works with no script."
       },
       "search-preview.svelte": {
         "origin": "ours",
@@ -387,13 +399,25 @@
       }
     },
     "notifications": {
-      "mark-all-read.svelte": {
+      "dismiss-all.svelte": {
         "origin": "ours",
-        "purpose": "The notifications' Mark all as read form: names the newest sign-in and the notice version listed, posted to /notifications?/readAll (P2.27)."
+        "purpose": "The notifications' Dismiss all form: names the newest entry listed, posted to /notifications?/dismissAll, for the bell and the page (P2.27, ADR 0081)."
+      },
+      "inbox.svelte": {
+        "origin": "ours",
+        "purpose": "The notifications page (P2.27b, ADR 0081): fills the window below the header; a list with checkboxes and Dismiss selected beside the chosen entry's detail, a split the member drags between 2/5 and 3/5, a cut-off row lifted above the detail on hover; plain forms and links with no script; the detail as its own screen on a phone."
       },
       "notification-list.svelte": {
         "origin": "ours",
-        "purpose": "The notifications as rows for the bell and the page: each a plain form button posting to /notifications?/open, times in UTC until script shows the device's zone (P2.27)."
+        "purpose": "The bell's notifications as rows: each a plain link to its detail on /notifications, times in UTC until script shows the device's zone (P2.27, ADR 0081)."
+      },
+      "sign-in-history.svelte": {
+        "origin": "ours",
+        "purpose": "The Sign-in history tab (P2.27c, ADR 0082): the member's sign-ins in the last 30 days, date and time and how long ago, in a list that scrolls under a header row that stays; a Delete form per row, Delete selected and Delete all; plain forms with no script."
+      },
+      "tabs.svelte": {
+        "origin": "ours",
+        "purpose": "The two tabs of /notifications (P2.27c): Notifications and Sign-in history, plain links, the current one aria-current=page."
       }
     }
   }

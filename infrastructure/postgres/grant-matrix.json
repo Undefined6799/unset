@@ -241,7 +241,8 @@
           "height": ["SELECT", "INSERT"],
           "bytes": ["SELECT", "INSERT"],
           "created_at": ["SELECT", "INSERT"],
-          "unused_since": ["SELECT", "UPDATE"]
+          "unused_since": ["SELECT", "UPDATE"],
+          "blob_cid": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -259,7 +260,9 @@
       "web": {
         "columns": {
           "image_id": ["SELECT", "INSERT"],
-          "record_uri": ["SELECT", "INSERT"]
+          "record_uri": ["SELECT", "INSERT"],
+          "holds": ["SELECT", "INSERT", "UPDATE"],
+          "settled_rev": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -276,6 +279,16 @@
         }
       }
     },
+    "app.image_record": {
+      "web": {
+        "columns": {
+          "record_uri": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "settled_rev": ["SELECT", "INSERT", "UPDATE"],
+          "removed": ["SELECT", "INSERT", "UPDATE"]
+        }
+      }
+    },
     "app.notification": {
       "web": {
         "columns": {
@@ -286,6 +299,16 @@
           "dedupe_key": ["SELECT", "INSERT"],
           "older_sessions_only": ["SELECT", "INSERT"],
           "created_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.sign_in": {
+      "web": {
+        "columns": {
+          "id": ["SELECT"],
+          "did": ["SELECT", "INSERT"],
+          "signed_in_at": ["SELECT"]
         },
         "rowPrivileges": ["DELETE"]
       }

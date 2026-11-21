@@ -25,8 +25,10 @@ export {
 } from "./handleStore.ts";
 export {
   createImageStore,
+  type HeldUse,
   type ImageKind,
   type ImageStore,
+  type ImageUse,
   type LibraryImage,
   type StoredImage,
   type SweepResult,
@@ -100,6 +102,7 @@ export {
   type SealedRow,
   sealedColumns,
 } from "./sealedColumns.ts";
+export { createSignInStore, type SignInStore } from "./signInStore.ts";
 export {
   createSingleUseStore,
   type Db,

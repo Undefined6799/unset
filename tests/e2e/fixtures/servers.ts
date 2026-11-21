@@ -24,9 +24,12 @@ import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastruct
 import type { SavedSession } from "@unset/infrastructure-pds";
 import {
   createAccountRepository,
+  createNotificationStore,
   createOAuthSessionStore,
   createPool,
+  createSignInStore,
   migrate,
+  withClient,
   withTransaction,
 } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
@@ -38,6 +41,7 @@ import { randomPassword, startPostgres, stopAllPostgres } from "../../support/po
 import {
   ACCOUNT,
   HOST,
+  INBOX_SIZE,
   INDEXED,
   INNER,
   LISTEN,
@@ -257,7 +261,10 @@ const didOf = (letter: string): Did => {
  * Where each signed-in member stands: a step of onboarding, onboarded with an email not yet confirmed, or done with a
  * confirmed one (ACCOUNT, whose repo the stand-in PDS holds).
  */
-const MEMBERS: Record<MemberName, { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" | "notice" }> = {
+const MEMBERS: Record<
+  MemberName,
+  { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" | "notice" | "inbox" }
+> = {
   age: { did: didOf("b"), step: "age" },
   terms: { did: didOf("c"), step: "terms" },
   chat: { did: didOf("d"), step: "chat" },
@@ -265,7 +272,27 @@ const MEMBERS: Record<MemberName, { did: Did; step: "age" | "terms" | "chat" | "
   account: { did: ACCOUNT.did as Did, step: "done" },
   // Done, but accepted an older privacy notice, so the shell shows the changed-notice banner (P2.12b).
   notice: { did: didOf("f"), step: "notice" },
+  // Done, with more notifications and sign-ins than the pages' lists show at once (P2.27b, P2.27c): the notifications
+  // spec reads them and deletes none, so the lists scroll and a cut-off title can be lifted.
+  inbox: { did: didOf("g"), step: "inbox" },
 };
+
+/** INBOX_SIZE notifications, oldest first, each a millisecond apart so their order is fixed. */
+async function seedInbox(pool: ReturnType<typeof createPool>, did: Did): Promise<void> {
+  const inbox = createNotificationStore();
+  for (let n = 0; n < INBOX_SIZE; n += 1) {
+    const notification =
+      n % 3 === 0 ? { reason: "privacy_notice" as const, topic: `e2e-${n}` } : { reason: "sign_in" as const };
+    await withClient(pool, null, (db) => inbox.insert(db, did, notification));
+    await new Promise((done) => setTimeout(done, 2));
+  }
+  // As many sign-ins in the Sign-in history tab (P2.27c), so its list scrolls too.
+  const history = createSignInStore();
+  for (let n = 0; n < INBOX_SIZE; n += 1) {
+    await withClient(pool, null, (db) => history.record(db, did));
+    await new Promise((done) => setTimeout(done, 2));
+  }
+}
 
 /** Each member's grant (so the session's foreign key holds) and session, stepped to where MEMBERS puts them. */
 async function seedMembers(pg: Postgres, keyring: string): Promise<Record<MemberName, string>> {
@@ -305,10 +332,11 @@ async function seedMembers(pg: Postgres, keyring: string): Promise<Record<Member
     const deadline = AbortSignal.timeout(5000);
     if (step === "terms" || step === "chat") await accounts.confirmAdult(did, deadline);
     if (step === "chat") await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, deadline);
-    if (step === "verify" || step === "done" || step === "notice") {
+    if (step === "verify" || step === "done" || step === "notice" || step === "inbox") {
       await readyMember(pool, did, step !== "verify");
     }
     if (step === "notice") await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", deadline);
+    if (step === "inbox") await seedInbox(pool, did);
     cookies[name] = `__Host-sid=${created.cookieValue}`;
   }
   await pool.end();

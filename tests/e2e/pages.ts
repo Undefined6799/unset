@@ -22,7 +22,9 @@ export const PROD_ORIGIN = `https://${HOST}:${LISTEN.prod}`;
 export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
 
 /** The signed-in members the test server seeds, by where each stands (fixtures/servers.ts MEMBERS). */
-export type MemberName = "age" | "terms" | "chat" | "verify" | "account" | "notice";
+export type MemberName = "age" | "terms" | "chat" | "verify" | "account" | "notice" | "inbox";
+/** How many notifications, and how many sign-ins, the test server gives the "inbox" member (fixtures/servers.ts). */
+export const INBOX_SIZE = 16;
 /** The finished member, whose repo the stand-in PDS holds. */
 /** A code of the PDS's shape for /join; nothing ever redeems it. */
 export const JOIN_CODE = "pds-test-abcde-fghij";
@@ -98,7 +100,8 @@ export const MEMBER_PAGES: readonly PageFixture[] = [
   signedIn("/settings/privacy", "account"),
   signedIn("/settings/account", "account"),
   signedIn("/invite", "account"),
-  signedIn("/notifications", "account"),
+  signedIn("/notifications", "inbox"),
+  signedIn("/notifications/sign-ins", "inbox"),
 ];
 
 /** Every page under test, each once. */

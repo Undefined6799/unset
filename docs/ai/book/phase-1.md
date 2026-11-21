@@ -4929,6 +4929,22 @@ picture. With no script the preview shows what is saved; with the client it foll
 path, `POST /settings/search-and-ai`, and now returns to `/settings/privacy?saved`. No data, lexicon or ADR change.
 Ownership: apps/web → interfaces/web.
 
+### P1.22a — Who sees your page (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21y · **Plan:** ADR 0078
+
+Alex, 2026-11-20 19:35Z to 19:56Z: offer "to not show the page to unsigned in user ... like Blue Sky does", with a
+disclaimer that the profile "will always remain available publicly on the At Proto network"; three levels (Public,
+signed-in members only, and only the member); for anyone left out "some kind of a message there to say that it's a
+user ... show minimum information about his account"; a question mark beside each choice with the whole explanation.
+The choice is an optional open string `visibility` on `sh.unset.profile` (public, signedIn, ownerOnly; absent means
+public, unknown means ownerOnly), saved with Search and AI by Settings › Privacy's one form, Search and AI folded under
+Public (20:26Z), each question mark showing that choice's one line. `/@` reads an optional session;
+whoever the choice leaves out gets the limited page (avatar, name, handle, DID, one sentence; noindex, no link-preview
+tags); a page that is not public is never listed in the sitemap or robots.txt, and its Search and AI choices are kept.
+ADR 0078 supersedes decision 37's "never hides on unset.sh" sentence and decision 35 D7 for this page.
+Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postgres for the listing queries.
+
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1
