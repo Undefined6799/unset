@@ -207,7 +207,20 @@ const panel =
 const account = $derived(shell.account ?? data.account);
 // The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
 const notes = $derived(data.notifications);
-const waiting = $derived(notes?.state === "ready" ? notes.count : 0);
+// Opening the bell marks what it shows seen in this browser (ADR 0085, Alex 2026-11-21 05:16Z): the badge goes at once
+// and comes back only with a newer entry. The hidden form posts it in the background; with no script the page's own
+// load marks it instead.
+const newest = $derived(notes?.state === "ready" ? notes.entries[0]?.id : undefined);
+let seenUpTo = $state<string | undefined>(undefined);
+const waiting = $derived(notes?.state === "ready" && newest !== seenUpTo ? notes.count : 0);
+let seenForm = $state<HTMLFormElement | undefined>(undefined);
+function markSeen(event: ToggleEvent): void {
+  if (event.newState !== "open" || newest === undefined || waiting === 0) return;
+  seenUpTo = newest;
+  seenForm?.requestSubmit();
+}
+// The mark needs nothing back: the page stays as it is, and the next page's bell reads the stored mark.
+const markInBackground: SubmitFunction = () => async () => undefined;
 // The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
 // drawn as a small badge.
 const badge =
@@ -508,10 +521,24 @@ const row =
     </ul>
   </section>
   {#each PANEL_BUTTONS as button (button.id)}
-    <section id={button.id} popover="auto" ontoggle={backToActions} aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+    <section
+      id={button.id}
+      popover="auto"
+      ontoggle={(event) => {
+        backToActions(event);
+        if (button.id === NOTIFICATIONS) markSeen(event);
+      }}
+      aria-labelledby="{button.id}-title"
+      class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2"
+    >
       {@render panelTitle(button.id, button.label, true)}
       {#if button.id === NOTIFICATIONS}
         {@render notificationsBody()}
+        {#if newest !== undefined}
+          <form bind:this={seenForm} method="POST" action="/notifications?/seen" hidden use:enhance={markInBackground}>
+            <input type="hidden" name="upTo" value={newest} />
+          </form>
+        {/if}
       {:else}
         <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
         <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>

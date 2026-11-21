@@ -4,11 +4,22 @@
   they stay so; the card's own form (card-editor.svelte) still edits it. With script, once the browser is idle, the
   Milkdown editor (P1.21u, editor/milkdown.ts) is drawn in their place and opened on `value` (the unsaved words, else
   the stored ones), and every change is handed to `onedit` as markdown, once a frame; `flushes` holds this card's way
-  to hand over a change still waiting for its frame, which the page runs before it builds a Save. If the editor
-  cannot load the blocks stay. The parent remounts this component to throw the member's changes away (Discard).
+  to hand over a change still waiting for its frame, which the page runs before it builds a Save, and `onfocus` hands
+  the page the way back into this card once the member types in it, so the page can return there after a Save.
+  The editor's script loads as soon as the page is up; a press on the card before the editor is drawn opens it at
+  once, and the caret goes where the press was, with the keys typed meanwhile (P1.21r): only the card pressed last
+  keeps them, a press or focus anywhere else lets go, and the first key it cannot replay ends them. A press on the card around
+  the words (its padding, below the last line) puts the caret at the nearest words. If the editor cannot load the
+  blocks stay, with a line that says so. The parent remounts this component to throw the member's changes away
+  (Discard).
 -->
+<script lang="ts" module>
+/** The one card holding an early press, and how to make it let go: a press on another card takes the press over. */
+let holder: (() => void) | undefined;
+</script>
+
 <script lang="ts">
-import { onDestroy, onMount } from "svelte";
+import { onDestroy, onMount, tick } from "svelte";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
 import { TEXT_IN_PLACE } from "../../profile/messages.ts";
 import type { Block } from "../../profile/types.ts";
@@ -20,21 +31,54 @@ let {
   value,
   onedit,
   flushes,
+  onfocus,
 }: {
   blocks: readonly Block[];
   name: string;
   value: string;
   onedit: (markdown: string) => void;
   flushes: Set<() => void>;
+  onfocus?: (focus: () => void) => void;
 } = $props();
 
 const id = $props.id();
 const labelId = `${id}-label`;
 let host: HTMLDivElement | undefined = $state();
 let editor: MarkdownEditor | undefined = $state();
+let failed = $state(false);
+/** The page's script runs here: from now on a press on the card opens the editor (a press before that is the page's). */
+let listening = $state(false);
 let closed = false;
+let opening: Promise<void> | undefined;
+/**
+ * A press on the card before the editor was drawn, and the keys typed since: carried into the editor once it is.
+ * `ended` is set by the first key it cannot replay; keys after that are not kept, so what reaches the editor is only
+ * ever what the member typed, in order.
+ */
+let early: { x: number; y: number; typed: string; ended: boolean } | undefined;
 
-/** Once the browser has nothing else to do: the page's own work and first paint come before the editor's script. */
+/** Lets go of the early press: the member pressed or moved somewhere else, so nothing typed belongs to this card. */
+function letGo() {
+  early = undefined;
+  if (holder === letGo) holder = undefined;
+}
+
+/** Takes the early press for this card, so that only the card pressed last keeps keys. */
+function hold(x: number, y: number) {
+  if (holder !== letGo) holder?.();
+  holder = letGo;
+  early = { x, y, typed: "", ended: false };
+}
+
+/** A press or a move of focus outside this card ends its early press. */
+function elsewhere(event: Event) {
+  if (early === undefined || !(event.target instanceof Node)) return;
+  if (!(cardOf()?.contains(event.target) ?? false)) letGo();
+}
+
+const cardOf = () => host?.closest<HTMLElement>("[data-slot='card']") ?? host?.parentElement ?? undefined;
+
+/** Once the browser has nothing else to do: the page's own work and first paint come before the editor is drawn. */
 function whenIdle(run: () => void): () => void {
   if (typeof requestIdleCallback === "function") {
     const id = requestIdleCallback(run, { timeout: 2000 });
@@ -44,7 +88,7 @@ function whenIdle(run: () => void): () => void {
   return () => clearTimeout(id);
 }
 
-async function open() {
+async function mount() {
   try {
     const { mountMarkdownEditor } = await import("../../editor/milkdown.ts");
     if (closed || host === undefined) return;
@@ -62,15 +106,89 @@ async function open() {
     }
     editor = mounted;
     flushes.add(mounted.flush);
+    // The editor is hidden until it is drawn in the blocks' place; the caret can only go in once it shows.
+    await tick();
+    carryEarly(mounted);
   } catch {
-    // The editor could not load: the blocks stay, and the card's own form still edits it.
+    // The blocks stay, and the card's own form still edits it; the line says why the words cannot be typed in.
+    failed = true;
+    letGo();
   }
+}
+
+const open = () => {
+  opening ??= mount();
+  return opening;
+};
+
+function carryEarly(mounted: MarkdownEditor) {
+  if (early === undefined) return;
+  const { x, y, typed } = early;
+  letGo();
+  mounted.focusAt(x, y);
+  if (typed !== "") mounted.type(typed);
+}
+
+/** A press the card's own controls, links and fields keep: never taken for a press on the words. */
+const CONTROLS = "a, button, input, textarea, select, label, [role='menu'], [role='menuitem'], [role='dialog']";
+
+function pressed(event: PointerEvent) {
+  if (event.button !== 0 || failed || !(event.target instanceof Element)) return;
+  if (event.target.closest(CONTROLS) !== null && !host?.contains(event.target)) return;
+  if (editor === undefined) {
+    if (event.target.closest("a") !== null) return;
+    event.preventDefault();
+    hold(event.clientX, event.clientY);
+    void open();
+    return;
+  }
+  if (event.target.closest(".ProseMirror") !== null) return;
+  event.preventDefault();
+  editor.focusAt(event.clientX, event.clientY);
+}
+
+/** Keys a person types with no modifier that the editor gets back as typed: a character, a space. */
+const replayable = (event: KeyboardEvent) =>
+  event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing;
+
+/** Keys that change nothing on their own (a Shift held for a capital) and so neither end nor join the kept keys. */
+const MODIFIERS = new Set(["Shift", "CapsLock"]);
+
+/**
+ * Keys typed between an early press and the editor being drawn. A character is kept; the first key that is not one
+ * (Backspace, Enter, an arrow, a shortcut) ends the kept keys, since replaying the characters around it would give
+ * words the member never typed.
+ */
+function typedEarly(event: KeyboardEvent) {
+  if (early === undefined || early.ended || MODIFIERS.has(event.key)) return;
+  if (!replayable(event)) {
+    early.ended = true;
+    return;
+  }
+  event.preventDefault();
+  early.typed += event.key;
 }
 
 let cancel: (() => void) | undefined;
 onMount(() => {
+  // The script is fetched now; the editor is drawn when the browser is idle, or at once when the member presses.
+  void import("../../editor/milkdown.ts").catch(() => undefined);
   cancel = whenIdle(() => void open());
+  const card = cardOf();
+  card?.addEventListener("pointerdown", pressed);
+  addEventListener("keydown", typedEarly);
+  addEventListener("pointerdown", elsewhere, true);
+  addEventListener("focusin", elsewhere);
+  listening = true;
+  return () => {
+    card?.removeEventListener("pointerdown", pressed);
+    removeEventListener("keydown", typedEarly);
+    removeEventListener("pointerdown", elsewhere, true);
+    removeEventListener("focusin", elsewhere);
+    letGo();
+  };
 });
+// Also on the server, where only `closed` matters: nothing else was set up there.
 onDestroy(() => {
   closed = true;
   cancel?.();
@@ -81,8 +199,11 @@ onDestroy(() => {
 
 <span id={labelId} class="sr-only">{TEXT_IN_PLACE.label(name)}</span>
 {#if editor === undefined}<Readme {blocks} />{/if}
+{#if failed}<p role="alert" class="text-sm text-muted-foreground">{TEXT_IN_PLACE.failed}</p>{/if}
 <div
   bind:this={host}
   data-text-in-place
-  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline"
+  data-listening={listening ? "" : undefined}
+  onfocusin={() => editor !== undefined && onfocus?.(editor.focus)}
+  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:ring-[3px] [&_.markdown-editor:focus-visible]:ring-ring/50 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline"
 ></div>

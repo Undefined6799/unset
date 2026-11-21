@@ -211,6 +211,7 @@ export const TEXT_EDITOR = {
 /** A Text card edited where it stands on the owner's page (ADR 0074 item 4). */
 export const TEXT_IN_PLACE = {
   label: (name: string) => `Text of the ${name} card`,
+  failed: "The editor could not load. Reload the page to edit here.",
 } as const;
 
 /** The bar that holds the owner's unsaved changes (ADR 0074 item 4), and the drafts offered back when the page opens. */
@@ -243,6 +244,12 @@ export const LIMITED_PAGE = {
 } as const;
 
 /** Above the whole page when it is not public, so the viewer knows who else sees it (ADR 0078). */
+/** Above the member's own public page, seen by the member (own-public-view.svelte). */
+export const OWN_PUBLIC_VIEW = {
+  title: "This is how others see your page.",
+  edit: "Edit your page",
+} as const;
+
 export const PAGE_AUDIENCE = {
   signedIn: "Only signed-in members see this page.",
   ownerOnly: "Only you see this page.",

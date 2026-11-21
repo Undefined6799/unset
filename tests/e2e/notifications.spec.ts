@@ -90,8 +90,9 @@ test.describe("wide screen", () => {
     const newest = (await rows(page).first().locator("[data-title]").textContent()) ?? "";
     const third = (await rows(page).nth(2).locator("[data-title]").textContent()) ?? "";
     await expect(page.locator("#notification-detail-title")).toHaveText(third);
-    // The bell's newest row: a link to ?n=<its id>, which the page keeps on screen (SvelteKit keeps its state).
-    await page.getByRole("button", { name: /^Notifications, (?:\d+|9\+) waiting$/ }).click();
+    // This page has shown the list, so the bell's count is gone (ADR 0085): it names no number.
+    // Its newest row: a link to ?n=<its id>, which the page keeps on screen (SvelteKit keeps its state).
+    await page.getByRole("button", { name: "Notifications", exact: true }).click();
     const id = await rows(page).first().locator("input[name=id]").getAttribute("value");
     await page.locator(`[popover] a[href="/notifications?n=${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`n=${id}$`));
