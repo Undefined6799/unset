@@ -26,15 +26,13 @@ preview link with its signature (ADR 0029, `server/routers/badger/logRequestAudi
    Traefik's `accessLog.fields` setting; not yet checked against the host's Traefik version) and restart Traefik. If
    the access log is off, nothing to do.
 6. **DNS on deSEC** (desktop: deSEC, Domains, `unset.site`, add records under the subname `staging.usercontent`).
-   Give `staging.usercontent.unset.site` the same set `staging.unset.sh` has:
-   - `A` and `AAAA`: the same values as `staging.unset.sh` (the Pangolin host).
-   - Four `CAA` records:
-     `0 issue "letsencrypt.org; validationmethods=dns-01"`,
+   Give `staging.usercontent.unset.site` the same set `staging.unset.sh` has (ADR 0032 Decision 4: staging has no
+   `dns-01` CAA line and no `_acme-challenge` CNAME):
+   - `A`: the same value as `staging.unset.sh` (the Pangolin host). No `AAAA`, as `staging.unset.sh` has none.
+   - Three `CAA` records:
      `0 issue "letsencrypt.org; validationmethods=http-01"`,
      `0 issuewild ";"`,
      `0 iodef "mailto:security@unset.sh"`.
-   - If `staging.unset.sh` has an `_acme-challenge` CNAME, add the matching one for
-     `_acme-challenge.staging.usercontent`.
 
    The apex `unset.site` and `usercontent.unset.site` (production, later) stay parked. Nothing that signs anyone in
    ever goes on an `unset.site` name (ADR 0029).
