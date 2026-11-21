@@ -14,12 +14,13 @@ export const LOCAL_ONLY_SERVICES: ReadonlySet<string> = new Set([TOKEN_READER]);
 export const LOCAL_ONLY_NETWORKS: ReadonlyMap<string, { internal: boolean; members: readonly string[] }> = new Map();
 
 /**
- * The other way round (P1.37v; ADR 0030 Decision 2): what only the dev file has, since a local stack has no Pangolin.
- * Newt and its two networks; under local, C17 leaves these rows of networks.dev.json out, and the drift test
- * (compose.local.test.ts) lets the dev file alone hold them.
+ * The other way round (P1.37v; ADR 0030 Decision 2): what only the dev files have, since a local stack has no Pangolin.
+ * Newt and its two networks, and media_edge (book P2.19): the local edge serves no media site, so only the dev source
+ * stack joins the edge to media. Under local, C17 leaves these rows of networks.dev.json out, and the drift test
+ * (compose.local.test.ts) lets the dev files alone hold them.
  */
 export const DEV_ONLY_SERVICES: ReadonlySet<string> = new Set(["newt"]);
-export const DEV_ONLY_NETWORKS: ReadonlySet<string> = new Set(["newt_edge", "newt_egress"]);
+export const DEV_ONLY_NETWORKS: ReadonlySet<string> = new Set(["newt_edge", "newt_egress", "media_edge"]);
 
 /**
  * Services only the stacks built from the checkout run (local, and dev with --source), with their own networks. Alex,
@@ -39,6 +40,7 @@ export const SOURCE_ONLY_NETWORKS: ReadonlySet<string> = new Set([
   "indexer_egress",
   "review_web",
   "objects_media",
+  "media_edge",
 ]);
 
 /** Whether a network belongs to the local stack alone: on the list, or named like the PLC's. */

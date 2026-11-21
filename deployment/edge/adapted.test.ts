@@ -18,6 +18,8 @@ const REAL = {
   APP_HOST: "staging.unset.sh",
   APP_UPSTREAM: "web:8080",
   DOCS_HOST: "docs.unset.sh",
+  MEDIA_HOST: "staging.usercontent.unset.site",
+  MEDIA_UPSTREAM: "media:8083",
 } as const;
 /** What Caddy adapts for `env`'s values: the reviewed text with each sentinel replaced, as a plain text replace. */
 const adaptedFor = (name: AdaptedEnvName, env: Readonly<Record<EnvName, string>>): Json =>

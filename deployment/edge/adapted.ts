@@ -22,6 +22,8 @@ export const SENTINELS = {
   APP_HOST: "app-host.invalid",
   APP_UPSTREAM: "app-upstream.invalid:2",
   DOCS_HOST: "docs-host.invalid",
+  MEDIA_HOST: "media-host.invalid",
+  MEDIA_UPSTREAM: "media-upstream.invalid:3",
 } as const;
 type EnvName = keyof typeof SENTINELS;
 /** The values a config was adapted with; a name the env does not set is absent. */

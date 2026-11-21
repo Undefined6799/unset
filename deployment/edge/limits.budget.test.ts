@@ -23,12 +23,17 @@ const limits = JSON.parse(readFileSync(join(import.meta.dirname, "limits.json"),
   rateLimitZones: Record<string, Zone>;
   appRateLimitZones: Record<string, Zone>;
   docsRateLimitZones: Record<string, Zone>;
+  mediaRateLimitZones: Record<string, Zone>;
 };
 
 const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
 
 function zone(name: string): { events: number; windowMs: number } {
-  const found = limits.appRateLimitZones[name] ?? limits.rateLimitZones[name] ?? limits.docsRateLimitZones[name];
+  const found =
+    limits.appRateLimitZones[name] ??
+    limits.rateLimitZones[name] ??
+    limits.docsRateLimitZones[name] ??
+    limits.mediaRateLimitZones[name];
   const parts = found?.window.match(/^(\d+)([smh])$/);
   if (found === undefined || parts === null || parts === undefined) throw new Error(`no zone ${name} in limits.json`);
   return { events: found.events, windowMs: Number(parts[1]) * (UNIT_MS[parts[2] ?? ""] ?? Number.NaN) };
@@ -216,4 +221,25 @@ describe("docs_global", () => {
   });
 
   test("a_flood_one_past_docs_global_is_refused", () => expectFloodRefused("docs_global"));
+});
+
+// The media site (book P2.19; ADR 0029): one zone, media_global, for every request. Each preview is its own request,
+// and a link lives five minutes, so a page loaded again asks for every picture again: an editor page with twelve
+// pictures in three sizes is at most 36 requests, none cached.
+describe("media_global", () => {
+  const EDITOR_PAGE = 36;
+  /** One member loading the editor `loads` times, one every `everyMs`, each load's pictures at once. */
+  const member = (loads: number, everyMs: number, from = 0) =>
+    paced(loads, everyMs, from).flatMap((at) => Array(EDITOR_PAGE).fill(at) as number[]);
+
+  test("a_member_reloading_a_full_editor_every_three_seconds_for_five_minutes_passes", () => {
+    expect(refusedIn("media_global", member(100, 3000))).toBe(0);
+  });
+
+  test("five_testers_behind_one_address_each_loading_the_editor_thirty_times_in_five_minutes_pass", () => {
+    const office = Array.from({ length: 5 }, (_, n) => member(30, 10_000, n * 700));
+    expect(refusedIn("media_global", together(...office))).toBe(0);
+  });
+
+  test("a_flood_one_past_media_global_is_refused", () => expectFloodRefused("media_global"));
 });

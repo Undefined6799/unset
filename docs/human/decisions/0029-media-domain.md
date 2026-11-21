@@ -25,28 +25,34 @@ Alex's to decide through a Proposed ADR, and recommended `unset.site`, a separat
 holds, with `staging.unset.site` on staging.
 
 ## Decision
-The media domain is `unset.site`. The development media host is `staging.unset.site`, a subdomain of it, not a
-separate registration, following ADR 0025's pattern for the other four roles.
+The media domain is `unset.site`. Media is served from `usercontent.unset.site` in production and from
+`staging.usercontent.unset.site` on staging, subdomains of it, not separate registrations (Alex, 2026-11-21,
+replacing the apex and `staging.unset.site` named here before). The name says what the host holds: content
+members uploaded, never the app.
 
-| Role | Domain | Development host |
-| --- | --- | --- |
-| Media | `unset.site` | `staging.unset.site` |
+| Role | Domain | Production host | Development host |
+| --- | --- | --- | --- |
+| Media | `unset.site` | `usercontent.unset.site` | `staging.usercontent.unset.site` |
 
-- `unset.site` is a different site from `unset.sh`, `unset.ac`, `unset.im` and `unset.cc`, and
-  `staging.unset.site` is a different site from every ADR 0025 staging host, so the media origin is cross-site
-  with the app and the PDS in both environments, as §5.2 requires. `staging.unset.site` and `unset.site` are
-  same site with each other, which is harmless: media sets no cookie of ours.
+- `unset.site` is a different site from `unset.sh`, `unset.ac`, `unset.im` and `unset.cc`, so both media hosts
+  are cross-site with the app and the PDS in both environments, as §5.2 requires. The two media hosts are same
+  site with each other and with every other `unset.site` name, which is harmless only while no name under
+  `unset.site` holds anything a cookie protects: media sets no cookie of ours.
+- Nothing that signs anyone in, sets a session or holds an account may ever live on any `unset.site` name: no
+  app, admin, PDS, chat, OAuth or login host. A sign-in there would be same site with pages that serve member
+  uploads, so its `SameSite` cookies would no longer separate the two (the reason media left the app and PDS
+  domains in the first place). Every `unset.site` name other than the two media hosts stays parked.
 - The media proxy sets no cookies and ignores any it receives (P2.19). Under staging no Pangolin login sits on
   the media host (below), so no Pangolin cookie is set on it either.
 - `KNOWN_TLDS` gains `.site`. That widens an allowlist in a trusted-base file, so it is its own PR, after this
   record is accepted, on Alex's typed line:
   "yes shared/http/config.ts KNOWN_TLDS add .site for the media domain unset.site". The `.net` entry, there for the
   placeholder example, is that step's to keep or drop; this record does not decide it.
-- Staging: `staging.unset.site` is published through the same Pangolin instance as `staging.unset.sh` and
+- Staging: `staging.usercontent.unset.site` is published through the same Pangolin instance as `staging.unset.sh` and
   `staging.unset.ac`, as a resource with every authentication method off, for this host only (architecture,
   2026-10-19 20:17Z real UTC). The login cannot protect it: Pangolin's resource session cookie is always
   `SameSite=Lax` (`server/auth/sessions/resource.ts:178-197` at 1.24.0), and a browser never sends a Lax cookie
-  on a cross-site subresource request, so an image on `staging.unset.sh` loaded from `staging.unset.site`
+  on a cross-site subresource request, so an image on `staging.unset.sh` loaded from `staging.usercontent.unset.site`
   would get the login redirect instead of bytes. In plain words: the media address skips the staging password,
   because browsers will not send that password's cookie to a different domain when a page loads an image.
   Until the real safety scan is live (P5.07b) and the rescan has run, the media address serves only five-minute
@@ -119,9 +125,9 @@ separate registration, following ADR 0025's pattern for the other four roles.
   Pangolin host, the `_acme-challenge` CNAME into the validation zone, and four CAA records
   (`CAA 0 issue "letsencrypt.org; validationmethods=dns-01"`,
   `CAA 0 issue "letsencrypt.org; validationmethods=http-01"`, `CAA 0 issuewild ";"`,
-  `CAA 0 iodef "mailto:security@unset.sh"`). The apex `unset.site` stays parked (P0.11's parked set) until
-  Phase 5 serves it.
-- Production: `unset.site` is served by our own edge in Phase 5 (P5.02). Its ACME challenge is Phase 5's to
+  `CAA 0 iodef "mailto:security@unset.sh"`). The apex `unset.site`, and every name under it but the two media
+  hosts, stays parked (P0.11's parked set).
+- Production: `usercontent.unset.site` is served by our own edge in Phase 5 (P5.02). Its ACME challenge is Phase 5's to
   choose; if it is DNS-01, it uses the delegated-zone pattern ADR 0025 gives `*.unset.im`, with its own typed
   line.
 - P0.11's checklist (registrar lock, DNSSEC with the DS submitted, auto-renew, WHOIS privacy) applies to
@@ -159,15 +165,15 @@ separate registration, following ADR 0025's pattern for the other four roles.
   (`apps/web/legal/domains.en.md:11-13`, which still says the media name is not chosen and that development uses
   four domains) is corrected in that same PR to name `unset.site` and say staging uses five domains, since it is
   the anti-phishing guidance users read (architecture, 21:17Z).
-- Web refuses to start with `https://staging.unset.site` as its media origin until the `KNOWN_TLDS` PR lands
+- Web refuses to start with `https://staging.usercontent.unset.site` as its media origin until the `KNOWN_TLDS` PR lands
   (the refusal is web's config load, not the preflight, which checks only that the origin is https). That PR
   joins the staging go-live list (A9) when the step book letters it, after acceptance.
-- Alex's staging list gains: DNS for `staging.unset.site` as above, a Pangolin resource for it with every
+- Alex's staging list gains: DNS for `staging.usercontent.unset.site` as above, a Pangolin resource for it with every
   authentication method off and the path rules (PASS `/o/*`, then DROP `/*`, until P5.07b), the org's
   request-log retention set to 0, then after at least six minutes (the 300-second cache plus the 5-second write
   batch) its stored rows purged, the access-log format without query strings, and its CAA set.
-- Our side: under dev the edge needs a site for `staging.unset.site`, which is P2.19's edge route for the media
-  domain plus the P1.36e DNS-01 override for that name and the media rate-limit zone keyed on the client
+- Our side: under dev the edge needs a site for `staging.usercontent.unset.site`, which is P2.19's edge route for
+  the media domain plus the P1.36e DNS-01 override for that name and the media rate-limit zone keyed on the client
   address under P1.36j's trust (architecture, 21:25Z). That is a trusted-base edge change with its own typed
   line, lettered P1.38c (#1126).
 - A real staging deploy must prove, on the media host: a signed `/o/*` draft preview loads within its 5
@@ -175,10 +181,11 @@ separate registration, following ADR 0025's pattern for the other four roles.
   images load on the editor and profile pages, a blob no visible record references is refused, and a blob whose
   only passing record came from the fake checker is refused); two client addresses behind Newt get separate
   media quotas once the edge's media zone is in; a draft preview URL without
-  its signature is refused; a dropped path (today `/b/*`, and any app or PDS path) on `staging.unset.site` gets
-  Pangolin's denial and not a media response, an unknown path under a passed prefix gets media's 404 with its
-  headers, and `staging.unset.sh` and `staging.unset.ac` still demand the login; after one draft preview and one
-  sign-in, Pangolin's request audit table holds no rows for the staging org and its access log shows no `sig=`,
+  its signature is refused; a dropped path (today `/b/*`, and any app or PDS path) on
+  `staging.usercontent.unset.site` gets Pangolin's denial and not a media response, an unknown path under a
+  passed prefix gets media's 404 with its headers, and `staging.unset.sh` and `staging.unset.ac` still demand
+  the login; after one draft preview and one sign-in, Pangolin's request audit table holds no rows for the
+  staging org and its access log shows no `sig=`,
   `code=` or `state=` (architecture 20:17Z, 20:38Z, 20:47Z, 20:58Z, 21:10Z, 21:17Z and 21:25Z; a staging
   section-3 check).
 - The staging media host is reachable from the internet without the staging login. Until P5.07b and the
@@ -201,8 +208,8 @@ separate registration, following ADR 0025's pattern for the other four roles.
 
 ## Compliance
 `shared/http/config.test.ts` pins that a TLD outside `KNOWN_TLDS` is refused and that the media origin must be
-another site than the public origin; the `KNOWN_TLDS` PR adds a case that `https://staging.unset.site` is
-accepted beside `https://staging.unset.sh` and `https://unset.site` beside `https://unset.sh`, and that
+another site than the public origin; the `KNOWN_TLDS` PR adds a case that `https://staging.usercontent.unset.site` is
+accepted beside `https://staging.unset.sh` and `https://usercontent.unset.site` beside `https://unset.sh`, and that
 `https://media.unset.sh` is still refused. `shared/http/` is a trusted-base path, so that PR routes to Alex and
 rides on his typed line above. Acceptance of this record is his line
 "yes accept ADR 0029 media domain docs/human/decisions/0029-media-domain.md"; ADR 0001 gains its one-paragraph

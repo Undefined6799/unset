@@ -4130,6 +4130,11 @@ P2.19, second half, split in three to stay reviewable (2026-11-20): (1) #1849, w
 (`SOURCE_ONLY_SERVICES`, like review), on `objects_media` alone with the store, as the identity `unset-media` whose one
 action is `Read:unset-private/drafts/*` (secret `objects_media`); (3) the edge site for the media domain, which needs
 the domain's DNS and Pangolin resource from Alex.
+P2.19 part (3) built 2026-11-20 (ADR 0029's dev edge media site, P1.38c): `deployment/edge/dev/media.caddy` for
+`staging.usercontent.unset.site`, ruled in `adapted-rules.ts` (`DEV_MEDIA`, upstream `media:8083`), with its own zone
+`media_global` (6000 per 5 minutes per client address, `limits.json`), noindex, no blob deny; the edge reaches media
+on `media_edge`, which only the source stack has (`SOURCE_ONLY_NETWORKS` and `DEV_ONLY_NETWORKS`); the dev leaf gains
+the name. Alex's steps, in order and with exact values: `docs/human/runbooks/media-site.md`.
 
 Inputs: P2.18 object store and key convention (`media` gets **read-only** credentials on `drafts/` only); P1.08 header
   helpers (the `media` group); config shared by `web` and `media`: `DRAFT_URL_KEYS` (secret, JSON `[{kid, key: base64 ≥

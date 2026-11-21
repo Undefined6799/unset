@@ -26,6 +26,8 @@ export const ENV_NAMES = {
   APP_HOST: HOST,
   APP_UPSTREAM: UPSTREAM_SHAPE,
   DOCS_HOST: HOST,
+  MEDIA_HOST: HOST,
+  MEDIA_UPSTREAM: UPSTREAM_SHAPE,
 } as const;
 export type EnvName = keyof typeof ENV_NAMES;
 /** The values a config was adapted with; a name the env does not set is absent. */
@@ -39,6 +41,8 @@ export const LOCAL_TLS = ["/run/secrets/local_tls_cert", "/run/secrets/local_tls
 export const DEV_APP = { APP_HOST: "staging.unset.sh", APP_UPSTREAM: "web:8080" } as const;
 /** The dev stack's docs site, exactly (P1.21w; ADR 0075): files from DOCS_ROOT, no upstream. */
 export const DEV_DOCS = { DOCS_HOST: "docs.unset.sh" } as const;
+/** The dev stack's media site, exactly (book P2.19; ADR 0029): the staging media host and the media process. */
+export const DEV_MEDIA = { MEDIA_HOST: "staging.usercontent.unset.site", MEDIA_UPSTREAM: "media:8083" } as const;
 /** Where the dev edge reads the built docs (compose.dev.yaml's one folder bind). */
 export const DOCS_ROOT = "/srv/docs";
 /** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */
@@ -351,18 +355,18 @@ const STYLE_TEXT = /^[a-z0-9 #:;,.()%{}-]*$/;
 const STYLE_BLOCK = /^[a-z-]+:[^{}]*$/;
 const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
 
-type Host = "PDS_HOST" | "APP_HOST" | "DOCS_HOST";
+type Host = "PDS_HOST" | "APP_HOST" | "DOCS_HOST" | "MEDIA_HOST";
 /** The sites that proxy, by their upstream's name; the docs site serves files and has none. */
-type ProxiedHost = "PDS_HOST" | "APP_HOST";
-const UPSTREAM = { PDS_HOST: "PDS_UPSTREAM", APP_HOST: "APP_UPSTREAM" } as const;
+type ProxiedHost = "PDS_HOST" | "APP_HOST" | "MEDIA_HOST";
+const UPSTREAM = { PDS_HOST: "PDS_UPSTREAM", APP_HOST: "APP_UPSTREAM", MEDIA_HOST: "MEDIA_UPSTREAM" } as const;
 /**
- * The public sites each env serves: the PDS everywhere, the app under dev and local (P1.34a, P1.36b), the docs under
- * dev alone (P1.21w).
+ * The public sites each env serves: the PDS everywhere, the app under dev and local (P1.34a, P1.36b), the docs (P1.21w)
+ * and media (P2.19; ADR 0029) under dev alone.
  */
 const HOSTS: Readonly<Record<EdgeMode, readonly Host[]>> = {
   shipped: ["PDS_HOST"],
   local: ["APP_HOST", "PDS_HOST"],
-  dev: ["APP_HOST", "PDS_HOST", "DOCS_HOST"],
+  dev: ["APP_HOST", "PDS_HOST", "DOCS_HOST", "MEDIA_HOST"],
 };
 const hostsOf = (mode: EdgeMode): readonly Host[] => HOSTS[mode];
 
@@ -426,7 +430,7 @@ export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
   const needed: EnvName[] = hostsOf(mode).flatMap((host) => (host === "DOCS_HOST" ? [host] : [host, UPSTREAM[host]]));
   if (mode === "shipped") needed.push("ACME_EMAIL");
   const found = needed.filter((name) => !ENV_NAMES[name].test(env[name] ?? "")).map((name) => `{$${name}} is not set`);
-  for (const host of ["PDS_HOST", "APP_HOST", "DOCS_HOST"] as const) {
+  for (const host of ["PDS_HOST", "APP_HOST", "DOCS_HOST", "MEDIA_HOST"] as const) {
     if (env[host] !== undefined && env[host] !== env[host].toLowerCase()) found.push(`{$${host}} is not lower case`);
   }
   if (mode !== "shipped") {
@@ -438,6 +442,9 @@ export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
       if (env[name] !== DEV_APP[name]) found.push(`{$${name}} is not the dev app site's ruled value`);
     }
     if (env.DOCS_HOST !== DEV_DOCS.DOCS_HOST) found.push("{$DOCS_HOST} is not the dev docs site's ruled value");
+    for (const name of ["MEDIA_HOST", "MEDIA_UPSTREAM"] as const) {
+      if (env[name] !== DEV_MEDIA[name]) found.push(`{$${name}} is not the dev media site's ruled value`);
+    }
   }
   return found;
 }
@@ -802,7 +809,7 @@ function siteProblems(route: Obj, host: Host, mode: EdgeMode, env: AdaptedEnv): 
 /**
  * The route counts first: its first inner route has no matcher and starts with the site's one rate_limit, whose
  * global zone has no matcher and whose every zone is keyed on the client address. The app site has its own zones
- * under dev (P1.36b) and shares the PDS's under local (refocus rulings, Amendment 2).
+ * under dev (P1.36b) and shares the PDS's under local (refocus rulings, Amendment 2); media has its own (P2.19).
  */
 function zoneProblems(name: string, routes: Obj[], all: Obj[], host: Host, mode: EdgeMode): string[] {
   const found: string[] = [];
@@ -813,9 +820,9 @@ function zoneProblems(name: string, routes: Obj[], all: Obj[], host: Host, mode:
     found.push(`${name}: the route does not apply the zones first`);
   }
   if (limits.length !== 1) found.push(`${name}: ${limits.length} rate_limit blocks`);
-  const own = host === "APP_HOST" && mode === "dev" ? "app_global" : "global";
+  const own = host === "MEDIA_HOST" ? "media_global" : host === "APP_HOST" && mode === "dev" ? "app_global" : "global";
   const others = GLOBALS.filter((each) => each !== own);
-  const ruled = own === "global" ? PDS_ZONES : APP_ZONES;
+  const ruled = own === "global" ? PDS_ZONES : own === "app_global" ? APP_ZONES : MEDIA_ZONES;
   if (!limits.every((each) => same(each, limiter(ruled)))) found.push(`${name}: the zones are not the ruled ones`);
   return [...found, ...limits.flatMap((each) => zoneSetProblems(name, obj(each.rate_limits), own, others))];
 }
@@ -901,8 +908,10 @@ const APP_ZONES: readonly Zone[] = [
 ];
 /** The docs site's one zone (dev/docs.caddy; limits.json docsRateLimitZones): every request, by client. */
 const DOCS_ZONES: readonly Zone[] = [["docs_global", 6000, 300]];
+/** The media site's one zone (dev/media.caddy; limits.json mediaRateLimitZones): every request, by client. */
+const MEDIA_ZONES: readonly Zone[] = [["media_global", 6000, 300]];
 /** Each site's unmatched zone, which no other site's rate_limit may hold. */
-const GLOBALS = ["global", "app_global", "docs_global"];
+const GLOBALS = ["global", "app_global", "docs_global", "media_global"];
 /** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64, but web's. */
 const limiter = (zones: readonly Zone[]): Json => ({
   handler: "rate_limit",
@@ -1002,7 +1011,7 @@ const holds = (list: Json[], part: Json): boolean => list.some((each) => same(ea
  * Each snippet's handlers on the site, each deny route before the upstream. Every site in every env: the security
  * headers. The PDS in every env: the admin guard and the route class its access log carries, once and nowhere else.
  * Under dev (P1.36b, P1.38f; ADR 0032) also noindex, blob routes shut on the PDS and the sign-in files read-only on
- * the app.
+ * the app; media serves no sign-in files, so it needs noindex alone (P2.19).
  */
 function snippetProblems(name: string, site: Obj[], routes: Obj[], host: Host, mode: EdgeMode): string[] {
   const before = routes.slice(0, upstreamAt(routes));
@@ -1011,7 +1020,8 @@ function snippetProblems(name: string, site: Obj[], routes: Obj[], host: Host, m
   if (pds) required.push([XRPC_GUARD.every((part) => holds(before, part)), "xrpc-guard"]);
   if (mode === "dev") {
     required.push([holds(site, NOINDEX), "noindex"]);
-    required.push(pds ? [holds(before, BLOB_DENY), "blob-deny"] : [holds(before, SIGNIN_FILES), "signin-files"]);
+    if (pds) required.push([holds(before, BLOB_DENY), "blob-deny"]);
+    if (host === "APP_HOST") required.push([holds(before, SIGNIN_FILES), "signin-files"]);
   }
   const found = required.filter(([present]) => !present).map(([, snippet]) => `${name}: does not import ${snippet}`);
   const classes = handlersIn(site).filter((each) => each.handler === "map" || each.handler === "log_append");

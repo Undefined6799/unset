@@ -145,6 +145,7 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
     "      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n" +
       "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n" +
       "      - ./edge/dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro\n" +
+      "      - ./edge/dev/media.caddy:/etc/caddy/sites/enabled/media.caddy:ro\n" +
       "      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n" +
       `      - ${DOCS_MOUNT}\n` +
       "    secrets: [dev_tls_cert, dev_tls_key]\n",
@@ -152,7 +153,7 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
   .replace(
     "      ACME_EMAIL: edge@example.test\n",
     "      ACME_EMAIL: edge@example.test\n      APP_HOST: staging.unset.sh\n      APP_UPSTREAM: web:8080\n" +
-      "      DOCS_HOST: docs.unset.sh\n",
+      "      DOCS_HOST: docs.unset.sh\n      MEDIA_HOST: staging.usercontent.unset.site\n      MEDIA_UPSTREAM: media:8083\n",
   )
   .replace(
     "    file: ../../unset-dev-secrets/db_password\n",
@@ -5917,12 +5918,16 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
       "dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro",
       "dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro",
       "dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro",
+      "dev/media.caddy:/etc/caddy/sites/enabled/media.caddy:ro",
       "dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro",
     ]);
     // The built docs are files to serve, not config: caddy adapt never sees them (P1.21w).
     expect(adapt.some((arg) => arg.includes("/srv/docs"))).toBe(false);
     expect(adapt.filter((_arg, at) => adapt[at - 1] === "-e")).toEqual(
-      expect.arrayContaining(["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM", "DOCS_HOST"]),
+      expect.arrayContaining([
+        ...["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM", "DOCS_HOST"],
+        ...["MEDIA_HOST", "MEDIA_UPSTREAM"],
+      ]),
     );
   });
 
