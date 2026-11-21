@@ -49,6 +49,8 @@ describe("ADR front matter", () => {
       value: { status: "Proposed", date: "2026-11-21", step: "P1.38y" },
       problems: [],
     });
+    // yaml 2.9.1's default core schema has no timestamp type, so an unquoted date is still a string.
+    expect(parseFrontMatter(PROPOSED.replace('"2026-11-21"', "2026-11-21"), ADRS).problems).toEqual([]);
     const links = `${ACCEPTED}supersedes:\n  - adr: "0002"\n    part: D8's log clause\namends:\n  - adr: "0001"\n    part: the log\n`;
     expect(parseFrontMatter(links, ADRS).problems).toEqual([]);
   });

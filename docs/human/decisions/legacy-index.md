@@ -1,4 +1,4 @@
-# ADRs 0001 to 0082: their frozen index rows
+# ADRs before 0083: their frozen index rows
 
 The index as it stood when ADR 0083 landed. This file never changes again (ADR 0083): an ADR here that is still
 Proposed is accepted by giving its own file front matter, and a later ADR supersedes one here in its own front
