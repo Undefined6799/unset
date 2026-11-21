@@ -7,6 +7,7 @@ export {
   atproto,
   atprotoBlobUpload,
   chatAdmin,
+  chatCount,
   DEFAULT_REQUEST_BYTES,
   internalPolicy,
   objectStore,

@@ -208,6 +208,10 @@ const account = $derived(shell.account ?? data.account);
 // The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
 const notes = $derived(data.notifications);
 const unread = $derived(notes?.state === "ready" ? notes.unread : 0);
+// The chat icon (build step 10; ADR 0082 decision 5; Alex: no dock on a phone): for a member, Messages is a plain link to the chat page on
+// its own origin, with the number of chats with new messages, on every width (no dock); a visitor keeps the panel.
+const chat = $derived(data.chat);
+const panelButtons = $derived(chat === undefined ? PANEL_BUTTONS : PANEL_BUTTONS.filter((b) => b.id !== MESSAGES));
 // The unread count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
 // drawn as a small badge.
 const badge =
@@ -355,16 +359,19 @@ const row =
       </button>
       <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
         <!-- On a phone a disabled icon says nothing to a finger, so it opens a panel that says search is coming
-             (staging walkthrough 2026-11-19), as Messages and Notifications do. -->
-        <Button
-          variant="outline"
-          size="icon-sm"
-          popovertarget={SEARCH}
-          popovertargetaction="toggle"
-          class="{control} sm:hidden"
-        >
-          <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
-        </Button>
+             (staging walkthrough 2026-11-19), as Messages and Notifications do. A member's phone has the chat link
+             instead, which works today, and finds this panel under More actions, so the bar fits 320px. -->
+        {#if chat === undefined}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={SEARCH}
+            popovertargetaction="toggle"
+            class="{control} sm:hidden"
+          >
+            <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
+          </Button>
+        {/if}
         <Button
           variant="outline"
           size="sm"
@@ -374,7 +381,13 @@ const row =
         >
           <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
         </Button>
-        {#each PANEL_BUTTONS as button (button.id)}
+        {#if chat !== undefined}
+          <Button variant="outline" size="icon-sm" href={chat.href} class="{control} relative">
+            <Icon name="comment" size={20} label={T.chat(chat.unread)} />
+            {#if chat.unread > 0}<span aria-hidden="true" class={badge}>{N.badge(chat.unread)}</span>{/if}
+          </Button>
+        {/if}
+        {#each panelButtons as button (button.id)}
           <Button
             variant="outline"
             size="icon-sm"
@@ -507,7 +520,7 @@ const row =
       </li>
     </ul>
   </section>
-  {#each PANEL_BUTTONS as button (button.id)}
+  {#each panelButtons as button (button.id)}
     <section id={button.id} popover="auto" ontoggle={backToActions} aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
       {@render panelTitle(button.id, button.label, true)}
       {#if button.id === NOTIFICATIONS}
@@ -518,7 +531,7 @@ const row =
       {/if}
     </section>
   {/each}
-  <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
+  <section id={SEARCH} popover="auto" ontoggle={backToActions} aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
     {@render panelTitle(SEARCH, T.search, true)}
     <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
   </section>
@@ -531,7 +544,14 @@ const row =
           <Icon name="add" size={20} /><span>{T.create}</span>
         </button>
       </li>
-      {#each PANEL_BUTTONS as button (button.id)}
+      {#if chat !== undefined}
+        <li>
+          <button type="button" popovertarget={SEARCH} popovertargetaction="show" class="{row} w-full">
+            <Icon name="search" size={20} /><span>{T.search}</span>
+          </button>
+        </li>
+      {/if}
+      {#each panelButtons as button (button.id)}
         <li>
           <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
             <Icon name={button.icon} size={20} /><span>{button.label}</span>

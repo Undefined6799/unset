@@ -231,6 +231,9 @@ services:
       CHAT_ADMIN_WEB_KID: web-chat
       # The door the unset.cc sign-in hop returns to (ADR 0025: staging.unset.cc is the staging chat site).
       CHAT_DOOR_ORIGIN: https://staging.unset.cc
+      # The door's internal count port (ADR 0090 decision 2), read for the chat icon's number. The door is not in this
+      # stack yet, so the icon shows with no number.
+      CHAT_COUNT_URL: http://chat-auth:8091
       # The draft image store (P2.21a; ADR 0070): web writes members' drafts under unset-private/drafts/ as its
       # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
       # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.

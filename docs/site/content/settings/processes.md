@@ -68,6 +68,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `CHAT_ADMIN_WEB_KEY` | secretFile | at least 64 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `CHAT_ADMIN_WEB_KID` | str | text (pattern in source) | required | `web-chat` | `web-chat` | `interfaces/web/src/lib/server/config.ts` |
 | `CHAT_DOOR_ORIGIN` | origin | https: | required | `https://staging.unset.cc` | `https://staging.unset.cc` | `interfaces/web/src/lib/server/config.ts` |
+| `CHAT_COUNT_URL` | origin | http: | required | `http://chat-auth:8091` | `http://chat-auth:8091` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_URL` | origin | http: or https: | required | `http://objects:8333` | `http://objects:8333` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |

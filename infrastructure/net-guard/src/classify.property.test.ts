@@ -103,7 +103,7 @@ describe("classifier properties", () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 48 }), (text) => {
         if (classifyAddress(text) !== "public") return;
-        expect(/^[\[\]0-9a-fA-F:.]+$/.test(text.replace(/\.+$/, "")), JSON.stringify(text)).toBe(true);
+        expect(/^[[\]0-9a-fA-F:.]+$/.test(text.replace(/\.+$/, "")), JSON.stringify(text)).toBe(true);
       }),
     );
   });
