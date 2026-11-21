@@ -6,7 +6,7 @@
 // reached.
 // This browser's storage is a Map behind the Storage methods the service calls (the page passes window.localStorage).
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
-import { createClient, MatrixEvent, Room } from "matrix-js-sdk/lib/matrix.js";
+import { createClient, MatrixEvent, Room, RoomEvent } from "matrix-js-sdk/lib/matrix.js";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { ConversationId } from "../core/conversations.ts";
 import { createConversations, forgetLocalChoices, type LocalChoices } from "./conversation-service.ts";
@@ -14,7 +14,9 @@ import { createConversations, forgetLocalChoices, type LocalChoices } from "./co
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
 const OTHER = "@ucccccccccccccccccccc:unset.cc";
+const AWAY = "@udddddddddddddddddddd:unset.cc";
 const ROOM = "!a:unset.cc";
+const HIDDEN = "!h:unset.cc";
 const DELETES = "!d:unset.cc";
 
 const FAILS = "$refused";
@@ -71,6 +73,11 @@ const memory = (): LocalChoices & { readonly keys: () => string[] } => {
     keys: () => [...values.keys()],
   };
 };
+/** The page as the service reads it: its visibility, and the event that says it changed. */
+const page = (visibilityState: DocumentVisibilityState) =>
+  Object.assign(new EventTarget(), { visibilityState }) as EventTarget & { visibilityState: DocumentVisibilityState };
+const receiptsIn = (roomId: string) =>
+  requests.filter((r) => r.path.includes(`/rooms/${encodeURIComponent(roomId)}/receipt/`)).length;
 const member = (userId: string) =>
   event({ type: "m.room.member", state_key: userId, sender: userId, content: { membership: "join" } });
 
@@ -78,7 +85,10 @@ beforeAll(async () => {
   await client.initRustCrypto({ useIndexedDB: false });
   storeRoom(ROOM, THEM, [event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body: "hi" } })]);
   storeRoom(DELETES, OTHER, [text("$mine1", ME), text("$theirs1", OTHER), text(FAILS, ME)]);
-  client.store.storeAccountDataEvents([event({ type: "m.direct", content: { [THEM]: [ROOM], [OTHER]: [DELETES] } })]);
+  storeRoom(HIDDEN, AWAY, [text("$away1", AWAY)]);
+  client.store.storeAccountDataEvents([
+    event({ type: "m.direct", content: { [THEM]: [ROOM], [OTHER]: [DELETES], [AWAY]: [HIDDEN] } }),
+  ]);
 }, 20_000);
 afterAll(() => client.stopClient());
 
@@ -86,7 +96,7 @@ describe("watch", () => {
   test("chat.read_receipt_public: the newest message from them is marked read with a public m.read, which they see", async () => {
     const crypto = client.getCrypto();
     if (crypto === undefined) throw new Error("no crypto");
-    const conversations = createConversations(client, crypto, ME);
+    const conversations = createConversations(client, crypto, ME, memory(), page("visible"));
     const shown = await new Promise((resolve) => {
       const stop = conversations.watch(ROOM as ConversationId, (view) => {
         stop();
@@ -98,6 +108,30 @@ describe("watch", () => {
     const receipts = requests.filter((r) => r.path.includes("/receipt/"));
     expect(receipts[0]?.method).toBe("POST");
     expect(receipts[0]?.path).toMatch(/\/rooms\/!a%3Aunset\.cc\/receipt\/m\.read\/%24e\d+$/);
+  });
+
+  test("chat.read_receipt_visible: nothing is marked read while the page is hidden; coming back marks it", async () => {
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    const tab = page("hidden");
+    const conversations = createConversations(client, crypto, ME, memory(), tab);
+    let views = 0;
+    const stop = conversations.watch(HIDDEN as ConversationId, () => void views++);
+    await expect.poll(() => views).toBeGreaterThan(0);
+    // A new message arrives while the tab is in the background: shown, not seen.
+    const late = text("$away2", AWAY);
+    late.event.room_id = HIDDEN;
+    await client.getRoom(HIDDEN)?.addLiveEvents([late], { addToState: false });
+    // Sync re-emits a room's timeline on the client (src/sync.ts:1964-1983); this room was stored by hand.
+    (client as unknown as { emit(name: string): void }).emit(RoomEvent.Timeline);
+    await expect.poll(() => views).toBeGreaterThan(1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(receiptsIn(HIDDEN)).toBe(0);
+    tab.visibilityState = "visible";
+    tab.dispatchEvent(new Event("visibilitychange"));
+    await expect.poll(() => receiptsIn(HIDDEN)).toBe(1);
+    expect(requests.findLast((r) => r.path.includes("/receipt/"))?.path).toContain(encodeURIComponent("$away2"));
+    stop();
   });
 });
 

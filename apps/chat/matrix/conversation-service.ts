@@ -21,6 +21,13 @@
 //   public m.read (src/client.ts:3911-3924), as Element sends with its "send read receipts" setting on, its default
 //   (TimelinePanel.tsx:963-983): the other person sees "Seen" (ADR 0103 decision 4; spec v1.18 #receipts). The view's
 //   seen is the other person's own m.read (Room.getEventReadUpTo, getReadReceiptForUserId, read-receipt.ts:91-127).
+//   A receipt goes only while the page is visible and the conversation is shown (watched while Conversation.svelte
+//   is on screen), and coming back to the page sends one: Element sends receipts only while the member is active
+//   (TimelinePanel.updateReadReceiptOnUserActivity, timeWhileActiveNow, element-web v1.12.35
+//   apps/web/src/components/structures/TimelinePanel.tsx:945-957), and a hidden page ends that activity while a
+//   visible one starts it (UserActivity.onPageVisibilityChanged, apps/web/src/UserActivity.ts:168-175;
+//   https://github.com/element-hq/element-web/blob/v1.12.35/apps/web/src/UserActivity.ts#L168-L175). Element also
+//   stops on a blur; here a visible page counts, so a member reading with another window focused still sends "Seen".
 // - react: Element's ReactionPicker.onChoose (element-web v1.12.35 apps/web/src/components/views/emojipicker/
 //   ReactionPicker.tsx:86-115): this member's own annotation with that key is taken back with redactEvent, otherwise
 //   sendEvent sends an m.reaction annotation, which matrix-js-sdk 43.0.0 never encrypts (src/client.ts:3056). A
@@ -115,6 +122,8 @@ const CHANGES = [
 
 /** The Storage calls the service makes; the page passes window.localStorage. */
 export type LocalChoices = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+/** Whether the page is seen, and the event that says it changed; the page passes its document. */
+export type PageVisibility = Pick<Document, "visibilityState" | "addEventListener" | "removeEventListener">;
 
 /** This account's "Don't ask me again" for Delete, in this browser only. */
 const skipDeleteConfirmKey = (me: string) => `unset-chat:${me}:skip-delete-confirm`;
@@ -129,6 +138,7 @@ export function createConversations(
   crypto: CryptoApi,
   me: string,
   storage: LocalChoices = globalThis.localStorage,
+  page: PageVisibility = globalThis.document,
 ): Conversations {
   const direct = () => directRooms(client.getAccountData(EventType.Direct)?.getContent());
   const changes = changeFeed(client);
@@ -267,14 +277,24 @@ export function createConversations(
     },
     watch(id, onView) {
       let latest = 0;
-      return changes.watch(async () => {
+      let shown = false;
+      const readIfSeen = () => {
+        const room = client.getRoom(id);
+        if (shown && room !== null && page.visibilityState === "visible") markRead(room);
+      };
+      const stop = changes.watch(async () => {
         const mine = ++latest;
         const view = await viewOf(id);
         if (mine !== latest) return; // a later read is under way; it paints instead
         onView(view);
-        const room = client.getRoom(id);
-        if (view !== null && room !== null) markRead(room);
+        shown = view !== null;
+        readIfSeen();
       });
+      page.addEventListener("visibilitychange", readIfSeen);
+      return () => {
+        stop();
+        page.removeEventListener("visibilitychange", readIfSeen);
+      };
     },
     find(other) {
       const found = findDirect((roomId) => client.getRoom(roomId), direct(), other);
