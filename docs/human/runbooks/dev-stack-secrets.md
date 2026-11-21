@@ -246,8 +246,8 @@ request sent twice.
 
 ## Invite requests' two files (P2.10r; ADR 0080)
 
-Web's invite-request page is off until `INVITE_REQUESTS=on`. On, web refuses to boot unless two secret files and one
-setting are valid. Both files are owner-only (0600), like the others in this folder; nobody prints them.
+Web's invite-request page is off until `INVITE_REQUESTS=on`. On, web refuses to boot unless two secret files and two
+settings are valid. Both files are owner-only (0600), like the others in this folder; nobody prints them.
 
 - `web_invite_request_smtp`: one line, `smtps://resend:<key>@smtp.resend.com:465`. Make a Resend API key for web alone,
   with sending access only and limited to the sending domain, not the PDS's key (Resend dashboard, API Keys, Create).
@@ -255,6 +255,8 @@ setting are valid. Both files are owner-only (0600), like the others in this fol
 - `web_invite_request_to`: one line, the owner's address that receives each request.
 - `INVITE_REQUEST_FROM` (plain env, not a secret): a sender on the verified Resend domain, for example the PDS's
   `noreply@` address.
+- `INVITE_REQUEST_OWNER_DID` (plain env, not a secret): the owner's DID, `did:plc:...`. When a request's mail fails,
+  that member's notifications say so, once a day (P2.10s); the entry names no visitor.
 
 Web reads them as `INVITE_REQUEST_SMTP_URL_FILE` and `INVITE_REQUEST_TO_FILE`; the compose mounts are added with the
 deploy that turns the page on. Turning it off is `INVITE_REQUESTS=off` (or leaving it unset) and a restart; the files

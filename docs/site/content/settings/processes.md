@@ -68,6 +68,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `INVITE_REQUEST_SMTP_URL` | secretFile | at least 16 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `INVITE_REQUEST_TO` | secretFile | at least 6 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `INVITE_REQUEST_FROM` | str | text (pattern in source) | (empty) | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `INVITE_REQUEST_OWNER_DID` | str | text (pattern in source) | (empty) | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_URL` | origin | http: or https: | required | `http://objects:8333` | `http://objects:8333` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |

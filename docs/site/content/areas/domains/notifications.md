@@ -18,5 +18,6 @@ The closed list of reasons, what a notification may carry, the list's caps and h
 | --- | --- |
 | `sign_in` | The OAuth callback, in the transaction that makes the session; only browsers signed in before it see it. |
 | `privacy_notice` | The OAuth callback, once per notice version, when the changed-notice banner would show; withdrawn when the banner is dismissed. |
+| `invite_mail_failed` | The invite-request page, to `INVITE_REQUEST_OWNER_DID`, when a request's mail to the owner failed; once a UTC day, naming no visitor (P2.10s). |
 
 A notification carries a reason, an optional topic (1 to 64 printable ASCII characters) and an optional dedupe key (1 to 128). Nothing a person typed is stored: the words come from the screens' reason table.

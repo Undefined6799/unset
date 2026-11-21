@@ -6,8 +6,8 @@
 // The shape follows Bluesky's app.bsky.notification (read in @atproto/api 0.32.5, dist/client/lexicons.js): a list
 // per account, newest first, a `reason` per item, and no PDS record; the rows are private server state.
 
-/** Every reason a notification may have. Closed: the database CHECK holds the same list (migration 0036). */
-export const REASONS = ["sign_in", "privacy_notice"] as const;
+/** Every reason a notification may have. Closed: the database CHECK holds the same list (migrations 0036, 0039). */
+export const REASONS = ["sign_in", "privacy_notice", "invite_mail_failed"] as const;
 export type Reason = (typeof REASONS)[number];
 
 declare const notificationIdBrand: unique symbol;

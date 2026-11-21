@@ -3221,7 +3221,8 @@ Goal: a visitor with no invite leaves one email address and the two sign-up tick
 Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
   mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
 Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
-  through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
+  through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4). Built as
+  P2.10s.
 
 Threats:
 - The form mails a third party (spam relay). Answered: mail goes only to `INVITE_REQUEST_TO`; the typed address is
@@ -3241,6 +3242,25 @@ Threats:
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
+### P2.10s — Tell the owner when invite mails fail
+Tags: [SEC]            Depends on: P2.10r, P2.27            Plan: §5.3 "Login and signup"; ADR 0080 point 4, ADR 0079
+Asked: the P2.10r follow-up ruled 2026-11-20; plan agreed 2026-11-21 (no new ADR: one more reason through the one send
+  call and the one reason table).
+Where: `interfaces/web/src/routes/request-invite/+page.server.ts` (after a failed mail),
+  `interfaces/web/src/lib/server/notification-sources.ts` `sendInviteMailFailed`, reason `invite_mail_failed` in
+  `domains/notifications` `REASONS` and `apps/web/lib/notifications/reasons.ts`, migration 0039 (the reason CHECK),
+  config `INVITE_REQUEST_OWNER_DID` (required when `INVITE_REQUESTS=on`).
+Goal: a failed invite-request mail puts one entry a UTC day (its dedupe key) in the owner's inbox, linking to `/invite`;
+  it names no visitor. The visitor still reads "your request is in".
+
+Threats:
+- The entry leaks a visitor's address. Answered: it has no topic, and its dedupe key is only the day
+  (`invite_request.mail_fails`).
+- Many failures flood the owner's inbox. Answered: one entry a day, however many fail (`invite_request.mail_fails`).
+- The entry's insert fails too. Accepted: it is logged (`invite.request_notice_failed`), and nothing more; the
+  visitor was answered before the mail was tried.
+
+Done when the red is shown, and check is green once migrations 0037 and 0038 are on main.
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19
 Where: `domains/identity/identity-seam/{mint.ts, module-accounts.ts, verify.ts}` (`verify.ts` is the verifier: imports only

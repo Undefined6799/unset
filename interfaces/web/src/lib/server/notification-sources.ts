@@ -46,6 +46,20 @@ export async function opened(did: Did, entries: readonly Entry[], deadline: Abor
   }
 }
 
+/**
+ * An invite request whose mail to the owner failed (P2.10s; ADR 0080 point 4): one entry a UTC day in the owner's
+ * inbox, however many fail, so they know to check the mail settings. It names no visitor: the address is forgotten.
+ */
+export async function sendInviteMailFailed(owner: Did, now: Date, deadline: AbortSignal): Promise<void> {
+  const day = now.toISOString().slice(0, 10);
+  const sent = await services().notifications.send(
+    owner,
+    { reason: "invite_mail_failed", dedupeKey: `invite_mail_failed:${day}` },
+    deadline,
+  );
+  if (!sent.ok) throw new Error(sent.error);
+}
+
 /** Dismissing the banner says the member has seen the change, so its entry goes too. */
 export function withdrawPrivacyNotice(did: Did, version: string, deadline: AbortSignal): Promise<void> {
   return services().notifications.withdraw(did, noticeKey(version), deadline);

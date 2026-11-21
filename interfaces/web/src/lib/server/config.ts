@@ -3,7 +3,7 @@
 // through the process note (note.ts). A slice adds the fields its routes need, as interfaces/http/config.ts has them.
 // P1.20e: what the OAuth client stands on, as interfaces/http/config.ts has it since P2.04c: the lock pool, the seal
 // keyring, net-guard, the identity lookups, the client keys and our PDS.
-import { parseRequesterEmail } from "@unset/domains-identity";
+import { parseDid, parseRequesterEmail } from "@unset/domains-identity";
 import { parseSmtpUrl } from "@unset/infrastructure-email";
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
@@ -130,8 +130,9 @@ const unsetOr = (value: unknown, check: (text: string) => boolean): boolean =>
 
 /**
  * Invite requests (book P2.10r; ADR 0080): off by default, so a stack with no mail settings never offers the form. On,
- * the three below must be set: the SMTP server as an `smtps:` URL (it holds the provider's key), the owner's address
- * the notice goes to (a file, so it is never in the checkout or in `docker inspect`), and the sender address.
+ * the four below must be set: the SMTP server as an `smtps:` URL (it holds the provider's key), the owner's address
+ * the notice goes to (a file, so it is never in the checkout or in `docker inspect`), the sender address, and the
+ * owner's DID, whose notification inbox says when a request could not be mailed (P2.10s).
  */
 const inviteRequestConfig = {
   INVITE_REQUESTS: withRule(
@@ -140,7 +141,8 @@ const inviteRequestConfig = {
       config.INVITE_REQUESTS !== "on" ||
       (config.INVITE_REQUEST_SMTP_URL instanceof Secret &&
         config.INVITE_REQUEST_TO instanceof Secret &&
-        parseRequesterEmail(String(config.INVITE_REQUEST_FROM)) !== null),
+        parseRequesterEmail(String(config.INVITE_REQUEST_FROM)) !== null &&
+        parseDid(String(config.INVITE_REQUEST_OWNER_DID)) !== null),
   ),
   INVITE_REQUEST_SMTP_URL: withRule(optionalSecretFile({ minBytes: 16 }), (config) =>
     unsetOr(config.INVITE_REQUEST_SMTP_URL, (text) => parseSmtpUrl(text) !== null),
@@ -149,6 +151,7 @@ const inviteRequestConfig = {
     unsetOr(config.INVITE_REQUEST_TO, (text) => parseRequesterEmail(text) !== null),
   ),
   INVITE_REQUEST_FROM: str({ default: "" }),
+  INVITE_REQUEST_OWNER_DID: str({ default: "" }),
 };
 
 /** Our PDS's issuer, from PDS_HOSTNAME, with no switch to widen it (interfaces/http/config.ts `pdsIssuerOf`). */
