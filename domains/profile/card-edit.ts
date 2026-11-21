@@ -26,6 +26,8 @@ import {
   SURFACES,
   WIDTHS,
 } from "./cards.ts";
+import { fitsIndex } from "./index-plan.ts";
+import { isPlainText } from "./member-text.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 /** The content fields this version writes, per kind; an edit replaces these and keeps any other. */
@@ -54,12 +56,15 @@ const fail = (code: CardError, field?: string): Failed =>
 const under = (name: string, failed: Failed): Failed =>
   fail(failed.code, failed.field === undefined ? name : `${name}.${failed.field}`);
 
-/** A string field: absent reads as "", anything else that is not a string is refused. One-line unless `multiline`. */
+/**
+ * A string field: absent reads as "", anything else that is not a string is refused. Printable text only, one line
+ * unless `multiline` (member-text.ts).
+ */
 function field(raw: unknown, multiline = false): Field<string> {
   if (raw === undefined || raw === null) return { ok: true, value: "" };
   if (typeof raw !== "string") return fail("card.invalid");
   const value = raw.replace(/\r\n?/g, "\n").trim();
-  if (!multiline && value.includes("\n")) return fail("card.invalid");
+  if (!isPlainText(value, multiline)) return fail("card.invalid");
   return { ok: true, value };
 }
 
@@ -416,7 +421,9 @@ export function toCardRecord(
     content: { ...old, ...keepElementFields(fresh, sameKind, content.kind) },
     createdAt: typeof createdAt === "string" ? createdAt : now,
   };
-  return validateRecord(NSID, record, "read").ok ? { ok: true, record } : fail("card.invalid");
+  if (!validateRecord(NSID, record, "read").ok) return fail("card.invalid");
+  // The fields an edit keeps count too: the index must keep what is written (index-plan.ts, book P3.12v).
+  return fitsIndex(record) ? { ok: true, record } : fail("card.too_long");
 }
 
 /**

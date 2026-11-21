@@ -2,8 +2,10 @@
 // which show visible accounts alone, so every state that hides an account (deactivated, deleted, erased, delisted,
 // suspended) reads here as no row. The profile and its cards come back in one statement, so the page never shows
 // cards from a different moment than the profile. The member's Search and AI choices (migration 0034) come with it. Records come back as stored; domains/profile reads them again.
-import { type Discoverability, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
-import { type Pool, withClient } from "./pool.ts";
+// Each card is its own row, in page order, and the read stops at MAX_PAGE_BYTES of cards (migration 0040), so one
+// page never makes web hold more than that, whatever the index holds (review of #1911).
+import { type Discoverability, MAX_PAGE_BYTES, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
+import { type Pool, readUntilAbort, withClient } from "./pool.ts";
 
 /** Who the page asks for: a DID from the path, or a handle the indexer verified (P3.08s). */
 export type PublicActor = { readonly did: string } | { readonly handle: string };
@@ -14,7 +16,10 @@ export type PublicProfile = {
   readonly handle: string | null;
   readonly cid: string;
   readonly record: unknown;
-  /** The member's cards, at most MAX_SECTIONS_PER_ACCOUNT, by record key; `pageCards` sets the page's order. */
+  /**
+   * The member's cards, at most MAX_SECTIONS_PER_ACCOUNT and MAX_PAGE_BYTES together: the ones the profile lists, in
+   * its order, then the rest by record key, cut where the next would pass the budget. `pageCards` sets the page's order.
+   */
   readonly sections: readonly { readonly key: string; readonly cid: string; readonly value: unknown }[];
   /** The member's Search and AI choices (ADR 0062); all off when they made none. */
   readonly discoverability: Discoverability;
@@ -37,12 +42,14 @@ export type PublicProfileStore = {
   ) => Promise<ListedPage[]>;
 };
 
+/** The profile's row (`n` 0) or one card's (`n` its place, from 1): the columns the other kind has not are null. */
 type Row = {
+  n: string;
   did: string;
   handle: string | null;
   cid: string;
   record: unknown;
-  sections: PublicProfile["sections"];
+  rkey: string | null;
   search_engines: boolean | null;
   ai_search: boolean | null;
   search_title: string | null;
@@ -51,16 +58,29 @@ type Row = {
 
 // Two rows for one handle would be the indexer's error (P3.08s keeps a verified handle on one account): the page
 // then shows neither rather than guess, so the query asks for two to see it.
-const SELECT = `
-  SELECT p.did, p.handle, p.cid, p.record,
-         d.search_engines, d.ai_search, d.search_title, d.search_description,
-         coalesce((SELECT json_agg(json_build_object('key', s.rkey, 'cid', s.cid, 'value', s.record) ORDER BY s.rkey)
-                     FROM (SELECT rkey, cid, record FROM idx.public_section
-                            WHERE did = p.did ORDER BY rkey LIMIT $2) s), '[]'::json) AS sections
-    FROM idx.public_profile p
-    LEFT JOIN app.discoverability d USING (did)`;
-const BY_DID = `${SELECT} WHERE p.did = $1 LIMIT 2`;
-const BY_HANDLE = `${SELECT} WHERE p.handle = $1 LIMIT 2`;
+// The cards are read only for exactly one profile row, and only while the running total of their sizes (in page order,
+// as the indexer stored them) stays within $3.
+const pageOf = (where: string) => `
+  WITH page AS (
+    SELECT p.did, p.handle, p.cid, p.record, d.search_engines, d.ai_search, d.search_title, d.search_description
+      FROM idx.public_profile p
+      LEFT JOIN app.discoverability d USING (did)
+     WHERE ${where} LIMIT 2),
+  cards AS (
+    SELECT s.rkey, s.cid, s.record,
+           row_number() OVER w AS n, sum(s.bytes) OVER (w ROWS UNBOUNDED PRECEDING) AS total
+      FROM idx.public_section s
+     WHERE s.did IN (SELECT did FROM page) AND (SELECT count(*) FROM page) = 1
+    WINDOW w AS (ORDER BY s.position NULLS LAST, s.rkey))
+  SELECT 0::bigint AS n, did, handle, cid, record, NULL::text AS rkey,
+         search_engines, ai_search, search_title, search_description
+    FROM page
+  UNION ALL
+  SELECT n, NULL, NULL, cid, record, rkey, NULL, NULL, NULL, NULL
+    FROM cards WHERE n <= $2 AND total <= $3
+  ORDER BY n`;
+const BY_DID = pageOf("p.did = $1");
+const BY_HANDLE = pageOf("p.handle = $1");
 // A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a record with no
 // visibility, or "public", counts, as domains/profile readProfileVisibility reads it (anything else fails closed).
 const PUBLIC_PAGE = `(NOT p.record ? 'visibility' OR p.record->'visibility' = '"public"'::jsonb)`;
@@ -77,15 +97,22 @@ export function createPublicProfileStore(pool: Pool): PublicProfileStore {
     find: (actor, deadline) =>
       withClient(pool, deadline, async (client) => {
         const [sql, key] = "did" in actor ? [BY_DID, actor.did] : [BY_HANDLE, actor.handle];
-        const { rows } = await client.query<Row>(sql, [key, MAX_SECTIONS_PER_ACCOUNT]);
-        const row = rows.length === 1 ? rows[0] : undefined;
+        // The query itself stops at the deadline, not only the wait for a connection (pool.ts readUntilAbort).
+        const { rows } = await readUntilAbort(
+          client,
+          deadline ?? undefined,
+          client.query<Row>(sql, [key, MAX_SECTIONS_PER_ACCOUNT, MAX_PAGE_BYTES]),
+        );
+        const pages = rows.filter((r) => r.n === "0");
+        const row = pages.length === 1 ? pages[0] : undefined;
         if (row === undefined) return null;
+        const cards = rows.filter((r) => r.n !== "0" && r.rkey !== null);
         return {
           did: row.did,
           handle: row.handle,
           cid: row.cid,
           record: row.record,
-          sections: row.sections,
+          sections: cards.map((r) => ({ key: r.rkey as string, cid: r.cid, value: r.record })),
           discoverability: {
             searchEngines: row.search_engines === true,
             aiSearch: row.ai_search === true,

@@ -4,10 +4,10 @@
 // detail after the pointer rests on it, never near the drag bar, and a click still shows the row. On a phone the
 // detail is its own screen. The "inbox" member (fixtures/servers.ts) has INBOX_SIZE entries; nothing here dismisses
 // one (each test has its own browser context, so the split's stored width starts fresh); the integration tests own
-// dismissing.
+// dismissing. Its Sign-in history tab (P2.27c) has INBOX_SIZE sign-ins, and nothing here deletes one either.
 import { expect, type Page, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
-import { INBOX_SIZE, type PageFixture } from "./pages.ts";
+import { BELL_SIZE, INBOX_SIZE, type PageFixture } from "./pages.ts";
 
 const INBOX: PageFixture = {
   path: "/notifications",
@@ -90,8 +90,9 @@ test.describe("wide screen", () => {
     const newest = (await rows(page).first().locator("[data-title]").textContent()) ?? "";
     const third = (await rows(page).nth(2).locator("[data-title]").textContent()) ?? "";
     await expect(page.locator("#notification-detail-title")).toHaveText(third);
-    // The bell's newest row: a link to ?n=<its id>, which the page keeps on screen (SvelteKit keeps its state).
-    await page.getByRole("button", { name: /^Notifications, (?:\d+|9\+) waiting$/ }).click();
+    // This page has shown the list, so the bell's count is gone (ADR 0085): it names no number.
+    // Its newest row: a link to ?n=<its id>, which the page keeps on screen (SvelteKit keeps its state).
+    await page.getByRole("button", { name: "Notifications", exact: true }).click();
     const id = await rows(page).first().locator("input[name=id]").getAttribute("value");
     await page.locator(`[popover] a[href="/notifications?n=${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`n=${id}$`));
@@ -108,6 +109,85 @@ test.describe("wide screen", () => {
     await expect(rows(page).getByRole("checkbox", { checked: true })).toHaveCount(INBOX_SIZE);
     await page.getByRole("checkbox", { name: "Select all" }).uncheck();
     await expect(button).toBeDisabled();
+  });
+});
+
+test.describe("the bell's count", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+  // The sign-ins tab marks nothing seen on its own (ADR 0085), so the count is the bell member's BELL_SIZE.
+  const BELL: PageFixture = {
+    ...INBOX,
+    path: "/notifications/sign-ins",
+    route: "/notifications/sign-ins",
+    member: "bell",
+  };
+
+  test("comes_back_when_marking_it_seen_fails", async ({ page, context }) => {
+    expect((await openPage(page, BELL))?.status()).toBe(200);
+    const bell = page.getByRole("button", { name: `Notifications, ${BELL_SIZE} waiting` });
+    await page.waitForLoadState("networkidle"); // the client has run, so opening the bell marks it
+    // The browser loses its connection, so the mark it posts fails and nothing is stored. No request is intercepted
+    // (rule TE-2): the browser is only offline (Playwright BrowserContext.setOffline).
+    await context.setOffline(true);
+    const failed = page.waitForEvent("requestfailed", (request) => request.url().endsWith("?/seen"));
+    await bell.click();
+    await failed;
+    // The badge is back, and the next opening tries again.
+    await expect(bell).toBeVisible();
+    await context.setOffline(false);
+  });
+});
+
+test.describe("sign-in history", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+  const HISTORY: PageFixture = { ...INBOX, path: "/notifications/sign-ins", route: "/notifications/sign-ins" };
+  const history = (page: Page) => page.getByRole("list", { name: "Sign-in history" });
+
+  test("the_tab_opens_it_and_its_list_scrolls_under_a_header_that_stays", async ({ page }) => {
+    await open(page);
+    await page.getByRole("link", { name: "Sign-in history" }).click();
+    await expect(page).toHaveURL(/\/notifications\/sign-ins$/);
+    await expect(history(page).locator("li")).toHaveCount(INBOX_SIZE);
+    await expect(page.getByRole("link", { name: "Sign-in history" })).toHaveAttribute("aria-current", "page");
+    const footer = await page.locator("footer").boundingBox();
+    expect(footer?.y ?? 0).toBeGreaterThanOrEqual(800);
+    const box = history(page).locator("xpath=..");
+    const header = box.locator("> div").first();
+    const before = await header.boundingBox();
+    await box.evaluate((node) => node.scrollBy(0, 200));
+    expect(await box.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    expect((await header.boundingBox())?.y).toBeCloseTo(before?.y ?? 0, 0);
+    // With script the rows say how long ago, and the times are the device's own.
+    await expect(history(page).locator("li").first()).toContainText(/ago|just now/);
+  });
+
+  test("delete_selected_waits_for_a_tick", async ({ page }) => {
+    expect((await openPage(page, HISTORY))?.status()).toBe(200);
+    const button = page.getByRole("button", { name: "Delete selected" });
+    await expect(page.getByRole("checkbox", { name: "Select all" })).toBeVisible(); // the client has run
+    await expect(button).toBeDisabled();
+    await history(page).getByRole("checkbox").first().check();
+    await expect(button).toBeEnabled();
+    await page.getByRole("checkbox", { name: "Select all" }).check();
+    await expect(history(page).getByRole("checkbox", { checked: true })).toHaveCount(INBOX_SIZE);
+  });
+});
+
+test.describe("sign-in history on a phone", () => {
+  // Staging break test 2026-11-21 (u8): the time was cut to "Nov 20, 2026 ..." and Delete all sat on a line of its own.
+  test.use({ viewport: { width: 390, height: 844 } });
+  const HISTORY: PageFixture = { ...INBOX, path: "/notifications/sign-ins", route: "/notifications/sign-ins" };
+
+  test("the_whole_time_shows_and_the_toolbar_is_one_line", async ({ page }) => {
+    expect((await openPage(page, HISTORY))?.status()).toBe(200);
+    await expect(page.getByRole("checkbox", { name: "Select all" })).toBeVisible(); // the client has run
+    const time = page.getByRole("list", { name: "Sign-in history" }).locator("time").first();
+    expect(await time.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    const [selected, all] = [
+      await page.getByRole("button", { name: "Delete selected" }).boundingBox(),
+      await page.getByRole("button", { name: "Delete all" }).boundingBox(),
+    ];
+    expect(all?.y).toBeCloseTo(selected?.y ?? 0, 0);
   });
 });
 

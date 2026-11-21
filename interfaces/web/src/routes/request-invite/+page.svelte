@@ -19,7 +19,8 @@ const showForm = $derived(data.open && !data.signedIn && !data.received);
 <Card.Root>
   <Card.Header>
     <Card.Title><h1>{T.title}</h1></Card.Title>
-    <Card.Description>{T.lead}</Card.Description>
+    <!-- The lead asks for an address, so it shows only with the form (staging test 2026-11-21, u7). -->
+    {#if showForm}<Card.Description>{T.lead}</Card.Description>{/if}
   </Card.Header>
   <Card.Content>
     {#if data.signedIn}

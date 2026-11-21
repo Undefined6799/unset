@@ -358,6 +358,22 @@ describe("page visibility (ADR 0078)", () => {
     expect(html).toContain('data-page-audience="ownerOnly"');
   });
 
+  test("the_owner_on_the_public_page_gets_a_link_to_edit_it_and_no_one_else_does", async () => {
+    const own = await get("/@alice.unset.org", { cookie: await signedIn(NAMED) });
+    expect(own.headers.get("cache-control")).toBe("private, no-store");
+    const ownHtml = await own.text();
+    expect(ownHtml).toContain(`href="/${NAMED}"`);
+    expect(ownHtml).toContain("Edit your page");
+    expect(ownHtml).not.toContain("<script");
+    // Right after the owner's visit: a visitor's copy and another member's copy never carry the link.
+    for (const cookie of [undefined, await signedIn(OTHER)]) {
+      const html = await (await get("/@alice.unset.org", cookie === undefined ? {} : { cookie })).text();
+      expect(html).toContain("Card of Alice");
+      expect(html).not.toContain("Edit your page");
+      expect(html).not.toContain(`href="/${NAMED}"`);
+    }
+  });
+
   test("a_visibility_we_do_not_know_reads_as_only_me", async () => {
     const html = await (await get(`/@${FUTURE}`)).text();
     expectLimited(html, "Future");

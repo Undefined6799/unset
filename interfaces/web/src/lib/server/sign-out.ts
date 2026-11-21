@@ -95,8 +95,21 @@ async function recordedIssuer(session: Session): Promise<string | null> {
   }
 }
 
-/** The 303 to the signed-out page, carrying `issuer` (an origin) for its account link, or clearing a stale one. */
-function finish(cookies: Cookies, issuer: string | null): never {
+/** How a sign-out answers: its cookies, and the event's own setHeaders. */
+export type SignOutReply = {
+  readonly cookies: Cookies;
+  readonly setHeaders: (headers: Record<string, string>) => void;
+};
+
+/**
+ * The 303 to the signed-out page, carrying `issuer` (an origin) for its account link, or clearing a stale one. The
+ * browser is told to clear this origin's storage, so unsaved card text kept on the device (ADR 0074 item 4,
+ * apps/web/lib/profile/drafts.ts) goes with the session (Clear-Site-Data "storage",
+ * https://w3c.github.io/webappsec-clear-site-data/#grammardef-storage). Only here, once the session is gone: a
+ * sign-out that fails keeps both the cookie and the drafts.
+ */
+function finish({ cookies, setHeaders }: SignOutReply, issuer: string | null): never {
+  setHeaders({ "clear-site-data": '"storage"' });
   dropSessionCookie(cookies);
   // A sign-in started before this one ends here too: its authorization was made without prompt=login.
   dropCookie(cookies, "nonce");
@@ -108,8 +121,12 @@ function finish(cookies: Cookies, issuer: string | null): never {
 }
 
 /** POST /logout: this browser's session; the grant too when it was the last browser. */
-export async function signOut(session: Session | undefined, cookies: Cookies, deadline: AbortSignal): Promise<never> {
-  if (session === undefined) finish(cookies, null);
+export async function signOut(
+  session: Session | undefined,
+  reply: SignOutReply,
+  deadline: AbortSignal,
+): Promise<never> {
+  if (session === undefined) finish(reply, null);
   const issuer = await recordedIssuer(session);
   const { pool, sessions, log } = services();
   // A failed delete is a retryable 503 (book P2.08 step 3), and the cookie stays so the retry finds it.
@@ -120,7 +137,7 @@ export async function signOut(session: Session | undefined, cookies: Cookies, de
   log.info("auth.logout_this_browser");
   // Last browser: revoke outside the transaction. The count saw this delete.
   if (remaining === 0) await endGrantIfLast(session.did, deadline);
-  finish(cookies, issuer);
+  finish(reply, issuer);
 }
 
 /**
@@ -130,10 +147,10 @@ export async function signOut(session: Session | undefined, cookies: Cookies, de
  */
 export async function signOutEverywhere(
   session: Session | undefined,
-  cookies: Cookies,
+  reply: SignOutReply,
   deadline: AbortSignal,
 ): Promise<never> {
-  if (session === undefined) finish(cookies, null);
+  if (session === undefined) finish(reply, null);
   const issuer = await recordedIssuer(session);
   const { oauth, log } = services();
   let entered = false;
@@ -150,5 +167,5 @@ export async function signOutEverywhere(
     await work();
   }
   log.info("auth.logout_everywhere");
-  finish(cookies, issuer);
+  finish(reply, issuer);
 }

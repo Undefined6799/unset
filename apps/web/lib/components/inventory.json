@@ -204,6 +204,16 @@
         "registrySha256": "38f6abf9c1d47d2ab4912556d05845ec9ba1ee6825405adb5f8831d6a30ac08b",
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       },
+      "dropdown-menu-radio-group.svelte": {
+        "sha256": "96e656077697114f47423accb450240ce7d716ea9a722b4c8967fe45caf49648",
+        "registrySha256": "ac025c63e0ade7c26cef7db98de2fe217208fe9387eb8bfaf97730ab3f013da2",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-radio-item.svelte": {
+        "sha256": "b23846b8b5f3f7bea9b6e460d941ff1421c0d988845a0abda87aab61e87582df",
+        "registrySha256": "95a121b75b8d9caed94f3ca0f3d54a7bb5ca0a7a73743e6686972e7069bd0507",
+        "change": "Lucide's filled circle swapped for our Icon done, as the checkbox item's mark (ADR 0055 point 4; Iconoir has no filled circle). Then biome format and import order only, no behaviour change."
+      },
       "dropdown-menu-separator.svelte": {
         "sha256": "41d50391e958b1e13b76cdaf225d7cd339f5e457786e97e9b1b26049855ce1ca",
         "registrySha256": "96c4a7c60a036396cf5b9ef2947251c1b39590dbd0637e8ecde52475172cf6ff",
@@ -240,9 +250,9 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       },
       "index.ts": {
-        "sha256": "1a70ede40d8af0b01f01ceb7f134a1c18554b7acd16edc7ef4eceb861e187faf",
+        "sha256": "0e850f52634484a55722ef6fe36ac37778ba82a3151fcc80f449d6842c471f32",
         "registrySha256": "02354b1d65c9862b678ebc8d247860c418478f7b074af42bd23c10272aefc7e4",
-        "change": "RadioGroup and RadioItem left out: no screen needs them and Iconoir has no filled circle for the radio mark (ADR 0055 point 5). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
     "input": {
@@ -331,6 +341,14 @@
         "origin": "ours",
         "purpose": "The owner's editor in place on the stock Card when the page is opened with one (no script): edit, delete, add or the avatar's shape."
       },
+      "card-text.svelte": {
+        "origin": "ours",
+        "purpose": "A Text card's words on the owner's page, edited where they stand once the page is idle (ADR 0074 item 4); the rendered blocks with no script."
+      },
+      "text-menus.svelte": {
+        "origin": "ours",
+        "purpose": "The in-place Text editor's side handle, block menu and floating bar, as Crepe draws them; editor/menus.ts places them with Milkdown's plugins (P1.21v slice 3)."
+      },
       "carousel.svelte": {
         "origin": "ours",
         "purpose": "A carousel card's sideways scrolling area, a keyboard stop, with the stock Button as Previous and Next once script runs."
@@ -351,6 +369,10 @@
         "origin": "ours",
         "purpose": "The limited page (ADR 0078): one card centered on the page with only avatar, name, handle and DID and one sentence, for someone the member's page visibility leaves out; a sign-in button when signing in would show the page."
       },
+      "own-public-view.svelte": {
+        "origin": "ours",
+        "purpose": "The notice above the member's own public page when the member looks at it: how others see it, and a plain link back to the page they edit."
+      },
       "page-audience.svelte": {
         "origin": "ours",
         "purpose": "The notice above a member page that is not public (ADR 0078): who else sees it."
@@ -370,6 +392,14 @@
       "text-editor.svelte": {
         "origin": "ours",
         "purpose": "The Text card's field: the stock Label and Textarea the form posts, with the Milkdown editor and a formatting bar of stock Buttons drawn over it once script has loaded it (P1.21u)."
+      },
+      "unsaved-bar.svelte": {
+        "origin": "ours",
+        "purpose": "The owner's unsaved changes: one sticky bar above the name and avatar with the count, Save and Discard (ADR 0074 item 4)."
+      },
+      "drafts-offer.svelte": {
+        "origin": "ours",
+        "purpose": "Unsaved words this device kept from an earlier visit, offered back on the owner's page or thrown away (ADR 0074 item 4)."
       }
     },
     "settings": {
@@ -410,6 +440,14 @@
       "notification-list.svelte": {
         "origin": "ours",
         "purpose": "The bell's notifications as rows: each a plain link to its detail on /notifications, times in UTC until script shows the device's zone (P2.27, ADR 0081)."
+      },
+      "sign-in-history.svelte": {
+        "origin": "ours",
+        "purpose": "The Sign-in history tab (P2.27c, ADR 0082): the member's sign-ins in the last 30 days, date and time and how long ago, in a list that scrolls under a header row that stays; a Delete form per row, Delete selected and Delete all; plain forms with no script."
+      },
+      "tabs.svelte": {
+        "origin": "ours",
+        "purpose": "The two tabs of /notifications (P2.27c): Notifications and Sign-in history, plain links, the current one aria-current=page."
       }
     }
   }

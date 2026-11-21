@@ -174,6 +174,47 @@ describe("notification store", () => {
     expect(await reasons(did, me)).toEqual(["privacy_notice"]);
   });
 
+  test("notifications.marking_seen_is_this_browsers_own_and_never_moves_back", async () => {
+    // ADR 0085: opening the bell or the page marks what it showed seen in that browser only; the entries stay.
+    const did = await member();
+    const [laptop, phone] = [await browser(did), await browser(did)];
+    await send(did, { reason: "privacy_notice", topic: "v1", dedupeKey: "a" });
+    await new Promise((done) => setTimeout(done, 2));
+    await send(did, { reason: "privacy_notice", topic: "v2", dedupeKey: "b" });
+    const [newest, older] = await list(did, laptop);
+    if (newest === undefined || older === undefined) throw new Error("no entries");
+    await db((c) => store.markSeen(c, did, laptop, newest.id));
+    expect((await list(did, laptop)).map((e) => e.seen)).toEqual([true, true]);
+    expect((await list(did, phone)).map((e) => e.seen)).toEqual([false, false]);
+    await new Promise((done) => setTimeout(done, 2));
+    await send(did, { reason: "privacy_notice", topic: "v3", dedupeKey: "c" });
+    // An older id never takes the mark back, and a new entry counts again.
+    await db((c) => store.markSeen(c, did, laptop, older.id));
+    expect((await list(did, laptop)).map((e) => e.seen)).toEqual([false, true, true]);
+  });
+
+  test("notifications.a_later_browser_or_another_member_marks_nothing_seen", async () => {
+    const did = await member();
+    const laptop = await browser(did);
+    const thief = await browser(did, true);
+    const [signIn] = await list(did, laptop);
+    if (signIn?.reason !== "sign_in") throw new Error("no sign-in entry");
+    // The browser the sign-in is about cannot see it, so it cannot mark it, and its own mark is not the laptop's.
+    await db((c) => store.markSeen(c, did, thief, signIn.id));
+    const other = await member();
+    const stranger = await browser(other);
+    await db((c) => store.markSeen(c, other, stranger, signIn.id));
+    await db((c) => store.markSeen(c, did, stranger, signIn.id));
+    expect((await list(did, laptop)).map((e) => e.seen)).toEqual([false]);
+    const marks = await db((c) =>
+      c.query<{ marked: number }>(
+        "SELECT count(*)::int AS marked FROM app.session WHERE did = ANY($1) AND notifications_seen_at IS NOT NULL",
+        [[did, other]],
+      ),
+    );
+    expect(marks.rows[0]?.marked).toBe(0);
+  });
+
   test("notifications.a_source_withdraws_by_its_key", async () => {
     const did = await member();
     const me = await browser(did);
@@ -231,6 +272,13 @@ describe("notification store", () => {
       (await reader.read({ key: {}, cookieValue, deadline: null })).session?.inbox ?? [];
     const laptopBell = await bell(laptop.cookieValue);
     expect(laptopBell.map((e) => e.id)).toEqual((await list(did, laptop.idHash, BELL_READ)).map((e) => e.id));
+    // What this browser has seen comes with it too (ADR 0085), by the same view.
+    const [top] = laptopBell;
+    if (top === undefined) throw new Error("no bell");
+    await db((c) => store.markSeen(c, did, laptop.idHash, top.id));
+    const seenBell = await bell(laptop.cookieValue);
+    expect(seenBell.every((e) => e.seen)).toBe(true);
+    expect((await bell(thief.cookieValue)).some((e) => e.seen)).toBe(false);
     expect(laptopBell).toHaveLength(BELL_READ);
     expect((await bell(thief.cookieValue)).map((e) => e.reason)).not.toContain("sign_in");
     expect((await bell(thief.cookieValue)).map((e) => e.sentAt)).toEqual(

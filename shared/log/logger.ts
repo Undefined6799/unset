@@ -104,7 +104,9 @@ const EVENTS = [
   // P2.27, notifications: the bell's or the page's read failed, so it says so and the page renders. `kind` is the class
   // name. No DID and no count.
   "notifications.read_failed",
+  "notifications.mark_seen_failed",
   "notifications.send_failed",
+  "sign_ins.read_failed",
   // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), it stopped (`kind` "finished",
   // "deadline" or "failed"), and its stream reader stopped and
   // will dial again (`reason` the StopReason, `count` the stops since start). No DID, handle or record.

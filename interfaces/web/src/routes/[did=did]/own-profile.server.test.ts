@@ -43,6 +43,13 @@ describe("loadOwnProfile", () => {
     expect(result.kind === "ok" && result.cards.map((c) => c.key)).toEqual(["b", "a", "c"]);
   });
 
+  // ADR 0074: the one Save names the version each card's editor opened, so the page carries each card's record CID.
+  test("each card's version is its record's CID, and one that is not a CID is left out", async () => {
+    const cid = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
+    const result = await load(ok(profile()), ok([{ key: "a", value: readme("A"), cid }, card("b", readme("B"))]));
+    expect(result.kind === "ok" && Object.fromEntries(result.versions)).toEqual({ a: cid });
+  });
+
   test("a card list the read cut short is shown, and says so", async () => {
     const whole = await load(ok(profile()), ok([card("a", readme("A"))]));
     const cut = await load(ok(profile()), ok([card("a", readme("A"))]), false);
