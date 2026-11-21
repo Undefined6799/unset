@@ -1,7 +1,15 @@
+---
+status: Proposed
+date: "2026-11-21"
+step: P2.27e
+amends:
+  - adr: "0081"
+    part: points 1 and 3, looking writes nothing and the badge counts what is waiting
+---
 # 0085 — The bell's count clears once this browser has seen the list
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P2.27e). Amends points 1 and 3 of
-[0081](0081-notifications-stay-until-dismissed.md) ("Looking changes nothing", "The badge counts what is waiting");
+Amends points 1 and 3 of [0081](0081-notifications-stay-until-dismissed.md) ("Looking changes nothing", "The badge
+counts what is waiting");
 every other point of 0081 and of [0079](0079-notifications-in-core.md) stands. Alex asked on 2026-11-21 at 05:16Z:
 "When you click on it, like that number should disappear and only ... come back with like some more if like there's
 new notification. Like I shouldn't have to dismiss it", and said "go" at 05:17Z.
