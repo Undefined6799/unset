@@ -119,7 +119,9 @@ describe("C36 the chat servers' settings", () => {
     // address Synapse may post to is the door's count port; and a push never carries a message's body or sender.
     const ranges = "homeserver.yaml: ip_range_whitelist is not its reviewed value";
     for (const value of [undefined, [], ["10.250.38.16/29"], ["10.250.38.19", "10.250.38.3"], ["10.0.0.0/8"]])
-      expect(synapseProblem(edited(synapse(), "ip_range_whitelist", value), SERVER), JSON.stringify(value)).toBe(ranges);
+      expect(synapseProblem(edited(synapse(), "ip_range_whitelist", value), SERVER), JSON.stringify(value)).toBe(
+        ranges,
+      );
     const push = "homeserver.yaml: push is not its reviewed value";
     for (const [path, value] of [
       ["push", undefined],
