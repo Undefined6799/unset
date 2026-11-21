@@ -63,27 +63,32 @@ async function endGrantIfLast(did: Did, deadline: AbortSignal): Promise<void> {
   }
 }
 
-/** Ends every session of the DID, trying again after a failure; the last failure is logged and is a retryable 503. */
-async function endEverySession(session: Session, deadline: AbortSignal): Promise<void> {
+/**
+ * Ends every session of the DID, trying again after a failure; the last failure is logged and is a retryable 503.
+ * Whether this browser holds a chat device, which then waits the Log out grace for the chat page.
+ */
+async function endEverySession(session: Session, deadline: AbortSignal): Promise<boolean> {
   const { pool, sessions, chat, log } = services();
   let last: unknown;
   for (let attempt = 1; attempt <= END_ALL_ATTEMPTS && !deadline.aborted; attempt++) {
     if (attempt > 1) await pause(END_ALL_PAUSE_MS);
     try {
       // P2.08j: the definer (migration 0014) ends every session of the DID and deletes its token set; every chat
-      // device the member signed in is queued to end with it (ADR 0083 decision 5, migration 0044).
-      await withTransaction(pool, deadline, async (tx) => {
+      // device the member signed in is queued to end with it (ADR 0083 decision 5, migration 0044), at once except
+      // those this session signed in, which this browser holds and its chat page logs out (migration 0046).
+      return await withTransaction(pool, deadline, async (tx) => {
         await chat.endFor.queueForDid(tx, session.did);
+        const held = await chat.endFor.holdForSession(tx, session.idHash);
         await sessions.destroyAllForDid(tx, session.did, "user_signout_all");
+        return held > 0;
       });
-      return;
     } catch (cause: unknown) {
       last = cause;
     }
   }
   // The grant is gone and session rows may remain: an operator must be able to see that it happened. No DID.
   log.warn("auth.logout_everywhere_incomplete", { kind: className(last) });
-  failed();
+  return failed();
 }
 
 /**
@@ -152,10 +157,11 @@ export async function signOutEverywhere(
   const issuer = await recordedIssuer(session);
   const { oauth, log } = services();
   let entered = false;
+  let chatHere = false;
   const work = async (): Promise<void> => {
     entered = true;
     await revokeOrDrop(session.did, deadline);
-    await endEverySession(session, deadline);
+    chatHere = await endEverySession(session, deadline);
   };
   try {
     await oauth.lockDid(session.did, work);
@@ -165,5 +171,6 @@ export async function signOutEverywhere(
     await work();
   }
   log.info("auth.logout_everywhere");
-  finish(cookies, issuer);
+  // As at Log out, this browser's chat page wipes chat here; the other browsers keep the queued end only.
+  finish(cookies, issuer, chatHere ? await chatSignOutTicket(session, deadline) : null);
 }

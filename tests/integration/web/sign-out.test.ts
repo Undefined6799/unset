@@ -606,6 +606,32 @@ describe("chat on the browsers a session signed in (ADR 0083 decision 5)", () =>
     expect(due.rows.map((r) => r.device_id)).not.toContain(device);
   });
 
+  test("sign_out_everywhere_with_chat_here_goes_through_the_chat_page: other browsers keep the end due now", async () => {
+    const owner = newDid();
+    const here = await signIn(owner);
+    const [hereRef] = await refsOf(owner);
+    await signIn(owner);
+    const thereRef = (await refsOf(owner)).find((ref) => ref !== hereRef) as SessionRef;
+    const user = await readyChat(owner);
+    const mine = await chatEntry(owner, hereRef as SessionRef, user);
+    const theirs = await chatEntry(owner, thereRef, user);
+    web.setStandIns(pdsFixture(owner));
+    const response = await signOutEverywhere(here);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/logout/chat");
+    const carried = `${CHAT_COOKIE}=${cookieValue(response, CHAT_COOKIE)}`;
+    const page = await web.fetch("/logout/chat", { headers: headers({ cookie: carried }) });
+    const html = await page.text();
+    const refresh = /<meta http-equiv="refresh" content="0;url=([^"]+)"/.exec(html)?.[1]?.replaceAll("&amp;", "&");
+    const payload = payloadOf(refresh ?? "");
+    expect([payload.verb, payload.did, payload.user, payload.sid]).toEqual(["session.mint", owner, user, hereRef]);
+    const due = await pool.query<{ device_id: string }>("SELECT device_id FROM app.claim_chat_session_end(100, 60)");
+    expect(due.rows.map((r) => r.device_id)).toContain(theirs);
+    expect(due.rows.map((r) => r.device_id)).not.toContain(mine);
+    expect(await queuedDevices()).toContain(mine);
+    expect(logsName(owner)).toBe(false);
+  });
+
   test("log_out_done_bounces_same_site: unset.cc's way back reaches /signed-out from a page of ours", async () => {
     // The issuer cookie stays Strict; the door sends the tab here, and this page's own navigation is same-site.
     const owner = newDid();

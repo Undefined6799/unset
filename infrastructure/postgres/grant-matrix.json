@@ -563,6 +563,9 @@
     "app.claim_chat_session_end": {
       "web": ["EXECUTE"]
     },
+    "app.hold_chat_session_end": {
+      "web": ["EXECUTE"]
+    },
     "app.finish_chat_session_end": {
       "web": ["EXECUTE"]
     }
