@@ -35,11 +35,11 @@ export async function sendPrivacyNoticeIfChanged(did: Did, deadline: AbortSignal
 }
 
 /**
- * What a source does when its entry is opened, if anything: opening the notice's entry is seeing the change, as the
- * banner's dismiss is, so the notice is not sent again at the next sign-in (Codex review of 2491506). A source with
- * nothing to do adds nothing here; the routes call `opened` for every entry they delete.
+ * What a source does when its entry is dismissed, if anything: dismissing the notice's entry is seeing the change, as
+ * the banner's dismiss is, so the notice is not sent again at the next sign-in (Codex review of 2491506). A source with
+ * nothing to do adds nothing here; the routes call `dismissed` for every entry they delete.
  */
-export async function opened(did: Did, entries: readonly Entry[], deadline: AbortSignal): Promise<void> {
+export async function dismissed(did: Did, entries: readonly Entry[], deadline: AbortSignal): Promise<void> {
   const { accounts, versions } = services();
   if (entries.some((entry) => entry.reason === "privacy_notice" && entry.topic === versions.privacy)) {
     await accounts.markPrivacyNoticeSeen(did, versions.privacy, deadline);

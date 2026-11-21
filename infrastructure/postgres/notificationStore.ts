@@ -1,4 +1,4 @@
-// The notification inbox's rows (P2.27, ADR 0079; migration 0036). Every statement names the member's DID, and every
+// The notification inbox's rows (P2.27, ADR 0079 and 0081; migration 0036). Every statement names the member's DID, and every
 // read or delete a browser makes names its session too, so an id a form sends never reaches another member's row
 // (rule SE-2) and an entry marked `older_sessions_only` stays out of reach of any browser signed in after it was sent.
 // The bell's newest few come with the session read instead (infrastructure/session/store.ts), through the same view.
@@ -18,11 +18,12 @@ const VISIBLE_IDS = "SELECT i.id FROM app.inbox i WHERE i.viewer = $2 AND i.did 
 const LIST = `SELECT i.id, i.reason, i.topic, i.created_at FROM app.inbox i WHERE i.viewer = $2 AND i.did = $1
    ORDER BY i.created_at DESC, i.id LIMIT $3`;
 
-const OPEN = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id = $3 AND n.id IN (${VISIBLE_IDS})
+/** The ids a form named ($3, a uuid[]), those this browser may see only. */
+const DISMISS = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id = ANY($3::uuid[]) AND n.id IN (${VISIBLE_IDS})
    RETURNING n.id, n.reason, n.topic, n.created_at`;
 
 /** Everything the list showed: `upTo` is its newest entry, so one sent after the list was drawn stays. */
-const OPEN_UP_TO = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id IN (${VISIBLE_IDS})
+const DISMISS_UP_TO = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id IN (${VISIBLE_IDS})
    AND n.created_at <= (SELECT u.created_at FROM app.notification u WHERE u.id = $3 AND u.did = $1)
    RETURNING n.id, n.reason, n.topic, n.created_at`;
 
@@ -61,12 +62,13 @@ export function createNotificationStore() {
       const { rows } = await db.query<Row>(LIST, [did, idHash, limit]);
       return rows.map(entryOf);
     },
-    async open(db: Db, did: Did, idHash: Buffer, id: NotificationId): Promise<Entry | null> {
-      const { rows } = await db.query<Row>(OPEN, [did, idHash, id]);
-      return rows[0] === undefined ? null : entryOf(rows[0]);
+    async dismiss(db: Db, did: Did, idHash: Buffer, ids: readonly NotificationId[]): Promise<Entry[]> {
+      if (ids.length === 0) return [];
+      const { rows } = await db.query<Row>(DISMISS, [did, idHash, ids]);
+      return rows.map(entryOf);
     },
-    async openUpTo(db: Db, did: Did, idHash: Buffer, upTo: NotificationId): Promise<Entry[]> {
-      const { rows } = await db.query<Row>(OPEN_UP_TO, [did, idHash, upTo]);
+    async dismissUpTo(db: Db, did: Did, idHash: Buffer, upTo: NotificationId): Promise<Entry[]> {
+      const { rows } = await db.query<Row>(DISMISS_UP_TO, [did, idHash, upTo]);
       return rows.map(entryOf);
     },
     /** A source taking back what it sent, by its dedupe key (the banner's dismiss withdraws the notice's entry). */
