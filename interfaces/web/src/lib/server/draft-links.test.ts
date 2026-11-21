@@ -9,12 +9,12 @@ const KEYS = { active: "d1", key: (kid: string) => (kid === "d1" ? new Uint8Arra
 const DID = "did:plc:abcdefghijklmnopqrstuvwx" as Did;
 const ID = "0b8e0b8e-1111-4222-8333-444455556666";
 const NOW = 1_800_000_000;
-const link = draftLinks(KEYS, "https://media.unset.net", () => NOW);
+const link = draftLinks(KEYS, "https://usercontent.unset.site", () => NOW);
 
 describe("draft links", () => {
   test("draft_links.media_accepts: the link is on the media origin and names the member's own version", () => {
     const url = new URL(link(DID, ID, "w960.avif"));
-    expect(url.origin).toBe("https://media.unset.net");
+    expect(url.origin).toBe("https://usercontent.unset.site");
     expect(verifyDraftPath(KEYS, `${url.pathname}${url.search}`, NOW)).toEqual({
       ok: true,
       objectKey: `drafts/${DID}/i/${ID}/w960.avif`,
