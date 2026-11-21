@@ -80,6 +80,8 @@ DECLARE
   v_image_use bigint;
   v_image_upload bigint;
   v_notification bigint;
+  v_image_record bigint;
+  v_sign_in bigint;
   v_chat_account bigint;
   v_door_browser bigint;
 BEGIN
@@ -107,7 +109,8 @@ BEGIN
          'idx.account.did', 'idx.account_job.did', 'idx.profile.did', 'idx.section.did', 'idx.record_blob.did',
          'idx.dead_letter.did', 'mod.account_state.did', 'idx.profile.uri', 'idx.section.uri', 'idx.record_blob.uri',
          'idx.track_request.did', 'app.discoverability.did', 'app.image.did', 'app.image_use.record_uri',
-         'app.image_upload.did', 'app.notification.did', 'app.chat_account.did',
+         'app.image_upload.did', 'app.notification.did', 'app.image_record.did',
+         'app.image_record.record_uri', 'app.sign_in.did', 'app.chat_account.did',
          'door.browser.did')
   ) THEN
     RAISE EXCEPTION 'erase_uncovered_did_column' USING ERRCODE = '55000';
@@ -130,12 +133,16 @@ BEGIN
   GET DIAGNOSTICS v_discoverability = ROW_COUNT;
   DELETE FROM app.image_use u USING app.image i WHERE u.image_id = i.id AND i.did = p_did;
   GET DIAGNOSTICS v_image_use = ROW_COUNT;
+  DELETE FROM app.image_record WHERE did = p_did;
+  GET DIAGNOSTICS v_image_record = ROW_COUNT;
   DELETE FROM app.image WHERE did = p_did;
   GET DIAGNOSTICS v_image = ROW_COUNT;
   DELETE FROM app.image_upload WHERE did = p_did;
   GET DIAGNOSTICS v_image_upload = ROW_COUNT;
   DELETE FROM app.notification WHERE did = p_did;
   GET DIAGNOSTICS v_notification = ROW_COUNT;
+  DELETE FROM app.sign_in WHERE did = p_did;
+  GET DIAGNOSTICS v_sign_in = ROW_COUNT;
   --    The chat mapping: its chat user is kept, with no DID, for the deactivation that erases the MAS account (ADR
   --    0096 decision 3), so the account can still be found once nothing here names the person.
   INSERT INTO app.chat_erasure (chat_user, queued_at)
@@ -180,7 +187,8 @@ BEGIN
       'idx.dead_letter', v_idx_dead_letter, 'mod.account_state', v_mod_account_state,
       'idx.track_request', v_track_request, 'app.discoverability', v_discoverability,
       'app.image', v_image, 'app.image_use', v_image_use, 'app.image_upload', v_image_upload,
-      'app.notification', v_notification, 'app.chat_account', v_chat_account,
+      'app.notification', v_notification, 'app.image_record', v_image_record, 'app.sign_in', v_sign_in,
+      'app.chat_account', v_chat_account,
       'door.browser', v_door_browser));
 END
 $$;
