@@ -44,6 +44,9 @@ export const BLOCK_ITEMS = [
   "heading1",
   "heading2",
   "heading3",
+  "heading4",
+  "heading5",
+  "heading6",
   "quote",
   "divider",
   "bullets",
@@ -123,6 +126,9 @@ function blockCommand(ctx: Ctx, item: BlockItem): () => void {
     case "heading1":
     case "heading2":
     case "heading3":
+    case "heading4":
+    case "heading5":
+    case "heading6":
       return set(headingSchema.type(ctx), { level: Number(item.at(-1)) });
     case "quote":
       return wrap(blockquoteSchema.type(ctx));

@@ -42,11 +42,17 @@ let {
   };
 } = $props();
 
-const BLOCK_ICONS: Partial<Record<BlockItem, IconName>> = {
-  heading1: "heading",
-  heading2: "heading",
-  heading3: "heading",
+/** Each item's icon, as Crepe draws one for each: Iconoir, and Lucide's numbered headings (ADR 0092). */
+const BLOCK_ICONS: Record<BlockItem, IconName> = {
+  text: "text",
+  heading1: "h1",
+  heading2: "h2",
+  heading3: "h3",
+  heading4: "h4",
+  heading5: "h5",
+  heading6: "h6",
   quote: "quote",
+  divider: "remove",
   bullets: "list",
   numbers: "numbered-list",
   codeBlock: "code-block",
@@ -57,6 +63,9 @@ const GROUPS: Record<BlockItem, keyof typeof TEXT_MENUS.groups> = {
   heading1: "text",
   heading2: "text",
   heading3: "text",
+  heading4: "text",
+  heading5: "text",
+  heading6: "text",
   quote: "text",
   divider: "text",
   bullets: "list",
@@ -124,7 +133,7 @@ const control =
         onclick={() => onchoose(item)}
         onkeydown={() => undefined}
       >
-        {#if BLOCK_ICONS[item] !== undefined}<Icon name={BLOCK_ICONS[item]} size={16} />{:else}<span class="size-4"></span>{/if}
+        <Icon name={BLOCK_ICONS[item]} size={16} />
         {TEXT_MENUS.items[item]}
       </li>
     {/each}

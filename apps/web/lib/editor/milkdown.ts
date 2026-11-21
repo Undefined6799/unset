@@ -301,6 +301,12 @@ const taskBox = $prose(
     }),
 );
 
+/** A drawn heading's own level, 1 to 6, from its data-level; anything else is none. */
+function headingLevel(value: string | undefined): number | undefined {
+  const level = Number(value);
+  return Number.isInteger(level) && level >= 1 && level <= 6 ? level : undefined;
+}
+
 /** The parts of a Markdown tree (mdast) the www rewrite reads. */
 type MdNode = { type: string; url?: string; value?: string; children?: MdNode[] };
 
@@ -472,11 +478,16 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       // its level; a pasted h1 is the top level, as an h2 is.
       ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
         ...prev(schemaCtx),
+        // HTML stops at h6, so levels 5 and 6 both draw one; data-level says which, and a copy keeps it.
         parseDOM: [1, 2, 3, 4, 5, 6].map((shown) => ({
           tag: `h${shown}`,
-          getAttrs: () => ({ level: Math.max(shown - 1, 1) }),
+          getAttrs: (dom: HTMLElement) => ({ level: headingLevel(dom.dataset.level) ?? Math.max(shown - 1, 1) }),
         })),
-        toDOM: (node) => [`h${Math.min(Number(node.attrs.level) + 1, 6)}`, 0],
+        toDOM: (node) => [
+          `h${Math.min(Number(node.attrs.level) + 1, 6)}`,
+          { "data-level": String(node.attrs.level) },
+          0,
+        ],
       }));
       // An image shows its alt text and loads nothing: the page shows it as a link (parse.ts) until the media proxy,
       // and a remote address would be refused by the page's img-src anyway (preset-commonmark 7.23.0 imageSchema.toDOM

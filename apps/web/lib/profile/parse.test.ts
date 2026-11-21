@@ -159,9 +159,11 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
-  test("a heading deeper than three reads as level three", () => {
-    expect(parseReadme("##### Deep")).toEqual([
-      { kind: "heading", level: 3, children: [{ kind: "text", text: "Deep" }] },
+  test("a heading keeps any of the six levels, and seven marks are a paragraph", () => {
+    expect(parseReadme("##### Deep\n\n###### Six\n\n####### Seven")).toEqual([
+      { kind: "heading", level: 5, children: [{ kind: "text", text: "Deep" }] },
+      { kind: "heading", level: 6, children: [{ kind: "text", text: "Six" }] },
+      { kind: "paragraph", children: [{ kind: "text", text: "####### Seven" }] },
     ]);
   });
 

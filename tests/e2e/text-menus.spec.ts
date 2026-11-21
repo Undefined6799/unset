@@ -90,7 +90,16 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
   await expect(menu).toBeVisible();
   await page.keyboard.type("head");
-  await expect(menu.getByRole("option")).toHaveText(["Heading 1", "Heading 2", "Heading 3"]);
+  // Six levels, each with its numbered icon, as the playground's menu has them (Crepe 7.23.0 block-edit menu).
+  await expect(menu.getByRole("option")).toHaveText([
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+  ]);
+  await expect(menu.getByRole("option").locator("svg")).toHaveCount(6);
   await expect(menu.getByRole("option", { name: "Heading 1" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowDown");
   const second = menu.getByRole("option", { name: "Heading 2" });
