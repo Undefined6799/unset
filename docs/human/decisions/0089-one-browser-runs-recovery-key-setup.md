@@ -1,7 +1,8 @@
 # 0089 — One browser at a time runs an account's recovery-key setup, under a short claim the door keeps
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P6.08, build step 8 of the minimal chat build). Carries out ADR 0083
-decisions 2 and 3; builds on ADRs 0081 (the door) and 0088 (the chat page).
+Status: Accepted by Alex 2026-11-21 ("yes" in the project chat, 04:26Z); proposed 2026-11-21 (P6.08, build
+step 8 of the minimal chat build). Carries out ADR 0083 decisions 2 and 3; builds on ADRs 0081 (the door) and 0088
+(the chat page).
 
 ## Context
 ADR 0083 decision 2 says the door lets exactly one browser run the "Save your recovery key" setup for an account
