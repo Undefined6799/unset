@@ -1,14 +1,13 @@
-// The MAS admin calls (ADR 0081 decisions 1 and 5): the only file in chat-admin that opens a connection, and only to
-// the two internal origins checked at boot (the egress guard's exemption). Every answer is parsed here into what
-// chat-admin needs; anything else throws MasUnavailable, which the handler answers 503 and never retries (RE-1: the
-// caller's queued job or the door retries). Read from MAS 1.26.0 docs/api/spec.json and docs/topics/admin-api.md
+// The MAS admin calls (ADR 0081 decisions 1 and 5), sent through outbound.ts to the two internal origins checked at
+// boot. Every answer is parsed here into what chat-admin needs; anything else throws MasUnavailable, which the handler
+// answers 503 and never retries (RE-1: the caller's queued job or the door retries). Read from MAS 1.26.0 docs/api/spec.json and docs/topics/admin-api.md
 // (https://github.com/element-hq/matrix-authentication-service/tree/v1.26.0/docs), checked on a live 1.26.0:
 // token by client_credentials with client_secret_basic and scope urn:mas:admin; users 201/409, by-username 200/404;
 // personal-sessions 201; revoke 200, 409 when already revoked; users/{id}/lock, /unlock and /deactivate 200 every
 // time and 404 for an unknown ID (the live 1.26.0, its own /api/spec.json, 2026-11-21). Deactivate is sent with no
 // body, so `skip_erase` keeps its default false and MAS asks the homeserver to erase the user (DeactivateUserRequest).
-import { request } from "node:http";
-import { type Resolve, systemResolve, vettedLookup } from "@unset/shared-admin-envelope";
+import type { Resolve } from "@unset/shared-admin-envelope";
+import { type Answer, createSender, field } from "./outbound.ts";
 
 export class MasUnavailable extends Error {}
 
@@ -31,48 +30,13 @@ export type MasOptions = {
   readonly resolve?: Resolve;
 };
 
-/** Each call's whole deadline, inside the request's (RE-1), and the most any answer may hold. */
-const TIMEOUT_MS = 5_000;
-const CAP = 64 * 1024;
 /** A token is dropped this long before MAS says it expires, so none is used as it runs out. */
 const TOKEN_MARGIN_MS = 30_000;
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const HUMAN_NAME = "unset.cc";
 
-type Answer = { status: number; body: Record<string, unknown> };
-const field = (value: unknown, ...path: string[]): unknown =>
-  path.reduce<unknown>((at, key) => (typeof at === "object" && at !== null ? Reflect.get(at, key) : undefined), value);
-
 export function createMas(options: MasOptions): Mas {
-  const lookup = vettedLookup(options.resolve ?? systemResolve, () => new MasUnavailable("public_answer"));
-  const send = (url: URL, method: string, headers: Record<string, string>, body?: string) =>
-    new Promise<Answer>((resolve, reject) => {
-      const req = request(url, { method, headers, timeout: TIMEOUT_MS, lookup }, (res) => {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        res.on("data", (chunk: Buffer) => {
-          size += chunk.length;
-          if (size > CAP) return req.destroy(new MasUnavailable("cap"));
-          chunks.push(chunk);
-        });
-        res.on("end", () => {
-          let parsed: unknown = {};
-          try {
-            parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-          } catch {
-            // Not JSON: an empty body, which every parser below refuses.
-          }
-          const record = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
-          resolve({ status: res.statusCode ?? 0, body: record });
-        });
-        res.on("error", () => reject(new MasUnavailable("read")));
-      });
-      const deadline = setTimeout(() => req.destroy(new MasUnavailable("deadline")), TIMEOUT_MS);
-      req.on("close", () => clearTimeout(deadline));
-      req.on("timeout", () => req.destroy(new MasUnavailable("timeout")));
-      req.on("error", (error) => reject(error instanceof MasUnavailable ? error : new MasUnavailable("connect")));
-      req.end(body);
-    });
+  const send = createSender(MasUnavailable, options.resolve);
 
   let cached: { token: string; until: number } | null = null;
   async function adminToken(): Promise<string> {
