@@ -1,6 +1,6 @@
 // P2.19b: the picture store bound to one member (picture-store.server.ts), over stand-ins for the image library, the
 // draft store and the upload. Every call names the member and a record URI built from the card key, the use and the
-// CID note run under the request's deadline, every use is stamped and fenced by when the request began, and taking a use back runs under its own, so a request out of time
+// CID note run under the request's deadline, and taking a use back runs under its own, so a request out of time
 // still settles (Codex review of #1860).
 import { describe, expect, test } from "vitest";
 import { type PictureDeps, picturesFor } from "./picture-store.server.ts";
@@ -15,7 +15,8 @@ const DRAFT = "0b6a52d4-6c1f-4bde-9b8e-2a1f6d7c3e01" as DraftId;
 const KEY = "3kpicture2aaa" as CardKey;
 const URI = `at://${DID}/sh.unset.section/${KEY}`;
 const CID = "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
-const STARTED = new Date("2026-11-21T01:00:00Z");
+const LEASE = "6c1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
+const REV = "3kcommit2aaaa";
 
 function bound(open = true) {
   const calls: { name: string; args: unknown[]; aborted: boolean | undefined }[] = [];
@@ -27,10 +28,11 @@ function bound(open = true) {
       return answer;
     };
   const store = {
-    addUse: note("addUse", { width: 3, height: 2, created: true }),
+    addUse: note("addUse", { width: 3, height: 2, created: true, lease: LEASE }),
     removeUse: note("removeUse"),
     notePublished: note("notePublished"),
-    dropUse: note("dropUse"),
+    settleUse: note("settleUse"),
+    dropUses: note("dropUses"),
   } as unknown as Store;
   const keys: string[] = [];
   const deps: PictureDeps = {
@@ -44,17 +46,17 @@ function bound(open = true) {
     upload: async () => ({ kind: "transient", code: "pds_unavailable" }),
   };
   const expired = AbortSignal.abort();
-  return { pictures: picturesFor(DID, deps, expired, STARTED), calls, keys };
+  return { pictures: picturesFor(DID, deps, expired), calls, keys };
 }
 
 describe("picturesFor", () => {
-  test("picture.bound: each call names the member, the card's record, its own draft key and when the request began", async () => {
+  test("picture.bound: each call names the member, the card's record, its own draft key", async () => {
     const { pictures, calls, keys } = bound();
     await pictures.use(DRAFT, KEY);
     await pictures.published(DRAFT, CID);
     await pictures.main(DRAFT);
     expect(calls.map((c) => [c.name, c.args])).toEqual([
-      ["addUse", [DID, DRAFT, URI, STARTED]],
+      ["addUse", [DID, DRAFT, URI]],
       ["notePublished", [DID, DRAFT, CID]],
     ]);
     expect(keys).toEqual([`drafts/${DID}/i/${DRAFT}/main.jpeg`]);
@@ -63,19 +65,19 @@ describe("picturesFor", () => {
   test("picture.settle_deadline: past the request's deadline a use is still taken back under its own", async () => {
     const { pictures, calls } = bound();
     await pictures.use(DRAFT, KEY);
-    await pictures.release(DRAFT, KEY);
-    await pictures.drop(KEY, CID);
-    await pictures.drop(KEY, null);
+    await pictures.release(DRAFT, KEY, LEASE);
+    await pictures.settle(KEY, REV, CID, [{ id: DRAFT, lease: LEASE }]);
+    await pictures.drop(KEY);
     expect(calls.map((c) => [c.name, c.aborted])).toEqual([
       ["addUse", true],
       ["removeUse", false],
-      ["dropUse", false],
-      ["dropUse", false],
+      ["settleUse", false],
+      ["dropUses", false],
     ]);
     expect(calls.slice(1).map((c) => c.args)).toEqual([
-      [DID, DRAFT, URI, STARTED],
-      [DID, URI, CID, STARTED],
-      [DID, URI, null, STARTED],
+      [DID, DRAFT, URI, LEASE],
+      [DID, URI, REV, CID, [{ id: DRAFT, lease: LEASE }]],
+      [DID, URI],
     ]);
   });
 

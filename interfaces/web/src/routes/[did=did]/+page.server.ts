@@ -156,7 +156,7 @@ function writesFor(did: Did, locals: App.Locals) {
   return cardWrites(
     store,
     () => new Date().toISOString(),
-    picturesFor(did, { images, drafts, upload }, locals.deadline, new Date()),
+    picturesFor(did, { images, drafts, upload }, locals.deadline),
   );
 }
 

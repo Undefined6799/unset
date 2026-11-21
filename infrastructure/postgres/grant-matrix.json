@@ -261,7 +261,8 @@
         "columns": {
           "image_id": ["SELECT", "INSERT"],
           "record_uri": ["SELECT", "INSERT"],
-          "acquired_at": ["SELECT", "INSERT", "UPDATE"]
+          "lease": ["SELECT", "INSERT", "UPDATE"],
+          "settled_rev": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }

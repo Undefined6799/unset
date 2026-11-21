@@ -14,23 +14,30 @@ import type { PictureStore } from "./card-writes.server.ts";
 export const SETTLE_MS = 5_000;
 
 /** The image library calls this file makes (infrastructure/postgres ImageStore, wired in compose.ts). */
+type HeldUse = { readonly id: string; readonly lease: string };
 type ImageUses = {
   readonly addUse: (
     did: Did,
     id: string,
     recordUri: string,
-    at: Date,
     deadline: AbortSignal,
-  ) => Promise<{ readonly width: number; readonly height: number; readonly created: boolean } | null>;
-  readonly removeUse: (did: Did, id: string, recordUri: string, at: Date, deadline: AbortSignal) => Promise<void>;
+  ) => Promise<{
+    readonly width: number;
+    readonly height: number;
+    readonly created: boolean;
+    readonly lease: string;
+  } | null>;
+  readonly removeUse: (did: Did, id: string, recordUri: string, lease: string, deadline: AbortSignal) => Promise<void>;
   readonly notePublished: (did: Did, id: string, blobCid: string, deadline: AbortSignal) => Promise<void>;
-  readonly dropUse: (
+  readonly settleUse: (
     did: Did,
     recordUri: string,
-    blobCid: string | null,
-    before: Date,
+    rev: string,
+    shownCid: string | null,
+    mine: readonly HeldUse[],
     deadline: AbortSignal,
   ) => Promise<void>;
+  readonly dropUses: (did: Did, recordUri: string, deadline: AbortSignal) => Promise<void>;
 };
 
 export type PictureDeps = {
@@ -43,17 +50,13 @@ export type PictureDeps = {
   readonly upload: (bytes: Uint8Array) => Promise<PdsResult<UploadedBlob>>;
 };
 
-/**
- * `startedAt` is when this request began, before any write: each use it makes is stamped with it, and it takes back
- * only uses no later request has stamped since, so saves of one card settle correctly whichever finishes first.
- */
-export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal, startedAt: Date): PictureStore {
+export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal): PictureStore {
   const { images, drafts } = deps;
   const uri = (key: string) => `at://${did}/${CARD_COLLECTION}/${key}`;
   const settling = () => AbortSignal.timeout(SETTLE_MS);
   return {
-    use: async (id, key) => (images.open ? images.store.addUse(did, id, uri(key), startedAt, deadline) : null),
-    release: (id, key) => images.store.removeUse(did, id, uri(key), startedAt, settling()),
+    use: async (id, key) => (images.open ? images.store.addUse(did, id, uri(key), deadline) : null),
+    release: (id, key, lease) => images.store.removeUse(did, id, uri(key), lease, settling()),
     main: async (id) => {
       const read = await drafts.get(`drafts/${did}/i/${id}/main.jpeg`);
       if (!read.ok) return { kind: "unavailable" };
@@ -61,6 +64,7 @@ export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal, 
     },
     upload: deps.upload,
     published: (id, link) => images.store.notePublished(did, id, link, deadline),
-    drop: (key, link) => images.store.dropUse(did, uri(key), link, startedAt, settling()),
+    settle: (key, rev, link, mine) => images.store.settleUse(did, uri(key), rev, link, mine, settling()),
+    drop: (key) => images.store.dropUses(did, uri(key), settling()),
   };
 }

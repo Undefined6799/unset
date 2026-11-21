@@ -28,9 +28,6 @@ async function member(): Promise<Did> {
 }
 
 const picture = { kind: "image" as const, width: 2560, height: 1707, bytes: 2_400_000 };
-// When the saves under test began: a use is stamped with its save's start, and a drop names its own.
-const T0 = new Date("2026-11-20T10:00:00Z");
-const LATER = new Date("2026-11-20T11:00:00Z");
 const record = (did: Did, rkey = "3kaaaaaaaaaaa") => `at://${did}/sh.unset.section/${rkey}`;
 
 async function stored(did: Did, bytes = picture.bytes): Promise<string> {
@@ -97,10 +94,11 @@ describe("image store", () => {
     const other = await member();
     const id = await stored(owner);
     expect(await store.list(other, null)).toEqual([]);
-    expect(await store.addUse(other, id, record(other), T0, null)).toBeNull();
-    expect(await store.addUse(owner, id, record(other), T0, null)).toBeNull();
+    expect(await store.addUse(other, id, record(other), null)).toBeNull();
+    expect(await store.addUse(owner, id, record(other), null)).toBeNull();
     expect(await store.discard(other, id, null)).toBe(false);
-    await store.removeUse(other, id, record(owner), T0, null);
+    const lease = "6c1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
+    await store.removeUse(other, id, record(owner), lease, null);
     expect(await exists(id)).toBe(true);
     expect(await store.list(owner, null)).toEqual([
       expect.objectContaining({ id, state: "uploaded", inUse: false, bytes: picture.bytes }),
@@ -111,25 +109,27 @@ describe("image store", () => {
     const did = await member();
     const id = await stored(did);
     const size = { width: 2560, height: 1707 };
-    expect(await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), T0, null)).toEqual({ ...size, created: true });
-    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), T0, null)).toEqual({ ...size, created: true });
+    const a = await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null);
+    expect(a).toEqual({ ...size, created: true, lease: expect.any(String) });
+    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toMatchObject({ ...size, created: true });
     // Asked again for a record that already has it, the use is not made a second time (and not this call's to undo).
-    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), T0, null)).toEqual({ ...size, created: false });
-    await store.removeUse(did, id, record(did, "3kaaaaaaaaaaa"), T0, null);
+    const b = await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null);
+    expect(b).toMatchObject({ ...size, created: false });
+    await store.removeUse(did, id, record(did, "3kaaaaaaaaaaa"), String(a?.lease), null);
     expect(await store.discard(did, id, null)).toBe(false);
     const [kept] = await sql<{ state: string; unused_since: Date | null }>(
       "SELECT state, unused_since FROM app.image WHERE id = $1",
       [id],
     );
     expect(kept).toEqual({ state: "published", unused_since: null });
-    await store.removeUse(did, id, record(did, "3kbbbbbbbbbbb"), T0, null);
+    await store.removeUse(did, id, record(did, "3kbbbbbbbbbbb"), String(b?.lease), null);
     const [dropped] = await sql<{ unused_since: Date | null }>("SELECT unused_since FROM app.image WHERE id = $1", [
       id,
     ]);
     expect(dropped?.unused_since).toBeInstanceOf(Date);
   });
 
-  test("image.drop_use: the picture a record no longer shows loses its use by CID; the record's other one stays", async () => {
+  test("image.settle: a landed write keeps the use of the picture its record shows and takes back the rest", async () => {
     const did = await member();
     const other = await member();
     const [old, fresh, theirs] = [await stored(did), await stored(did), await stored(other)];
@@ -137,48 +137,93 @@ describe("image store", () => {
       "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe",
       "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
     ];
-    await store.addUse(did, old, record(did), T0, null);
-    await store.addUse(did, fresh, record(did), T0, null);
-    await store.addUse(other, theirs, record(other), T0, null);
+    await store.addUse(did, old, record(did), null);
     await store.notePublished(did, old, OLD, null);
+    await store.settleUse(did, record(did), "3kcommit2aaaa", OLD, [], null);
+    const made = await store.addUse(did, fresh, record(did), null);
+    await store.addUse(other, theirs, record(other), null);
     await store.notePublished(did, fresh, FRESH, null);
     // Another member's call names nothing of theirs.
     await store.notePublished(other, fresh, OLD, null);
-    await store.dropUse(did, record(did), OLD, LATER, null);
-    const rows = await sql<{ id: string; unused: boolean; uses: number; cid: string | null }>(
+    await store.settleUse(other, record(did), "3kcommit2zzzz", null, [], null);
+    await store.settleUse(did, record(did), "3kcommit2bbbb", FRESH, [{ id: fresh, lease: String(made?.lease) }], null);
+    const rows = await sql<{ id: string; unused: boolean; uses: number; cid: string | null; rev: string | null }>(
       `SELECT id::text, unused_since IS NOT NULL AS unused, blob_cid AS cid,
-              (SELECT count(*)::int FROM app.image_use u WHERE u.image_id = app.image.id) AS uses
+              (SELECT count(*)::int FROM app.image_use u WHERE u.image_id = app.image.id) AS uses,
+              (SELECT max(settled_rev) FROM app.image_use u WHERE u.image_id = app.image.id) AS rev
          FROM app.image WHERE id = ANY($1::uuid[])`,
       [[old, fresh, theirs]],
     );
-    expect(Object.fromEntries(rows.map((row) => [row.id, [row.unused, row.uses, row.cid]]))).toEqual({
-      [old]: [true, 0, OLD],
-      [fresh]: [false, 1, FRESH],
-      [theirs]: [false, 1, null],
+    expect(Object.fromEntries(rows.map((row) => [row.id, [row.unused, row.uses, row.cid, row.rev]]))).toEqual({
+      [old]: [true, 0, OLD, null],
+      [fresh]: [false, 1, FRESH, "3kcommit2bbbb"],
+      [theirs]: [false, 1, null, null],
     });
-    // Another member's call reaches nothing of theirs, and null (the record is gone) drops its last use.
-    await store.dropUse(other, record(did), null, LATER, null);
+    // The record gone: another member's call reaches nothing of theirs, and the member's drops its last use.
+    await store.dropUses(other, record(did), null);
     expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [fresh])).toHaveLength(1);
-    await store.dropUse(did, record(did), null, LATER, null);
+    await store.dropUses(did, record(did), null);
     expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [fresh])).toHaveLength(0);
   });
 
-  test("image.drop_fenced: a use a later save stamped survives an earlier save's drop and release", async () => {
+  test("image.settle_order: saves of one card settle by commit revision, whichever settles first", async () => {
+    // The card shows A. Save 1 writes B (rev ...b); save 2 puts A back (rev ...c). Either settling order ends with
+    // A's use alone (Codex review of #1860).
+    for (const order of [
+      ["b", "c"],
+      ["c", "b"],
+    ]) {
+      const did = await member();
+      const [a, b] = [await stored(did), await stored(did)];
+      const [A, B] = [
+        "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe",
+        "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
+      ];
+      await store.addUse(did, a, record(did), null);
+      await store.notePublished(did, a, A, null);
+      await store.settleUse(did, record(did), "3kcommit2aaaa", A, [], null);
+      const one = await store.addUse(did, b, record(did), null);
+      await store.notePublished(did, b, B, null);
+      const two = await store.addUse(did, a, record(did), null);
+      expect(two).toMatchObject({ created: false });
+      const settle = {
+        b: () => store.settleUse(did, record(did), "3kcommit2bbbb", B, [{ id: b, lease: String(one?.lease) }], null),
+        c: () => store.settleUse(did, record(did), "3kcommit2cccc", A, [], null),
+      } as const;
+      for (const step of order) await settle[step as "b" | "c"]();
+      const uses = await sql<{ id: string; rev: string | null }>(
+        "SELECT image_id::text AS id, settled_rev AS rev FROM app.image_use WHERE record_uri = $1",
+        [record(did)],
+      );
+      expect(uses).toEqual([{ id: a, rev: "3kcommit2cccc" }]);
+      const [unused] = await sql<{ unused: boolean }>(
+        "SELECT unused_since IS NOT NULL AS unused FROM app.image WHERE id = $1",
+        [a],
+      );
+      expect(unused?.unused).toBe(false);
+    }
+  });
+
+  test("image.release_lease: a failed save takes back its use only if nothing touched it since", async () => {
     const did = await member();
     const id = await stored(did);
     const CID = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe";
-    const between = new Date("2026-11-20T10:30:00Z");
-    expect(await store.addUse(did, id, record(did), T0, null)).toMatchObject({ created: true });
+    const uses = async () => (await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [id])).length;
+    const failed = await store.addUse(did, id, record(did), null);
+    // Another save, even one that began earlier, asks for the same picture on the same card: a new lease.
+    const winner = await store.addUse(did, id, record(did), null);
+    expect(winner?.lease).not.toBe(failed?.lease);
+    await store.removeUse(did, id, record(did), String(failed?.lease), null);
+    expect(await uses()).toBe(1);
+    // The last lease on a use no write settled takes it.
+    await store.removeUse(did, id, record(did), String(winner?.lease), null);
+    expect(await uses()).toBe(0);
+    // A use a landed write settled is never taken back by a release, even under the lease that made it.
+    const made = await store.addUse(did, id, record(did), null);
     await store.notePublished(did, id, CID, null);
-    // A later save asks for the same picture on the same card: no new use, but a newer stamp.
-    expect(await store.addUse(did, id, record(did), LATER, null)).toMatchObject({ created: false });
-    // A save that began between the two took that picture off the record, then settles last.
-    await store.dropUse(did, record(did), CID, between, null);
-    await store.removeUse(did, id, record(did), T0, null);
-    expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [id])).toHaveLength(1);
-    // A save that began after the stamp takes it.
-    await store.dropUse(did, record(did), CID, new Date("2026-11-20T12:00:00Z"), null);
-    expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [id])).toHaveLength(0);
+    await store.settleUse(did, record(did), "3kcommit2aaaa", CID, [], null);
+    await store.removeUse(did, id, record(did), String(made?.lease), null);
+    expect(await uses()).toBe(1);
   });
 
   test("image.discard_during_use: a discard waiting on a save's open use leaves the image and its use", async () => {
@@ -209,11 +254,10 @@ describe("image store", () => {
   test("image.remove_concurrent: removing an image's last two uses at once marks it unused", async () => {
     const did = await member();
     const id = await stored(did);
-    await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), T0, null);
-    await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), T0, null);
-    await Promise.all(
-      ["3kaaaaaaaaaaa", "3kbbbbbbbbbbb"].map((rkey) => store.removeUse(did, id, record(did, rkey), T0, null)),
-    );
+    const leases = new Map<string, string>();
+    for (const rkey of ["3kaaaaaaaaaaa", "3kbbbbbbbbbbb"])
+      leases.set(rkey, String((await store.addUse(did, id, record(did, rkey), null))?.lease));
+    await Promise.all([...leases].map(([rkey, lease]) => store.removeUse(did, id, record(did, rkey), lease, null)));
     const [row] = await sql<{ unused_since: Date | null }>("SELECT unused_since FROM app.image WHERE id = $1", [id]);
     expect(row?.unused_since).toBeInstanceOf(Date);
   });
@@ -245,7 +289,12 @@ describe("image store", () => {
     test("image.sweep_use_first: an expired upload a save used before the sweep is kept", async () => {
       const did = await member();
       const id = await aged(did, "uploaded", "2 days");
-      expect(await store.addUse(did, id, record(did), T0, null)).toEqual({ width: 10, height: 10, created: true });
+      expect(await store.addUse(did, id, record(did), null)).toEqual({
+        width: 10,
+        height: 10,
+        created: true,
+        lease: expect.any(String),
+      });
       expect(await store.sweep(null)).toEqual({ kind: "deleted", images: [] });
       expect(await exists(id)).toBe(true);
     });

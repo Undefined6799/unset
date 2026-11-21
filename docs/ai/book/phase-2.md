@@ -3972,12 +3972,14 @@ keep the picture, `alt`, `caption`, `fit`), and every card write publishes a new
 before the write: the use first (`addUse`, under a key web picks with `newCardKey` for a new card), then the main
 version from `drafts/<did>/i/<id>/main.jpeg`, then `com.atproto.repo.uploadBlob`; a Save publishes once across its one
 retry. After the write (Codex review): a write that surely did not land releases a use the request made (never one
-the record already had); one the PDS did not answer keeps it, since it may have landed. One that landed takes back
-only the use of the picture the record it replaced showed, found by the CID web notes on `app.image.blob_cid`
-(migration 0037) after the upload; the write swapped on that record, so two tabs' saves settle in either order. A
-delete drops every use of the record. Taking a use back runs under its own 5 s deadline (`SETTLE_MS`), not the
-request's. Left: a use whose write went unanswered and did not land, or whose request died mid-save, keeps its image
-from the sweep. Pages still hide picture cards until P2.19c.
+the record already had), only while its lease on it (`app.image_use.lease`, renewed by every `addUse`) is unchanged;
+one the PDS did not answer keeps it, since it may have landed. One that landed settles the record's uses under its
+commit revision (`settled_rev`, migration 0037; a TID sorts by time): an older revision than one the uses hold only
+takes back its own, a newer one leaves exactly the use of the picture the record shows (found by the CID web notes on
+`app.image.blob_cid`), so two tabs' saves end right in either settling order. A delete drops every use of the record.
+Taking a use back runs under its own 5 s deadline (`SETTLE_MS`), not the request's. Left: a use whose write went
+unanswered and did not land, whose request died mid-save, or whose older save settles after a newer one removed every
+picture, keeps its image from the sweep. Pages still hide picture cards until P2.19c.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
