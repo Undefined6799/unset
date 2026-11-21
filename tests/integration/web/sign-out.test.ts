@@ -216,6 +216,8 @@ describe("one browser of several", () => {
     const response = await signOut(first);
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/signed-out");
+    // Unsaved card text kept on this device (ADR 0074 item 4) goes with the session.
+    expect(response.headers.get("clear-site-data")).toBe('"storage"');
     expect(seen.revokes()).toBe(0);
     expect(await sessionsOf(owner)).toBe(1);
     expect(await hasToken(owner)).toBe(true);
@@ -411,6 +413,7 @@ describe("sign out everywhere", () => {
     const response = await signOutEverywhere(here, `did=${stranger}`);
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.get("clear-site-data")).toBe('"storage"');
     expect(response.headers.getSetCookie().some((line) => line.startsWith("__Host-sid=;"))).toBe(true);
     expect(seen.revokes()).toBe(1);
     expect(await sessionsOf(owner)).toBe(0);

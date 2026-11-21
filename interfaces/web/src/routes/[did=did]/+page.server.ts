@@ -110,7 +110,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? cardViews(own.cards) : [];
+  const cards = own.kind === "ok" ? cardViews(own.cards, own.versions) : [];
   return {
     shell,
     account,
@@ -124,7 +124,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes },
+    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes, formBytes: CARD_FORM_LIMIT_BYTES },
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
     cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",
