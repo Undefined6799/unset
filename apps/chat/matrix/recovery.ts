@@ -178,11 +178,19 @@ export async function unlock(keys: Keys, userId: string, typed: string): Promise
   } catch {
     return "wrong_key";
   }
-  const found = await client.secretStorage.getKey();
-  if (found === null) return "unfinished";
-  const [keyId, info] = found;
-  if (!(await client.secretStorage.checkKey(key, info as SecretStorageKeyDescriptionAesV1))) return "wrong_key";
-  if (!(await readFacts(client, crypto, userId)).vaultComplete) return "unfinished";
+  // Every read before the unlock goes to the server and may fail; a failure is the retryable "failed", never a throw
+  // that would leave the page waiting.
+  let keyId: string;
+  try {
+    const found = await client.secretStorage.getKey();
+    if (found === null) return "unfinished";
+    const info = found[1] as SecretStorageKeyDescriptionAesV1;
+    keyId = found[0];
+    if (!(await client.secretStorage.checkKey(key, info))) return "wrong_key";
+    if (!(await readFacts(client, crypto, userId)).vaultComplete) return "unfinished";
+  } catch {
+    return "failed";
+  }
   try {
     await holder.during(keyId, key, async () => {
       await crypto.getUserDeviceInfo([userId], true);
