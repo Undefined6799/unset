@@ -303,6 +303,16 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.sign_in": {
+      "web": {
+        "columns": {
+          "id": ["SELECT"],
+          "did": ["SELECT", "INSERT"],
+          "signed_in_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {
