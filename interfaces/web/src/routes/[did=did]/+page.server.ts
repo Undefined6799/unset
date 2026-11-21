@@ -15,6 +15,7 @@ import {
   parseCardInput,
   parseCardKey,
   parseCardVersion,
+  parseNewCardKey,
   parseRepoDid,
   TEXT_EDIT_BYTES,
 } from "@unset/domains-profile";
@@ -127,6 +128,8 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
     cardEditLimits: { ...CARD_EDIT_LIMITS, text: TEXT_EDIT_BYTES, formBytes: CARD_FORM_LIMIT_BYTES },
+    // Drawn fresh on each load, so each add form names its own card (newKeyField).
+    newCardKey: newCardKey(),
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
     cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",
@@ -181,6 +184,16 @@ function keyField(form: URLSearchParams): CardKey {
   if (key === null) throw new AppError("http.not_found");
   form.delete("key");
   return key;
+}
+
+/**
+ * The key the add form was given when the page was drawn (load's `newCardKey`), so the same form sent twice adds one
+ * card. One that is missing or not a TID (a page drawn before this field) just means a fresh key, as before.
+ */
+function newKeyField(form: URLSearchParams): CardKey | undefined {
+  const keys = form.getAll("newKey");
+  form.delete("newKey");
+  return (keys.length === 1 ? parseNewCardKey(keys[0]) : null) ?? undefined;
 }
 
 /**
@@ -308,8 +321,11 @@ export const actions: Actions = {
     write(
       event,
       (form, did) => {
+        const key = newKeyField(form);
         const input = cardInput(form);
-        return input.ok ? writesFor(did, event.locals).create(input.content, input.width, input.surface) : input.failed;
+        return input.ok
+          ? writesFor(did, event.locals).create(input.content, input.width, input.surface, key)
+          : input.failed;
       },
       true,
     ),

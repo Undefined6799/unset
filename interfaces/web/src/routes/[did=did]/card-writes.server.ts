@@ -2,6 +2,8 @@
 // The card writes behind the card routes (ADR 0051): create, edit, delete and reorder a member's cards on their own
 // PDS. Records are built by domains/profile; the PDS calls come from infrastructure/pds through `CardStore`, bound to
 // the session's DID in the composition root, so no write here can reach another member's repo.
+
+import { isDeepStrictEqual } from "node:util";
 import {
   type AvatarShape,
   CARDS_MAX,
@@ -155,7 +157,11 @@ export type CardEdit = {
 };
 
 export type CardWrites = {
-  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
+  /**
+   * `key`, when given, is the one the add form named, so the same form sent twice (a double click, a retry after a
+   * lost answer) adds one card: a key already stored is answered as saved.
+   */
+  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface, key?: CardKey) => Promise<CardWrite>;
   readonly save: (key: CardKey, content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
   /** Every changed card at once, all or none (ADR 0074). */
   readonly saveAll: (edits: readonly CardEdit[]) => Promise<CardWrite>;
@@ -192,6 +198,18 @@ const landed = (key: CardKey, written: unknown, rev: string | undefined): Landed
   shown: pictureLink(written),
   rev: rev ?? null,
 });
+/**
+ * Whether a stored card is the record a create would write: the same fields as JSON, its creation time aside. A
+ * picture stored in another JSON form compares unequal, so a resend adds a second card rather than losing one.
+ */
+function sameCard(stored: unknown, record: unknown): boolean {
+  const plain = (value: unknown): unknown => {
+    const { createdAt: _at, ...rest } = JSON.parse(JSON.stringify(value ?? null)) ?? {};
+    return rest;
+  };
+  return isDeepStrictEqual(plain(stored), plain(record));
+}
+
 /** A write the PDS did not answer may still have landed. */
 const unanswered = (result: PdsResult<unknown>): boolean => result.kind === "transient";
 
@@ -325,32 +343,51 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
     // a second refusal asks the member to save again. A list cut short by the read budget (card-records.ts) is not a
     // count: the add is refused. The card's key is picked once, before the first write (a picture's use is recorded
     // under it), and a retry reuses it and the published picture.
-    create: async (content, width, surface) => {
+    create: async (content, width, surface, named) => {
       const early = draftOf(content) === null ? toCardRecord(content, width, null, now(), surface) : null;
       if (early !== null && !early.ok) return failed(early.code, early.field);
       let record = early?.record ?? null;
       let held: Held | null = null;
-      const key = store.newKey();
+      let key = named ?? store.newKey();
       const done = async (result: CardWrite, unsure = false) => {
         await settle(held === null ? [] : [held], [], unsure);
         return result;
+      };
+      /** Publishes a new picture under `key` and builds the record; null when there is nothing to do. */
+      const prepare = async (): Promise<CardWrite | null> => {
+        if (record !== null) return null;
+        const published = await publish(content, key);
+        if (!published.ok) return published.failed;
+        held = published.held;
+        const built = toCardRecord(published.content, width, null, now(), surface);
+        if (!built.ok) return done(failed(built.code, built.field));
+        record = built.record;
+        return null;
       };
       for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
         const repo = await readRepo();
         if (!repo.ok) return done(repo.failed);
         const { list, profile } = repo;
+        // The form's key already stored: the same form sent again is answered as saved (checked before the count, so
+        // a resend at the last free place is too). A page that kept an old key (back to an earlier draw, a refresh
+        // that failed after a save) carries other words, so that is a new card, under a fresh key.
+        const stored = list.cards.find((card) => card.key === key);
+        if (stored !== undefined) {
+          const unready = await prepare();
+          if (unready !== null) return unready;
+          if (sameCard(stored.value, record)) return done(SAVED);
+          await settle(held === null ? [] : [held], [], false);
+          held = null;
+          record = early?.record ?? null;
+          key = store.newKey();
+        }
         if (list.overflow || list.cards.length >= CARDS_MAX) return done(failed("card.too_many"));
         if (!list.complete) return done(failed("card.list_incomplete"));
         const listed = withCardListed(owner, key, profile?.value ?? null, now());
         if (!listed.ok) return done(failed(listed.code));
-        if (record === null) {
-          const published = await publish(content, key);
-          if (!published.ok) return published.failed;
-          held = published.held;
-          const built = toCardRecord(published.content, width, null, now(), surface);
-          if (!built.ok) return done(failed(built.code, built.field));
-          record = built.record;
-        }
+        const unready = await prepare();
+        if (unready !== null) return unready;
+        if (record === null) return done(failed("card.cards_changed")); // prepare built it; this only narrows the type
         // All the member's cards must still fit one page (domains/profile MAX_PAGE_BYTES), counted on this same list.
         if (!fitsPage(list.cards, [{ key: null, record }])) return done(failed("card.page_full"));
         const card: CardChange = { kind: "create", key, record };

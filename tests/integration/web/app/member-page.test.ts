@@ -337,6 +337,21 @@ describe("card writes", () => {
     expect(await (await page(`/${OWNER}`, { cookie })).text()).toContain("Hello");
   });
 
+  test("the_same_add_form_sent_twice_adds_one_card", async () => {
+    // card.create_once: the add form carries the key its page drew, so a double click or a retry adds the card once.
+    const html = await (await page(`/${OWNER}?add=readme`, { cookie })).text();
+    const newKey = /name="newKey" value="([a-z2-7]{13})"/.exec(html)?.[1];
+    expect(newKey).toBeDefined();
+    const form = new URLSearchParams({ newKey: newKey ?? "", kind: "readme", width: "full", text: "Once" }).toString();
+    const writes = await writesOf(async () => {
+      expect((await action("create", form)).status).toBe(303);
+      expect((await action("create", form)).status).toBe(303);
+    });
+    expect(writes.filter((w) => w.method === "createRecord")).toEqual([
+      expect.objectContaining({ collection: "sh.unset.card", rkey: newKey }),
+    ]);
+  });
+
   test("a_save_replaces_the_named_card_only_if_it_has_not_changed", async () => {
     const writes = await writesOf(() =>
       action("save", new URLSearchParams({ key: CARD_A, kind: "readme", width: "full", text: "Edited" }).toString()),

@@ -5,7 +5,7 @@
 // Records are untrusted member content even after the signature check: each one is validated against its lexicon
 // (shared/lexicons, read mode, so a field a newer client adds is kept) and capped in size before it is stored.
 import { LIMITS, NSID, validateRecord } from "@unset/shared-lexicons";
-import { parseCardKey } from "./cards.ts";
+import { parseNewCardKey } from "./cards.ts";
 
 /** The collections the index reads; every other op in a commit is ignored. */
 export const INDEXED_COLLECTIONS = [NSID.profile, NSID.card] as const;
@@ -138,11 +138,8 @@ function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null
 
 /** The lexicon's record key type: `literal:self` for the profile, `tid` for a section (atproto.com/specs/record-key). */
 function keyFits(collection: IndexedCollection, rkey: string): boolean {
-  return collection === NSID.profile ? rkey === "self" : TID.test(rkey) && parseCardKey(rkey) !== null;
+  return collection === NSID.profile ? rkey === "self" : parseNewCardKey(rkey) !== null;
 }
-
-/** atproto.com/specs/tid: 13 characters of base32-sortable, the first in 2-7 or a-j. */
-const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 
 /**
  * Whether the index keeps `record`: within MAX_RECORD_BYTES and storable. The save checks the record it writes with
