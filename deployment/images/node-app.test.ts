@@ -68,3 +68,19 @@ test("review_image_copies_every_workspace_the_process_reaches", () => {
   const missing = [...needed].filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
   expect(missing).toEqual([]);
 });
+
+test("chat_auth_image_copies_every_workspace_the_door_reaches", () => {
+  const copied = copiedBy("deployment/images/chat-auth.Dockerfile");
+  const needed = runtimeClosure("interfaces/chat-auth", workspaceFolders());
+  expect(needed.size).toBeGreaterThan(1);
+  const missing = [...needed].filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
+  expect(missing).toEqual([]);
+});
+
+test("chat_admin_image_copies_only_its_folder_and_the_envelope", () => {
+  // ADR 0081 decision 5: chat-admin imports only its folder, Node built-ins and the zero-dependency allowlist.
+  const needed = runtimeClosure("interfaces/chat-admin", workspaceFolders());
+  expect([...needed].sort()).toEqual(["interfaces/chat-admin", "shared/admin-envelope"]);
+  const copied = copiedBy("deployment/images/chat-admin.Dockerfile").filter((dir) => dir !== "node_modules");
+  expect(copied.sort()).toEqual([...needed].sort());
+});

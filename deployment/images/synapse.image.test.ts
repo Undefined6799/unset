@@ -58,8 +58,10 @@ function secretsDir(image: string, pgPassword: string): string {
   }
   // As the runbook has them: owned by 991 and 0400. libpq ignores a passfile that its group or others can read
   // (PostgreSQL 18 libpq docs, "The Password File"), so a looser mode would fail this test with "no password supplied".
-  const own = ["run", "--rm", "--network", "none", "--user", "0", "-v", `${dir}:/s`, "--entrypoint", "sh", image, "-c"];
-  run([...own, "chown 991:991 /s/* && chmod 0400 /s/*"]);
+  // The distroless runtime has no shell (ADR 0086 Decision 1), so the image's own Python does it.
+  const own = ["run", "--rm", "--network", "none", "--user", "0", "-v", `${dir}:/s`];
+  const chown = "import glob, os\nfor p in glob.glob('/s/*'):\n    os.chown(p, 991, 991)\n    os.chmod(p, 0o400)";
+  run([...own, "--entrypoint", "/opt/synapse/bin/python", image, "-c", chown]);
   return dir;
 }
 

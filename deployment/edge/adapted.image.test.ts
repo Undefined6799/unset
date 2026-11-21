@@ -34,6 +34,13 @@ const MOUNTS: Readonly<Record<AdaptedEnvName, readonly string[]>> = {
     bind("dev/docs.caddy", "sites/enabled/docs.caddy"),
     bind("dev/tls.caddy", "snippets/tls.caddy"),
   ],
+  "dev-chat": [
+    bind("dev/app.caddy", "sites/enabled/app.caddy"),
+    bind("dev/pds.caddy", "sites/enabled/pds.caddy"),
+    bind("dev/docs.caddy", "sites/enabled/docs.caddy"),
+    bind("dev/chat.caddy", "sites/enabled/chat.caddy"),
+    bind("dev/tls.caddy", "snippets/tls.caddy"),
+  ],
   local: [
     bind("sites/pds.caddy", "sites/enabled/pds.caddy"),
     bind("local/app.caddy", "sites/enabled/app.caddy"),

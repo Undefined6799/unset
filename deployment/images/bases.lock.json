@@ -67,18 +67,21 @@
     "tag": "3.13-slim-trixie",
     "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
     "source": "upstream",
+    "stage": "build",
+    "buildStage": true
+  },
+  "python3-debian13": {
+    "ref": "gcr.io/distroless/python3-debian13",
+    "tag": "nonroot",
+    "digest": "sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71",
+    "source": "upstream",
     "stage": "runtime",
-    "buildStage": true,
-    "stripped": [
-      "/usr/local/lib/python3.13/site-packages/pip",
-      "/usr/local/lib/python3.13/site-packages/pip-26.2.2.dist-info",
-      "/usr/local/lib/python3.13/ensurepip"
-    ]
+    "buildStage": false
   },
   "mas": {
     "ref": "ghcr.io/element-hq/matrix-authentication-service",
-    "tag": "1.26.0",
-    "digest": "sha256:e089f1048a1d4a9a492ed17b9fe759100f1bd619407b001f5927928d88b780c4",
+    "tag": "1.29.0",
+    "digest": "sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false

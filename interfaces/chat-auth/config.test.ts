@@ -41,6 +41,8 @@ const DOOR_ENV = {
   CHAT_SERVER_NAME: "staging.unset.cc",
   COUNT_LISTEN_PORT: "8091",
   COUNT_ORIGIN: "http://chat-auth:8091",
+  LISTEN_ADDRESS: "10.250.38.43",
+  COUNT_LISTEN_ADDRESS: "10.250.38.19",
 };
 
 describe("door config", () => {
@@ -89,5 +91,19 @@ describe("door config", () => {
     const { COUNT_ORIGIN: _, ...without } = DOOR_ENV;
     expect(() => loadConfig(schema, without)).toThrow();
     expect(() => loadConfig(schema, { ...DOOR_ENV, COUNT_ORIGIN: "https://chat-auth:8091" })).toThrow();
+  });
+
+  test("door_config.listen_addresses: each listener binds one IPv4 address, never every address", () => {
+    const config = loadConfig(schema, DOOR_ENV);
+    expect([config.LISTEN_ADDRESS, config.COUNT_LISTEN_ADDRESS]).toEqual(["10.250.38.43", "10.250.38.19"]);
+    for (const key of ["LISTEN_ADDRESS", "COUNT_LISTEN_ADDRESS"] as const) {
+      const { [key]: _, ...without } = DOOR_ENV;
+      expect(() => loadConfig(schema, without), key).toThrow();
+      for (const value of ["0.0.0.0", "::", "chat-auth", "10.250.38.256", "10.250.38.019", ""]) {
+        expect(() => loadConfig(schema, { ...DOOR_ENV, [key]: value }), `${key}=${value}`).toThrow();
+      }
+    }
+    // Two listeners on one address would share the network the count port is kept off.
+    expect(() => loadConfig(schema, { ...DOOR_ENV, COUNT_LISTEN_ADDRESS: "10.250.38.43" })).toThrow();
   });
 });

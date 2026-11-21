@@ -60,3 +60,7 @@ hidden from users joining the room afterwards" (Synapse 1.162.0, `docs/admin_api
   chat account's erasure is the `deactivate` call (GDPR Art. 17, PIPEDA principle 4.5).
 - Build step 11: tests that suspend locks without ending sessions, unsuspend restores the same browser, delete
   deactivates and erases and removes our rows, a retried job is harmless, and no route reactivates.
+
+## Follow-up
+
+2026-11-21: MAS pinned at 1.29.0 (Alex, 2026-11-21, 'use the latest version'), re-checked: `docs/api/spec.json` and `crates/handlers/src/admin/v1/users/` (`add.rs`, `lock.rs`, `unlock.rs`) are identical to 1.26.0 and `deactivate.rs` changed only in its tests, so lock, unlock, deactivate and the username rule hold as written; 1.29.0 still has no admin call that changes a display name. Read from the v1.26.0 and v1.29.0 source trees on 2026-11-21; no live run of 1.29.0 was possible here (the image pull and the release binary download were both refused), so the 1.29.0 behaviour is unverified until the image test runs it.

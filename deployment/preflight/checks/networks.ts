@@ -4,6 +4,8 @@
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
 import {
+  CHAT_NETWORKS,
+  CHAT_SERVICES,
   DEV_ONLY_NETWORKS,
   isLocalOnlyNetwork,
   LOCAL_ONLY_NETWORKS,
@@ -303,17 +305,29 @@ function localOnlyProblems(compose: Pick<Compose, "networks">, env: Env): string
 }
 
 /**
- * Under local, the table without the dev-only networks and plus the local-only ones, matched as one; under dev without
- * --source, the table without what only a built stack runs. The table never
+ * Under local, the table without the dev-only and chat networks and plus the local-only ones, matched as one; under
+ * dev without --source, the table without what only a built stack runs and without the chat rows. The table never
  * lists a local-only network, listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no
  * local-only rows; verify-903 S3).
  */
 export function withLocalOnly(table: NetworkTable, env: Env, source: boolean): NetworkTable | string {
   const clash = [...table.keys()].find(isLocalOnlyNetwork);
   if (clash !== undefined) return `the network table lists ${clash}, a local-only network`;
-  if (env === "dev" && !source) return withoutSourceOnly(table);
+  if (env === "dev" && !source) return withoutChat(withoutSourceOnly(table));
   if (env !== "local") return table;
-  return new Map([...[...table].filter(([name]) => !DEV_ONLY_NETWORKS.has(name)), ...LOCAL_ONLY_NETWORKS]);
+  return new Map(
+    [...withoutChat(table)].filter(([name]) => !DEV_ONLY_NETWORKS.has(name)).concat([...LOCAL_ONLY_NETWORKS]),
+  );
+}
+
+/** The table without the chat rows and the chat services in any row (local-only.ts CHAT_SERVICES): staging's source
+ * stack alone runs them. */
+function withoutChat(table: NetworkTable): NetworkTable {
+  return new Map(
+    [...table]
+      .filter(([name]) => !CHAT_NETWORKS.has(name))
+      .map(([name, row]) => [name, { ...row, members: row.members.filter((s) => !CHAT_SERVICES.has(s)) }]),
+  );
 }
 
 /**

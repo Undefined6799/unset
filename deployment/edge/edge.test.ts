@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { ADAPTED_ENVS, type AdaptedEnvName, type Json, SENTINELS } from "./adapted.ts";
-import { adaptedProblems, DEV_APP, DEV_DOCS } from "./adapted-rules.ts";
+import { adaptedProblems, DEV_APP, DEV_CHAT, DEV_DOCS } from "./adapted-rules.ts";
 
 const EDGE = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(EDGE, file), "utf8");
@@ -297,11 +297,14 @@ describe("edge config", () => {
     const pds = ruled(limits.rateLimitZones as Record<string, { events: number; window: string }>);
     const app = ruled(limits.appRateLimitZones as Record<string, { events: number; window: string }>);
     const docs = ruled(limits.docsRateLimitZones as Record<string, { events: number; window: string }>);
+    const chat = ruled(limits.chatRateLimitZones as Record<string, { events: number; window: string }>);
     expect(adapted("prod")).toEqual([pds]);
-    // Dev: the app site's own zones, the PDS's and the docs site's (P1.21w). Local: both sites count on the PDS's
-    // zones (local/app.caddy).
+    // Dev: the app site's own zones, the PDS's and the docs site's (P1.21w); the source stack's adds the chat site's
+    // (P6.02). Local: both sites count on the PDS's zones (local/app.caddy).
     expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds, docs]));
     expect(adapted("dev").length).toBe(3);
+    expect(adapted("dev-chat")).toEqual(expect.arrayContaining([app, pds, docs, chat]));
+    expect(adapted("dev-chat").length).toBe(4);
     expect(adapted("local")).toEqual([pds, pds]);
   });
 
@@ -401,17 +404,23 @@ describe("edge config", () => {
 
   test("every_pds_route_has_a_zone", () => {
     // On what Caddy adapts, for each env's files (P1.39d): the rules on the adapted config pass. The dev rules name
-    // the app site's two values and the docs site's host, so the dev config is read with those in place of their
+    // the app site's two values, the docs site's host and the chat site's three values (P6.02), so the dev config is read with those in place of their
     // sentinels.
-    expect(adaptedProblems(reviewed("prod"), "shipped", SENTINELS)).toEqual([]);
-    expect(adaptedProblems(reviewed("local"), "local", SENTINELS)).toEqual([]);
-    const ruled = { ...DEV_APP, ...DEV_DOCS };
-    const devText = (["APP_HOST", "APP_UPSTREAM", "DOCS_HOST"] as const).reduce(
-      (text, name) => text.replaceAll(SENTINELS[name], ruled[name]),
-      read("adapted/dev.generated.json"),
-    );
-    expect(devText).toContain(DEV_APP.APP_HOST);
-    expect(adaptedProblems(JSON.parse(devText) as Json, "dev", { ...SENTINELS, ...ruled })).toEqual([]);
+    // The chat site's values are the source stack's dev edge's alone (P6.02), so the other envs are read without them.
+    const { CHAT_HOST: _host, CHAT_UPSTREAM: _door, MATRIX_UPSTREAM: _matrix, ...plain } = SENTINELS;
+    expect(adaptedProblems(reviewed("prod"), "shipped", plain)).toEqual([]);
+    expect(adaptedProblems(reviewed("local"), "local", plain)).toEqual([]);
+    for (const [file, ruled, others] of [
+      ["dev", { ...DEV_APP, ...DEV_DOCS }, plain],
+      ["dev-chat", { ...DEV_APP, ...DEV_DOCS, ...DEV_CHAT }, SENTINELS],
+    ] as const) {
+      const devText = (Object.keys(ruled) as (keyof typeof ruled)[]).reduce(
+        (text, name) => text.replaceAll(SENTINELS[name], ruled[name]),
+        read(`adapted/${file}.generated.json`),
+      );
+      expect(devText, file).toContain(DEV_APP.APP_HOST);
+      expect(adaptedProblems(JSON.parse(devText) as Json, "dev", { ...others, ...ruled }), file).toEqual([]);
+    }
   });
 
   test("edge_admin_api_off_in_config", () => {
@@ -438,7 +447,7 @@ describe("edge config", () => {
     const carried = ["request>client_ip", "request>headers", "request>remote_ip", "request>remote_port"];
     for (const env of ADAPTED_ENVS) {
       const logs = at(reviewed(env), "logging", "logs") as Obj;
-      const sites = { prod: 1, local: 2, dev: 3 }[env];
+      const sites = { prod: 1, local: 2, dev: 3, "dev-chat": 4 }[env];
       expect(Object.keys(logs).sort(), env).toEqual(["default", ...Array.from({ length: sites }, (_, n) => `log${n}`)]);
       for (const [name, log] of Object.entries(logs)) {
         expect(at(log, "encoder", "format"), `${env} ${name}`).toBe("filter");
@@ -744,6 +753,8 @@ describe("dev leaf (P1.21w)", () => {
     const runbook = readFileSync(join(EDGE, "..", "..", "docs", "human", "runbooks", "dev-stack-secrets.md"), "utf8");
     const san = /subjectAltName=([^\\\n']+)\\n/.exec(runbook)?.[1];
     const names = san?.split(",").map((entry) => entry.replace(/^DNS:/, ""));
-    expect(names?.sort()).toEqual([DEV_APP.APP_HOST, DEV_DOCS.DOCS_HOST, "staging.unset.ac"].sort());
+    expect(names?.sort()).toEqual(
+      [DEV_APP.APP_HOST, DEV_DOCS.DOCS_HOST, DEV_CHAT.CHAT_HOST, "staging.unset.ac"].sort(),
+    );
   });
 });
