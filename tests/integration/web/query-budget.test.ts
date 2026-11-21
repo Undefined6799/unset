@@ -32,7 +32,9 @@ const BUDGET = 5;
 /**
  * Settings › Privacy runs 6 (CI run on #1952, 2026-11-21). It was 5 until who sees the page moved to the main page
  * record (ADR 0091): the page is read with the profile in one PDS call (loadProfileAndPage), which took it from 7 back
- * to 6, and the second PDS request adds the one statement over the budget.
+ * to 6, and the second PDS request adds the one statement over the budget. Reading the choice from the index instead
+ * would keep 5, but the screen would then show the old choice while the index catches up after a save, and Public for
+ * an account the index does not have yet; the PDS record is what the member edits, so the read stays there.
  */
 const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 7, "/settings/privacy": 6 };
 const REPO = join(import.meta.dirname, "..", "..", "..");
