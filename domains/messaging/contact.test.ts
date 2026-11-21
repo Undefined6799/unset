@@ -5,7 +5,7 @@ import type { Did } from "@unset/domains-identity";
 import { describe, expect, test } from "vitest";
 import type { BrowserEntry, BrowserKey, BrowserList, DeviceId, LockKey } from "./browser.ts";
 import type { ChatUser } from "./chat-account.ts";
-import { type ChatContacts, chatContact } from "./contact.ts";
+import { type ChatContacts, type ChatNames, chatContact, chatName } from "./contact.ts";
 
 const ENTRY: BrowserEntry = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -53,6 +53,47 @@ describe("chatContact", () => {
     const p = ports();
     const other = new Uint8Array(32).fill(2) as BrowserKey;
     expect(await chatContact(p, { browser: other, device: ENTRY.device, did: THEM, deadline })).toEqual({
+      kind: "no_session",
+    });
+    expect(p.asked).toEqual([]);
+  });
+});
+
+describe("chatName", () => {
+  const names = () => {
+    const asked: ChatUser[] = [];
+    const store: ChatNames = {
+      nameOf: async (user) => {
+        asked.push(user);
+        if (user === THEIR_USER) return "Bea";
+        if (user === LONG_USER) return "x".repeat(641);
+        return user === EMPTY_USER ? "" : null;
+      },
+    };
+    return { ...ports(), names: store, asked };
+  };
+  const LONG_USER = `u${"c".repeat(20)}` as ChatUser;
+  const EMPTY_USER = `u${"d".repeat(20)}` as ChatUser;
+
+  test("door.name: a signed-in browser learns the member's public name", async () => {
+    const p = names();
+    expect(await chatName(p, { browser: MINE, device: ENTRY.device, user: THEIR_USER, deadline })).toEqual({
+      kind: "found",
+      name: "Bea",
+    });
+  });
+
+  test("door.name_missing: unknown, empty or longer than the lexicon allows all read as missing", async () => {
+    const p = names();
+    for (const user of [`u${"e".repeat(20)}` as ChatUser, EMPTY_USER, LONG_USER]) {
+      expect(await chatName(p, { browser: MINE, device: ENTRY.device, user, deadline })).toEqual({ kind: "missing" });
+    }
+  });
+
+  test("door.name_denied: without the device the store is never asked", async () => {
+    const p = names();
+    const other = new Uint8Array(32).fill(2) as BrowserKey;
+    expect(await chatName(p, { browser: other, device: ENTRY.device, user: THEIR_USER, deadline })).toEqual({
       kind: "no_session",
     });
     expect(p.asked).toEqual([]);

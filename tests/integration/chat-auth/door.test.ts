@@ -614,7 +614,7 @@ describe("the Message link (ADR 0082 decision 6, ADR 0090 decision 3)", () => {
   const [webDb, indexerDb] = [as("web"), as("indexer")];
   afterAll(() => Promise.all([webDb.end(), indexerDb.end()]));
   /** A member with a ready chat account and, unless `shown` is false, a public page; their DID and chat user. */
-  async function contact(shown = true) {
+  async function contact(shown = true, name = "N") {
     const did =
       `did:plc:${Array.from(randomBytes(24), (b) => "abcdefghijklmnopqrstuvwxyz234567"[b % 32]).join("")}` as Did;
     const user = newChatUser((k) => randomBytes(k));
@@ -628,8 +628,8 @@ describe("the Message link (ADR 0082 decision 6, ADR 0090 decision 3)", () => {
       await c.query("UPDATE idx.account SET pds_active = $2 WHERE did = $1", [did, shown]);
       await c.query(
         `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
-         VALUES ($1, $2, 'cid', '3l', '{}', 'N', false, now())`,
-        [did, `at://${did}/sh.unset.profile/self`],
+         VALUES ($1, $2, 'cid', '3l', '{}', $3, false, now())`,
+        [did, `at://${did}/sh.unset.profile/self`, name],
       );
     });
     return { did, user };
@@ -683,13 +683,49 @@ describe("the Message link (ADR 0082 decision 6, ADR 0090 decision 3)", () => {
     expect((await other.post("/chat-id", { deviceId, did })).status).toBe(401);
   });
 
-  test("door.chat_id_logs_nothing_personal: no DID or chat user in a log line", async () => {
+  test("door.chat_name_found: a signed-in browser gets the public name of a member whose page shows", async () => {
     const { tab, deviceId } = await signedIn();
-    const { did, user } = await contact();
+    const { user } = await contact(true, "Bea Ramos");
+    const res = await tab.post("/chat-name", { deviceId, chatId: `@${user}:staging.unset.cc` });
+    expect([res.status, await res.json()]).toEqual([200, { name: "Bea Ramos" }]);
+  });
+
+  test("door.chat_name_missing: a hidden member and an unknown chat ID both read as the same 404", async () => {
+    const { tab, deviceId } = await signedIn();
+    const hidden = await contact(false, "Hidden Name");
+    for (const user of [hidden.user, `u${"z".repeat(20)}`]) {
+      const res = await tab.post("/chat-name", { deviceId, chatId: `@${user}:staging.unset.cc` });
+      expect([res.status, await res.json()]).toEqual([404, { error: "chat.not_found" }]);
+    }
+  });
+
+  test("door.chat_name_denied: no cookie, another browser's device, another server, a bad body or a cross-site post learn nothing", async () => {
+    const { tab, deviceId } = await signedIn();
+    const other = browser();
+    const { user } = await contact(true, "Bea Ramos");
+    const chatId = `@${user}:staging.unset.cc`;
+    for (const res of [
+      await other.post("/chat-name", { deviceId, chatId }),
+      await tab.post("/chat-name", { deviceId, chatId }, "https://unset.sh"),
+      await tab.post("/chat-name", { deviceId, chatId: `@${user}:elsewhere.example` }),
+      await tab.post("/chat-name", { deviceId, chatId: user }),
+      await tab.post("/chat-name", { deviceId, chatId, extra: 1 }),
+      await tab.post("/chat-name", { chatId }),
+    ]) {
+      expect([400, 401, 403]).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toContain("Bea");
+    }
+    expect((await other.post("/chat-name", { deviceId, chatId })).status).toBe(401);
+  });
+
+  test("door.chat_id_logs_nothing_personal: no DID, chat user or name in a log line", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { did, user } = await contact(true, "Logged Name");
     logs.length = 0;
     await tab.get(`/dm/${did}`);
     await tab.post("/chat-id", { deviceId, did });
+    await tab.post("/chat-name", { deviceId, chatId: `@${user}:staging.unset.cc` });
     const text = logs.join("\n");
-    for (const secret of [did, user]) expect(text).not.toContain(secret);
+    for (const secret of [did, user, "Logged Name"]) expect(text).not.toContain(secret);
   });
 });

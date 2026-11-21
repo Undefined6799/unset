@@ -39,7 +39,14 @@ export {
   followAccountStates,
   type LockCounts,
 } from "./chat-lifecycle.ts";
-export { type ChatContacts, type ContactOutcome, chatContact } from "./contact.ts";
+export {
+  type ChatContacts,
+  type ChatNames,
+  type ContactOutcome,
+  chatContact,
+  chatName,
+  type NameOutcome,
+} from "./contact.ts";
 export {
   type AccessToken,
   type DoorPorts,

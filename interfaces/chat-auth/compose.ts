@@ -12,6 +12,7 @@ import {
   connectionOf,
   createBrowserListStore,
   createChatContactStore,
+  createChatNameStore,
   createPool,
   createPushKeyStore,
   createSetupClaimStore,
@@ -25,7 +26,15 @@ import { createCountDoor, NOTIFY_PATH } from "./count.ts";
 import { createDoor, type DoorLog } from "./door.ts";
 import { createListener } from "./listener.ts";
 import type { ChatPage } from "./page.ts";
-import { chatIdRoute, pushKeyRoute, redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
+import {
+  chatIdRoute,
+  chatNameRoute,
+  pushKeyRoute,
+  redeemRoute,
+  setupClaimRoute,
+  setupReleaseRoute,
+  signOutRoute,
+} from "./routes.ts";
 
 /** The largest body the door reads: a redeem's ticket, about 600 bytes of JSON, with room to spare. */
 const BODY_CAP = 4096;
@@ -97,6 +106,11 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
       "/chat-id": chatIdRoute({
         list: ports.list,
         contacts: createChatContactStore(pool),
+        serverName: config.CHAT_SERVER_NAME,
+      }),
+      "/chat-name": chatNameRoute({
+        list: ports.list,
+        names: createChatNameStore(pool),
         serverName: config.CHAT_SERVER_NAME,
       }),
     },

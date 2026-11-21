@@ -17,6 +17,7 @@ export { type ChatAccountStore, type ChatAccountStoreOptions, createChatAccountS
 export { createChatContactStore } from "./chatContactStore.ts";
 export { type ChatErasureStore, createChatErasureStore } from "./chatErasureStore.ts";
 export { type ChatLockStore, createChatLockStore } from "./chatLockStore.ts";
+export { createChatNameStore } from "./chatNameStore.ts";
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export { createDiscoverabilityStore, type DiscoverabilityStore } from "./discoverabilityStore.ts";

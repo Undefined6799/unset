@@ -10,11 +10,14 @@ import {
   type BrowserKey,
   type BrowserList,
   type ChatContacts,
+  type ChatNames,
   chatContact,
+  chatName,
   claimSetup,
   type DoorPorts,
   issuePushKey,
   type PushKeys,
+  parseChatUser,
   parseDeviceId,
   parseDoorState,
   type RedeemRefusal,
@@ -243,6 +246,38 @@ export function chatIdRoute({ list, contacts, serverName }: ChatIdPorts): PostRo
       if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
       if (outcome.kind === "missing") return answer(404, { error: "chat.not_found" });
       return answer(200, { chatId: `@${outcome.user}:${serverName}` });
+    },
+  };
+}
+
+type ChatNamePorts = { readonly list: BrowserList; readonly names: ChatNames; readonly serverName: string };
+/** What /chat-name answers (SE-3): the name, and nothing else of the profile. */
+type ChatNameView = { readonly name: string };
+/** A chat ID is `@` + a 21-character chat user + `:` + the server name; well under this. */
+const MAX_CHAT_ID = 256;
+
+/**
+ * POST /chat-name: a chat partner's public profile name, read exactly `{ deviceId, chatId }` (ADR 0096). Only a
+ * browser holding that device asks; a chat ID on another server, a hidden member and an unknown one are all refused
+ * or 404, so the answer is never more than the member's public page shows.
+ */
+export function chatNameRoute({ list, names, serverName }: ChatNamePorts): PostRoute {
+  const suffix = `:${serverName}`;
+  return {
+    limit: "default",
+    async handle(request, deadline) {
+      const browser = browserOf(request);
+      if (browser === null) return answer(401, { error: "chat.no_session" });
+      const [rawDevice, rawChatId = ""] = (await onlyFields(request, ["deviceId", "chatId"], MAX_CHAT_ID)) ?? [];
+      const device = parseDeviceId(rawDevice);
+      const local = rawChatId.startsWith("@") && rawChatId.endsWith(suffix) ? rawChatId.slice(1, -suffix.length) : "";
+      const user = parseChatUser(local);
+      if (device === null || user === null) return answer(400, { error: "chat.bad_request" });
+      const outcome = await chatName({ list, names }, { browser: browser.key, device, user, deadline });
+      if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
+      if (outcome.kind === "missing") return answer(404, { error: "chat.not_found" });
+      const view: ChatNameView = { name: outcome.name };
+      return answer(200, view);
     },
   };
 }
