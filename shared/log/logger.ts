@@ -106,6 +106,9 @@ const EVENTS = [
   // Build step 11, erased members' chat accounts (ADR 0084 decision 3): deactivations still failing after about a day
   // this run (`count`), for an operator; they keep retrying. No DID or chat user.
   "chat.erasure_stuck",
+  // ADR 0083 decision 5, ADR 0084 decision 7: chat devices still not ended after about a day of tries this run
+  // (`count`), for an operator; they keep retrying. No DID, chat user or device.
+  "chat.session_end_stuck",
   // Build step 11, idle plain chats (ADR 0091): how many rooms one sweep deleted (`count`), and a sweep with rooms it
   // could not finish (`count`) or that did not run (`reason` "unavailable"). Never a room, user or token.
   "chat.rooms_swept",

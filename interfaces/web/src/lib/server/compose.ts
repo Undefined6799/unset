@@ -9,6 +9,7 @@
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
 // P2.27: the member's notification inbox and the one way to send into it (ADR 0079).
 // Build step 5 (ADR 0081): each member's chat account, queued at the terms step and created through chat-admin.
+// ADR 0083 decision 5, ADR 0084 decision 7: the chat devices a web session signed in end with it, through a queue.
 import { createPrivateKey, type KeyObject, randomBytes } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
@@ -25,8 +26,10 @@ import {
   type ChatAccountPorts,
   type ChatErasurePorts,
   type ChatLockPorts,
+  type ChatSessionEndPorts,
   type ChatUser,
   createDueAccounts,
+  endDueSessions,
   eraseDueAccounts,
   followAccountStates,
   newChatUser,
@@ -60,12 +63,14 @@ import {
   type ChatAccountStore,
   type ChatErasureStore,
   type ChatLockStore,
+  type ChatSessionEndStore,
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
   createChatAccountStore,
   createChatErasureStore,
   createChatLockStore,
+  createChatSessionEndStore,
   createDiscoverabilityStore,
   createImageStore,
   createInviteStore,
@@ -114,6 +119,11 @@ const CHAT_JOBS_PER_RUN = 20;
 const ROOM_SWEEP_MS = 3_600_000;
 /** A claim's lease: above one job's handle check (identity timeouts, at most 10 s each) and its 8 s chat-admin call. */
 const CHAT_LEASE_S = 120;
+/**
+ * How long after Log out the devices that session signed in are due to end (ADR 0083 decision 5). At once for now; a
+ * later step that runs the wipe on unset.cc before ending the device gives itself time here.
+ */
+const LOGOUT_CHAT_AFTER_S = 0;
 /** Under the health check's 1 s bound (shared/http/health.ts), so the probe is ended, not left behind. */
 const READINESS_MS = 900;
 
@@ -180,6 +190,11 @@ export type Services = {
   };
   /** Build step 5 (ADR 0081 decision 3): what the unset.cc sign-in hop needs to sign a member's ticket. */
   readonly chat: {
+    /**
+     * ADR 0083 decision 5 and ADR 0084 decision 7, on the transaction that ends the web session (or every session of
+     * a DID): queues the chat devices to end, which web's job then ends through chat-admin.
+     */
+    readonly endFor: ChatSessionEndStore;
     readonly readyUser: (did: Did, deadline: AbortSignal) => Promise<ChatUser | null>;
     readonly signTicket: SignInPorts["sign"];
     /** Build step 10 (ADR 0090 decision 2): the member's chat count from the door's count port, or null. */
@@ -255,6 +270,7 @@ function chatAccountPorts(
     },
     create: (user, name) => chatAdmin.createAccount(user, name),
     settle: (job, settlement) => store.settle(job, settlement),
+    nowMs: () => performance.now(),
   };
 }
 
@@ -274,6 +290,16 @@ function chatLockPorts(store: ChatLockStore, chatAdmin: ChatAdminClient): ChatLo
     claim: async () => (await store.claim(1))[0] ?? null,
     change: (user, lock) => chatAdmin.setLocked(user, lock),
     settle: (job) => store.settle(job),
+    retry: (job, inS) => store.retry(job, inS),
+  };
+}
+
+/** Devices queued when web ended a session (domains/messaging endDueSessions; ADR 0083, ADR 0084 decision 7). */
+function chatSessionEndPorts(store: ChatSessionEndStore, chatAdmin: ChatAdminClient): ChatSessionEndPorts {
+  return {
+    claim: async () => (await store.claim(1))[0] ?? null,
+    end: (user, device) => chatAdmin.endSession(user, device),
+    finish: (job) => store.finish(job),
     retry: (job, inS) => store.retry(job, inS),
   };
 }
@@ -372,10 +398,15 @@ async function build(): Promise<Services> {
     onUnexpected: (error) =>
       log.warn("handle.verify_failed", { kind: error instanceof Error ? error.constructor.name : "unknown" }),
   });
+  const chatSessionEnds = createChatSessionEndStore(pool, { leaseS: CHAT_LEASE_S, logoutAfterS: LOGOUT_CHAT_AFTER_S });
   const pds = createPdsCall({
     client,
+    // ADR 0084 decision 7: a revoked grant ends every chat session of the account, queued with the same commit.
     endSessions: (did) =>
-      withTransaction(pool, null, (tx) => sessions.destroyAllForDid(tx, did, "auth_dead")).then(() => undefined),
+      withTransaction(pool, null, async (tx) => {
+        await chatSessionEnds.queueForDid(tx, did);
+        await sessions.destroyAllForDid(tx, did, "auth_dead");
+      }),
     tokenSetRemains: (did) => oauthSessionExists(pool, did),
     log,
   });
@@ -464,6 +495,7 @@ async function build(): Promise<Services> {
   const chatPorts = chatAccountPorts(chatAccounts, handles, chatAdmin);
   const erasurePorts = chatErasurePorts(createChatErasureStore(pool, { leaseS: CHAT_LEASE_S }), chatAdmin);
   const lockPorts = chatLockPorts(createChatLockStore(pool, { leaseS: CHAT_LEASE_S }), chatAdmin);
+  const endPorts = chatSessionEndPorts(chatSessionEnds, chatAdmin);
   const stopChatJobs = startSweeps({
     sweeps: [
       {
@@ -481,6 +513,13 @@ async function build(): Promise<Services> {
         },
       },
       { job: "chat-account-lock", run: async () => void (await followAccountStates(lockPorts, CHAT_JOBS_PER_RUN)) },
+      {
+        job: "chat-session-end",
+        run: async () => {
+          const counts = await endDueSessions(endPorts, CHAT_JOBS_PER_RUN);
+          if (counts.stuck > 0) log.error("chat.session_end_stuck", { count: counts.stuck });
+        },
+      },
     ],
     everyMs: CHAT_JOBS_MS,
     log,
@@ -544,6 +583,7 @@ async function build(): Promise<Services> {
     invites,
     notifications,
     chat: {
+      endFor: chatSessionEnds,
       readyUser: (did, deadline) => chatAccounts.readyUser(did, deadline),
       signTicket: chatAdmin.signTicket,
       count: createChatCountClient(guard, config.CHAT_COUNT_URL).count,

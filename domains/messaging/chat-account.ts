@@ -67,7 +67,16 @@ export type ChatAccountPorts = {
   readonly create: (user: ChatUser, name: Handle) => Promise<ChatAccountCreation>;
   /** Writes the outcome if the job still holds its lease; false when it no longer does (erased, or re-claimed). */
   readonly settle: (job: ChatAccountJob, settlement: JobSettlement) => Promise<boolean>;
+  /** A monotonic clock in milliseconds (performance.now in production). */
+  readonly nowMs: () => number;
 };
+
+/**
+ * The longest a job may take from its claim to its create call; one slower is not sent and waits for the next claim.
+ * A claim only finds a member not yet erased, so this bounds how late a create can still reach MAS after an erasure
+ * (chat-lifecycle.ts CREATE_LANDS_WITHIN_S).
+ */
+export const CREATE_CALL_WITHIN_MS = 60_000;
 
 /** After this many failed attempts (about a day at the hourly step) the job stops and needs an operator. */
 export const MAX_ATTEMPTS = 24;
@@ -83,8 +92,10 @@ function retry(job: ChatAccountJob): JobSettlement {
 
 /** What one job comes to. The display name is the verified handle; with none, nothing is sent and the job waits. */
 async function settlementFor(ports: ChatAccountPorts, job: ChatAccountJob): Promise<JobSettlement> {
+  const claimedAt = ports.nowMs();
   const handle = await ports.verifiedHandle(job.did);
   if (handle === null) return retry(job);
+  if (ports.nowMs() - claimedAt > CREATE_CALL_WITHIN_MS) return retry(job);
   const answer = await ports.create(job.user, handle);
   if (answer.kind === "created") return { state: "ready" };
   if (answer.kind === "unavailable") return retry(job);

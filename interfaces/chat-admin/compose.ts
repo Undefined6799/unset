@@ -1,6 +1,6 @@
 // chat-admin's composition root (ADR 0081 decision 5; rule AB-2): the one place its parts are built. It refuses a MAS
 // or Synapse origin that resolves to a public address (outbound.ts checks every later lookup too) and opens the jti
-// file.
+// file and the room sweep's resume point, both in the state folder.
 import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
 import { join } from "node:path";
 import { openJtiStore, resolvesInternal } from "@unset/shared-admin-envelope";
@@ -8,6 +8,7 @@ import { BootError, type Config } from "./config.ts";
 import { createMas } from "./mas.ts";
 import { createQuotas } from "./quota.ts";
 import { createHandler } from "./server.ts";
+import { openSweepCursor } from "./sweep.ts";
 import { createSynapse } from "./synapse.ts";
 
 export type Composed = {
@@ -35,6 +36,7 @@ export async function compose(config: Config): Promise<Composed> {
     env: config.env,
     mas: createMas(config),
     synapse: createSynapse({ adminUrl: config.synapseUrl }),
+    sweepCursor: openSweepCursor(join(config.stateDir, "sweep.cursor")),
     sessionTtl: config.sessionTtl,
     jti,
     quotas: createQuotas(),
