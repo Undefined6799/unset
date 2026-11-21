@@ -4019,6 +4019,28 @@ P2.19b, review follow-ups, built 2026-11-20 (#1844): the upload's deadline resta
 `bodyWindowMs` 120 s, then 100 s for review and the store); web sends review at most `REVIEW_LANES` (2) pictures at
 once; a timed-out upload keeps its slot until its review call ends. Four uploads per process stays (eight measured at
 about 910 MiB above web's base).
+P2.19b, picture cards on the server, built 2026-11-20: the card forms take kind `image` (`image` a draft id or empty to
+keep the picture, `alt`, `caption`, `fit`), and every card write publishes a new picture after its own checks and
+before the write: the use first (`addUse`, under a key web picks with `newCardKey` for a new card), then the main
+version from `drafts/<did>/i/<id>/main.jpeg`, then `com.atproto.repo.uploadBlob`; a Save publishes once across its one
+retry. After the write (Codex review): every `addUse` adds the save's own token to `app.image_use.holds`; a write
+that surely did not land removes its token, and the use goes only when no save holds it and no write settled it; one
+the PDS did not answer keeps its token, since it may have landed. One that landed settles the record's uses under its
+commit revision (migration 0037; a TID sorts by time). `app.image_record` keeps each record's last settled revision
+and whether it was deleted: a revision not newer than that, or any after a delete, only takes back its own uses; a
+newer one becomes the last and leaves exactly the use of the picture the record shows (found by the CID web notes on
+`app.image.blob_cid`), so two tabs' saves end right in either settling order, also when the newer one left no picture.
+A delete marks the record and drops every use of it. Taking a use back runs under its own 5 s deadline
+(`SETTLE_MS`), not the request's. Left: a use whose write went unanswered and did not land, or whose request died
+mid-save, keeps its image from the sweep. Pages still hide picture cards until P2.19c.
+P2.19b, orphan-object sweep, built 2026-11-20: web's sweeps also run `sweep.image_orphan`
+(`interfaces/web/src/lib/server/image-orphans.ts`). It lists `drafts/`, then reads which of the listed ids still have
+a row (`ImageStore.named`), and deletes each `drafts/<did>/i/<id>/` folder no row of that member names, all or nothing
+under the image sweep's governor. No age check: rows are written before objects and deleted before them, and ids are
+never reused, so a folder with no row at that read can never gain one. Keys of any other shape are left alone.
+P2.19b, booked follow-up (reviewer, #1860): a card write the PDS answers without a commit revision, or never
+answers, keeps its saves' holds on `app.image_use` for good, so that image is never swept and stays in the quota. Fix
+in a later step: a reconciliation that reads the record from the member's PDS and settles or releases those holds.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
