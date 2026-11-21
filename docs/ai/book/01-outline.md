@@ -1704,7 +1704,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.11 | Service-auth JWT verifier; signed-in `getTimeline` and `searchProfiles` | [SEC] | P3.10, P1.16 | `phase-3.md` |
 | P3.12 | Public `/@handle` and `/@handle/p/{rkey}` | [SEC] | P3.09, P2.20, P2.02 | `phase-3.md` |
 | P3.13 | Handle hosts | — | P3.12 | `phase-3.md` |
-| P3.12u | Fix small rough edges from the staging test | — | P3.12s | `phase-3.md` |
+| P3.12u | Fix small rough edges from the staging test | — | P3.12 | `phase-3.md` |
 | P3.14 | Directory and search | — | P3.05 | `phase-3.md` |
 | P3.14s | Web search through SearXNG behind the search bar (ADR 0035) | [SEC] [ALEX] (typed line) | P3.14, P1.18a | `phase-3.md` |
 | P3.15 | Report intake and the public notice form | [MOD] [SEC] | P3.12, P3.06, P1.15, P1.14, P1.14d | `phase-3.md` |

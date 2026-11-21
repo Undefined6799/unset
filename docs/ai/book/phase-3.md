@@ -1935,7 +1935,7 @@ Not in this step: the external resolver check (P3.23, P5.02a); DNS TXT at mint.
 Diagram: none.
 
 ### P3.12u — Fix small rough edges from the staging test
-Tags: —            Depends on: P3.12s
+Tags: —            Depends on: P3.12
 `apps/web/lib/components/{profile,notifications}/`, `interfaces/web/src/routes/request-invite/`; staging break test
 2026-11-21, UX items 3, 5, 6, 7 and 9, and the second pass's sign-in times.
 
