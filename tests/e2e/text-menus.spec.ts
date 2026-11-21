@@ -31,8 +31,9 @@ async function cardWithCaret(page: Page, word: string, text: string) {
   return { card, editor };
 }
 
-async function discardAndRemove(page: Page, word: string) {
-  await page.locator("[data-unsaved-bar]").getByRole("button", { name: "Discard" }).click();
+/** Discards the card's changes (when it has any the saved text would hold) and deletes it. */
+async function discardAndRemove(page: Page, word: string, { changed = true } = {}) {
+  if (changed) await page.locator("[data-unsaved-bar]").getByRole("button", { name: "Discard" }).click();
   const card = page.locator('[data-slot="card"]', { hasText: word });
   await card.getByRole("button", { name: /^More for / }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
@@ -156,5 +157,91 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await drag(page, grip, first);
   await expect(editor.locator("p")).toHaveText(["third line", `${word} one`, "new line", "second line"]);
   await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+test("selected_words_become_a_link_from_the_floating_bar_which_shows_edits_and_removes_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `links${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} start`);
+  const floating = page.getByRole("toolbar", { name: "Format the selected words" }).filter({ visible: true });
+  const linkButton = floating.getByRole("button", { name: "Link" });
+  await editor.getByText(`${word} start`).selectText();
+  await expect(linkButton).toHaveAttribute("aria-pressed", "false");
+  await linkButton.click();
+  // The link editor opens over the words, its field focused, as Crepe's link-edit does.
+  const address = card.getByRole("textbox", { name: "Link address" });
+  await expect(address).toBeFocused();
+  // An address the page would not show as a link is refused, and nothing changes.
+  await address.fill("javascript:alert(1)");
+  await page.keyboard.press("Enter");
+  await expect(card.getByText("Use an address that starts with https:// or http://")).toBeVisible();
+  await expect(editor.locator("a")).toHaveCount(0);
+  await address.fill("https://example.com/a");
+  await page.keyboard.press("Enter");
+  await expect(address).toBeHidden();
+  await expect(editor.locator("a")).toHaveAttribute("href", "https://example.com/a");
+  await expect(editor.locator("a")).toHaveText(`${word} start`);
+  await expect(editor).toBeFocused();
+
+  // A pointer over the link shows its address, with Copy, Edit and Remove.
+  await page.keyboard.press("ControlOrMeta+End");
+  await editor.locator("a").hover();
+  const preview = card.getByRole("group", { name: "Link" });
+  await expect(preview.getByRole("link", { name: "https://example.com/a" })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Copy link" })).toBeVisible();
+  await preview.getByRole("button", { name: "Edit link" }).click();
+  await expect(address).toBeFocused();
+  await expect(address).toHaveValue("https://example.com/a");
+  await address.fill("https://example.org/b");
+  await page.keyboard.press("Enter");
+  await expect(editor.locator("a")).toHaveAttribute("href", "https://example.org/b");
+  await expect(editor.locator("a")).toHaveText(`${word} start`);
+  // Escape closes the editor and changes nothing.
+  await editor.locator("a").hover();
+  await preview.getByRole("button", { name: "Edit link" }).click();
+  await address.fill("https://example.net/c");
+  await page.keyboard.press("Escape");
+  await expect(address).toBeHidden();
+  await expect(editor.locator("a")).toHaveAttribute("href", "https://example.org/b");
+  await editor.locator("a").hover();
+  await preview.getByRole("button", { name: "Remove link" }).click();
+  await expect(editor.locator("a")).toHaveCount(0);
+  await expect(editor).toContainText(`${word} start`);
+
+  // Linked words selected again: the bar's Link is on, and pressing it takes the link off (Crepe's toggle).
+  await editor.getByText(`${word} start`).selectText();
+  await linkButton.click();
+  await address.fill("https://example.com/d");
+  await page.keyboard.press("Enter");
+  await editor.getByText(`${word} start`).selectText();
+  await expect(linkButton).toHaveAttribute("aria-pressed", "true");
+  await linkButton.click();
+  await expect(editor.locator("a")).toHaveCount(0);
+  // The words are as they were, so there is nothing to discard.
+  await discardAndRemove(page, word, { changed: false });
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+test("an_empty_line_with_the_caret_says_to_type_a_slash", async ({ page }) => {
+  const watched = watch(page);
+  const word = `hint${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} start`);
+  const hint = editor.locator("[data-placeholder]");
+  await expect(hint).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(hint).toHaveCount(1);
+  await expect(hint).toHaveAttribute("data-placeholder", "Type / to choose a block");
+  // The hint is drawn by the page, not typed: the words and the saved Markdown do not hold it.
+  await expect(editor).not.toContainText("Type /");
+  await page.keyboard.type("x");
+  await expect(hint).toHaveCount(0);
+  await page.keyboard.press("Backspace");
+  await expect(hint).toHaveCount(1);
+  // Only the line with the caret shows it.
+  await page.keyboard.press("ArrowUp");
+  await expect(hint).toHaveCount(0);
+  // An empty line is not saved (milkdown.ts stored), so there is nothing to discard.
+  await discardAndRemove(page, word, { changed: false });
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });

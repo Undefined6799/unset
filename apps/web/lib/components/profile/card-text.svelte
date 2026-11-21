@@ -48,11 +48,13 @@ const labelId = `${id}-label`;
 let host: HTMLDivElement | undefined = $state();
 let editor: MarkdownEditor | undefined = $state();
 let failed = $state(false);
-let menus: MenusState = $state({ items: [], index: 0, bar: false, on: new Set() });
+let menus: MenusState = $state({ items: [], index: 0, bar: false, on: new Set(), link: null });
 let handle: HTMLElement | undefined = $state();
 let add: HTMLElement | undefined = $state();
 let menu: HTMLElement | undefined = $state();
 let bar: HTMLElement | undefined = $state();
+let linkEdit: HTMLElement | undefined = $state();
+let linkPreview: HTMLElement | undefined = $state();
 const optionId = (item: BlockItem) => `${id}-block-${item}`;
 /** The page's script runs here: from now on a press on the card opens the editor (a press before that is the page's). */
 let listening = $state(false);
@@ -99,8 +101,8 @@ function whenIdle(run: () => void): () => void {
 async function mount() {
   try {
     const { mountMarkdownEditor } = await import("../../editor/milkdown.ts");
-    if (closed || host === undefined || handle === undefined || add === undefined || menu === undefined || bar === undefined)
-      return;
+    const drawn = [host, handle, add, menu, bar, linkEdit, linkPreview];
+    if (closed || drawn.some((element) => element === undefined)) return;
     const mounted = await mountMarkdownEditor(host, {
       value,
       labelledBy: labelId,
@@ -108,7 +110,18 @@ async function mount() {
       onEdit: () => undefined,
       onChange: onedit,
       onToolbar: () => undefined,
-      menus: { handle, add, menu, bar, labels: TEXT_MENUS.items, optionId, onState: (state) => (menus = state) },
+      menus: {
+        handle,
+        add,
+        menu,
+        bar,
+        linkEdit,
+        linkPreview,
+        hint: TEXT_MENUS.hint,
+        labels: TEXT_MENUS.items,
+        optionId,
+        onState: (state) => (menus = state),
+      },
     });
     if (closed) {
       await mounted.destroy();
@@ -141,7 +154,7 @@ function carryEarly(mounted: MarkdownEditor) {
 
 /** A press the card's own controls, links and fields keep: never taken for a press on the words. */
 const CONTROLS =
-  "a, button, input, textarea, select, label, [role='menu'], [role='menuitem'], [role='dialog'], [role='listbox'], [data-block-handle]";
+  "a, button, input, textarea, select, label, [role='menu'], [role='menuitem'], [role='dialog'], [role='listbox'], [data-block-handle], [data-text-popover]";
 
 function pressed(event: PointerEvent) {
   if (event.button !== 0 || failed || !(event.target instanceof Element)) return;
@@ -219,14 +232,22 @@ onDestroy(() => {
   bind:add
   bind:menu
   bind:bar
+  bind:linkEdit
+  bind:linkPreview
   onchoose={(item) => editor?.menus?.choose(item)}
   onformat={(item) => editor?.menus?.format(item)}
+  onlink={{
+    confirm: (address) => editor?.menus?.confirmLink(address),
+    cancel: () => editor?.menus?.cancelLink(),
+    edit: () => editor?.menus?.editLink(),
+    remove: () => editor?.menus?.removeLink(),
+  }}
 />
 <div
   bind:this={host}
   data-text-in-place
   data-listening={listening ? "" : undefined}
   onfocusin={() => editor !== undefined && onfocus?.(editor.focus)}
-  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:ring-[3px] [&_.markdown-editor:focus-visible]:ring-ring/50 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground"
+  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:ring-[3px] [&_.markdown-editor:focus-visible]:ring-ring/50 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
 ></div>
 </div>

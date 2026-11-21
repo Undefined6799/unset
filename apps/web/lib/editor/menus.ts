@@ -17,18 +17,23 @@ import {
   codeBlockSchema,
   headingSchema,
   hrSchema,
+  linkSchema,
   orderedListSchema,
   paragraphSchema,
   setBlockTypeCommand,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
+  toggleLinkCommand,
   toggleStrongCommand,
+  updateLinkCommand,
   wrapInBlockTypeCommand,
 } from "@milkdown/preset-commonmark";
-import { findParent } from "@milkdown/prose";
+import { findParent, posToDOMRect } from "@milkdown/prose";
 import type { NodeType } from "@milkdown/prose/model";
-import { type EditorState, TextSelection } from "@milkdown/prose/state";
-import type { EditorView } from "@milkdown/prose/view";
+import { type EditorState, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
+import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
+import { $prose } from "@milkdown/utils";
+import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 
 /** The block menu's items, in Crepe's order, less what the page cannot show (tables, tasks, images, math). */
 export const BLOCK_ITEMS = [
@@ -43,7 +48,7 @@ export const BLOCK_ITEMS = [
   "codeBlock",
 ] as const;
 export type BlockItem = (typeof BLOCK_ITEMS)[number];
-export const BAR_ITEMS = ["strong", "emphasis", "code"] as const;
+export const BAR_ITEMS = ["strong", "emphasis", "code", "link"] as const;
 export type BarItem = (typeof BAR_ITEMS)[number];
 
 export type MenusState = {
@@ -53,7 +58,14 @@ export type MenusState = {
   readonly bar: boolean;
   /** Which of the bar's marks the selected words carry. */
   readonly on: ReadonlySet<BarItem>;
+  /** The link editor (its field's words, and whether the last address was refused) or the link preview, if open. */
+  readonly link: LinkState | null;
 };
+
+export type LinkState =
+  | { readonly mode: "edit"; readonly value: string; readonly refused: boolean }
+  /** The stored address, and the same through safeHref when the page shows it as a link (else it is only words). */
+  | { readonly mode: "preview"; readonly href: string; readonly safe: SafeHref | null };
 
 export type MenusOptions = {
   /** The elements the plugins place: the handle (holding the add button and the grip), the block menu and the bar. */
@@ -61,18 +73,29 @@ export type MenusOptions = {
   readonly add: HTMLElement;
   readonly menu: HTMLElement;
   readonly bar: HTMLElement;
+  /** The link editor, holding its address field, and the preview a pointer over a link shows. */
+  readonly linkEdit: HTMLElement;
+  readonly linkPreview: HTMLElement;
+  /** What an empty line with the caret says. */
+  readonly hint: string;
   readonly labels: Readonly<Record<BlockItem, string>>;
   /** The id of an item's option, for the editor's aria-activedescendant. */
   readonly optionId: (item: BlockItem) => string;
   readonly onState: (state: MenusState) => void;
-  /** Whether a bar item is on for the selection (milkdown.ts isActive). */
-  readonly isOn: (item: BarItem, state: EditorState) => boolean;
+  /** Whether a bar mark is on for the selection (milkdown.ts isActive). */
+  readonly isOn: (item: Exclude<BarItem, "link">, state: EditorState) => boolean;
 };
 
 export type Menus = {
   /** Runs the block menu's item: the "/" and what follows it go, and the block becomes the item. */
   readonly choose: (item: BlockItem) => void;
   readonly format: (item: BarItem) => void;
+  /** The link editor's address: set on the words when the page would show it as a link, else refused. */
+  readonly confirmLink: (address: string) => void;
+  readonly cancelLink: () => void;
+  /** The previewed link: opened in the link editor, or taken off its words. */
+  readonly editLink: () => void;
+  readonly removeLink: () => void;
 };
 
 /** Milkdown's context, as Editor.config hands it over (@milkdown/ctx, which apps/web does not depend on directly). */
@@ -80,6 +103,11 @@ type Ctx = Parameters<Parameters<Editor["config"]>[0]>[0];
 
 const blockMenu = slashFactory("UNSET_BLOCK_MENU");
 const formatBar = tooltipFactory("UNSET_FORMAT_BAR");
+const linkTips = tooltipFactory("UNSET_LINK");
+/** What the page shows as a link (lib/profile/parse.ts). */
+const WEB = ["http:", "https:"] as const;
+/** How long a pointer rests before the link preview follows it (Crepe's link-tooltip DELAY). */
+const HOVER_MS = 50;
 
 function blockCommand(ctx: Ctx, item: BlockItem): () => void {
   const commands = ctx.get(commandsCtx);
@@ -108,6 +136,47 @@ function blockCommand(ctx: Ctx, item: BlockItem): () => void {
 
 const BAR_COMMANDS = { strong: toggleStrongCommand, emphasis: toggleEmphasisCommand, code: toggleInlineCodeCommand };
 
+function hasLink(ctx: Ctx, state: EditorState): boolean {
+  return state.doc.rangeHasMark(state.selection.from, state.selection.to, linkSchema.type(ctx));
+}
+
+/** The linked words under the page point (x, y): the text they are, its address (Crepe link-tooltip utils.ts). */
+function linkAt(ctx: Ctx, view: EditorView, x: number, y: number) {
+  const found = view.posAtCoords({ left: x, top: y });
+  if (found === null) return null;
+  const node = view.state.doc.nodeAt(found.pos);
+  const mark = node?.marks.find((each) => each.type === linkSchema.type(ctx));
+  if (node == null || mark === undefined) return null;
+  const from = found.pos - view.state.doc.resolve(found.pos).textOffset;
+  return { from, to: from + node.nodeSize, href: String(mark.attrs.href) };
+}
+
+/**
+ * An empty line with the caret says what to type, drawn by the page and never part of the words (Crepe 7.23.0
+ * feature/placeholder, block mode; Milkdown ships no placeholder plugin). Not in a code block or a list, as Crepe.
+ */
+const placeholder = (hint: string) =>
+  $prose(
+    () =>
+      new Plugin({
+        key: new PluginKey("UNSET_PLACEHOLDER"),
+        props: {
+          decorations: (state) => {
+            const { selection } = state;
+            const { $anchor } = selection;
+            const line = $anchor.parent;
+            if (!selection.empty || $anchor.depth === 0 || line.content.size > 0) return null;
+            if (line.type.name === "code_block" || findParent((node) => node.type.name === "list_item")($anchor)) {
+              return null;
+            }
+            const before = $anchor.before();
+            const shown = Decoration.node(before, before + line.nodeSize, { "data-placeholder": hint });
+            return DecorationSet.create(state.doc, [shown]);
+          },
+        },
+      }),
+  );
+
 function atEndOfBlock(state: EditorState): boolean {
   const { selection } = state;
   return selection instanceof TextSelection && selection.$head.parentOffset === selection.$head.parent.content.size;
@@ -121,11 +190,16 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
   let index = 0;
   let bar = false;
   let on: ReadonlySet<BarItem> = new Set();
+  let link: LinkState | null = null;
+  /** The linked words the link editor or preview is for, and whether they carried a link already. */
+  let linked: { from: number; to: number; existing: boolean } | null = null;
+  let linkTip: ReturnType<typeof linkView> | undefined;
+  let barTip: ReturnType<typeof barView> | undefined;
   /** Where the handle's add button opened the menu: it stays open on that empty line until the caret leaves it. */
   let addedAt: number | null = null;
   let slash: SlashProvider | undefined;
 
-  const report = () => options.onState({ items, index, bar, on });
+  const report = () => options.onState({ items, index, bar, on, link });
   const matching = () =>
     BLOCK_ITEMS.filter((item) => options.labels[item].toLowerCase().includes(filter.toLowerCase()));
   const refresh = (view: EditorView) => view.dispatch(view.state.tr.setMeta("addToHistory", false));
@@ -211,17 +285,117 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
         },
       });
       configured.set(formatBar.key, {
-        view: (view) =>
-          barView(view, options, (shown, marks) => {
-            bar = shown;
-            on = marks;
+        view: (view) => {
+          barTip = barView(
+            configured,
+            view,
+            options,
+            () => link?.mode === "edit",
+            (shown, marks) => {
+              bar = shown;
+              on = marks;
+              report();
+            },
+          );
+          return barTip;
+        },
+      });
+      let resting = 0;
+      configured.set(linkTips.key, {
+        props: {
+          handleDOMEvents: {
+            mousemove: (view, event) => {
+              clearTimeout(resting);
+              resting = window.setTimeout(() => hover(view, event.clientX, event.clientY), HOVER_MS);
+              return false;
+            },
+            mouseleave: () => {
+              clearTimeout(resting);
+              resting = window.setTimeout(() => linkTip?.leave(), HOVER_MS);
+              return false;
+            },
+          },
+        },
+        view: (view) => {
+          linkTip = linkView(view, options);
+          linkTip.edit.onHide = () => {
+            if (link?.mode !== "edit") return;
+            stopOutside();
+            link = null;
+            linked = null;
             report();
-          }),
+          };
+          linkTip.preview.onHide = () => {
+            if (link?.mode !== "preview") return;
+            link = null;
+            linked = null;
+            report();
+          };
+          return {
+            // The editor closes when the selection leaves its words (Crepe link-edit update).
+            update: (updated) => {
+              const { from, to } = updated.state.selection;
+              if (link?.mode === "edit" && (from !== linked?.from || to !== linked?.to)) linkTip?.edit.hide();
+            },
+            destroy: () => {
+              clearTimeout(resting);
+              stopOutside();
+              linkTip?.destroy();
+            },
+          };
+        },
       });
     })
     .use(block)
     .use(blockMenu)
-    .use(formatBar);
+    .use(formatBar)
+    .use(linkTips)
+    .use(placeholder(options.hint));
+
+  // A press outside the link editor closes it, keeping the words as they were (Crepe link-edit).
+  function outside(event: PointerEvent) {
+    if (event.target instanceof Node && options.linkEdit.contains(event.target)) return;
+    linkTip?.edit.hide();
+  }
+  const stopOutside = () => document.removeEventListener("pointerdown", outside, true);
+
+  function hover(view: EditorView, x: number, y: number) {
+    if (ctx === undefined || !view.hasFocus() || link?.mode === "edit") return;
+    const found = linkAt(ctx, view, x, y);
+    if (found === null) {
+      linkTip?.leave();
+      return;
+    }
+    linked = { from: found.from, to: found.to, existing: true };
+    link = { mode: "preview", href: found.href, safe: safeHref(found.href, WEB) };
+    report();
+    linkTip?.preview.show({ getBoundingClientRect: () => posToDOMRect(view, found.from, found.to) }, view);
+  }
+
+  /** Opens the link editor over the words from..to, which it selects, with `value` in its field (Crepe link-edit). */
+  function openLink(from: number, to: number, value: string, existing: boolean) {
+    if (ctx === undefined || linkTip === undefined) return;
+    const view = ctx.get(editorViewCtx);
+    linkTip.preview.hide();
+    // Set first, so the selection below keeps the editor open and the bar stays away while it is.
+    linked = { from, to, existing };
+    link = { mode: "edit", value, refused: false };
+    report();
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)));
+    barTip?.hide();
+    linkTip.edit.show({ getBoundingClientRect: () => posToDOMRect(view, from, to) }, view);
+    document.addEventListener("pointerdown", outside, true);
+    requestAnimationFrame(() => options.linkEdit.querySelector("input")?.focus());
+  }
+
+  // The bar comes back over the words the editor was for: they are still selected, so no change would show it.
+  function closeLink() {
+    linkTip?.edit.hide();
+    if (ctx === undefined) return;
+    const view = ctx.get(editorViewCtx);
+    view.focus();
+    barTip?.update(view);
+  }
 
   function openAt(pos: number) {
     addedAt = pos;
@@ -233,8 +407,37 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     choose,
     format: (item) => {
       if (ctx === undefined) return;
-      ctx.get(commandsCtx).call(BAR_COMMANDS[item].key);
-      ctx.get(editorViewCtx).focus();
+      const view = ctx.get(editorViewCtx);
+      if (item !== "link") ctx.get(commandsCtx).call(BAR_COMMANDS[item].key);
+      // Link on linked words takes the link off them; on others it opens the link editor (Crepe toggleLinkCommand).
+      else if (!hasLink(ctx, view.state)) {
+        openLink(view.state.selection.from, view.state.selection.to, "", false);
+        return;
+      } else ctx.get(commandsCtx).call(toggleLinkCommand.key);
+      view.focus();
+    },
+    confirmLink: (address) => {
+      if (ctx === undefined || linked === null) return;
+      // Only what the page shows as a link (safeHref, http and https): anything else would be saved as plain words.
+      const href = safeHref(address.trim(), WEB);
+      if (href === null) {
+        link = { mode: "edit", value: address, refused: true };
+        report();
+        return;
+      }
+      ctx.get(commandsCtx).call(linked.existing ? updateLinkCommand.key : toggleLinkCommand.key, { href });
+      closeLink();
+    },
+    cancelLink: closeLink,
+    editLink: () => {
+      if (link?.mode === "preview" && linked !== null) openLink(linked.from, linked.to, link.href, true);
+    },
+    removeLink: () => {
+      if (ctx === undefined || linked === null) return;
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.removeMark(linked.from, linked.to, linkSchema.type(ctx)));
+      linkTip?.preview.hide();
+      view.focus();
     },
   };
 }
@@ -283,8 +486,15 @@ function handleView(ctx: Ctx, options: MenusOptions, openAt: (pos: number) => vo
 }
 
 /** The floating bar: shown over words selected in the focused editor (Crepe toolbar shouldShow). */
-function barView(view: EditorView, options: MenusOptions, onBar: (shown: boolean, on: ReadonlySet<BarItem>) => void) {
-  const marks = (state: EditorState) => new Set(BAR_ITEMS.filter((item) => options.isOn(item, state)));
+function barView(
+  ctx: Ctx,
+  view: EditorView,
+  options: MenusOptions,
+  editingLink: () => boolean,
+  onBar: (shown: boolean, on: ReadonlySet<BarItem>) => void,
+) {
+  const marks = (state: EditorState) =>
+    new Set(BAR_ITEMS.filter((item) => (item === "link" ? hasLink(ctx, state) : options.isOn(item, state))));
   const provider = new TooltipProvider({
     content: options.bar,
     root: options.bar.parentElement ?? undefined,
@@ -295,6 +505,7 @@ function barView(view: EditorView, options: MenusOptions, onBar: (shown: boolean
       const focused = shown.hasFocus() || options.bar.contains(document.activeElement);
       return (
         focused &&
+        !editingLink() &&
         shown.editable &&
         selection instanceof TextSelection &&
         !selection.empty &&
@@ -310,6 +521,52 @@ function barView(view: EditorView, options: MenusOptions, onBar: (shown: boolean
       provider.update(updated, prev);
       if (options.bar.dataset.show === "true") onBar(true, marks(updated.state));
     },
+    hide: () => provider.hide(),
     destroy: () => provider.destroy(),
+  };
+}
+
+/**
+ * The link editor and the link preview, each placed by plugin-tooltip over the linked words and shown only when asked
+ * (Crepe 7.23.0 link-tooltip, @milkdown/components edit-view.ts and preview-view.ts). The preview stays while the
+ * pointer is on it.
+ */
+function linkView(view: EditorView, options: MenusOptions) {
+  const placed = (content: HTMLElement) => {
+    const provider = new TooltipProvider({
+      content,
+      root: content.parentElement ?? undefined,
+      debounce: 0,
+      offset: 10,
+      shouldShow: () => false,
+    });
+    provider.update(view);
+    return provider;
+  };
+  const edit = placed(options.linkEdit);
+  const preview = placed(options.linkPreview);
+  let over = false;
+  const enter = () => {
+    over = true;
+  };
+  const leave = () => {
+    over = false;
+    preview.hide();
+  };
+  options.linkPreview.addEventListener("mouseenter", enter);
+  options.linkPreview.addEventListener("mouseleave", leave);
+  return {
+    edit,
+    preview,
+    /** The pointer left the linked words: the preview goes unless the pointer went onto it. */
+    leave: () => {
+      if (!over) preview.hide();
+    },
+    destroy: () => {
+      options.linkPreview.removeEventListener("mouseenter", enter);
+      options.linkPreview.removeEventListener("mouseleave", leave);
+      edit.destroy();
+      preview.destroy();
+    },
   };
 }
