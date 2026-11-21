@@ -121,6 +121,11 @@ const EVENTS = [
   "media.started",
   "media.stopped",
   "media.request",
+  // Build step 6, the unset.cc door (interfaces/chat-auth): it started, it stopped, and each answer as `route` (the
+  // template), `method`, `status` and a fixed `reason` word. Never a query, cookie, ticket, token, DID or lock key.
+  "door.started",
+  "door.stopped",
+  "door.request",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

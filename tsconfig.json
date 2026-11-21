@@ -22,6 +22,7 @@
     { "path": "infrastructure/storage" },
     { "path": "interfaces/chat-admin" },
     { "path": "interfaces/indexer" },
+    { "path": "interfaces/chat-auth" },
     { "path": "interfaces/media" },
     { "path": "interfaces/review" },
     { "path": "interfaces/pds-admin" },
