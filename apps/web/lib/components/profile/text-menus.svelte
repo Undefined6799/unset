@@ -16,6 +16,7 @@ let {
   optionId,
   handle = $bindable(),
   add = $bindable(),
+  grip = $bindable(),
   menu = $bindable(),
   bar = $bindable(),
   linkEdit = $bindable(),
@@ -29,6 +30,7 @@ let {
   optionId: (item: BlockItem) => string;
   handle?: HTMLElement;
   add?: HTMLElement;
+  grip?: HTMLElement;
   menu?: HTMLElement;
   bar?: HTMLElement;
   linkEdit?: HTMLElement;
@@ -128,9 +130,10 @@ const control =
 
 <div bind:this={handle} data-block-handle data-show="false" class="{floating} gap-0.5 pointer-coarse:data-[show=true]:invisible">
   <button bind:this={add} type="button" class={control} aria-label={TEXT_MENUS.add}><Icon name="add" /></button>
-  <!-- Not a button: a browser starts no drag from a form control, and the grip has no key to press (blocks move by
-       Mod-Shift-Arrow instead, menus.ts). It is named. The six dots are Crepe's handle, Lucide's grip (ADR 0087). -->
-  <span role="img" class="{control} cursor-grab" aria-label={TEXT_MENUS.drag} title={TEXT_MENUS.drag}><Icon name="grip" /></span>
+  <!-- Not a <button>: a browser starts no drag from a form control. Dragged, it moves its block; pressed, it opens
+       the block menu to change that block (Alex 2026-11-21 18:48Z). Keys need neither: blocks move by Mod-Shift-Arrow
+       and change by "/" (menus.ts). The six dots are Crepe's handle, Lucide's grip (ADR 0087). -->
+  <span bind:this={grip} role="button" tabindex="-1" class="{control} cursor-grab" aria-label={TEXT_MENUS.drag} title={TEXT_MENUS.drag}><Icon name="grip" /></span>
 </div>
 
 <div bind:this={menu} data-show="false" class="{floating} w-56 flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
