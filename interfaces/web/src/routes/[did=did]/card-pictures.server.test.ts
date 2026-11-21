@@ -173,6 +173,17 @@ describe("a new picture card", () => {
     expect(written).toEqual([]);
   });
 
+  test("picture.note_throws: the database failing after the upload releases the use, then the error surfaces", async () => {
+    const broken = new Error("database down");
+    const published = async () => {
+      throw broken;
+    };
+    const { writes, log, written } = stack({ pictures: { published } });
+    await expect(writes.create(picture(), "full")).rejects.toBe(broken);
+    expect(log.at(-1)).toBe(`release ${DRAFT} ${NEW_KEY}`);
+    expect(written).toEqual([]);
+  });
+
   test("picture.create_unknown: a create the PDS did not answer may have landed, so its use stays", async () => {
     const { writes, log } = stack({ store: { create: async () => down } });
     expect(await writes.create(picture(), "full")).toEqual({ kind: "failed", code: "card.pds_unavailable" });
@@ -353,6 +364,25 @@ describe("a Save with pictures", () => {
     const { writes, log } = stack({ cards, store: { saveMany: async () => ok({ kind: "too_large", key: "p" }) } });
     expect(await writes.saveAll([edit("p", picture(), "cp")])).toMatchObject({ code: "card.save_too_large" });
     expect(log.at(-1)).toBe(`release ${DRAFT} p`);
+  });
+
+  test("picture.save_all_throws: a later picture's database failure releases the uses made before it", async () => {
+    const second = "5e1d0c2b-7a3f-4c6e-8d9b-1f2a3b4c5d6e" as DraftId;
+    const broken = new Error("database down");
+    const both = [...cards, { key: "q", value: storedPicture, cid: "cq" }];
+    const { writes, log } = stack({
+      cards: both,
+      pictures: {
+        published: async (id) => {
+          if (id === second) throw broken;
+          log.push(`published ${id}`);
+        },
+      },
+    });
+    const edits = [edit("p", picture(), "cp"), edit("q", picture(second), "cq")];
+    await expect(writes.saveAll(edits)).rejects.toBe(broken);
+    expect(log.filter((line) => line.startsWith("release"))).toEqual([`release ${second} q`, `release ${DRAFT} p`]);
+    expect(log.some((line) => line.startsWith("saveMany"))).toBe(false);
   });
 
   test("picture.kind_changed: a picture card saved as Text drops its picture's use", async () => {

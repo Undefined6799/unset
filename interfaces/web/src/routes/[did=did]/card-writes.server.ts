@@ -190,7 +190,8 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
   /**
    * A new picture made publishable, in order: the use first (so no sweep can take the upload mid-save, and the size
    * is the member's own row), then its main version, then the upload to their PDS. Any later failure takes the use
-   * back. A card with no new picture passes unchanged.
+   * back, a thrown one too (the database failing while noting the CID), before the error goes on. A card with no new
+   * picture passes unchanged.
    */
   const publish = async (
     content: CardContent,
@@ -201,6 +202,21 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
     const use = await pictures.use(id, key);
     if (use === null) return { ok: false, failed: failed("card.image_missing", "image") };
     const held: Held = { key, id, created: use.created };
+    try {
+      return await publishHeld(content, held, use);
+    } catch (error) {
+      await settle([held], [], false);
+      throw error;
+    }
+  };
+
+  /** `publish` once the use is held: the main version, the upload, then the CID noted on the image. */
+  const publishHeld = async (
+    content: CardContent,
+    held: Held,
+    use: { readonly width: number; readonly height: number },
+  ): Promise<{ ok: true; content: CardContent; held: Held } | { ok: false; failed: CardWrite }> => {
+    const { id } = held;
     const main = await pictures.main(id);
     if (main.kind !== "ok") {
       await settle([held], [], false);
@@ -220,14 +236,20 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
     return { ok: true, content: published, held };
   };
 
-  /** Each edit with its new picture published, in order; `held` gains each use. The first refusal stops the Save. */
+  /**
+   * Each edit with its new picture published, in order; `held` gains each use. The first refusal stops the Save; a
+   * thrown failure takes back the uses made before it, then goes on.
+   */
   const publishAll = async (
     edits: readonly CardEdit[],
     held: Held[],
   ): Promise<{ ok: true; edits: CardEdit[] } | { ok: false; failed: CardWrite }> => {
     const out: CardEdit[] = [];
     for (const edit of edits) {
-      const published = await publish(edit.content, edit.key);
+      const published = await publish(edit.content, edit.key).catch(async (error: unknown) => {
+        await settle(held, [], false);
+        throw error;
+      });
       if (!published.ok) {
         const refusal = published.failed;
         return { ok: false, failed: refusal.kind === "failed" ? { ...refusal, card: edit.key } : refusal };
