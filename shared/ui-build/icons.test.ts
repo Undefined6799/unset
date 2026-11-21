@@ -10,6 +10,8 @@ import {
   APPROVED_EXTENSION_SHA256,
   ICONOIR_VERSION,
   type IconsIo,
+  LUCIDE,
+  parseLucide,
   parseSvg,
   runIcons,
   sheetDrawings,
@@ -67,6 +69,68 @@ test("icon_allowlist_matches_sheet", () => {
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
+});
+
+// ADR 0087: the drag handle's grip is Lucide grip-vertical at 1.72.0 (ISC), the six dots Crepe's handle draws; Iconoir
+// 7.12.1 has none. It is the one file in icons/lucide/, pinned by sha256, drawn at Iconoir's 1.5 stroke.
+const GRIP = "icons/lucide/grip.svg.txt";
+const dot = (cx: number, cy: number) => ({
+  d: `M${cx - 1} ${cy}a1 1 0 1 0 2 0a1 1 0 1 0 -2 0`,
+  stroke: "currentColor",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+});
+
+test("icon_lucide_grip_is_six_dots_at_iconoirs_stroke", () => {
+  const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
+  expect(LUCIDE).toEqual({
+    version: "1.72.0",
+    icons: {
+      grip: { lucideName: "grip-vertical", sha256: "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5" },
+    },
+  });
+  expect(json.lucide).toEqual(LUCIDE);
+  expect(json.drawings.grip).toEqual([dot(9, 12), dot(9, 5), dot(9, 19), dot(15, 12), dot(15, 5), dot(15, 19)]);
+  expect(json.icons).not.toHaveProperty("grip");
+  expect(json.iconoir).not.toHaveProperty("grip");
+  const licence = readFileSync(join(UI, "icons/LICENSE-lucide.txt"), "utf8");
+  expect(licence).toContain("ISC License");
+  expect(licence).toContain("Copyright (c) 2026 Lucide Icons and Contributors");
+});
+
+test("icon_lucide_changed_or_extra_file_fails_closed", () => {
+  const changed = copy();
+  writeFileSync(
+    join(changed, GRIP),
+    readFileSync(join(changed, GRIP), "utf8").replace('cx="9" cy="12"', 'cx="8" cy="12"'),
+  );
+  expect(code(run(changed, ["--check"]))).toEqual(["icons.source_mismatch"]);
+
+  const extra = copy();
+  cpSync(join(extra, GRIP), join(extra, "icons/lucide/dots.svg.txt"));
+  expect(code(run(extra, ["--check"]))).toEqual(["icons.list_mismatch"]);
+
+  // With no Lucide file the build draws no grip, so a page naming it fails the typecheck and the ui-inventory guard.
+  const gone = copy();
+  rmSync(join(gone, GRIP));
+  expect(run(gone, []).code).toBe(0);
+  const json = JSON.parse(readFileSync(join(gone, "icons/icons.json"), "utf8"));
+  expect(json).not.toHaveProperty("lucide");
+  expect(json.drawings).not.toHaveProperty("grip");
+});
+
+test("icon_lucide_parser_admits_only_its_circles", () => {
+  const svg = readFileSync(join(UI, GRIP), "utf8");
+  expect(parseLucide("grip", svg)).toHaveLength(6);
+  for (const [from, to] of [
+    ['<circle cx="9" cy="12" r="1" />', '<path d="M0 0" />'],
+    ['<circle cx="9" cy="12" r="1" />', '<circle cx="9" cy="12" r="1" onload="x" />'],
+    ['<circle cx="9" cy="12" r="1" />', '<circle cx="9" cy="12" r="2" />'],
+    ['<circle cx="9" cy="12" r="1" />', "<script>alert(1)</script>"],
+    ['stroke-width="2"', 'stroke-width="2"\n  style="x"'],
+    ["<svg\n", '<svg onload="x"\n'],
+  ])
+    expect(() => parseLucide("grip", svg.replace(from as string, to as string)), to).toThrow(/icons\.drawing_mismatch/);
 });
 
 test("icon_check_detects_stale_output", () => {
@@ -249,6 +313,8 @@ function baseFiles(): Map<string, string> {
   files.set("inventory.json", JSON.stringify(inventory));
   const json = JSON.parse(files.get("icons/icons.json") as string);
   delete json.extensionProvenance;
+  delete json.lucide;
+  delete json.drawings.grip;
   for (const alias of Object.keys(ADDITIONS)) {
     files.delete(`icons/svg/${alias}.svg.txt`);
     for (const field of ["icons", "iconoir", "drawings"]) delete json[field][alias];
