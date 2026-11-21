@@ -94,3 +94,10 @@ export const review = (origin: string): Policy => internalPolicy("review", [orig
  * reachable under this policy.
  */
 export const pdsAdmin = (origin: string): Policy => internalPolicy("pds-admin", [origin]);
+
+/**
+ * chat-admin (ADR 0081 decision 5): the one internal service that holds the MAS admin credential. `web` reaches it by
+ * one exact origin, the `CHAT_ADMIN_URL` its composition root passes in, so answers must be private and nothing else
+ * is reachable under this policy.
+ */
+export const chatAdmin = (origin: string): Policy => internalPolicy("chat-admin", [origin]);

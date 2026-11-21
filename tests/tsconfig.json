@@ -9,6 +9,7 @@
     { "path": "../interfaces/chat-admin" },
     { "path": "../interfaces/indexer" },
     { "path": "../infrastructure/audit" },
+    { "path": "../infrastructure/matrix" },
     { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },
     { "path": "../infrastructure/storage" },

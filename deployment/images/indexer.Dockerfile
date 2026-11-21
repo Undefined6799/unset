@@ -21,6 +21,8 @@ COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/shared /app/shared
 COPY --from=deps /app/domains/content /app/domains/content
 COPY --from=deps /app/domains/identity /app/domains/identity
+# The Postgres adapter stores chat accounts in the messaging domain's types (P6.05).
+COPY --from=deps /app/domains/messaging /app/domains/messaging
 COPY --from=deps /app/domains/notifications /app/domains/notifications
 COPY --from=deps /app/domains/profile /app/domains/profile
 COPY --from=deps /app/infrastructure/firehose /app/infrastructure/firehose

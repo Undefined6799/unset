@@ -28,6 +28,8 @@ const STANDIN: Record<string, () => string> = {
     return JSON.stringify([{ ...jwk, kid: example.get("WEB_OAUTH_ACTIVE_KID"), alg: "ES256" }]);
   },
   web_pds_admin_key: () => generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+  web_chat_admin_key: () =>
+    generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
   pds_web_key: () => randomBytes(32).toString("hex"),
   objects_web: () => randomBytes(32).toString("hex"),
 };
@@ -62,6 +64,7 @@ describe("web's environment against its config", () => {
         "web_seal_keyring",
         "web_oauth_client_keys",
         "web_pds_admin_key",
+        "web_chat_admin_key",
         "pds_web_key",
         "objects_web",
       ]);

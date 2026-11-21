@@ -12,6 +12,7 @@ export {
   createAccountStore,
   MAX_CONFIRM_DAYS,
 } from "./accountStore.ts";
+export { type ChatAccountStore, type ChatAccountStoreOptions, createChatAccountStore } from "./chatAccountStore.ts";
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export { createDiscoverabilityStore, type DiscoverabilityStore } from "./discoverabilityStore.ts";
