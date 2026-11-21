@@ -332,10 +332,11 @@ const row =
        menu button and wordmark, the action buttons and account menu at the right edge, and a row of main destinations
        below. Every menu is a native popover with a title and a close button, so it opens with no script, closes on
        Escape or a click outside, and gives focus back to its button. Only what runs today is a link; the rest is drawn
-       disabled, as SOON_ACTIONS, SOON_TABS and the panels list them. -->
-  <div class="flex min-h-svh flex-col">
-  <header class="border-b bg-secondary">
-    <div class="flex min-h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
+       disabled, as SOON_ACTIONS, SOON_TABS and the panels list them. It sticks to the top of the page as it scrolls
+       (Alex, 2026-11-20), at a fixed height that app.css names as --site-header-height, so anchors land below it and a
+       bar can stick under it; it sits outside the page's wrapper so the footer never pushes it off. -->
+  <header data-site-header="core" class="sticky top-0 z-40 border-b bg-secondary">
+    <div class="flex h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
       <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-1.5">
         <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
           <Icon name="menu" size={20} label={T.menu} />
@@ -414,7 +415,7 @@ const row =
         {/if}
       </div>
     </div>
-    <nav aria-label={T.mainNav} class="flex min-h-11.5 items-stretch gap-2 px-5 max-md:px-3 max-sm:gap-1 max-sm:px-2">
+    <nav aria-label={T.mainNav} class="flex h-11.5 items-stretch gap-2 px-5 max-md:px-3 max-sm:gap-1 max-sm:px-2">
       {#each TABS as tab (tab.href)}
         <a
           href={tab.href}
@@ -435,6 +436,7 @@ const row =
       {/each}
     </nav>
   </header>
+  <div class="flex min-h-[calc(100svh-var(--site-header-height))] flex-col">
   {#snippet soonRow(item: { label: string; icon: IconName })}
     <li>
       <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
@@ -590,11 +592,12 @@ const row =
     </nav>
   </footer>
 {:else}
-  <div class="flex min-h-svh flex-col">
-    <header class="flex h-14 items-center justify-between border-b px-4">
+  <!-- Sticky too, at --site-header-height (app.css), outside the page's wrapper as in the core shell. -->
+  <header data-site-header="site" class="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background px-4">
       <a href="/" class="font-mono font-semibold text-foreground" aria-label={T.homeLabel}>{T.brand}</a>
       {#if !signedIn}<Button href={data.signInHref} size="sm">{T.signIn}</Button>{/if}
-    </header>
+  </header>
+  <div class="flex min-h-[calc(100svh-var(--site-header-height))] flex-col">
     <main id="main" class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{@render content()}</main>
   </div>
   <!-- As in the core shell: the footer starts below the first screen. -->

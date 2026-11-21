@@ -45,11 +45,6 @@ type Main = {
   website?: l.UriString;
 
   /**
-   * How the profile page is laid out: sidebar (a side column beside the cards) or compact (a short header above them). Absent or unknown means sidebar.
-   */
-  layout?: "sidebar" | "compact" | l.UnknownString;
-
-  /**
    * True: listed in the unset.sh directory. Absent or false: not listed; the page is still public at its URL.
    */
   listed?: boolean;
@@ -82,9 +77,6 @@ const main = /*#__PURE__*/ l.record<"literal:self", Main>(
     ),
     location: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
     website: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
-    layout: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["sidebar", "compact"] }>({ maxLength: 32 }),
-    ),
     listed: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
     cards: /*#__PURE__*/ l.optional(
       /*#__PURE__*/ l.array(/*#__PURE__*/ l.string({ format: "record-key" }), { maxLength: 100 }),

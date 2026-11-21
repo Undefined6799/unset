@@ -27,6 +27,8 @@ The core shell is a skip link, a two-row header, the main region and a footer. T
 
 The bare shell is the main region alone, centred. The sign-in page uses it.
 
+The site and core headers stick to the top of the page as it scrolls. Each has a fixed height, which [`apps/web/app.css`](../../../apps/web/app.css) names as `--site-header-height`. The page's `scroll-padding-top` uses it, so an anchor lands below the header, and a bar that sticks under the header uses `top: var(--site-header-height)`. [`tests/e2e/sticky-header.spec.ts`](../../../tests/e2e/sticky-header.spec.ts) holds the drawn height and the variable equal.
+
 The theme form posts to `/prefs/theme`. Sign out posts to `/logout`. A changed privacy notice is a banner whose dismiss form posts to `/privacy-notice/seen`.
 
 ## UI pieces

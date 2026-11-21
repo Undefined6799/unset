@@ -69,6 +69,20 @@
 }
 
 @layer base {
+  /* The site header's height (+layout.svelte): it sticks to the top as the page scrolls (Alex, 2026-11-20), so an anchor
+   * or a focused field scrolls in below it (scroll-padding, CSS Scroll Snap 1 §4.1), and a bar that sticks under it uses
+   * top: var(--site-header-height). Each shell's header has this fixed height, rows and bottom border included; a
+   * test holds the two equal (tests/e2e/sticky-header.spec.ts). The bare shell has no header. */
+  :root {
+    --site-header-height: 0px;
+    scroll-padding-top: var(--site-header-height);
+  }
+  :root:has([data-site-header="core"]) {
+    --site-header-height: calc(4.5rem + 2.875rem + 1px);
+  }
+  :root:has([data-site-header="site"]) {
+    --site-header-height: 3.5rem;
+  }
   * {
     @apply border-border outline-ring/50;
   }
