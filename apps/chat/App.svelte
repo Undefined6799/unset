@@ -47,6 +47,14 @@ const WORDS = {
     text: "Enter your recovery key to read your messages in this browser.",
   },
   ready: { title: "Your messages", text: "" },
+  logging_out: {
+    title: "Logging out",
+    text: "Saving your keys so you can read your messages in another browser. This can take a few seconds.",
+  },
+  logged_out: {
+    title: "You are logged out",
+    text: "Nothing of your messages is left in this browser. Your recovery key opens them again in any browser.",
+  },
   signed_out: { title: "Signing you in again", text: "One moment." },
   error: { title: "Messages could not open", text: "Try again in a moment." },
 } as const;
@@ -169,6 +177,10 @@ onMount(() => {
       <Card.Content>
         <Conversations conversations={view.conversations} me={view.me} />
       </Card.Content>
+    {:else if view.kind === "logged_out"}
+      <Card.Content>
+        <Button href={hopPath("/")}>Open messages</Button>
+      </Card.Content>
     {:else if view.kind === "setup_elsewhere" || view.kind === "error"}
       <Card.Content class="flex flex-col items-start gap-4">
         {#if view.kind === "error"}
@@ -176,6 +188,13 @@ onMount(() => {
         {/if}
         <Button href={hopPath("/")}>Try again</Button>
       </Card.Content>
+    {/if}
+    {#if view.kind === "ready" || view.kind === "locked"}
+      <Card.Footer>
+        <Button variant="outline" onclick={() => (view.kind === "ready" || view.kind === "locked") && view.logOut()}>
+          Log out
+        </Button>
+      </Card.Footer>
     {/if}
   </Card.Root>
 </main>

@@ -68,7 +68,7 @@ export async function redeem(fetchFn: Fetch, ticket: string, deadline: AbortSign
 /** The door's 200 answer, checked field by field; null when any field is not what the door sends. */
 function signedIn(body: unknown): Redeemed | null {
   if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
-  const { accessToken, userId, deviceId, expiresAt, storageKey, returnTo } = body as Record<string, unknown>;
+  const { accessToken, userId, deviceId, expiresAt, storageKey, newDevice, returnTo } = body as Record<string, unknown>;
   if (typeof accessToken !== "string" || accessToken === "") return null;
   if (typeof userId !== "string" || !USER_ID.test(userId)) return null;
   if (typeof deviceId !== "string" || !DEVICE_ID.test(deviceId)) return null;
@@ -76,8 +76,13 @@ function signedIn(body: unknown): Redeemed | null {
   if (Number.isNaN(expiresAtMs)) return null;
   const key = typeof storageKey === "string" ? base64url(storageKey) : null;
   if (key === null || key.length !== 32) return null;
+  if (typeof newDevice !== "boolean") return null;
   if (typeof returnTo !== "string" || !returnTo.startsWith("/") || /^\/[/\\]/.test(returnTo)) return null;
-  return { kind: "signed_in", returnTo, session: { accessToken, userId, deviceId, expiresAtMs, storageKey: key } };
+  return {
+    kind: "signed_in",
+    returnTo,
+    session: { accessToken, userId, deviceId, expiresAtMs, storageKey: key, newDevice },
+  };
 }
 
 function base64url(text: string): Uint8Array | null {

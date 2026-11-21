@@ -54,7 +54,14 @@ test.afterEach(async () => {
   await stack.close();
 });
 
-type Redeemed = { accessToken: string; storageKey: string; deviceId: string; userId: string; ticket: string };
+type Redeemed = {
+  accessToken: string;
+  storageKey: string;
+  deviceId: string;
+  userId: string;
+  newDevice: boolean;
+  ticket: string;
+};
 
 /** A page that records each redeem (the ticket it sent, the session it got) and every CSP complaint. */
 async function open(browser: Browser, colorScheme: "light" | "dark" = "light") {
@@ -289,6 +296,55 @@ test("chat_page.second_browser_unlocks: another browser is locked, refuses a wro
   await second.page.getByRole("button", { name: "Unlock" }).click();
   await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("ready");
   expect(second.problems).toEqual([]);
+});
+
+/** The IndexedDB databases this origin holds for chat accounts (the SDK's two per account, client.ts storePrefix). */
+const chatStores = async (page: Page) => (await kept(page)).names.filter((n) => n.startsWith("unset-chat:"));
+
+test("chat_page.log_out: Log out waits for the backup, ends the device at the door and leaves no store behind", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, redeems, problems } = await open(browser);
+  await page.goto("https://unset.cc/");
+  await saveKey(page);
+  expect(await chatStores(page)).toHaveLength(2);
+  const signOuts: string[] = [];
+  page.on("request", (r) => r.url().endsWith("/sign-out") && signOuts.push(r.postData() ?? ""));
+  await page.getByRole("button", { name: "Log out" }).click();
+  expect(await state(page)).toBe("logging_out");
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("logged_out");
+  expect(signOuts).toEqual([JSON.stringify({ deviceId: redeems[0]?.deviceId })]);
+  // ADR 0083 decision 5 and build plan unverified item 3: clearStores with the account's prefix removes both of the
+  // Rust crypto store's databases.
+  expect(await chatStores(page)).toEqual([]);
+  // The next sign-in is a new device with a new lock key; the account is set up, so this browser is locked.
+  await page.getByRole("link", { name: "Open messages" }).click();
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
+  expect(redeems.map((r) => r.newDevice)).toEqual([true, true]);
+  expect(redeems[1]?.deviceId).not.toBe(redeems[0]?.deviceId);
+  expect(redeems[1]?.storageKey).not.toBe(redeems[0]?.storageKey);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.ended_device_wiped: a store left by a device ended elsewhere is wiped, and the new device opens", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, redeems } = await open(browser);
+  await page.goto("https://unset.cc/");
+  await saveKey(page);
+  stack.endAllSessions();
+  await page.goto("https://unset.cc/");
+  // The door finds the device ended and drops its entry; the next sign-in makes a new device for this browser.
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("error");
+  expect(await page.locator("main").textContent()).toContain("chat.device_ended");
+  await page.getByRole("link", { name: "Try again" }).click();
+  // Without the wipe the old store, sealed with a lock key that no longer exists, would refuse to open
+  // (chat.keys_unavailable).
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
+  expect(redeems.map((r) => r.newDevice)).toEqual([true, true]);
+  expect(await chatStores(page)).toHaveLength(2);
 });
 
 test("chat_page.unlock_before_setup_done: a browser whose account is half set up elsewhere is told so", async ({

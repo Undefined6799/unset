@@ -121,7 +121,7 @@ export function redeemRoute({ ports, serverName, random = randomBytes }: RouteSe
       const outcome = await redeem(ports, { ticket, state, browser: browser.key, deadline });
       if (outcome.kind === "refused") return answer(STATUS[outcome.code], { error: outcome.code }, headers);
       headers.append("set-cookie", setCookie(BROWSER_COOKIE, browser.value, BROWSER_MAX_AGE_S, "Strict"));
-      const { entry, token, expiresAtS } = outcome;
+      const { entry, token, expiresAtS, newDevice } = outcome;
       return answer(
         200,
         {
@@ -130,6 +130,7 @@ export function redeemRoute({ ports, serverName, random = randomBytes }: RouteSe
           deviceId: entry.device,
           expiresAt: new Date(expiresAtS * 1000).toISOString(),
           storageKey: Buffer.from(entry.lockKey).toString("base64url"),
+          newDevice,
           returnTo: returnPathOf(request),
         },
         headers,

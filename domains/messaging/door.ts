@@ -82,6 +82,9 @@ export type RedeemOutcome =
       readonly entry: BrowserEntry;
       readonly token: AccessToken;
       readonly expiresAtS: number;
+      /** True when this browser had no entry for the account: anything it kept for the account is from an ended
+       * device, whose lock key no longer exists, so the page wipes it (ADR 0083 decision 5). */
+      readonly newDevice: boolean;
     }
   | { readonly kind: "refused"; readonly code: RedeemRefusal };
 
@@ -112,7 +115,8 @@ export async function redeem(ports: DoorPorts, request: Request): Promise<Redeem
     await ports.end(ticket.user, minted.device, deadline);
     return entry;
   }
-  return { kind: "signed_in", entry: entry.entry, token: minted.token, expiresAtS: ports.nowS() + minted.expiresInS };
+  const expiresAtS = ports.nowS() + minted.expiresInS;
+  return { kind: "signed_in", entry: entry.entry, token: minted.token, expiresAtS, newDevice: existing === null };
 }
 
 /** Writes what a mint on `device` means for the list: the renewed entry, or a new one (rule DA-4: one statement). */
