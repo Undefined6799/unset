@@ -84,7 +84,7 @@ test("tooling_set_members", () => {
   for (const path of [
     "shared/http/main.ts",
     "shared/http/.h/leak.test.ts",
-    "scripts/ui/css-scope.ts",
+    "scripts/ui/tokens.ts",
     "apps/web/vite.config.ts",
     "shared/http/myfixtures/a.ts",
     "shared/http/vector.json",

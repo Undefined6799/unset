@@ -179,7 +179,8 @@
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
           "email_checked_at": ["SELECT", "UPDATE"],
-          "issuer_origin": ["SELECT", "INSERT"]
+          "issuer_origin": ["SELECT", "INSERT"],
+          "notifications_seen_at": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -275,7 +276,8 @@
           "did": ["SELECT"],
           "reason": ["SELECT"],
           "topic": ["SELECT"],
-          "created_at": ["SELECT"]
+          "created_at": ["SELECT"],
+          "seen": ["SELECT"]
         }
       }
     },
@@ -299,6 +301,16 @@
           "dedupe_key": ["SELECT", "INSERT"],
           "older_sessions_only": ["SELECT", "INSERT"],
           "created_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.sign_in": {
+      "web": {
+        "columns": {
+          "id": ["SELECT"],
+          "did": ["SELECT", "INSERT"],
+          "signed_in_at": ["SELECT"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -429,7 +441,8 @@
           "rev": ["SELECT", "INSERT", "UPDATE"],
           "record": ["SELECT", "INSERT", "UPDATE"],
           "position": ["SELECT", "INSERT", "UPDATE"],
-          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"],
+          "bytes": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -450,7 +463,9 @@
           "did": ["SELECT"],
           "rkey": ["SELECT"],
           "cid": ["SELECT"],
-          "record": ["SELECT"]
+          "record": ["SELECT"],
+          "position": ["SELECT"],
+          "bytes": ["SELECT"]
         }
       }
     },

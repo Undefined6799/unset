@@ -321,16 +321,16 @@ test("a_line_break_in_a_list_item_is_refused", async ({ page }) => {
   await page.keyboard.press("Escape");
 });
 
-// Codex review of #1827: the page shows a quote as one paragraph and a line break as a space, so neither a second
-// paragraph in a quote nor a line break in a paragraph is added.
-test("a_quote_keeps_one_paragraph_and_no_line_break_is_added", async ({ page }) => {
+// Codex review of #1827 kept a quote to one paragraph and refused line breaks while the page could show neither; since
+// P1.21s the page draws a quote's paragraphs and a hard line break, so both are kept.
+test("a_quote_keeps_its_paragraphs_and_shift_enter_breaks_the_line", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
   await paste(page, editor, "<p>a</p><blockquote><p>one</p><p>two</p></blockquote><p>b</p>");
   await editor.pressSequentially("typed");
-  await expect(postedText(dialog)).toHaveValue("typed");
+  await expect(postedText(dialog)).toHaveValue("a\n\n> one\n>\n> two\n\nbtyped");
   await editor.press("Shift+Enter");
   await editor.pressSequentially("more");
-  await expect(postedText(dialog)).toHaveValue("typedmore");
+  await expect(postedText(dialog)).toHaveValue("a\n\n> one\n>\n> two\n\nbtyped\\\nmore");
   await page.keyboard.press("Escape");
 });
 
@@ -446,7 +446,8 @@ test("the_in_place_toolbar_sticks_below_the_site_header", async ({ page }) => {
       .getByRole("link", { name: "Edit" })
       .getAttribute("href");
     await page.goto(new URL(href ?? "", page.url()).toString());
-    const editor = page.getByRole("textbox", { name: "Text" });
+    // Exact: the page's own in-place editor for the card is "Text of the Text card" (ADR 0074 item 4).
+    const editor = page.getByRole("textbox", { name: "Text", exact: true });
     await expect(editor).toHaveAttribute("contenteditable", "true");
     await editor.getByText("Paragraph 30 of a long text.").scrollIntoViewIfNeeded();
     const header = await page.locator("[data-site-header]").boundingBox();

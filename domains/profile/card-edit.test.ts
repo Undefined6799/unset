@@ -3,6 +3,7 @@ import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
 import { parseCardKey } from "./cards.ts";
+import { MAX_RECORD_BYTES } from "./index-plan.ts";
 
 const NOW = "2026-11-17T05:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
@@ -47,6 +48,10 @@ describe("parseCardInput", () => {
     });
   });
 
+  test("multi-line text keeps its tabs", () => {
+    expect(parseCardInput({ kind: "readme", text: "a\n\tb" })).toMatchObject({ ok: true, content: { text: "a\n\tb" } });
+  });
+
   test.each([
     [{ kind: "video" }, "card.kind_unknown"],
     [{ kind: "readme", text: "  " }, "card.required", "text"],
@@ -74,6 +79,12 @@ describe("parseCardInput", () => {
     [{ kind: "readme", text: "x", width: "third" }, "card.invalid"],
     [{ kind: "links", title: ["x"], items: [] }, "card.invalid", "title"],
     [{ kind: "links", title: "a\nb", items: [] }, "card.invalid", "title"],
+    // Staging break test 2026-11-21: the index leaves out a record with a NUL, so the save refuses it.
+    [{ kind: "readme", text: "a\u0000b" }, "card.invalid", "text"],
+    [{ kind: "readme", text: "a\ud800b" }, "card.invalid", "text"],
+    [{ kind: "links", title: "a\u0007b", items: [] }, "card.invalid", "title"],
+    [{ kind: "links", items: [{ uri: "https://a.example/", label: "a\u0000" }] }, "card.invalid", "items.0.label"],
+    [{ kind: "buttons", heading: "Hi", text: "a\u001bb", buttons: [] }, "card.invalid", "text"],
   ])("refuses %j with %s, naming the field to blame", (input, code, field?: string) => {
     expect(parseCardInput(input)).toEqual(field === undefined ? { ok: false, code } : { ok: false, code, field });
   });
@@ -93,6 +104,17 @@ describe("parseCardInput", () => {
     expect(parseCardInput({ kind: "links", items })).toEqual({ ok: false, code: "card.too_long" });
     const buttons = Array.from({ length: 6 }, () => ({ kind: "email", address: "a@b.example" }));
     expect(parseCardInput({ kind: "buttons", heading: "Hi", buttons })).toEqual({ ok: false, code: "card.too_long" });
+  });
+});
+
+// What the save accepts, the index keeps (book P3.12v): a record the index would skip is refused at save, the stored
+// fields an edit keeps included, so the owner never sees a card the public page leaves out.
+describe("a card the index would leave out is refused at save", () => {
+  test("kept fields past the index's size refuse the edit as too long", () => {
+    const input = parseCardInput({ kind: "readme", text: "hi" });
+    if (!input.ok) throw new Error(input.code);
+    const existing = stored({ $type: ref("readme"), text: "old" }, { note: "x".repeat(MAX_RECORD_BYTES) });
+    expect(toCardRecord(input.content, input.width, existing, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 });
 

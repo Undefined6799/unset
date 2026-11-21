@@ -85,6 +85,9 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
           url: `${config.PUBLIC_ORIGIN}${canonical}`,
         }
       : null,
+    // The owner looking at their own public page gets a plain link back to the page they edit; the hook keeps a
+    // member's copy private and never stored (hooks.server.ts), so no one else's copy carries it.
+    editHref: viewer === "owner" ? `/${did}` : null,
     // Who else sees the page, when not everyone does (ADR 0078).
     audience: visibility === "public" ? null : visibility,
     ...who,

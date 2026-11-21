@@ -120,6 +120,12 @@ const post = (path: string, fields: Record<string, string>, cookie: string, orig
     },
   });
 const html = async (path: string, cookie: string) => (await get(path, cookie)).text();
+/** A visit as a browser sends it, with its Fetch Metadata: from our own page unless `extra` says otherwise. */
+const visit = async (
+  path: string,
+  cookie: string,
+  extra: Record<string, string> = { "sec-fetch-site": "same-origin" },
+) => (await web.fetch(path, { headers: { "x-forwarded-for": clientAddress(), cookie, ...extra } })).text();
 /** The ids the page's forms carry, once each (the bell and the page both list them, newest first). */
 const listed = (page: string): string[] => [
   ...new Set([...page.matchAll(/name="(?:id|upTo)" value="([^"]+)"/g)].map((m) => m[1] ?? "")),
@@ -139,10 +145,10 @@ describe("the bell and the notifications page", () => {
   test("notifications.sign_in_shows_on_the_older_browser_with_its_count", async () => {
     const { did, cookie: laptop } = await member();
     const phone = await signInElsewhere(did);
+    // The bell on every page: the count in the button's name, and the newest few.
+    expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
     const page = await html("/notifications", laptop);
     expect(page).toContain(SIGN_IN);
-    // The bell on every page: the count in the button's name, and the newest few.
-    expect(page).toContain("Notifications, 1 waiting");
     expect(listed(page)[0]).toMatch(/^[0-9a-f-]{36}$/);
     const other = await html("/notifications", phone);
     expect(other).not.toContain(SIGN_IN);
@@ -171,6 +177,65 @@ describe("the bell and the notifications page", () => {
     await post("/notifications?/dismiss", { id: id as string }, thief);
     await post("/notifications?/dismissAll", { upTo: id as string }, thief);
     expect(await html("/notifications", laptop)).toContain(SIGN_IN);
+  });
+
+  test("notifications.opening_the_page_clears_this_browsers_count_until_a_newer_entry", async () => {
+    // ADR 0085 (Alex 2026-11-21 05:16Z): seeing the list is acknowledging it; the entries stay until dismissed.
+    const { did, cookie: laptop } = await member();
+    const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did));
+    const phone = `__Host-sid=${created.cookieValue}`;
+    await notice(did, "seen-1");
+    expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
+    const page = await visit("/notifications", laptop);
+    expect(page).not.toMatch(WAITING); // the bell on the page itself reads nothing waiting
+    expect(page).toContain("Read the privacy notice");
+    expect(await html("/legal/terms", laptop)).not.toMatch(WAITING);
+    // Another browser of the member's still counts it.
+    expect(await html("/legal/terms", phone)).toContain("Notifications, 1 waiting");
+    await new Promise((done) => setTimeout(done, 3));
+    await notice(did, "seen-2");
+    expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
+    expect(await html("/legal/terms", phone)).toContain("Notifications, 2 waiting");
+  });
+
+  test("notifications.only_a_visit_from_our_pages_or_a_typed_address_marks_seen", async () => {
+    // Review of #1910: with SameSite=Lax another site's link still carries the cookie, so it must not clear the badge.
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    const ignored: Record<string, string>[] = [
+      { "sec-fetch-site": "cross-site" },
+      { "sec-fetch-site": "same-site" },
+      {}, // no Fetch Metadata at all
+      { "sec-fetch-site": "same-origin", "sec-purpose": "prefetch" },
+      { "sec-fetch-site": "same-origin", "sec-purpose": "prefetch;prerender" },
+      { "sec-fetch-site": "none", purpose: "prefetch" },
+    ];
+    for (const headers of ignored) {
+      const page = await visit("/notifications", cookie, headers);
+      expect(page).toContain(SIGN_IN);
+      expect(page).toContain("Notifications, 1 waiting");
+    }
+    expect(await html("/legal/terms", cookie)).toContain("Notifications, 1 waiting");
+    await visit("/notifications", cookie, { "sec-fetch-site": "none" }); // typed or bookmarked
+    expect(await html("/legal/terms", cookie)).not.toMatch(WAITING);
+  });
+
+  test("notifications.opening_the_bell_marks_seen_in_this_browser_only", async () => {
+    const { did, cookie: laptop } = await member();
+    const thief = await signInElsewhere(did);
+    const [id] = listed(await html("/legal/terms", laptop));
+    // The browser the sign-in is about cannot see it, so its mark does not clear the laptop's badge.
+    const refused = await post("/notifications?/seen", { upTo: id as string }, thief);
+    expect(refused.status).toBe(303);
+    expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
+    // Another site's form is refused by the gate.
+    const forged = await post("/notifications?/seen", { upTo: id as string }, laptop, "https://evil.example");
+    expect(forged.status).toBe(403);
+    expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
+    await post("/notifications?/seen", { upTo: id as string }, laptop);
+    const after = await html("/legal/terms", laptop);
+    expect(after).not.toMatch(WAITING);
+    expect(after).toContain(SIGN_IN); // still listed until dismissed
   });
 
   test("notifications.viewing_or_showing_an_entry_changes_nothing", async () => {

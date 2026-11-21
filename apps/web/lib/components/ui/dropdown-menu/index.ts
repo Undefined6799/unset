@@ -7,6 +7,8 @@ import GroupHeading from "./dropdown-menu-group-heading.svelte";
 import Item from "./dropdown-menu-item.svelte";
 import Label from "./dropdown-menu-label.svelte";
 import Portal from "./dropdown-menu-portal.svelte";
+import RadioGroup from "./dropdown-menu-radio-group.svelte";
+import RadioItem from "./dropdown-menu-radio-item.svelte";
 import Separator from "./dropdown-menu-separator.svelte";
 import Shortcut from "./dropdown-menu-shortcut.svelte";
 import Sub from "./dropdown-menu-sub.svelte";
@@ -31,6 +33,10 @@ export {
   Label,
   Portal,
   Portal as DropdownMenuPortal,
+  RadioGroup,
+  RadioGroup as DropdownMenuRadioGroup,
+  RadioItem,
+  RadioItem as DropdownMenuRadioItem,
   Root as DropdownMenu,
   Root,
   Separator as DropdownMenuSeparator,
