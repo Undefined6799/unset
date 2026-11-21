@@ -58,7 +58,7 @@ export async function writeText(editor: Locator, blocks: readonly string[]) {
     await expect(editor).toHaveText("", { timeout: 500 });
   }).toPass();
   for (const [i, block] of blocks.entries()) {
-    if (i > 0) await editor.press("Enter");
+    if (i > 0) await editor.press("Shift+Enter");
     await editor.pressSequentially(block);
   }
 }

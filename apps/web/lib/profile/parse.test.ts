@@ -346,3 +346,66 @@ describe("what the in-place editor writes (P1.21s)", () => {
     ]);
   });
 });
+
+// Alex 2026-11-21: "bare addresses become https". GFM 0.29 "Autolinks (extension)", as micromark-extension-gfm-autolink-
+// literal 2.1.0 reads it (dev/lib/syntax.js), which is what the editor reads: the page links the same words.
+describe("bare addresses", () => {
+  const link = (href: string, words: string) => ({ kind: "link", href, children: [text(words)] });
+
+  test("an address and a www name are links, and www opens over https", () => {
+    expect(parseInline("see https://example.com/a and www.example.org.")).toEqual([
+      text("see "),
+      link("https://example.com/a", "https://example.com/a"),
+      text(" and "),
+      link("https://www.example.org/", "www.example.org"),
+      text("."),
+    ]);
+  });
+
+  test("closing punctuation after an address is not part of it", () => {
+    expect(parseInline("(see https://example.com/a_(b)), then http://x.example/?q=1!")).toEqual([
+      text("(see "),
+      link("https://example.com/a_(b)", "https://example.com/a_(b)"),
+      text("), then "),
+      link("http://x.example/?q=1", "http://x.example/?q=1"),
+      text("!"),
+    ]);
+  });
+
+  test("an address ends at a space or a <, and a trailing &name; is not part of it", () => {
+    expect(parseInline("www.a.example/x&amp; and https://b.example<c")).toEqual([
+      link("https://www.a.example/x", "www.a.example/x"),
+      text("&amp; and "),
+      link("https://b.example/", "https://b.example"),
+      text("<c"),
+    ]);
+  });
+
+  test("an address inside emphasis is a link inside it", () => {
+    expect(parseInline("*www.example.org*")).toEqual([
+      { kind: "em", children: [link("https://www.example.org/", "www.example.org")] },
+    ]);
+  });
+
+  test("what is not an address stays text", () => {
+    for (const words of [
+      "awww.example.org",
+      "xhttps://example.org",
+      "www.",
+      "https://",
+      "www.a_b.example_c",
+      "https://exa_mple.com",
+      "ftp://example.org",
+      "`https://example.org`",
+    ]) {
+      expect(
+        parseInline(words).some((node) => node.kind === "link"),
+        words,
+      ).toBe(false);
+    }
+  });
+
+  test("an address inside a link's words is not a second link", () => {
+    expect(parseInline("[www.a.example](https://b.example/)")).toEqual([link("https://b.example/", "www.a.example")]);
+  });
+});

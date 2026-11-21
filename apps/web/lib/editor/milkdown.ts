@@ -32,6 +32,7 @@ import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
+import { enterKeys } from "./enter-keys.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 
 /** The toolbar's actions, by name. */
@@ -484,6 +485,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .use(changes)
     .use(dropLine)
     .use(gapCaret)
+    .use(enterKeys)
     .create();
   return {
     run: (command) =>
