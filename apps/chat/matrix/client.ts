@@ -14,12 +14,19 @@ import {
   CryptoEvent,
   OnlySignedDevicesIsolationMode,
 } from "matrix-js-sdk/lib/crypto-api/index.js";
-import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
+import {
+  ClientEvent,
+  createClient,
+  HttpApiEvent,
+  type MatrixClient,
+  RoomEvent,
+  SyncState,
+} from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations } from "./conversation-service.ts";
-import { BACKUP_WAIT_MS, backupSettled } from "./log-out.ts";
+import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
   createKeyHolder,
@@ -97,6 +104,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     },
   };
   const tell = (state: ChatState) => stopped || options.onState(state);
+  const backup = followBackup(client);
   client.on(HttpApiEvent.SessionLoggedOut, () => {
     chat.stop();
     options.onSignedOut();
@@ -142,7 +150,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const logOut = async () => {
     busy = true;
     tell({ kind: "logging_out" });
-    await backupSettled(client, BACKUP_WAIT_MS);
+    await backup.settled(BACKUP_WAIT_MS);
     chat.stop();
     if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
     await client.clearStores({ cryptoDatabasePrefix });
@@ -200,6 +208,27 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   client.on(CryptoEvent.DevicesUpdated, (users) => users.includes(session.userId) && void report());
   await report();
   return chat;
+}
+
+/**
+ * To-device types that carry a room key to this device (Matrix spec v1.16,
+ * https://spec.matrix.org/v1.16/client-server-api/#mroom_key and #mforwarded_room_key).
+ */
+const ROOM_KEY_TYPES = new Set(["m.room_key", "m.forwarded_room_key"]);
+
+/**
+ * The backup's own events, and the new room keys it has to upload, fed to Log out's watch (log-out.ts) from before the
+ * crypto starts, so the enable at start is seen. The to-device message arrives decrypted (src/sync.ts:2041-2093,
+ * src/sync-accumulator.ts:171-179); a local echo is this browser sending, which makes or uses its room key
+ * (src/models/room.ts:2846, re-emitted on the client, src/sync.ts:1964-1970).
+ */
+function followBackup(client: MatrixClient): BackupWatch {
+  const watch = watchBackup();
+  client.on(CryptoEvent.KeyBackupStatus, watch.enabled);
+  client.on(CryptoEvent.KeyBackupSessionsRemaining, watch.remaining);
+  client.on(ClientEvent.ReceivedToDeviceMessage, ({ message }) => ROOM_KEY_TYPES.has(message.type) && watch.keyMade());
+  client.on(RoomEvent.LocalEchoUpdated, () => watch.keyMade());
+  return watch;
 }
 
 /** Resolves true on the first PREPARED or SYNCING (src/sync.ts:80-92), false at the deadline. */
