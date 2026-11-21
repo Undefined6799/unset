@@ -436,7 +436,7 @@ async function putSection(tx: PoolClient, did: string, rev: string, write: Extra
      VALUES ($1, $2::types.did, $3, $4, $5, $6, $7, (
        SELECT (o.ord - 1)::integer FROM idx.profile p,
               jsonb_array_elements(p.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
-        WHERE p.did = $2::types.did AND o.ref ->> 'uri' = $1 ORDER BY o.ord LIMIT 1), now())
+        WHERE p.did = $2::types.did AND o.ref ->> 'uri' = $1::types.at_uri::text ORDER BY o.ord LIMIT 1), now())
      ON CONFLICT (uri) DO UPDATE SET cid = excluded.cid, rev = excluded.rev, record = excluded.record,
        bytes = excluded.bytes, position = excluded.position, indexed_at = excluded.indexed_at
      WHERE excluded.rev >= idx.section.rev AND idx.section.did = excluded.did`,
