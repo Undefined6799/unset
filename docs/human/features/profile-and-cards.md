@@ -7,7 +7,9 @@ A member's profile and cards are records in that member's own repository. The me
 - [`interfaces/web/src/routes/[did=did]/`](../../../interfaces/web/src/routes/[did=did]) is the member's own page, at `/<DID>`. It loads the profile and cards from the member's PDS. Its form actions create, edit, delete and reorder cards, and save the avatar shape. A path that is not a DID, or another member's DID, is a 404. A visitor is sent to sign in.
 - [`interfaces/web/src/routes/profile/`](../../../interfaces/web/src/routes/profile) is `POST /profile`, the one profile save. It has no page: a GET is a 404. The DID is the session's.
 - [`interfaces/web/src/routes/settings/profile/`](../../../interfaces/web/src/routes/settings/profile) is the settings page. The profile form posts to `/profile`, and the save returns to `/settings/profile?saved`, so the page says it saved even with no script. Search and AI is on Settings › Privacy ([public indexing](public-indexing.md)).
-- [`interfaces/web/src/routes/@[actor]/`](../../../interfaces/web/src/routes/@[actor]) is the public page. It reads the index, not the PDS.
+- [`interfaces/web/src/routes/@[actor]/`](../../../interfaces/web/src/routes/@[actor]) is the public page. It reads the index, not the PDS. The own page's View as public link opens it at `/@<DID>`.
+
+Both pages draw the same profile header ([ADR 0077](../decisions/0077-one-profile-layout.md)): the avatar and display name above the cards. The avatar opens the About panel, a native popover with the headline, handle, place, website, DID and the first Contact button. Click, tap, Enter or Space opens it, with or without script; hover does not.
 
 ## Operation
 
@@ -38,7 +40,7 @@ Unit tests sit beside the server and domain files (`own-profile.server.test.ts`,
 
 Integration: [`tests/integration/web/app/own-page.test.ts`](../../../tests/integration/web/app/own-page.test.ts), [`member-page.test.ts`](../../../tests/integration/web/app/member-page.test.ts), [`tests/integration/web/settings/profile-save.test.ts`](../../../tests/integration/web/settings/profile-save.test.ts), [`settings.test.ts`](../../../tests/integration/web/settings/settings.test.ts).
 
-End to end: [`tests/e2e/cards.spec.ts`](../../../tests/e2e/cards.spec.ts), [`cards-nojs.spec.ts`](../../../tests/e2e/cards-nojs.spec.ts), [`profile-layout.spec.ts`](../../../tests/e2e/profile-layout.spec.ts), [`profile-carousel.spec.ts`](../../../tests/e2e/profile-carousel.spec.ts), [`profile-refusals.spec.ts`](../../../tests/e2e/profile-refusals.spec.ts).
+End to end: [`tests/e2e/cards.spec.ts`](../../../tests/e2e/cards.spec.ts), [`cards-nojs.spec.ts`](../../../tests/e2e/cards-nojs.spec.ts), [`profile-layout.spec.ts`](../../../tests/e2e/profile-layout.spec.ts), [`profile-header.spec.ts`](../../../tests/e2e/profile-header.spec.ts), [`profile-carousel.spec.ts`](../../../tests/e2e/profile-carousel.spec.ts), [`profile-refusals.spec.ts`](../../../tests/e2e/profile-refusals.spec.ts).
 
 ## When it is off or replaced
 

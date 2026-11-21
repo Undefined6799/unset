@@ -6,8 +6,6 @@ export type CardLayout = "list" | "carousel" | "grid";
 /** How the avatar is cropped (sh.unset.profile avatarShape). */
 export type AvatarShape = "round" | "roundedSquare";
 export type CardSurface = "filled" | "outlined" | "plain";
-/** How the profile page is laid out (sh.unset.profile layout, ADR 0072). */
-export type ProfileLayout = "sidebar" | "compact";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
 

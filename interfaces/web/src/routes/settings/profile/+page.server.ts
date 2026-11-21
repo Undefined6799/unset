@@ -4,14 +4,7 @@
 // request's (SE-2). Every stored field is checked on the way in (domains/profile readProfileRecord): one another client
 // wrote badly reads as empty. A dead grant sends the member to sign in; any other failed read shows no form.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
-import {
-  APP_LIMITS,
-  EMPTY_PROFILE,
-  type ProfileFields,
-  type ProfileLayout,
-  readProfileLayout,
-  readProfileRecord,
-} from "@unset/domains-profile";
+import { APP_LIMITS, EMPTY_PROFILE, type ProfileFields, readProfileRecord } from "@unset/domains-profile";
 import { loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
 import { pdsSignInRedirect } from "../../../lib/server/pds-failure.ts";
@@ -23,13 +16,10 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   const ctx = { memo: new Map(), deadline: locals.deadline, deadlineAt: locals.deadlineAt };
   const read = await loadProfileRecord(services().pds.pdsCall, ctx, did);
-  let profile: (ProfileFields & { readonly layout: ProfileLayout }) | null = null;
+  let profile: ProfileFields | null = null;
   if (read.kind === "ok") {
     const stored = read.value?.value;
-    profile = {
-      ...(stored === undefined ? EMPTY_PROFILE : readProfileRecord(stored)),
-      layout: readProfileLayout(stored),
-    };
+    profile = stored === undefined ? EMPTY_PROFILE : readProfileRecord(stored);
   } else {
     const location = pdsSignInRedirect(read);
     if (location !== null) redirect(303, location);
