@@ -1,6 +1,6 @@
 # 0091 — Idle plain chats are deleted by chat-admin, with a Synapse admin session it mints through MAS for each run and revokes at its end
 
-Status: Proposed 2026-11-21 (P6.04a, build step 11 of the minimal chat build), awaiting Alex. The credential model is
+Status: Accepted by Alex 2026-11-21 ("accept" in the chat build thread, 17:40Z); proposed 2026-11-21 (P6.04a, build step 11 of the minimal chat build). The credential model is
 Alex's call of 2026-11-21 13:52Z on a decision card (option A): `chat-admin` mints a short-lived session with Synapse
 admin scope through MAS for a dedicated service user on each run, uses it for that run only and never stores it, and
 a scheduled job in `web` triggers it with a new fixed, signed `chat-admin` command. Carries out the "idle plain rooms

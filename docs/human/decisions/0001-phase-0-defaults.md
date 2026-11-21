@@ -742,5 +742,5 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0091](0091-idle-plain-chats-deleted-by-chat-admin.md)):** a fixed, signed `rooms.sweep` command from a scheduled
   web job makes chat-admin mint a two-minute Synapse admin session for a service user through MAS, delete each plain
   room with no event for 30 days (purge, no block), never touch an encrypted room, and revoke the session at the end;
-  chat-admin gains a network path to Synapse. Amends ADR 0081 decisions 1, 5 and 6 and ADR 0086 decision 4. Proposed,
-  awaiting Alex.
+  chat-admin gains a network path to Synapse. Amends ADR 0081 decisions 1, 5 and 6 and ADR 0086 decision 4. Accepted
+  by Alex 2026-11-21.
