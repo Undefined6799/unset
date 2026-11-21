@@ -22,7 +22,7 @@ import type { Config } from "@unset/shared-config";
 import { createClientIpResolver, createRateLimiter, definePolicies } from "@unset/shared-http";
 import type { schema } from "./config.ts";
 import { createCountDoor, NOTIFY_PATH } from "./count.ts";
-import { createDoor, type DoorLog } from "./door.ts";
+import { createDoor, type DoorLog, type PostPath, type PostRoute } from "./door.ts";
 import { createListener } from "./listener.ts";
 import type { ChatPage } from "./page.ts";
 import {
@@ -114,7 +114,7 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
         contacts: createChatContactStore(pool),
         serverName: config.CHAT_SERVER_NAME,
       }),
-    },
+    } satisfies Record<PostPath, PostRoute>,
   });
   const count = createCountDoor({ keys, log: logs.request, deadlineMs: config.REQUEST_DEADLINE_MS });
   return {

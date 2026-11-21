@@ -24,7 +24,7 @@ const RETURN_PATH = "/sign-in/return";
 const SIGN_OUT_RETURN_PATH = "/sign-out/return";
 const SIGNED_OUT_PATH = "/sign-out/done";
 /** A profile's Message link, `/dm/<did>` (ADR 0082 decision 6): the page, which asks for the chat ID once signed in. */
-const DM_PREFIX = "/dm/";
+export const DM_PREFIX = "/dm/";
 const DM_ROUTE = "/dm/*";
 /** The page for signup's chat step (ADR 0083 decision 2): it sets up chat, then sends the tab back through WELCOME_DONE. */
 const WELCOME_PATH = "/welcome";
@@ -39,6 +39,21 @@ export type PostRoute = {
 };
 /** What a route answers: the response, and the reason word its log line carries, if any. */
 export type DoorAnswer = { readonly response: Response; readonly reason?: string };
+
+/**
+ * Every POST route's path, the routes in routes.ts that compose.ts wires (it must name exactly these). The unset.cc
+ * edge lets through these and the GET routes but /health (tests/integration/chat-auth/edge-routes.test.ts).
+ */
+export const POST_PATHS = [
+  "/sign-in/redeem",
+  "/sign-out/redeem",
+  "/sign-out",
+  "/setup/claim",
+  "/setup/release",
+  "/push/key",
+  "/chat-id",
+] as const;
+export type PostPath = (typeof POST_PATHS)[number];
 
 export type DoorDeps = {
   /** PUBLIC_ORIGIN: the door's own origin, which the CSRF gate matches exactly. */
@@ -152,6 +167,8 @@ const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   [ASSETS]: { limit: "default", handle: pageFile },
   [DM_ROUTE]: { limit: "default", handle: dmPage },
 };
+/** Every GET route's template: its exact path, ASSETS or DM_ROUTE. */
+export const GET_ROUTES: readonly string[] = Object.keys(GETS);
 
 /** The route a path falls under: its own, the built files' or the Message link's, or "/*" for everything else. */
 function routeOf(path: string, posts: DoorDeps["posts"]): string {
