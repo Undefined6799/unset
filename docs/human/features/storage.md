@@ -1,6 +1,6 @@
 # Storage
 
-One object store holds blobs. Today the PDS uses it for members' blobs. The app has a client and does not call it.
+One object store holds blobs. Today the PDS uses it for members' blobs. Picture uploads keep drafts there, and the media process serves signed preview links from it.
 
 ## Route
 
@@ -8,7 +8,7 @@ There is no web route. The store is the `objects` service in the compose files, 
 
 ## Operation
 
-Nothing under `interfaces/` or `apps/` calls the store. The app's client is [`infrastructure/storage/object-store.ts`](../../../infrastructure/storage/object-store.ts): `createObjectStore` signs each call with `aws4fetch` 1.0.20 and sends it through net-guard's `object-store` policy. No caller passes that fetch in yet.
+The client is [`infrastructure/storage/object-store.ts`](../../../infrastructure/storage/object-store.ts): `createObjectStore` signs each call with `aws4fetch` 1.0.20 and sends it through net-guard's `object-store` policy. [`interfaces/web/src/lib/server/compose.ts`](../../../interfaces/web/src/lib/server/compose.ts) calls it for the `drafts` store, and [`interfaces/media/compose.ts`](../../../interfaces/media/compose.ts) calls it for reads. Picture uploads keep drafts there, and the media process serves signed preview links from it.
 
 ## Domain rules
 
@@ -32,6 +32,6 @@ None.
 
 ## When it is off or replaced
 
-With the store down, the PDS cannot store or serve blobs, avatars included. The app does not call the store, so its pages do not read or write objects themselves.
+With the store down, the PDS cannot store or serve blobs, avatars included, and picture uploads cannot keep a draft or serve its preview.
 
 A production store is not configured yet. The client and the PDS speak plain S3, so a later hosted endpoint would be a configuration change. That swap is unverified: no production configuration exists.

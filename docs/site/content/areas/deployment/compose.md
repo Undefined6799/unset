@@ -3,21 +3,25 @@ title: Compose
 weight: 1
 ---
 
-The files the wrapper starts. `deployment/compose.dev.yaml` is the homelab file. `deployment/compose.dev.source.yaml` is that file with five services built from the checkout. `deployment/compose.local.yaml` is the throwaway file on one machine. There is no `compose.prod.yaml` on the tree.
+The files the wrapper starts. `deployment/compose.dev.yaml` is the homelab file. `deployment/compose.dev.source.yaml` is that file with the built services taken from the checkout. `deployment/compose.local.yaml` is the throwaway file on one machine. There is no `compose.prod.yaml` on the tree.
 
 ## Owns
 
 `deployment/compose.dev.yaml` and `deployment/compose.dev.source.yaml` (`name: unset-dev`) and `deployment/compose.local.yaml` (`name: unset-local`). All three are read by the preflight's parser (`deployment/preflight/compose-parse.ts`), not by `docker compose config`. The file headers state the subset that parser accepts: no interpolation outside `environment` (local also allows it in network aliases), no `healthcheck`, no `command`.
 
-`compose.dev.yaml` runs each service's `deployment/images.lock.json` ref, by digest, and has no `build:` key. `compose.dev.source.yaml` replaces `image:` with the local `build:` on `postgres`, `migrate`, `pds`, `edge` and `web`, and leaves `newt` on the lock ref (`deployment/compose.dev.source.test.ts`). Local builds from the checkout except `pds-token-reader`. [ADR 0033](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0033-image-signing-keyless.md) is the signing record. [ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md) and [ADR 0032](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0032-self-signed-dev-edge.md) are the dev edge and Newt records. [ADR 0036](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0036-staging-builds-from-source.md) is the `--source` record.
+`compose.dev.yaml` runs each service's `deployment/images.lock.json` ref, by digest, and has no `build:` key. `compose.dev.source.yaml` replaces `image:` with the local `build:` on `postgres`, `migrate`, `pds`, `edge`, `web` and `objects`, adds `pds-admin`, `indexer` and `review` (`SOURCE_ONLY_SERVICES` in `deployment/preflight/local-only.ts`), and leaves `newt` on the lock ref (`deployment/compose.dev.source.test.ts`). Local builds those same services from the checkout and adds `pds-token-reader`, whose image is the locked Node image with no Dockerfile. [ADR 0033](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0033-image-signing-keyless.md) is the signing record. [ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md) and [ADR 0032](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0032-self-signed-dev-edge.md) are the dev edge and Newt records. [ADR 0036](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0036-staging-builds-from-source.md) is the `--source` record.
 
 | Service | `compose.dev.yaml` | `compose.dev.source.yaml` | `compose.local.yaml` |
 | --- | --- | --- | --- |
 | `postgres` | lock ref, image | same build as local | `deployment/images/postgres.Dockerfile` |
 | `migrate` | lock ref, image | same build as local | `deployment/images/migrate.Dockerfile` |
-| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5051` image with its whole `@atproto/oauth-provider-ui` dist replaced: sign-in, consent, account and error pages (ADR 0027, P2.24y) | same build as local | built from `deployment/pds/Dockerfile` |
+| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5051` image with its whole `@atproto/oauth-provider-ui` dist replaced: sign-in, consent, account and error pages (ADR 0027, P2.24y) | same build as local | `deployment/pds/pds.Dockerfile`, context `.` |
 | `edge` | lock ref, image | same build as local | `deployment/edge/Dockerfile`, context `deployment/edge` |
 | `web` | lock ref, image | same build as local | `deployment/images/node-app.Dockerfile` |
+| `objects` | lock ref, image | same build as local | `deployment/images/objects.Dockerfile` |
+| `pds-admin` | absent (`SOURCE_ONLY_SERVICES`) | `deployment/images/pds-admin.Dockerfile` | same build as source |
+| `indexer` | absent (`SOURCE_ONLY_SERVICES`) | `deployment/images/indexer.Dockerfile` | same build as source |
+| `review` | absent (`SOURCE_ONLY_SERVICES`) | `deployment/images/review.Dockerfile` | same build as source |
 | `newt` | lock ref, image. Address `10.250.37.2` on `newt_edge` | same image as dev | absent |
 | `pds-token-reader` | absent | absent | `docker.io/library/node:26-trixie-slim` by the `bases.lock.json` digest. Profile `tools`, `network_mode: none` |
 
@@ -25,7 +29,7 @@ The files the wrapper starts. `deployment/compose.dev.yaml` is the homelab file.
 
 All three files set `user`, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, and `mem_limit`, `cpus`, `pids_limit`. The edge is the service with `cap_add: [NET_BIND_SERVICE]`. The numbers are `deployment/limits.dev.json`.
 
-`deployment/preflight/local-only.ts` names what only one file may hold. `LOCAL_ONLY_SERVICES` is `pds-token-reader`. `DEV_ONLY_SERVICES` is `newt`. `DEV_ONLY_NETWORKS` is `newt_edge` and `newt_egress`. `LOCAL_ONLY_NETWORKS` is empty. `LOCAL_ONLY_KEY_NAMES` is `OAUTH_ALLOW_HTTP` and `NETGUARD_ALLOW_LOOPBACK`.
+`deployment/preflight/local-only.ts` names what only one file may hold. `LOCAL_ONLY_SERVICES` is `pds-token-reader`. `DEV_ONLY_SERVICES` is `newt`. `DEV_ONLY_NETWORKS` is `newt_edge` and `newt_egress`. `SOURCE_ONLY_SERVICES` is `pds-admin`, `indexer` and `review`: they are in `compose.local.yaml` and `compose.dev.source.yaml`, and absent from `compose.dev.yaml`. `LOCAL_ONLY_NETWORKS` is empty. `LOCAL_ONLY_KEY_NAMES` is `OAUTH_ALLOW_HTTP` and `NETGUARD_ALLOW_LOOPBACK`.
 
 Networks, from `deployment/networks.dev.json`. Under local, C17 leaves the two dev-only rows out.
 
