@@ -734,3 +734,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Chat page served by the door (P6.06, 2026-11-21; own record: [0088](0088-chat-page-served-by-the-door.md)):**
   the door on unset.cc serves the static chat page, which redeems the sign-in ticket in its own tab, keeps the
   session in memory only, and renews by running the hop again. Accepted by Alex 2026-11-21.
+- **One browser runs recovery-key setup (P6.08, 2026-11-21; own record:
+  [0089](0089-one-browser-runs-recovery-key-setup.md)):** the door keeps a 15-minute claim so only one browser at a
+  time makes an account's recovery key; the key is shown and checked before the vault is written. Accepted by Alex
+  2026-11-21.

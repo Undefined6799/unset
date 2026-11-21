@@ -1,5 +1,5 @@
 // The door's composition root (build step 6; rule AB-2): the one place its parts are built. Its limits are its own:
-// a sign-in hop per client every few seconds, and a looser bucket for the chat page, its files, health and Log out. Before
+// a sign-in hop per client every few seconds, and a looser bucket for the chat page, its files, health, Log out and the setup claim. Before
 // it answers anything the pool must fit the role's connection limit across replicas, and the door's key must be
 // Ed25519, or it does not start.
 import { createPrivateKey, randomBytes, randomUUID } from "node:crypto";
@@ -11,6 +11,7 @@ import {
   connectionOf,
   createBrowserListStore,
   createPool,
+  createSetupClaimStore,
   withClient,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
@@ -20,7 +21,7 @@ import type { schema } from "./config.ts";
 import { createDoor, type DoorLog } from "./door.ts";
 import { createListener } from "./listener.ts";
 import type { ChatPage } from "./page.ts";
-import { redeemRoute, signOutRoute } from "./routes.ts";
+import { redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
 
 /** The largest body the door reads: a redeem's ticket, about 600 bytes of JSON, with room to spare. */
 const BODY_CAP = 4096;
@@ -69,6 +70,7 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
     newId: randomUUID,
     nowS: () => Math.floor(Date.now() / 1000),
   };
+  const setup = { list: ports.list, claims: createSetupClaimStore(pool) };
   const handle = createDoor({
     origin: config.PUBLIC_ORIGIN,
     webOrigin: config.WEB_ORIGIN,
@@ -81,6 +83,8 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
     posts: {
       "/sign-in/redeem": redeemRoute({ ports, serverName: config.CHAT_SERVER_NAME }),
       "/sign-out": signOutRoute({ ports }),
+      "/setup/claim": setupClaimRoute(setup),
+      "/setup/release": setupReleaseRoute(setup),
     },
   });
   return { listener: createListener(config.PUBLIC_ORIGIN, BODY_CAP, handle), handle, close: () => pool.end() };

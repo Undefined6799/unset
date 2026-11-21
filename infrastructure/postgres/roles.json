@@ -131,7 +131,7 @@
       "statement_timeout": "2s"
     },
     "createdBy": "P6.03",
-    "grantsBy": ["P6.03"],
+    "grantsBy": ["P6.03", "P6.08"],
     "passwordFrom": null
   },
   {

@@ -102,6 +102,7 @@ export {
   type SealedRow,
   sealedColumns,
 } from "./sealedColumns.ts";
+export { createSetupClaimStore } from "./setupClaimStore.ts";
 export {
   createSingleUseStore,
   type Db,
