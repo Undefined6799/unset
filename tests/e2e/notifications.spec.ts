@@ -146,6 +146,24 @@ test.describe("sign-in history", () => {
   });
 });
 
+test.describe("sign-in history on a phone", () => {
+  // Staging break test 2026-11-21 (u8): the time was cut to "Nov 20, 2026 ..." and Delete all sat on a line of its own.
+  test.use({ viewport: { width: 390, height: 844 } });
+  const HISTORY: PageFixture = { ...INBOX, path: "/notifications/sign-ins", route: "/notifications/sign-ins" };
+
+  test("the_whole_time_shows_and_the_toolbar_is_one_line", async ({ page }) => {
+    expect((await openPage(page, HISTORY))?.status()).toBe(200);
+    await expect(page.getByRole("checkbox", { name: "Select all" })).toBeVisible(); // the client has run
+    const time = page.getByRole("list", { name: "Sign-in history" }).locator("time").first();
+    expect(await time.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    const [selected, all] = [
+      await page.getByRole("button", { name: "Delete selected" }).boundingBox(),
+      await page.getByRole("button", { name: "Delete all" }).boundingBox(),
+    ];
+    expect(all?.y).toBeCloseTo(selected?.y ?? 0, 0);
+  });
+});
+
 test.describe("narrow window", () => {
   // At 900 pixels the list's 2/5 cuts the titles off.
   test.use({ viewport: { width: 900, height: 760 } });

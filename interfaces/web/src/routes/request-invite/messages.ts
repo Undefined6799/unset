@@ -12,7 +12,7 @@ export const REQUEST_INVITE = {
   notice: "Privacy notice",
   send: "Request an invite",
   received: "Thanks, your request is in. If an invite is possible, it comes to that address by email.",
-  closed: "Invite requests are closed for now.",
+  closed: "unset is invite only, and invite requests are closed for now.",
   signedIn: "You're signed in already. To bring someone in, make an invite on your Invite page.",
   invitePage: "Go to Invite",
   // The hidden field bots fill in; people never see it.
