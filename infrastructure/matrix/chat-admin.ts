@@ -5,7 +5,7 @@
 // job's (domains/messaging createDueAccounts), never here (rule RE-1: one layer).
 import { type KeyObject, randomBytes } from "node:crypto";
 import type { Handle } from "@unset/domains-identity";
-import type { ChatAccountCreation, ChatUser } from "@unset/domains-messaging";
+import type { ChatAccountCreation, ChatUser, SignInTicket } from "@unset/domains-messaging";
 import { chatAdmin, type NetGuard, NetGuardError } from "@unset/infrastructure-net-guard";
 import { type ChatAdminPayload, signEnvelope } from "@unset/shared-admin-envelope";
 
@@ -82,7 +82,17 @@ export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettin
     }
   }
 
-  return { createAccount };
+  /**
+   * web's sign-in ticket (ADR 0081 decision 3): a session.mint envelope for chat-admin, single use (its jti) and 60
+   * seconds long, naming the member, the web session and the door's one-time value. Encoded as base64url of its JSON,
+   * so it travels in a URL fragment; the door decodes it and posts the envelope to chat-admin as `ticket`.
+   */
+  function signTicket(ticket: SignInTicket): string {
+    const envelope = sign({ verb: "session.mint", name: "", device: "", ...ticket });
+    return Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+  }
+
+  return { createAccount, signTicket };
 }
 
 export type ChatAdminClient = ReturnType<typeof createChatAdminClient>;
