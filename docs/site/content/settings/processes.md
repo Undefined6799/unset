@@ -183,6 +183,8 @@ Services we run as shipped or without a settings schema: the keys each stack set
 | `APP_HOST` | from env file: `APP_HOST` | from env file: `APP_HOST` |
 | `APP_UPSTREAM` | `web:8080` | `web:8080` |
 | `DOCS_HOST` | not set | `docs.unset.sh` |
+| `MEDIA_HOST` | not set | `staging.usercontent.unset.site` |
+| `MEDIA_UPSTREAM` | not set | `media:8083` |
 | `PDS_HOST` | from env file: `PDS_HOSTNAME` | from env file: `PDS_HOSTNAME` |
 | `PDS_UPSTREAM` | `pds:3000` | `pds:3000` |
 

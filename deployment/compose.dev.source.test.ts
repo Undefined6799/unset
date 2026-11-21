@@ -24,7 +24,8 @@ const SOURCE_ONLY = [...SOURCE_ONLY_SERVICES];
 /**
  * The source file without what only it has: each source-only service's block (its comment lines with it), the
  * top-level network, volume and secret entries only those services use, and their networks in any other service's
- * list. What is left must be the dev file with the builds swapped in.
+ * list or networks map (the edge joins media_edge by name, beside its fixed newt_edge address). What is left must be
+ * the dev file with the builds swapped in.
  */
 function withoutSourceOnly(text: string): string {
   const source = parseCompose(text, SOURCE);
@@ -46,6 +47,7 @@ function withoutSourceOnly(text: string): string {
   for (const name of SOURCE_ONLY_NETWORKS) {
     rest = rest.replace(new RegExp(`(?:^  #.*\\n)*^  ${entry(name)}:\\n(?:^ {4}.*\\n)*`, "m"), "");
     rest = rest.replaceAll(new RegExp(`(^    networks: \\[.*), ${entry(name)}(?=[,\\]])`, "gm"), "$1");
+    rest = rest.replaceAll(new RegExp(`^      ${entry(name)}:\\n`, "gm"), "");
   }
   for (const name of [...ownVolumes, ...ownSecrets]) {
     rest = rest.replace(new RegExp(`(?:^  #.*\\n)*^  ${entry(name)}:\\n(?:^ {4}.*\\n)*`, "m"), "");

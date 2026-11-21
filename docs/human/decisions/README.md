@@ -35,7 +35,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0025](0025-public-domains.md) | Public domains: app `unset.sh`, PDS `unset.ac`, handles `unset.im`, chat `unset.cc`; development `staging.unset.*` | Accepted by Alex 2026-10-19 |
 | [0026](0026-local-email-gate-exception.md) | Local-only email-gate exception for `alice.unset.im` and `bob.unset.im` (mechanism 2) | Proposed (awaiting Alex) |
 | [0027](0027-pds-frontend-distribution.md) | PDS frontend distribution replacement with unchanged backend and runtime configuration (P2.24a) | Accepted by Alex 2026-10-18; implementation pending |
-| [0029](0029-media-domain.md) | Media domain `unset.site`; development `staging.unset.site` | Proposed (awaiting Alex) |
+| [0029](0029-media-domain.md) | Media domain `unset.site`; media at `usercontent.unset.site`, staging `staging.usercontent.unset.site` | Proposed (awaiting Alex) |
 | [0030](0030-pangolin-checks-at-our-edge.md) | Staging behind Pangolin: method scope and last-hop trust move to our edge, cookie and logging clauses of 0025 restated | Accepted by Alex 2026-10-19 |
 | [0031](0031-public-staging-pds.md) | Staging public through Pangolin, no login, no certificate at our edge; departs from 0025 and 0030 for dev only | Accepted 2026-10-20; Decision 2 and Decision 1's plain-http sentence superseded by 0032 |
 | [0032](0032-self-signed-dev-edge.md) | Self-signed certificate at the dev edge behind Pangolin; supersedes 0031 Decision 2 for dev only | Accepted 2026-10-20 |

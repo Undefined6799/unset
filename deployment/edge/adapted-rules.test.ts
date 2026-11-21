@@ -12,6 +12,7 @@ import {
   DEV_APP,
   DEV_DOCS,
   DEV_LISTENER,
+  DEV_MEDIA,
   DEV_PROXY_ADDRESS,
   DEV_TLS,
   DOCS_CSP,
@@ -31,7 +32,7 @@ const PDS = { PDS_HOST: "pds.example.org", PDS_UPSTREAM: "pds:3000" } as const;
 const ENVS: Readonly<Record<EdgeMode, AdaptedEnv>> = {
   shipped: { ...PDS, ACME_EMAIL: "edge@example.org" },
   local: { ...PDS, APP_HOST: "app.example.org", APP_UPSTREAM: "web:8080" },
-  dev: { ...PDS, ...DEV_APP, ...DEV_DOCS },
+  dev: { ...PDS, ...DEV_APP, ...DEV_DOCS, ...DEV_MEDIA },
 };
 const FILES: Readonly<Record<EdgeMode, string>> = { shipped: "prod", local: "local", dev: "dev" };
 
@@ -1241,6 +1242,73 @@ const DOCS_REDS: readonly Red[] = [
   ],
 ];
 
+/** The media site (book P2.19; ADR 0029): a proxied site with its own zone, noindex, and the media process alone. */
+const MEDIA = DEV_MEDIA.MEDIA_HOST;
+const MEDIA_REDS: readonly Red[] = [
+  [
+    "a media zone that counts less",
+    "dev",
+    (c) => void Object.assign(o(zones(c, MEDIA).media_global), { max_events: 30 }),
+    "{$MEDIA_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a media zone keyed on the edge's own address",
+    "dev",
+    (c) => void Object.assign(o(zones(c, MEDIA).media_global), { key: "{http.request.remote.host}" }),
+    "{$MEDIA_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a media site that skips its zone",
+    "dev",
+    (c) => void inner(c, MEDIA).shift(),
+    "{$MEDIA_HOST}: the route does not apply the zones first",
+  ],
+  [
+    "the app's zones on the media site",
+    "dev",
+    (c) =>
+      void Object.assign(o(handlerIn(inner(c, MEDIA), "rate_limit")), copy(handlerIn(inner(c, APP_DEV), "rate_limit"))),
+    "{$MEDIA_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a media site without noindex",
+    "dev",
+    (c) => {
+      const at = site(c, MEDIA).findIndex((handler) => JSON.stringify(handler).includes("X-Robots-Tag"));
+      site(c, MEDIA).splice(at, 1);
+    },
+    "{$MEDIA_HOST}: does not import noindex",
+  ],
+  [
+    "a media site proxying to web",
+    "dev",
+    (c) => void Object.assign(proxy(c, MEDIA), { upstreams: [{ dial: "web:8080" }] }),
+    "{$MEDIA_HOST}: a reverse_proxy does not name the site's one upstream",
+  ],
+  [
+    "a media site passing the client's address",
+    "dev",
+    (c) => void Object.assign(request(c, MEDIA), { delete: ["X-Real-IP", "Forwarded", "X-Unset-Web-Key"] }),
+    "{$MEDIA_HOST}: a reverse_proxy passes X-Forwarded-For",
+  ],
+  [
+    "a CORS header on the media site",
+    "dev",
+    (c) =>
+      void site(c, MEDIA).unshift({
+        handler: "headers",
+        response: { set: { "Access-Control-Allow-Origin": ["*"] } },
+      }),
+    "{$MEDIA_HOST}: changes a response header outside the ruled snippets",
+  ],
+  [
+    "the media host on a local edge",
+    "local",
+    (c) => void Object.assign(siteRoute(c, APP_LOCAL), { match: [{ host: ["staging.usercontent.unset.site"] }] }),
+    "the public server holds a site other than the env's own",
+  ],
+];
+
 const REDS: readonly Red[] = [
   ...REVIEW,
   ...SHAPE,
@@ -1253,6 +1321,7 @@ const REDS: readonly Red[] = [
   ...TOO_MANY_TRIES,
   ...STRAY,
   ...DOCS_REDS,
+  ...MEDIA_REDS,
 ];
 const changed = ([, mode, change]: Red): string[] => {
   const config = adapted(mode);
@@ -1276,8 +1345,8 @@ describe("edge rules on the adapted config (P1.39b)", () => {
         String(page(adapted(mode), String(a(o(a(o(route).match)[0]).host)[0])).body),
       ),
     );
-    // One site under prod, two under local, three under dev (the docs site, P1.21w).
-    expect(bodies.length).toBe(6);
+    // One site under prod, two under local, four under dev (the docs site, P1.21w; the media site, P2.19).
+    expect(bodies.length).toBe(7);
     expect(new Set(bodies).size).toBe(1);
     const words = String(bodies[0])
       .replace(/<style>[^<]*<\/style>/, "")

@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { ADAPTED_ENVS, type AdaptedEnvName, type Json, SENTINELS } from "./adapted.ts";
-import { adaptedProblems, DEV_APP, DEV_DOCS } from "./adapted-rules.ts";
+import { adaptedProblems, DEV_APP, DEV_DOCS, DEV_MEDIA } from "./adapted-rules.ts";
 
 const EDGE = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(EDGE, file), "utf8");
@@ -297,11 +297,12 @@ describe("edge config", () => {
     const pds = ruled(limits.rateLimitZones as Record<string, { events: number; window: string }>);
     const app = ruled(limits.appRateLimitZones as Record<string, { events: number; window: string }>);
     const docs = ruled(limits.docsRateLimitZones as Record<string, { events: number; window: string }>);
+    const media = ruled(limits.mediaRateLimitZones as Record<string, { events: number; window: string }>);
     expect(adapted("prod")).toEqual([pds]);
-    // Dev: the app site's own zones, the PDS's and the docs site's (P1.21w). Local: both sites count on the PDS's
-    // zones (local/app.caddy).
-    expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds, docs]));
-    expect(adapted("dev").length).toBe(3);
+    // Dev: the app site's own zones, the PDS's, the docs site's (P1.21w) and the media site's (P2.19). Local: both
+    // sites count on the PDS's zones (local/app.caddy).
+    expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds, docs, media]));
+    expect(adapted("dev").length).toBe(4);
     expect(adapted("local")).toEqual([pds, pds]);
   });
 
@@ -401,12 +402,12 @@ describe("edge config", () => {
 
   test("every_pds_route_has_a_zone", () => {
     // On what Caddy adapts, for each env's files (P1.39d): the rules on the adapted config pass. The dev rules name
-    // the app site's two values and the docs site's host, so the dev config is read with those in place of their
-    // sentinels.
+    // the app and media sites' two values each and the docs site's host, so the dev config is read with those in place
+    // of their sentinels.
     expect(adaptedProblems(reviewed("prod"), "shipped", SENTINELS)).toEqual([]);
     expect(adaptedProblems(reviewed("local"), "local", SENTINELS)).toEqual([]);
-    const ruled = { ...DEV_APP, ...DEV_DOCS };
-    const devText = (["APP_HOST", "APP_UPSTREAM", "DOCS_HOST"] as const).reduce(
+    const ruled = { ...DEV_APP, ...DEV_DOCS, ...DEV_MEDIA };
+    const devText = (["APP_HOST", "APP_UPSTREAM", "DOCS_HOST", "MEDIA_HOST", "MEDIA_UPSTREAM"] as const).reduce(
       (text, name) => text.replaceAll(SENTINELS[name], ruled[name]),
       read("adapted/dev.generated.json"),
     );
@@ -438,7 +439,7 @@ describe("edge config", () => {
     const carried = ["request>client_ip", "request>headers", "request>remote_ip", "request>remote_port"];
     for (const env of ADAPTED_ENVS) {
       const logs = at(reviewed(env), "logging", "logs") as Obj;
-      const sites = { prod: 1, local: 2, dev: 3 }[env];
+      const sites = { prod: 1, local: 2, dev: 4 }[env];
       expect(Object.keys(logs).sort(), env).toEqual(["default", ...Array.from({ length: sites }, (_, n) => `log${n}`)]);
       for (const [name, log] of Object.entries(logs)) {
         expect(at(log, "encoder", "format"), `${env} ${name}`).toBe("filter");
@@ -744,6 +745,8 @@ describe("dev leaf (P1.21w)", () => {
     const runbook = readFileSync(join(EDGE, "..", "..", "docs", "human", "runbooks", "dev-stack-secrets.md"), "utf8");
     const san = /subjectAltName=([^\\\n']+)\\n/.exec(runbook)?.[1];
     const names = san?.split(",").map((entry) => entry.replace(/^DNS:/, ""));
-    expect(names?.sort()).toEqual([DEV_APP.APP_HOST, DEV_DOCS.DOCS_HOST, "staging.unset.ac"].sort());
+    expect(names?.sort()).toEqual(
+      [DEV_APP.APP_HOST, DEV_DOCS.DOCS_HOST, DEV_MEDIA.MEDIA_HOST, "staging.unset.ac"].sort(),
+    );
   });
 });

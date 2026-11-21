@@ -144,15 +144,16 @@ services:
     security_opt: [no-new-privileges:true]
     tmpfs:
       - /tmp:uid=65532,gid=65532,mode=1777
-    # The three dev sites and the dev (tls) over the shipped one, four read-only file binds (P1.36c; ADR 0032 Decisions
-    # 1 and 3; P1.21w): https with one self-signed leaf for every staging name, read from the edge's own two secrets;
-    # the app site's name and upstream and the docs site's name are the ruled values (deployment/edge/adapted-rules.ts
-    # DEV_APP, DEV_DOCS). The docs site serves the built docs/site/public folder, one read-only folder bind that the
-    # publish step fills (docs/human/runbooks/docs-site.md; ADR 0075).
+    # The four dev sites and the dev (tls) over the shipped one, five read-only file binds (P1.36c; ADR 0032 Decisions
+    # 1 and 3; P1.21w; P2.19): https with one self-signed leaf for every staging name, read from the edge's own two
+    # secrets; the app and media sites' names and upstreams and the docs site's name are the ruled values
+    # (deployment/edge/adapted-rules.ts DEV_APP, DEV_DOCS, DEV_MEDIA). The docs site serves the built docs/site/public
+    # folder, one read-only folder bind that the publish step fills (docs/human/runbooks/docs-site.md; ADR 0075).
     volumes:
       - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
       - ./edge/dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro
+      - ./edge/dev/media.caddy:/etc/caddy/sites/enabled/media.caddy:ro
       - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
       - ../docs/site/public:/srv/docs:ro
       - edgedata:/data
@@ -165,6 +166,8 @@ services:
       APP_HOST: ${APP_HOST}
       APP_UPSTREAM: web:8080
       DOCS_HOST: docs.unset.sh
+      MEDIA_HOST: staging.usercontent.unset.site
+      MEDIA_UPSTREAM: media:8083
     depends_on:
       pds:
         condition: service_started

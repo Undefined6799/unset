@@ -78,8 +78,8 @@ const LEGAL_KEYS: Record<string, string[]> = {
 /** The dev keys the local file must leave out, by service: the from addresses, since local sends no mail (P1.36g). */
 const DEV_ONLY: Record<string, string[]> = {
   pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"],
-  // The docs site is served by the dev stack alone (P1.21w; ADR 0075).
-  edge: ["DOCS_HOST"],
+  // The docs (P1.21w; ADR 0075) and media (P2.19; ADR 0029) sites are served by the dev stack alone.
+  edge: ["DOCS_HOST", "MEDIA_HOST", "MEDIA_UPSTREAM"],
 };
 /**
  * The keys only the local file sets, by service, with their one value: web's internal host for net-guard, which the
@@ -113,13 +113,20 @@ const APP_SITE: { mount: Mount; environment: [string, EnvValue][] } = {
 const APP_SITE_KEYS = new Set(APP_SITE.environment.map(([key]) => key));
 /**
  * The edge's sites, each its own read-only file in local (item 12) and in dev, which binds dev/app.caddy, dev/pds.caddy,
- * dev/docs.caddy with the built docs it serves (P1.21w; ADR 0075), and the dev (tls) (P1.36c; ADR 0032 Decision 3).
+ * dev/docs.caddy with the built docs it serves (P1.21w; ADR 0075), dev/media.caddy (P2.19), and the dev (tls) (P1.36c;
+ * ADR 0032 Decision 3).
  */
 const EDGE_SITES: { dev: Mount[]; local: Mount[] } = {
   dev: [
     { type: "bind", source: "./edge/dev/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
     { type: "bind", source: "./edge/dev/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
     { type: "bind", source: "./edge/dev/docs.caddy", target: "/etc/caddy/sites/enabled/docs.caddy", readOnly: true },
+    {
+      type: "bind",
+      source: "./edge/dev/media.caddy",
+      target: "/etc/caddy/sites/enabled/media.caddy",
+      readOnly: true,
+    },
     { type: "bind", source: "./edge/dev/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
     { type: "bind", source: "../docs/site/public", target: "/srv/docs", readOnly: true },
   ],
