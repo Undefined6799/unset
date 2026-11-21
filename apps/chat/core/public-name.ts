@@ -7,8 +7,12 @@ type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
 /** sh.unset.profile `displayName` maxGraphemes (shared/lexicons/schemas/sh.unset.profile.json). */
 const MAX_GRAPHEMES = 64;
-/** The Unicode bidi controls (UAX #9 section 2: ALM, LRM, RLM, LRE..RLO, LRI..PDI) and every control character. */
-const HIDDEN = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]|[\p{Cc}--[\t\n\r]]/gv;
+/**
+ * The Unicode bidi controls (UAX #9 section 2: ALM, LRM, RLM, LRE..RLO, LRI..PDI) and every control character but tab,
+ * newline and return, which fold as spaces. The `u` flag, not `v`: Safari before 17 cannot parse `v`
+ * (apps/chat/regex-flags.test.ts).
+ */
+const HIDDEN = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]|(?![\t\n\r])\p{Cc}/gu;
 const SPACES = /[\s\p{Zs}]+/gu;
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 

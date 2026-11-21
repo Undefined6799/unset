@@ -23,6 +23,7 @@ describe("shownName", () => {
     expect(shownName("\u202Eevil\u202C name")).toBe("evil name");
     expect(shownName("a\u2066b\u2069\u200Fc\u061C\u200Ed")).toBe("abcd");
     expect(shownName("tab\there\nnew\u0000line\u007F")).toBe("tab here newline");
+    expect(shownName("re\rturn\u0085c1\u009B\u001Fend\u0008")).toBe("re turnc1end");
     expect(shownName("  spaced   out  ")).toBe("spaced out");
     expect(shownName("Zoë 👩‍💻")).toBe("Zoë 👩‍💻");
   });
