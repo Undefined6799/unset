@@ -3,7 +3,8 @@
   apps/web/src/components/views/rooms/EventTile/ActionBarAdapter.tsx, components/views/context_menus/
   MessageContextMenu.tsx). On a desktop the actions show
   while the pointer is over the message or focus is in it, and a right-click opens them; on a phone pressing and holding
-  opens them. The actions float over the message's top edge, as Element's action bar is absolutely placed
+  opens them. From the keyboard, Tab reaches them: they stay in the tab order while out of sight, and show once focus
+  is within the message (Element shows its action bar on keyboard focus in the tile, EventTile.tsx:700-708). The actions float over the message's top edge, as Element's action bar is absolutely placed
   (packages/shared-components/src/room/timeline/event-tile/EventTileView/EventTileView.module.css:150-156), so showing
   or hiding them never moves the timeline, or a confirm below it, under the pointer. React offers Element's eight quick reactions (ADR 0103 decision 1); a reaction under the message is
   pressed to add one's own or take it back. Reply quotes the message above the composer, and a reply shows what it
@@ -97,8 +98,8 @@ function react(key: QuickReaction) {
 }
 </script>
 
-<!-- The right-click and press-and-hold here only open the same toolbar that keyboard focus inside the message shows,
-     so the message itself needs no keyboard handler of its own. -->
+<!-- The right-click and press-and-hold here only open the same toolbar that Tab reaches and keyboard focus inside the
+     message shows, so the message itself needs no keyboard handler of its own. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <li
   class={["group relative flex flex-col gap-1", message.mine ? "items-end self-end text-right" : "items-start self-start"]}
@@ -154,7 +155,13 @@ function react(key: QuickReaction) {
   {#if menuActions.length > 0}
     <div
       class={[
-        menu === "closed" ? "hidden group-hover:flex group-focus-within:flex" : "flex",
+        // Closed, the actions stay in the tab order but out of sight and untouchable, so Tab reaches them and focus
+        // within the message shows them, as Element's tile shows its action bar on keyboard focus (element-web
+        // v1.12.35 apps/web/src/components/views/rooms/EventTile.tsx:700-708). display:none would take them out.
+        menu === "closed"
+          ? "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          : "",
+        "flex",
         message.mine ? "end-0" : "start-0",
         "bg-background absolute bottom-full z-10 gap-1 rounded-md border shadow-xs",
       ]}

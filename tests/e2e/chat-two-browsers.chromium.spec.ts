@@ -130,10 +130,18 @@ async function talking(browser: Browser) {
   // Bob's page marks it read with a public receipt, so Alice sees "Seen" and the time under it (ADR 0103 decision 4).
   const read = message(a.page, "hello from alice").locator("[data-seen]");
   await expect(read).toHaveText(/^Seen \d/, { timeout: 60_000 });
-  // Bob reacts from the message's actions; Alice sees it, and it goes when Bob takes it back (ADR 0103 decision 1).
+  // Bob reacts from the message's actions, from the keyboard alone: Tab from the message's text reaches React, which
+  // shows the actions (Chromium starts sequential focus at the point clicked). Alice sees the reaction, and it goes
+  // when Bob takes it back (ADR 0103 decision 1).
   const bobs = message(b.page, "hello from alice");
-  await bobs.hover();
-  await bobs.getByRole("button", { name: "React", exact: true }).click();
+  await bobs.getByText("hello from alice", { exact: true }).click();
+  await b.page.mouse.move(0, 0); // not shown by hover: only focus shows them now
+  await expect(bobs.locator("[data-actions]")).toHaveCSS("opacity", "0");
+  await b.page.keyboard.press("Tab");
+  const react = bobs.getByRole("button", { name: "React", exact: true });
+  await expect(react).toBeFocused();
+  await expect(bobs.locator("[data-actions]")).toHaveCSS("opacity", "1");
+  await b.page.keyboard.press("Enter");
   await bobs.getByRole("button", { name: "React with 👍" }).click();
   const thumbs = message(a.page, "hello from alice").locator('[data-reaction="👍"]');
   await expect(thumbs).toHaveText("👍 1", { timeout: 60_000 });
