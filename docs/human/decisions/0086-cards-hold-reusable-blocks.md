@@ -40,7 +40,7 @@ The profile listed bare record keys, which name nothing outside its own reposito
    optional `createdAt`. Anything else about how a card looks is a later optional field.
 2. **A block is its own lexicon in the one group `sh.unset.block.*`**, so the same block can sit in a card today and
    in another record later: `text` (Markdown, 20,000 bytes), `links` (up to 50), `showcase` (titled entries, up to
-   50), `buttons` (1 to 5: `#email` or `#link`; link presets `book-call`, `hire`, `subscribe`, and no preset means
+   50), `buttons` (up to 5: `#email` or `#link`; link presets `book-call`, `hire`, `subscribe`, and no preset means
    the label shows) and `images` (up to 20 pictures with one `fit`, `contain` or `cover`). `sh.unset.block.defs`
    holds `#image` (blob `image/*` up to 5,000,000 bytes, required `alt` and `aspectRatio`, optional `caption`) and
    `#aspectRatio`. No list has a minimum in the lexicon; the editor keeps its own rules. The build refuses any other
@@ -65,13 +65,14 @@ The profile listed bare record keys, which name nothing outside its own reposito
 
 ## Consequences
 
-- Staging cards and profiles in the old shape stop showing; staging accounts are disposable and their cards are
-  cleared at the switch. Staging members sign in again, since the grant now names `sh.unset.card`.
+- Staging cards and profiles in the old shape stop showing; staging accounts are disposable, and at the switch their
+  card records and their profile's old `cards` field are cleared (a list of plain keys no longer validates, so every
+  profile write would be refused until it goes). Staging members sign in again, since the grant now names `sh.unset.card`.
 - The app's image pipeline is unchanged here: it still stores and serves its current format and size, inside the
   wider lexicon. WebP at up to 4,096 px and the 2 MB retry belong to the image work (P2.19f).
 - Follow-ups, each its own pull request: P1.31u makes the app show only listed cards and writes a new card into the
   list in the same commit (until then the app still shows unlisted cards after the listed ones, which the lexicon
-  allows no reader to rely on); the index table `idx.section` and the internal kind names `readme`, `collection`
+  allows no reader to rely on), and hides a block with nothing to show (an empty list); the index table `idx.section` and the internal kind names `readme`, `collection`
   and `image` are renamed to match; publishing the schemas (DNS and the lexicon account) is Alex's.
 
 ## Alternatives
