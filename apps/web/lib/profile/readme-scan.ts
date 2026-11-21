@@ -121,7 +121,7 @@ export function nextUnescaped(text: string, needle: string): (from: number) => n
   };
 }
 
-export type Mark = "*" | "_" | "**" | "__";
+export type Mark = "*" | "_" | "**" | "__" | "~~";
 
 /**
  * Whether `mark` at `j` can close emphasis, judged from the text alone: a single mark that is not part of a longer

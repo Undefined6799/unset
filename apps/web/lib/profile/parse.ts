@@ -2,7 +2,9 @@
 // blocks that a renderer writes as escaped elements (readme.svelte), so member text is always escaped and raw HTML
 // is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced
 // code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH. Inline:
-// code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. Images are
+// code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. From GitHub
+// Flavored Markdown 0.29 (https://github.github.com/gfm/, read as cmark-gfm test/spec.txt), as ADR 0086 lets readers
+// extend CommonMark: strikethrough, task list items and tables. Images are
 // not shown (there is no media proxy), so `![alt](url)` is a link to the image with its alt text. A link is kept
 // only when safeHref accepts it as http or https (shared/ui/safe-href.ts); otherwise its characters stay text.
 // Nothing here throws: any input renders.
@@ -23,7 +25,7 @@ export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "break" }
-  | { readonly kind: "strong" | "em"; readonly children: readonly Inline[] }
+  | { readonly kind: "strong" | "em" | "del"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: SafeHref; readonly children: readonly Inline[] };
 
 export type Block =
@@ -32,7 +34,16 @@ export type Block =
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
   | { readonly kind: "code"; readonly text: string }
-  | { readonly kind: "rule" };
+  | { readonly kind: "rule" }
+  | TableBlock;
+
+/** A table's column alignments, header cells and data rows, each row as wide as the header (GFM "Tables"). */
+export type TableBlock = {
+  readonly kind: "table";
+  readonly align: readonly ("left" | "center" | "right" | null)[];
+  readonly head: readonly (readonly Inline[])[];
+  readonly rows: readonly (readonly (readonly Inline[])[])[];
+};
 
 export type ListBlock = {
   readonly kind: "list";
@@ -41,13 +52,19 @@ export type ListBlock = {
   readonly start?: number;
   readonly items: readonly ListItem[];
 };
-/** A list item's text, and the lists indented under it. */
-export type ListItem = { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] };
+/** A list item's text, the lists indented under it, and whether it is a task and ticked (GFM "Task list items"). */
+export type ListItem = {
+  readonly text: readonly Inline[];
+  readonly lists: readonly ListBlock[];
+  readonly task?: "open" | "done";
+};
 
 /** Guards, not limits: the lexicon caps the text at 100,000 bytes. */
 const MAX_CHARS = 100_000;
 const MAX_BLOCKS = 2_000;
 const MAX_DEPTH = 3;
+/** A guard: a table wider than this is read as text. */
+const MAX_COLUMNS = 50;
 /** Lists nest this deep; an item indented further is a sibling of the deepest. */
 const MAX_LIST_DEPTH = 3;
 
@@ -127,6 +144,14 @@ function takeImage(text: string, i: number, depth: number, find: Finders): Taken
   return text[i] === "!" && text[i + 1] === "[" ? takeLink(text, i + 1, depth, find) : null;
 }
 
+/** Strikethrough, `~~words~~` (GFM 0.29, "Strikethrough (extension)"): paired as emphasis is; a single tilde is text. */
+function takeStrike(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
+  if (!text.startsWith("~~", i)) return null;
+  const end = find.emphasisClose("~~", i + 2);
+  if (end <= i + 2) return null;
+  return { node: { kind: "del", children: parseInline(text.slice(i + 2, end), depth + 1, links) }, next: end + 2 };
+}
+
 function takeEmphasis(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
   const strong = text.startsWith("**", i) || text.startsWith("__", i);
   const ch = text[i];
@@ -186,7 +211,8 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
           (links
             ? (takeAutolink(text, i) ?? takeImage(text, i, depth, find) ?? takeLink(text, i, depth, find))
             : null) ??
-          takeEmphasis(text, i, depth, links, find));
+          takeEmphasis(text, i, depth, links, find) ??
+          takeStrike(text, i, depth, links, find));
     if (taken === null) {
       buffer += text[i];
       i += 1;
@@ -317,12 +343,83 @@ function takeList(lines: readonly string[], i: number, depth = 1): { block: List
       lists.push(sub.block);
       j = Math.max(sub.next, j + 1);
     }
-    items.push({ text: parseInline(item.text), lists });
+    items.push(listItem(item.text, lists));
     at = end;
   }
   const start = first?.start ?? 1;
   const list: ListBlock = { kind: "list", ordered, items };
   return { block: start === 1 ? list : { ...list, start }, next: at };
+}
+
+/**
+ * A task list item opens with `[ ]`, `[x]` or `[X]` and a space before its words (GFM 0.29, "Task list items
+ * (extension)"); the marker is not shown as text.
+ */
+const TASK = /^\[([ xX])\][ \t]+(\S.*)$/;
+
+function listItem(text: string, lists: readonly ListBlock[]): ListItem {
+  const task = TASK.exec(text);
+  if (task === null) return { text: parseInline(text), lists };
+  return { text: parseInline(task[2] ?? ""), lists, task: task[1] === " " ? "open" : "done" };
+}
+
+/**
+ * A row's cells: split at each pipe that is not escaped, without the optional pipe at each end; an escaped pipe is a
+ * pipe in its cell, inside a code span too (GFM 0.29, "Tables (extension)"). One pass over the line.
+ */
+function rowCells(line: string): string[] {
+  const cells: string[] = [];
+  let cell = "";
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] === "\\" && line[i + 1] === "|") {
+      cell += "|";
+      i += 1;
+    } else if (line[i] === "|") {
+      cells.push(cell);
+      cell = "";
+    } else cell += line[i];
+  }
+  cells.push(cell);
+  const trimmed = line.trim();
+  if (trimmed.startsWith("|")) cells.shift();
+  if (trimmed.endsWith("|") && !trimmed.endsWith("\\|") && cells.length > 0) cells.pop();
+  return cells.map((c) => c.trim());
+}
+
+const DELIMITER_CELL = /^(:?)-+(:?)$/;
+
+/** The alignments of a delimiter row, or null when the line is none: only hyphens with an optional colon each end. */
+function delimiterRow(line: string): TableBlock["align"] | null {
+  if (!line.includes("-")) return null;
+  const cells = rowCells(line);
+  const align: ("left" | "center" | "right" | null)[] = [];
+  for (const cell of cells) {
+    const match = DELIMITER_CELL.exec(cell);
+    if (match === null) return null;
+    const [, left, right] = match;
+    align.push(left !== "" && right !== "" ? "center" : right !== "" ? "right" : left !== "" ? "left" : null);
+  }
+  return align;
+}
+
+/**
+ * A table from a header row whose next line is a delimiter row with as many cells. It starts only where a block may
+ * (not inside a paragraph), and its rows run to a blank line or the start of another block; each row is filled with
+ * empty cells or cut to the header's width.
+ */
+function takeTable(lines: readonly string[], i: number): { block: Block; next: number } | null {
+  const header = lines[i] ?? "";
+  if (!header.includes("|")) return null;
+  const align = delimiterRow(lines[i + 1] ?? "");
+  const head = rowCells(header);
+  if (align === null || align.length !== head.length || head.length > MAX_COLUMNS) return null;
+  const rows: Inline[][][] = [];
+  let next = i + 2;
+  for (; next < lines.length && !startsBlock(lines[next] ?? ""); next += 1) {
+    const cells = rowCells(lines[next] ?? "");
+    rows.push(head.map((_, c) => parseInline(cells[c] ?? "")));
+  }
+  return { block: { kind: "table", align, head: head.map((cell) => parseInline(cell)), rows }, next };
 }
 
 function takeBlock(lines: readonly string[], i: number): { block: Block | null; next: number } {
@@ -339,7 +436,7 @@ function takeBlock(lines: readonly string[], i: number): { block: Block | null; 
   if (RULE.test(line)) return { block: { kind: "rule" }, next: i + 1 };
   if (BULLET.test(line) || ORDERED.test(line)) return takeList(lines, i);
   if (QUOTE.test(line)) return takeQuote(lines, i);
-  return takeParagraph(lines, i);
+  return takeTable(lines, i) ?? takeParagraph(lines, i);
 }
 
 function takeQuote(lines: readonly string[], i: number): { block: Block | null; next: number } {

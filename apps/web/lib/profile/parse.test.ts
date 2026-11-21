@@ -267,4 +267,82 @@ describe("what the in-place editor writes (P1.21s)", () => {
       { kind: "paragraph", children: [text("two")] },
     ]);
   });
+
+  // GitHub Flavored Markdown 0.29 (cmark-gfm test/spec.txt), "Strikethrough (extension)" and "Task list items
+  // (extension)": Alex, 2026-11-21, "every single thing that you can do in markdown".
+  test("words between two tildes each side are struck through, and a single tilde is text", () => {
+    expect(parseInline("~~Hi~~ Hello, **~~world~~**")).toEqual([
+      { kind: "del", children: [text("Hi")] },
+      text(" Hello, "),
+      { kind: "strong", children: [{ kind: "del", children: [text("world")] }] },
+    ]);
+    expect(parseInline("~one~ and ~~ two")).toEqual([text("~one~ and ~~ two")]);
+  });
+
+  test("a struck run does not reach past the paragraph it opens in", () => {
+    expect(parseReadme("This ~~has a\n\nnew paragraph~~.")).toEqual([
+      { kind: "paragraph", children: [text("This ~~has a")] },
+      { kind: "paragraph", children: [text("new paragraph~~.")] },
+    ]);
+  });
+
+  test("a list item opening with a task marker is a task, ticked by an x of either case", () => {
+    const src = ["- [ ] foo", "- [x] bar", "  - [X] baz", "- [y] not a task", "- [ ]", "1. [ ] numbered"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "list",
+        ordered: false,
+        items: [
+          { text: [text("foo")], lists: [], task: "open" },
+          {
+            text: [text("bar")],
+            lists: [{ kind: "list", ordered: false, items: [{ text: [text("baz")], lists: [], task: "done" }] }],
+            task: "done",
+          },
+          item("[y] not a task"),
+          item("[ ]"),
+        ],
+      },
+      { kind: "list", ordered: true, items: [{ text: [text("numbered")], lists: [], task: "open" }] },
+    ]);
+  });
+
+  // GFM 0.29, "Tables (extension)".
+  test("a header row, a delimiter row and data rows are a table, aligned by the delimiter's colons", () => {
+    const src = ["| abc | defghi |", ":-: | -----------:", "bar | baz", "| f\\|oo | `a\\|b` |", "", "after"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "table",
+        align: ["center", "right"],
+        head: [[text("abc")], [text("defghi")]],
+        rows: [
+          [[text("bar")], [text("baz")]],
+          [[text("f|oo")], [{ kind: "code", text: "a|b" }]],
+        ],
+      },
+      { kind: "paragraph", children: [text("after")] },
+    ]);
+  });
+
+  test("a row with fewer cells is filled, one with more is cut, and a line that starts a block ends the table", () => {
+    const src = ["| a | b |", "| --- | --- |", "| one |", "| x | y | z |", "> quoted"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "table",
+        align: [null, null],
+        head: [[text("a")], [text("b")]],
+        rows: [
+          [[text("one")], []],
+          [[text("x")], [text("y")]],
+        ],
+      },
+      { kind: "quote", paragraphs: [[text("quoted")]] },
+    ]);
+  });
+
+  test("a header whose cells do not match the delimiter row is no table", () => {
+    expect(parseReadme("| abc | def |\n| --- |\n| bar |")).toEqual([
+      { kind: "paragraph", children: [text("| abc | def | | --- | | bar |")] },
+    ]);
+  });
 });

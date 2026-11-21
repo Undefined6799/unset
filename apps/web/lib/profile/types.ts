@@ -47,6 +47,7 @@ export type Inline =
   | { readonly kind: "break" }
   | { readonly kind: "strong"; readonly children: readonly Inline[] }
   | { readonly kind: "em"; readonly children: readonly Inline[] }
+  | { readonly kind: "del"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: string; readonly children: readonly Inline[] };
 
 export type Block =
@@ -55,13 +56,23 @@ export type Block =
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
   | { readonly kind: "code"; readonly text: string }
-  | { readonly kind: "rule" };
+  | { readonly kind: "rule" }
+  | {
+      readonly kind: "table";
+      readonly align: readonly ("left" | "center" | "right" | null)[];
+      readonly head: readonly (readonly Inline[])[];
+      readonly rows: readonly (readonly (readonly Inline[])[])[];
+    };
 
 export type ListBlock = {
   readonly kind: "list";
   readonly ordered: boolean;
   readonly start?: number;
-  readonly items: readonly { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] }[];
+  readonly items: readonly {
+    readonly text: readonly Inline[];
+    readonly lists: readonly ListBlock[];
+    readonly task?: "open" | "done";
+  }[];
 };
 
 /** A link, entry or button as the card shows it; a row with no safe address is left out. */
