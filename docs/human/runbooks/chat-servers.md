@@ -111,7 +111,21 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
 1. The mirror must hold the Python base and MAS (`deployment/mirror.list.json`; `mirror.yml` copies and signs them on a
    push to main), and `deployment/images.lock.json` must name MAS's mirror digest, or C2 refuses `mas`.
 2. The files above and the two databases exist.
-3. The edge has no `staging.unset.cc` site yet: how that name is published (Pangolin or not, with which login bypass
-   for `/_matrix/client/`) is Alex's call, since ADR 0025 gives it no address record. Until then the services start
-   but no browser reaches the door or Synapse.
+3. `staging.unset.cc` is published through Pangolin behind the same login as `staging.unset.sh` (ADR 0094; Alex
+   2026-11-21, "Yes, behind Pangolin"). The source stack's edge serves it from `deployment/edge/dev/chat.caddy`:
+   `/_matrix/client/` to Synapse's client listener, the door's routes to the door, the edge's 404 for anything else.
+   Once, before the first start:
+   1. **DNS.** Add a record for `staging.unset.cc` of the same type and value as the one `staging.unset.sh` has, so it
+      points at Pangolin, and add `CAA 0 issue "letsencrypt.org; validationmethods=http-01"` beside its three CAA
+      records (ADR 0025), so Pangolin can get its own certificate for it.
+   2. **Pangolin.** Add a resource `staging.unset.cc` on the staging site, set up like `staging.unset.sh`
+      (`dev-stack-secrets.md`, "Newt's env file"): one target, `https` to `10.250.37.3` port 443, certificate check off
+      for the target, **TLS Server Name** `staging.unset.cc`, and the resource's login **on**, with the same users or
+      roles as `staging.unset.sh`. Add no bypass rule until Alex rules on ADR 0094's open point: the chat client sends
+      its Matrix calls without cookies, so until then the page loads behind the login but its `/_matrix/client/`
+      calls are refused.
+   3. **The dev leaf.** Remake the edge's self-signed leaf with `staging.unset.cc` as its fourth name
+      (`dev-stack-secrets.md`, "The dev edge's self-signed leaf"); a site name the leaf does not cover would make the
+      edge ask a public CA.
+   4. After the deploy, run that runbook's after-deploy check; it now checks the chat site's routes at the edge.
 
