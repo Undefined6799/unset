@@ -16,8 +16,10 @@ import {
 } from "matrix-js-sdk/lib/crypto-api/index.js";
 import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
+import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations } from "./conversation-service.ts";
+import { registerPusher } from "./pusher.ts";
 import { createKeyHolder, type Keys, makeKey, phaseOf, readFacts, storeKey, unlock } from "./recovery.ts";
 
 const UNAVAILABLE = "chat.unavailable";
@@ -41,6 +43,8 @@ export type ChatOptions = {
   readonly onSignedOut: () => void;
   /** The door's setup claim for this browser's device (ADR 0089). */
   readonly setup: { readonly claim: () => Promise<ClaimOutcome>; readonly release: () => Promise<void> };
+  /** The door's pushkey for this device (ADR 0090 decision 1), asked for once this browser is ready. */
+  readonly pushKey: () => Promise<PushTarget | null>;
 };
 
 /**
@@ -101,6 +105,15 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const conversations = createConversations(client, crypto, session.userId);
   // While a setup or an unlock runs its own steps, the trust events it causes do not repaint the page.
   let busy = false;
+  // The count's pusher, registered once per sign-in when the page is first ready. A failure leaves chat as it is: the
+  // count on unset.sh then shows no number, or the last one, until the next sign-in (ADR 0082 Consequences).
+  let pusherAsked = false;
+  const registerOnce = async () => {
+    if (pusherAsked) return;
+    pusherAsked = true;
+    const target = await options.pushKey();
+    if (target !== null && !stopped) await registerPusher(client, target);
+  };
   const report = async () => {
     if (busy) return;
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
@@ -108,6 +121,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     if (facts === null) return void fail(UNAVAILABLE);
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
+    if (phase === "ready") void registerOnce();
     tell(phase === "ready" ? { kind: "ready", conversations, me: session.userId } : { kind: "locked", unlock: tryKey });
   };
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {

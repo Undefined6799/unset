@@ -11,6 +11,8 @@
 // Conversations (build step 9): a request shows who asks and whether the room is encrypted, and Accept joins and records
 // it as direct; the start route makes exactly the room our server accepts, keeps the composer off until the other
 // person has joined, then sends only ciphertext; a second start finds the same room; a bad chat ID starts nothing.
+// The count (build step 10; ADR 0090): once ready the page registers one pusher with the door's key, and a refused
+// pusher leaves chat as it is.
 // Chromium only, by its name (playwright.config.ts ignores *chromium.spec.ts for Firefox and WebKit): the CSP check
 // reads Chromium's console wording, as csp.spec.ts does.
 import { readFileSync } from "node:fs";
@@ -423,5 +425,42 @@ test("chat_page.reload_cached_sync: a set-up browser reloaded within Synapse's s
   expect(states.filter((s) => s === "save_key" || s === "setting_up")).toEqual([]);
   expect(await state(page)).toBe("ready");
   expect(vaultWrites()).toBe(written);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.pusher_once: once ready the page registers one pusher with the door's key, and its count reaches web", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, problems } = await open(browser);
+  await page.goto("https://unset.cc/");
+  await saveKey(page);
+  await expect.poll(() => stack.homeserver.pushers.length, { timeout: 30_000 }).toBe(1);
+  const [pusher] = stack.homeserver.pushers;
+  expect(pusher).toMatchObject({
+    kind: "http",
+    app_id: "sh.unset.count",
+    append: false,
+    data: { url: "http://chat-auth:8091/_matrix/push/v1/notify", format: "event_id_only" },
+  });
+  // What Synapse would post for that pusher reaches the count web reads (ADR 0090 decision 2).
+  const notified = await stack.notify(String(pusher?.pushkey), 3);
+  expect(notified).toEqual({ rejected: [] });
+  expect(await stack.count()).toBe(3);
+  // A later trust change repaints the page but registers nothing more.
+  await page.waitForTimeout(1000);
+  expect(stack.homeserver.pushers).toHaveLength(1);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.pusher_refused: a homeserver that refuses the pusher leaves chat ready", async ({ browser }) => {
+  const { page, problems } = await open(browser);
+  stack.homeserver.state.refusePushers = true;
+  await page.goto("https://unset.cc/");
+  await saveKey(page);
+  await expect
+    .poll(() => stack.homeserver.seen.some((c) => c.url.includes("/pushers/set")), { timeout: 30_000 })
+    .toBe(true);
+  expect(await state(page)).toBe("ready");
   expect(problems).toEqual([]);
 });

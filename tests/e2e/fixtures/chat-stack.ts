@@ -23,6 +23,7 @@ import { createNetGuard } from "@unset/infrastructure-net-guard";
 import { loadConfig } from "@unset/shared-config";
 import { compose } from "../../../interfaces/chat-auth/compose.ts";
 import { schema } from "../../../interfaces/chat-auth/config.ts";
+import { NOTIFY_PATH as NOTIFY } from "../../../interfaces/chat-auth/count.ts";
 import { loadChatPage } from "../../../interfaces/chat-auth/page.ts";
 import { fakeMas, startService } from "../../integration/chat-admin/harness.ts";
 import { migrateAsMigrator, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
@@ -107,7 +108,13 @@ function fakeHomeserver() {
    * that asks again within sync_response_cache_duration (2 minutes by default: synapse v1.165.0
    * config/cache.py:211-212, the cache key in rest/client/sync.py:210 includes the device). Later syncs bring the rest.
    */
-  const state: { refuse: boolean; cachedInitialAt: number | null } = { refuse: false, cachedInitialAt: null };
+  const state: { refuse: boolean; cachedInitialAt: number | null; refusePushers: boolean } = {
+    refuse: false,
+    cachedInitialAt: null,
+    refusePushers: false,
+  };
+  /** Each pusher the page registered (POST /pushers/set, spec v1.18), as its body came. */
+  const pushers: Json[] = [];
   const devices: Record<string, Signed> = {};
   const signing: { master?: Signed; self?: Signed; user?: Signed } = {};
   const accountData = new Map<string, { content: Json; at: number }>();
@@ -219,6 +226,11 @@ function fakeHomeserver() {
       return;
     }
     if (path === "/capabilities") return reply(res, 200, { capabilities: {} });
+    if (path === "/pushers/set" && method === "POST") {
+      if (state.refusePushers) return reply(res, 500, { errcode: "M_UNKNOWN", error: "Internal error" });
+      pushers.push(body);
+      return reply(res, 200, {});
+    }
     if (path === "/pushrules/") return reply(res, 200, { global: {} });
     if (/^\/user\/[^/]+\/filter$/.test(path)) return reply(res, 200, { filter_id: "f1" });
     const data = /^\/user\/[^/]+\/account_data\/([^/]+)$/.exec(path);
@@ -240,7 +252,7 @@ function fakeHomeserver() {
     if (path.startsWith("/sendToDevice/")) return reply(res, 200, {});
     return reply(res, 404, { errcode: "M_NOT_FOUND", error: "Not found" });
   };
-  return { seen, state, handle, rooms, now: () => clock };
+  return { seen, state, pushers, handle, rooms, now: () => clock };
 }
 
 const listen = (server: { listen(port: number, host: string, done: () => void): unknown }) =>
@@ -273,6 +285,10 @@ async function connectProxy(edgePort: number) {
 export type ChatStack = {
   /** The proxy a browser context sends unset.cc and unset.sh through. */
   readonly proxy: string;
+  /** Posts what Synapse would for `pushkey` to the door's count port; the door's answer. */
+  readonly notify: (pushkey: string, unread: number) => Promise<unknown>;
+  /** The number web would read for the member. */
+  readonly count: () => Promise<unknown>;
   readonly homeserver: FakeHomeserver;
   close(): Promise<void>;
 };
@@ -343,6 +359,16 @@ export async function startChatStack(db: ChatDatabase, pageDir: string, dir: str
   return {
     proxy: `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`,
     homeserver,
+    async notify(pushkey, unread) {
+      const notification = { counts: { unread }, devices: [{ app_id: "sh.unset.count", pushkey, pushkey_ts: 1 }] };
+      const init = { method: "POST", headers: { "content-type": "application/json" } };
+      const req = new Request(`http://chat-auth:8091${NOTIFY}`, { ...init, body: JSON.stringify({ notification }) });
+      return (await door.count.handle(req)).json();
+    },
+    async count() {
+      const res = await door.count.handle(new Request(`http://chat-auth:8091/count?did=${ALICE}`));
+      return ((await res.json()) as { unread: unknown }).unread;
+    },
     async close() {
       proxy.closeAllConnections();
       edge.closeAllConnections();
