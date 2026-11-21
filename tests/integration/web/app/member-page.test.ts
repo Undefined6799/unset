@@ -15,7 +15,7 @@ import { createOAuthSessionStore, createPool, withTransaction } from "@unset/inf
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, inject, test } from "vitest";
 import {
   buildOnce,
   clientAddress,
@@ -464,6 +464,12 @@ describe("card writes", () => {
 });
 
 describe("the one Save (ADR 0074)", () => {
+  // Each write gives its card a new version (stand-in-pds.ts, as a real PDS does), so each test starts on a repo whose
+  // cards are still at the version they are posted with.
+  beforeEach(async () => {
+    await member.stop();
+    member = await memberServer();
+  }, 60_000);
   // The stand-in gives every record this one CID, so it is the version an editor opened; any other is stale.
   const OPENED = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
   const STALE = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae";
@@ -483,12 +489,27 @@ describe("the one Save (ADR 0074)", () => {
     return { code: flat[data.code ?? -1], card: flat[data.card ?? -1], field: flat[data.field ?? -1] };
   }
 
+  // P1.21v follow-up (Codex on c6cddd7): the answer the page reads (kit's action JSON, as use:enhance asks for it)
+  // names each written card's new version as the PDS gave it, so words typed meanwhile settle on that version.
   test("every_changed_card_is_written_in_one_commit_and_the_page_shows_them", async () => {
     let response: Response | undefined;
     const writes = await writesOf(async () => {
-      response = await saveAll([...text(0, CARD_A, "First of two"), ...text(1, CARD_C, "Second of two")]);
+      response = await saveAll([...text(0, CARD_A, "First of two"), ...text(1, CARD_C, "Second of two")], {
+        accept: "application/json",
+        "x-sveltekit-action": "true",
+      });
     });
-    expect(response?.status).toBe(303);
+    expect(response?.status).toBe(200);
+    const answer = JSON.parse(await (response as Response).text()) as { type: string; data: string };
+    expect(answer.type).toBe("success");
+    // devalue's flat array: the root object, its versions list, then each { key, version } by index.
+    const flat = JSON.parse(answer.data) as unknown[];
+    const at = (index: unknown) => flat[index as number];
+    const listed = at((flat[0] as { versions: number }).versions) as number[];
+    const versions = listed.map((i) => at(i) as { key: number; version: number });
+    expect(versions.map((entry) => at(entry.key))).toEqual([CARD_A, CARD_C]);
+    for (const entry of versions) expect(at(entry.version)).toMatch(/^b[a-z2-7]{20,100}$/);
+    expect(versions.map((entry) => at(entry.version))).not.toContain(OPENED);
     expect(writes.map((w) => [w.method, w.rkey])).toEqual([
       ["applyWrites", CARD_A],
       ["applyWrites", CARD_C],
@@ -646,7 +667,7 @@ describe("the card limit", () => {
         body,
         headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
       });
-      expect(saved.status).toBe(303);
+      expect(saved.status).toBe(200);
       expect(eleven.writes().map((write) => [write.method, write.rkey])).toEqual(
         keys.map((key) => ["applyWrites", key]),
       );
