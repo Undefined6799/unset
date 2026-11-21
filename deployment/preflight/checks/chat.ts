@@ -183,7 +183,7 @@ export const c36: Check = {
       if (outcome !== null) return outcome;
     }
     const mas = inputs.compose.services.find((s) => s.name === "mas");
-    return (mas === undefined ? null : masNetworkProblem(inputs, mas)) ?? pass();
+    return (mas === undefined ? null : listenerNetworksProblem(inputs, mas, MAS_NETWORKS, MAS_JOINS)) ?? pass();
   },
 };
 
@@ -223,32 +223,49 @@ function configVariable(service: Service, variable: string, path: string): Outco
   return null;
 }
 
+/** A network a server's listener binds one fixed address on, and the one other service that may join it. */
+type ListenerNetwork = {
+  readonly name: string;
+  readonly subnet: string;
+  readonly address: string;
+  readonly peer: string;
+};
+
 /**
  * MAS's two listeners bind fixed addresses (mas.yaml), which keep each on one network only if MAS holds exactly those
  * addresses there (ADR 0086 Decision 4). So MAS joins chat_db and the two MAS networks and nothing else, has each
  * listener's address on its network, each network is internal on its reviewed subnet, and only Synapse shares one and
  * only chat-admin the other.
  */
-const MAS_NETWORKS = [
+const MAS_NETWORKS: readonly ListenerNetwork[] = [
   { name: "chat_mas", subnet: "10.250.38.0/29", address: "10.250.38.3", peer: "synapse" },
   { name: "chat_admin_mas", subnet: "10.250.38.8/29", address: "10.250.38.11", peer: "chat-admin" },
-] as const;
+];
 const MAS_JOINS = ["chat_db", ...MAS_NETWORKS.map((n) => n.name)];
 
-function masNetworkProblem(inputs: Inputs, mas: Service): Outcome | null {
-  if (mas.networkMode !== null || mas.networks.some((n) => !MAS_JOINS.includes(n)))
-    return fail("mas joins a network other than chat_db, chat_mas and chat_admin_mas");
-  for (const { name, subnet, address, peer } of MAS_NETWORKS) {
-    const held = mas.addresses.filter(([network]) => network === name);
+const listing = (names: readonly string[]) => `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+
+/** `service` joins only `joins`, holds each listener's address on its network, and shares it with its peer alone. */
+function listenerNetworksProblem(
+  inputs: Inputs,
+  service: Service,
+  networks: readonly ListenerNetwork[],
+  joins: readonly string[],
+): Outcome | null {
+  const owner = service.name;
+  if (service.networkMode !== null || service.networks.some((n) => !joins.includes(n)))
+    return fail(`${owner} joins a network other than ${listing(joins)}`);
+  for (const { name, subnet, address, peer } of networks) {
+    const held = service.addresses.filter(([network]) => network === name);
     if (held.length !== 1 || held[0]?.[1] !== address)
-      return fail(`mas's address on ${name} is not its listener's bind`);
+      return fail(`${owner}'s address on ${name} is not its listener's bind`);
     const network = inputs.compose.networks.find((n) => n.name === name);
     if (network === undefined || !network.internal) return fail(`${name} is not internal`);
     if (network.subnet !== subnet) return fail(`${name} is not on its reviewed subnet`);
     const stranger = inputs.compose.services.find(
-      (s) => s.networks.includes(name) && s.name !== "mas" && s.name !== peer,
+      (s) => s.networks.includes(name) && s.name !== owner && s.name !== peer,
     );
-    if (stranger !== undefined) return fail(`${stranger.name} is on ${name}, which only mas and ${peer} share`);
+    if (stranger !== undefined) return fail(`${stranger.name} is on ${name}, which only ${owner} and ${peer} share`);
   }
   return null;
 }
