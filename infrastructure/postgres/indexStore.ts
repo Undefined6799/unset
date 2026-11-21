@@ -12,6 +12,7 @@ import {
   type IndexAccount,
   type IndexChange,
   type IndexWrite,
+  MAX_PAGE_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
 } from "@unset/domains-profile";
@@ -90,6 +91,7 @@ export const INGEST_COUNTERS = [
   "ingest_inactive",
   "ingest_invalid",
   "ingest_capped",
+  "ingest_over_budget",
   "ingest_account_inactive",
   "ingest_account_confirm",
   "ingest_dead_letter",
@@ -397,29 +399,46 @@ async function putProfile(tx: PoolClient, did: string, rev: string, write: Extra
 
 async function putSection(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "section" }>) {
   const uri = `at://${did}/sh.unset.section/${write.rkey}`;
-  if (!(await sectionFits(tx, did, uri))) return count(tx, "ingest_capped");
+  const room = await sectionRoom(tx, did, uri, write.bytes);
+  if (room === "count") return count(tx, "ingest_capped");
+  if (room === "bytes") {
+    // As for a record planCommit refuses: the older version under this key goes, so the page never shows a card
+    // its member has since changed (a backfill of the repo would not index it either).
+    await applyWrite(tx, did, rev, { kind: "delete", collection: "sh.unset.section", rkey: write.rkey });
+    return count(tx, "ingest_over_budget");
+  }
   const { rowCount } = await tx.query(
-    `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-     VALUES ($1, $2::types.did, $3, $4, $5, $6, (
+    `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, bytes, position, indexed_at)
+     VALUES ($1, $2::types.did, $3, $4, $5, $6, $7, (
        SELECT (o.ord - 1)::integer FROM idx.profile p,
               jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
         WHERE p.did = $2::types.did AND o.rkey = $3 ORDER BY o.ord LIMIT 1), now())
      ON CONFLICT (uri) DO UPDATE SET cid = excluded.cid, rev = excluded.rev, record = excluded.record,
-       position = excluded.position, indexed_at = excluded.indexed_at
+       bytes = excluded.bytes, position = excluded.position, indexed_at = excluded.indexed_at
      WHERE excluded.rev >= idx.section.rev AND idx.section.did = excluded.did`,
-    [uri, did, write.rkey, write.cid, rev, write.record],
+    [uri, did, write.rkey, write.cid, rev, write.record, write.bytes],
   );
   if (rowCount !== 0) await replaceBlobs(tx, did, uri, write.blobs);
 }
 
-/** A section already indexed may change; a new one fits while the account holds fewer than the cap. */
-async function sectionFits(tx: PoolClient, did: string, uri: string): Promise<boolean> {
+/**
+ * Whether the section fits its account: a section already indexed may change, and a new one fits while the account
+ * holds fewer than the cap ("count" when not); and the account's other sections and this one together stay within
+ * MAX_PAGE_BYTES ("bytes" when not), as the save counts them (domains/profile `fitsPage`). The frame holds the account
+ * row's lock (lockAccount), so no other write to this account's sections runs between this count and the write (DA-4).
+ * A size an older indexer left out counts as its jsonb text, as migration 0040 fills it.
+ */
+async function sectionRoom(tx: PoolClient, did: string, uri: string, bytes: number): Promise<"ok" | "count" | "bytes"> {
   const { rows } = await tx.query(
     `SELECT EXISTS (SELECT 1 FROM idx.section WHERE did = $1 AND uri = $2) AS known,
-            (SELECT count(*) FROM idx.section WHERE did = $1) AS held`,
+            (SELECT count(*) FROM idx.section WHERE did = $1) AS held,
+            (SELECT coalesce(sum(coalesce(bytes, octet_length(record::text))), 0)
+               FROM idx.section WHERE did = $1 AND uri <> $2) AS others`,
     [did, uri],
   );
-  return rows[0]?.known === true || Number(rows[0]?.held) < MAX_SECTIONS_PER_ACCOUNT;
+  const row = rows[0];
+  if (row?.known !== true && !(Number(row?.held) < MAX_SECTIONS_PER_ACCOUNT)) return "count";
+  return Number(row?.others) + bytes <= MAX_PAGE_BYTES ? "ok" : "bytes";
 }
 
 export async function replaceBlobs(tx: PoolClient, did: string, uri: string, blobs: readonly BlobRef[]): Promise<void> {

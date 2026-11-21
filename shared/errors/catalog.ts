@@ -62,6 +62,8 @@ export const ERROR_CODES = {
   "card.order_invalid": { status: 409, public: true },
   "card.missing": { status: 404, public: true },
   "card.too_many": { status: 409, public: true },
+  // The member's cards together would pass what one page holds (domains/profile MAX_PAGE_BYTES): nothing was written.
+  "card.page_full": { status: 409, public: true },
   // More cards stored than a page shows (written outside this app): moving waits until the member deletes one.
   "card.overflow": { status: 409, public: true },
   // A new card's repo changed twice while it was being added (createRecord swapCommit refused); nothing was written.

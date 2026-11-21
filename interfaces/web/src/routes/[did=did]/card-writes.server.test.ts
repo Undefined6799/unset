@@ -269,6 +269,58 @@ describe("cardWrites", () => {
   });
 });
 
+// Review of #1911: all of a member's cards together must fit one page (domains/profile MAX_PAGE_BYTES, 4 MiB),
+// counted on the list the write is checked against, so the index never leaves out a card the owner saved.
+describe("a page's cards together fit one page", () => {
+  // Forty-one Text cards of 100,000 characters: about 4.1 MB, just under the budget.
+  const full = "a".repeat(100_000);
+  const page = (cards: number) =>
+    ok({
+      cards: Array.from({ length: cards }, (_, i) => ({ key: `k${i}`, value: readme(full), cid: "c" })),
+      complete: true,
+      overflow: false,
+    });
+
+  test("adding a card past the budget is refused and nothing is written", async () => {
+    const { writes, calls } = store({ list: async () => page(41) });
+    expect(await writes.create(input(full).content, "full")).toEqual({ kind: "failed", code: "card.page_full" });
+    expect(calls.created).toEqual([]);
+    expect(await store({ list: async () => page(40) }).writes.create(input(full).content, "full")).toEqual({
+      kind: "saved",
+    });
+  });
+
+  test("an edit that takes the page past the budget is refused; one that keeps it within is saved", async () => {
+    const { writes, calls } = store({ list: async () => page(41) });
+    expect(await writes.save(KEY, input(full).content, "full")).toEqual({ kind: "failed", code: "card.page_full" });
+    expect(calls.saved).toMatchObject([{ built: { ok: false, code: "card.page_full" } }]);
+    expect(await writes.save("k0" as CardKey, input(full).content, "full")).toEqual({ kind: "saved" });
+  });
+
+  test("an edit is counted on a complete list only", async () => {
+    const cut = { cards: [], complete: false, overflow: false };
+    const { writes, calls } = store({ list: async () => ok(cut) });
+    expect(await writes.save(KEY, input().content, "full")).toEqual({ kind: "failed", code: "card.list_incomplete" });
+    expect(calls.saved).toEqual([]);
+  });
+
+  test("a Save of several cards past the budget is refused and nothing is written", async () => {
+    const stored = { cards: [{ key: "k0", value: readme("A"), cid: "c" }], complete: true, overflow: false };
+    const { writes, calls } = store({ list: async () => ok(stored) });
+    const big = { kind: "readme", text: "a".repeat(100_000) } as CardContent;
+    const edits = Array.from({ length: 1 }, () => ({
+      key: "k0" as CardKey,
+      version: "c" as Parameters<CardWrites["saveAll"]>[0][number]["version"],
+      content: big,
+      width: "full" as const,
+    }));
+    expect(await writes.saveAll(edits)).toEqual({ kind: "saved" });
+    const many = await store({ list: async () => page(42) }).writes.saveAll(edits);
+    expect(many).toEqual({ kind: "failed", code: "card.page_full" });
+    expect(calls.many).toHaveLength(1);
+  });
+});
+
 test("create and save pass the chosen surface to the member's stored record", async () => {
   const { writes, calls } = store();
   const { content, width } = input();

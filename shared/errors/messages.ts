@@ -52,6 +52,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.order_invalid": "Your cards changed since you opened the page. Reload, then move them again.",
   "card.missing": "That card is gone. Reload to see your cards.",
   "card.too_many": "You have the most cards a page can hold. Delete one to add another.",
+  "card.page_full": "Your cards together are more than one page can hold. Shorten or delete a card, then save again.",
   "card.overflow": "You have more cards than your page can show. Delete one to bring a hidden card back.",
   "card.cards_changed":
     "Your cards changed somewhere else while you were adding this one. Nothing was saved. Save again to add it.",

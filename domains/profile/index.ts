@@ -56,15 +56,18 @@ export {
 } from "./discoverability.ts";
 export {
   type BlobRef,
+  fitsPage,
   INDEXED_COLLECTIONS,
   type IndexAccount,
   type IndexChange,
   type IndexedCollection,
   type IndexPlan,
   type IndexWrite,
+  MAX_PAGE_BYTES,
   MAX_RECORD_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
+  recordBytes,
 } from "./index-plan.ts";
 export {
   APP_LIMITS,

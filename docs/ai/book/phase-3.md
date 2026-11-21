@@ -1970,17 +1970,25 @@ Diagram: none.
 
 ### P3.12v — Keep every card a member can save on the public page
 Tags: [SEC] [ALEX] (typed line: it raises a resource cap)            Depends on: P3.12
-`domains/profile/` (index-plan.ts, card-edit.ts, profile.ts); staging break test 2026-11-21, bug 2.
+`domains/profile/` (index-plan.ts, card-edit.ts, profile.ts), the card writes in `interfaces/web`, the indexer's and
+web's stores in `infrastructure/postgres` (migration 0040); staging break test 2026-11-21, bug 2.
 
 **What:** a 95 KB Text card saved and showed to its owner, but the index kept records of at most 64 KiB
 (`MAX_RECORD_BYTES`), so the public page never had it. Alex's limits allow more: the lexicon's 100,000-byte text and
 100-entry collections, about 620 KB at every field's limit. The cap becomes 1,000,000 bytes, the most one write to the
 pinned PDS may carry (`APPLY_WRITES_BODY_BYTES`; a test holds the two equal), so every record saved through our PDS is
 kept. The save checks each profile and card record it writes with the indexer's own `fitsIndex`, so the two never
-drift again. Per account the index then holds at most 200 sections (`MAX_SECTIONS_PER_ACCOUNT`) of 1 MB each, about
-191 MiB at worst, up from about 12.5 MiB; a backfill also stops at the 32 MiB repo cap (`INDEXER_REPO_MAX_BYTES`).
+drift again. A member's cards together are held to `MAX_PAGE_BYTES` (4 MiB, Alex's number; 8 MiB the alternative), the
+number the owner's card list already stopped at (`CARD_LIST_BYTES`, a test holds the two equal): the save refuses a
+write past it (`card.page_full`), counted on the list it checks; the indexer stores each card's size (migration 0040)
+and skips and counts (`ingest_over_budget`) a card past it, removing its older version; and the public page reads the
+cards one row each, in page order, stopping at it. Without the budget, 200 cards of 1 MB would make one page of about
+191 MiB that web reads for any visitor (review of #1911). At the editor's limits 4 MiB holds about 41 Text cards of
+100,000 characters or 54 collections of 30 full entries; a hundred cards fit while they average under about 41 KB.
 **Tests:** the largest Text card and collection the limits allow are indexed; an edit whose kept fields pass the cap
-is refused at save; the cap equals the PDS write limit.
+is refused at save; the cap equals the PDS write limit; a hundred everyday cards fit and the 42nd full Text card does
+not; create, edit and Save of several are refused past the budget; the indexer skips, counts and removes past it; the
+public read stops at it in page order.
 
 ### P3.14s — Web search through SearXNG behind the search bar
 Tags: [SEC] [ALEX] (ADR 0035, typed line)            Depends on: P3.14, P1.18a

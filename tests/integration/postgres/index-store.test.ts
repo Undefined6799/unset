@@ -2,7 +2,7 @@
 // `indexer` role (TE-2). Account rows and pds_active are set as the superuser, as the track loop (P3.02s) and the
 // account-state machine (P3.06s) will. The tests run in order on one database of their own container.
 import { join } from "node:path";
-import { type IndexChange, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
+import { type IndexChange, MAX_PAGE_BYTES, MAX_SECTIONS_PER_ACCOUNT, recordBytes } from "@unset/domains-profile";
 import {
   createIndexStore,
   type IndexStore,
@@ -38,6 +38,7 @@ const C = "did:plc:cccccccccccccccccccccccc";
 const D = "did:plc:dddddddddddddddddddddddd";
 const G = "did:plc:gggggggggggggggggggggggg";
 const H = "did:plc:hhhhhhhhhhhhhhhhhhhhhhhh";
+const I = "did:plc:iiiiiiiiiiiiiiiiiiiiiiii";
 const T = "2026-11-18T00:00:00.000Z";
 const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const BLOB = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
@@ -290,6 +291,23 @@ describe("index store", () => {
     await commit(H, rev(3), [section("3jzfcijpj2z2d"), drop]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${H}'`)).toEqual([String(MAX_SECTIONS_PER_ACCOUNT)]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${H}' AND rkey = '3jzfcijpj2z2d'`)).toEqual(["1"]);
+  });
+
+  // Review of #1911: one member's cards together stay within what one page holds, counted as the save counts them.
+  test("index.a_card_past_the_page_budget_is_skipped_counted_and_its_older_version_removed", async () => {
+    track(I, true);
+    const first = section(CARD_1);
+    await commit(I, rev(3), [first]);
+    if (first.kind !== "put") throw new Error("a put");
+    expect(lines(`SELECT bytes FROM idx.section WHERE did = '${I}'`)).toEqual([String(recordBytes(first.record))]);
+    sql(
+      `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, bytes, indexed_at)
+       VALUES ('at://${I}/sh.unset.section/big', '${I}', 'big', '${CID}', '${rev(3)}', '{}', ${MAX_PAGE_BYTES - 10}, now())`,
+    );
+    const before = Number(stat("ingest_over_budget"));
+    await commit(I, rev(4), [section(CARD_1), section(CARD_2)]);
+    expect(lines(`SELECT rkey FROM idx.section WHERE did = '${I}' ORDER BY rkey`)).toEqual(["big"]);
+    expect(Number(stat("ingest_over_budget"))).toBe(before + 2);
   });
 
   test("index.active_status_is_only_queued_for_confirmation", async () => {

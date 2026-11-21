@@ -1,6 +1,8 @@
 // The index's rules for one commit (index-plan.ts, book P3.05s). Pure: the store's tests cover the transaction.
+
+import { LIMITS } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { type IndexChange, MAX_RECORD_BYTES, planCommit } from "./index-plan.ts";
+import { fitsPage, type IndexChange, MAX_PAGE_BYTES, MAX_RECORD_BYTES, planCommit, recordBytes } from "./index-plan.ts";
 
 const T = "2026-11-18T00:00:00.000Z";
 const TID = "3jzfcijpj2z2a";
@@ -49,6 +51,52 @@ describe("the largest cards a member may save are indexed", () => {
   };
   test.each(Object.entries(largest))("index.keeps_%s", (_name, content) => {
     expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
+});
+
+// Review of #1911: all of a member's cards together are held to MAX_PAGE_BYTES (4 MiB, Alex's number to set), by the
+// save and the index alike. At the editor's per-field limits that is about 41 Text cards of 100,000 characters, or
+// about 54 collections of 30 full entries; a hundred cards fit while they average under about 41 KB. A hundred full
+// cards never fit: the page budget gives before the per-card limits do.
+describe("a member's cards together fit one page", () => {
+  const card = (text: string) => ({
+    $type: "sh.unset.section",
+    content: { $type: "sh.unset.section#readme", text },
+    width: "full",
+    surface: "filled",
+    createdAt: "2026-11-21T05:00:00.000Z",
+  });
+  const full = card("a".repeat(LIMITS.section.textBytes));
+  const many = (n: number, record: unknown) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: record }));
+
+  test("page.a_hundred_everyday_cards_fit", () => {
+    // A long paragraph each: 2,000 characters.
+    expect(fitsPage(many(LIMITS.profile.cardsMax - 1, card("a".repeat(2_000))), [{ key: null, record: full }])).toBe(
+      true,
+    );
+  });
+
+  test("page.forty_one_full_text_cards_fit_and_a_forty_second_does_not", () => {
+    expect(fitsPage(many(40, full), [{ key: null, record: full }])).toBe(true);
+    expect(fitsPage(many(41, full), [{ key: null, record: full }])).toBe(false);
+  });
+
+  test("page.a_card_being_replaced_counts_once", () => {
+    const stored = many(41, full);
+    expect(fitsPage(stored, [{ key: "k0", record: full }])).toBe(true);
+    expect(fitsPage(stored, [{ key: "k0", record: card("a".repeat(MAX_PAGE_BYTES)) }])).toBe(false);
+  });
+
+  test("page.a_value_json_cannot_encode_never_fits", () => {
+    expect(recordBytes(10n)).toBe(Number.POSITIVE_INFINITY);
+    expect(fitsPage([], [{ key: null, record: { n: 10n } }])).toBe(false);
+  });
+
+  test("index.a_section_write_carries_its_size", () => {
+    const plan = planCommit(active, "3jzfcijpj2z2c", [section()]);
+    const write = plan.kind === "apply" ? plan.writes[0] : undefined;
+    expect(write?.kind === "section" ? write.bytes : 0).toBe(recordBytes(write?.kind === "section" ? write.record : 0));
+    expect(write?.kind === "section" && write.bytes > 0).toBe(true);
   });
 });
 

@@ -20,6 +20,14 @@ export type IndexedCollection = (typeof INDEXED_COLLECTIONS)[number];
  * and never showed publicly (staging break test 2026-11-21).
  */
 export const MAX_RECORD_BYTES = 1_000_000;
+/**
+ * All of a member's cards together, as `recordBytes` counts them: the most the index keeps for one account, the most
+ * the public page reads, and the most the owner's own card list reads (CARD_LIST_BYTES in infrastructure/pds,
+ * card-records.ts, held equal by a test). Without it, 200 cards of up to MAX_RECORD_BYTES each would make one page of
+ * about 191 MiB, which web would read and render for any visitor (review of #1911). 4 MiB is the number the owner's
+ * list already stopped at (book P3.12v; the number is Alex's to set).
+ */
+export const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 /** Sections kept per account: the profile lists at most LIMITS.profile.cardsMax, and unlisted ones show after. */
 export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.profile.cardsMax;
 
@@ -55,6 +63,8 @@ export type IndexWrite =
       readonly cid: string;
       readonly record: Readonly<Record<string, unknown>>;
       readonly blobs: readonly BlobRef[];
+      /** The record's size as `recordBytes` counts it, which the store keeps to hold the account to MAX_PAGE_BYTES. */
+      readonly bytes: number;
     }
   | { readonly kind: "delete"; readonly collection: IndexedCollection; readonly rkey: string };
 
@@ -109,7 +119,9 @@ function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null
   if (!checked.ok) return null;
   const record = checked.value;
   const blobs = blobRefs(record);
-  if (collection === NSID.section) return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs };
+  if (collection === NSID.section) {
+    return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs, bytes: recordBytes(record) };
+  }
   return {
     kind: "profile",
     cid: change.cid,
@@ -134,11 +146,37 @@ const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
  * this same function, so a record the owner can save and see is never one the public page leaves out.
  */
 export function fitsIndex(record: unknown): boolean {
+  return recordBytes(record) <= MAX_RECORD_BYTES && storable(record);
+}
+
+/**
+ * A record's size: the bytes of its JSON in UTF-8, as the save, the index and the owner's card list all count it.
+ * A value JSON cannot encode is not a record, and counts as too large for anything.
+ */
+export function recordBytes(record: unknown): number {
   try {
-    return new TextEncoder().encode(JSON.stringify(record)).byteLength <= MAX_RECORD_BYTES && storable(record);
+    const json = JSON.stringify(record);
+    return typeof json === "string" ? new TextEncoder().encode(json).byteLength : Number.POSITIVE_INFINITY;
   } catch {
-    return false; // a value JSON cannot encode is not a record
+    return Number.POSITIVE_INFINITY;
   }
+}
+
+/**
+ * Whether a member's cards fit MAX_PAGE_BYTES once `writes` are made (a new card's key is one `stored` does not hold).
+ * `stored` is every card they hold now, as their repo lists them; a card a write names is replaced, not added to. The
+ * save refuses writes that would not fit, and the index skips a card that does not (indexStore.ts), so what the owner
+ * saves is what the page shows.
+ */
+export function fitsPage(
+  stored: readonly { readonly key: string; readonly value: unknown }[],
+  writes: readonly { readonly key: string | null; readonly record: unknown }[],
+): boolean {
+  const written = new Set(writes.map((write) => write.key));
+  let bytes = 0;
+  for (const write of writes) bytes += recordBytes(write.record);
+  for (const card of stored) if (!written.has(card.key)) bytes += recordBytes(card.value);
+  return bytes <= MAX_PAGE_BYTES;
 }
 
 /**

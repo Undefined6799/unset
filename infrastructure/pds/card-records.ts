@@ -14,12 +14,16 @@ export const CARD_COLLECTION = "sh.unset.section";
  * How the cards are read (Codex on #1657; coordinator 2026-11-17 07:04Z). Every PDS response is capped at 1 MiB
  * (net-guard libraryFetch), and one card may be about 900 KB, so the cards come in pages of PAGE records; a page past
  * the cap is read again one record at a time. One page load makes at most MAX_CALLS calls and keeps at most
- * MAX_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.profile.cardsMax), all inside the request's deadline.
+ * CARD_LIST_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.profile.cardsMax), all inside the request's deadline.
  * When it stops early, the list says it is incomplete, and the caller shows what it has, never more.
  */
 const PAGE = 10;
 const MAX_CALLS = 24;
-const MAX_BYTES = 4 * 1024 * 1024;
+/**
+ * Equal to the most one member's cards may hold together (MAX_PAGE_BYTES in domains/profile, index-plan.ts; a test in
+ * interfaces/web, record-size.test.ts, holds them equal), so a list of cards the page can show always reads complete.
+ */
+export const CARD_LIST_BYTES = 4 * 1024 * 1024;
 const MAX_CARDS = 100;
 
 export type StoredCard = { readonly key: string; readonly value: unknown; readonly cid: string };
@@ -111,7 +115,7 @@ export async function listCardRecords(
     if (page.value.cursor === undefined) return listed(cards, cards.length <= MAX_CARDS);
     cursor = page.value.cursor;
     // One page past MAX_CARDS is read, so exactly MAX_CARDS cards still end with an empty last page and count as all.
-    if (cards.length > MAX_CARDS || bytes > MAX_BYTES) break;
+    if (cards.length > MAX_CARDS || bytes > CARD_LIST_BYTES) break;
   }
   return partial(cards);
 }
