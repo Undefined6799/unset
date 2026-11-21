@@ -2584,6 +2584,19 @@ the time or edit a row, the sweep), the route's denial and largest form, the cal
 erasure counts the rows, the e2e page and the no-script page.
 **Not in this step:** the second check before deleting (P2.28).
 
+### P2.27d — Show the member's initial on notification pages
+Tags: —            Depends on: P2.27c
+`interfaces/web/src/routes/{notifications,notifications/sign-ins,invite}/+page.server.ts` and the notifications'
+empty-list hint; staging break test 2026-11-21, bugs 3 and 4.
+
+**What:** those three pages passed their own shell `account` with a path and no name, which replaces the root
+layout's, so the header's account button drew the person icon as if signed out. They now leave the account to the
+layout, and `shell-account.test.ts` fails on any page shell that names an account without its name. A sign-in's entry
+is shown only in the browsers signed in before it (migration 0036 `older_sessions_only`), by design, so the browser
+that signed in never sees its own; the empty list's hint now says so.
+
+---
+
 ### P2.28 — Ask for a second check before sensitive actions
 Tags: [SEC] [ALEX]            Depends on: P2.27c
 Alex 2026-11-21 00:58Z: "make a note about like the things that we believe will require 2FA, and then when we build

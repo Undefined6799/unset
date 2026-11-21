@@ -14,7 +14,7 @@ import type { ShellData } from "../../lib/shell.ts";
 export const load: ServerLoad = async (event) => {
   if (event.locals.did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   event.setHeaders({ "x-robots-tag": "noindex" });
-  const shell: ShellData = { kind: "core", noindex: true, wide: true, account: { path: `/${event.locals.did}` } };
+  const shell: ShellData = { kind: "core", noindex: true, wide: true }; // the account button is the layout's
   return { shell, notifications: await notificationsView(event, PAGE_LIMIT) };
 };
 
