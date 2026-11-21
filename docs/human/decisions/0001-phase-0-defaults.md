@@ -735,3 +735,17 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   `visibility` on `sh.unset.profile` (public, signedIn, ownerOnly; absent public, unknown ownerOnly); anyone the choice
   leaves out gets a limited page with the name and handle; a page that is not public is never listed. Partly
   supersedes ADR 0004 and decision 35 D7 for the profile page. Proposed, awaiting Alex.
+- **ADR 0079 accepted** (2026-11-21 00:38Z): Alex's line "Merge 1855 at e8dcaa5", given after that head was reviewed;
+  merged as d4e3599. Its status, index row and this line were added in the P2.27b pull request.
+- **Notifications stay until dismissed (P2.27b, 2026-11-21; own record:
+  [0081](0081-notifications-stay-until-dismissed.md)):** looking at a notification no longer deletes it; a member
+  dismisses one, the selected or all, and every entry still goes at 30 days. Amends 0079 point 3. Proposed, awaiting
+  Alex.
+- **ADR 0080 accepted (Alex, 2026-11-21 01:03Z, against 724bda1; own record:
+  [0080](0080-invite-requests-mail-the-owner.md)):** a visitor may ask for an invite at `/request-invite`; web mails the
+  owner each address over SMTP (always encrypted before the login), keeps only a keyed hash in memory for 30 days, and
+  limits asks to 3 an hour per address and 20 a day site-wide.
+- **ADR 0078 accepted (Alex, 2026-11-21 01:32Z, against 7a73c61; own record:
+  [0078](0078-who-sees-the-profile-page.md)):** a member chooses who sees their page, Public, Signed-in members only or
+  Only me, and anyone left out gets the limited page. For the profile page only, it partly supersedes ADR 0004 (decision
+  37) and decision 35 D7 (ADR 0002); both still hold everywhere else, and their own status lines are unchanged.

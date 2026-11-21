@@ -59,7 +59,7 @@ export const load: ServerLoad = async (event) => {
   // The changed privacy notice banner (P2.12b), as the app gate decided it for this request; it names the version it
   // shows so its dismiss records that one and no newer.
   const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
-  // The bell (P2.27): the newest few and the unread count, brought by the session read on every page a member opens,
+  // The bell (P2.27): the newest few and their count, brought by the session read on every page a member opens,
   // so it is current with no script, no polling and no statement of its own. Undefined for a visitor.
   const notifications = locals.did === undefined ? undefined : await bellView(event);
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.

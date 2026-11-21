@@ -2549,6 +2549,25 @@ in-place editing), email, push, live updates.
 Tags: [SEC]            Depends on: P2.27
 **What:** ADR 0079 point 5: the Settings › Privacy choice to keep opened notifications for 30 days instead of deleting
 them on open (a read time on the row, shown as read), inside the same 30-day ceiling.
+Overtaken by P2.27b (2026-11-21): under ADR 0081 opening deletes nothing, so every entry already stays until it is
+dismissed or 30 days old, and there is no choice left to offer. Not to be built unless Alex asks again.
+
+### P2.27b — Notifications: stay until dismissed, the full-window page
+Tags: [SEC]            Depends on: P2.27
+Alex 2026-11-21 00:15Z to 00:36Z, on the mock-up (https://claude.ai/artifact/QS2ByLohscteWE1HG4psPV): "perfect implement
+that". ADR 0081, Proposed; carries ADR 0079's acceptance record.
+
+**What:** opening a notification deletes nothing. `/notifications` fills the window below the header (the footer
+only on scrolling): dense rows with checkboxes beside the chosen entry's detail (when, kind, what to do, the reason's
+button, Dismiss). Dismiss selected and Dismiss all; `?/open` and `?/readAll` become `?/dismiss` (one or the ticked,
+at most 50) and `?/dismissAll`; the page's form limit 4 KB. With script: showing a row without a round trip, a split
+dragged or moved by arrow keys between 2/5 and 3/5 and kept on the device, a cut-off row lifted over the detail after
+0.4 s, never within 40 px of the split. Phone: the detail is its own screen at `?n=`. The bell's rows link to the
+detail; its count is what is waiting.
+**Tests:** the store and route tests rewritten for dismissing (denial, the new browser, the largest form, double and
+stale posts, the notice seen on dismiss), the domain's id parsing, tests/e2e/notifications.spec.ts (a seeded
+"inbox" member), the no-script page.
+**Not in this step:** the Sign-in history tab (P2.27c).
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
@@ -3218,7 +3237,7 @@ Where: `interfaces/web/src/routes/request-invite/`, `domains/identity/invite-req
   `shared/config` `optionalSecretFile`; links on `/login` and a bare `/join`.
 Goal: a visitor with no invite leaves one email address and the two sign-up ticks; the owner gets one mail with the
   address as Reply-To and sends an invite link from their own mailbox. No copy is kept (ADR 0080 point 3).
-Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
+Not in this step: the "Sign up" button on ADR 0078's limited-page card (built as P2.10t); the compose
   mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
 Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
   through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
@@ -3241,6 +3260,16 @@ Threats:
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
+
+### P2.10t — Offer Sign up on the limited page
+Tags: —            Depends on: P2.10r, P1.22a            Plan: §5.3 "Login and signup"; ADR 0078, ADR 0080
+Asked by Alex 2026-11-20 (a sign-up button on the limited page's card, pointing to request-an-invite for now).
+Where: `apps/web/lib/components/profile/limited-profile.svelte`, `interfaces/web/src/routes/@[actor]/+page.server.ts`.
+Goal: a visitor on a page shown to signed-in members only sees "Sign up" beside "Sign in", leading to
+  `/request-invite`, while invite requests are on; with them off there is no button. A page only its member sees
+  offers neither, since joining would not show it.
+Also carries the acceptance records of ADR 0080 and ADR 0078.
+Done when `signed_in_only_offers_a_visitor_sign_up_when_invite_requests_are_on` was shown red, and check is green.
 ### P2.10u — Invite requests on in staging: mounts, env, C9 names a missing file
 Tags: [SEC]            Depends on: P2.10r            Plan: §5.3 "Login and signup"; ADR 0080
 Where: `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` (web's env and two secret mounts),
@@ -4028,6 +4057,14 @@ newer one becomes the last and leaves exactly the use of the picture the record 
 A delete marks the record and drops every use of it. Taking a use back runs under its own 5 s deadline
 (`SETTLE_MS`), not the request's. Left: a use whose write went unanswered and did not land, or whose request died
 mid-save, keeps its image from the sweep. Pages still hide picture cards until P2.19c.
+P2.19b, orphan-object sweep, built 2026-11-20: web's sweeps also run `sweep.image_orphan`
+(`interfaces/web/src/lib/server/image-orphans.ts`). It lists `drafts/`, then reads which of the listed ids still have
+a row (`ImageStore.named`), and deletes each `drafts/<did>/i/<id>/` folder no row of that member names, all or nothing
+under the image sweep's governor. No age check: rows are written before objects and deleted before them, and ids are
+never reused, so a folder with no row at that read can never gain one. Keys of any other shape are left alone.
+P2.19b, booked follow-up (reviewer, #1860): a card write the PDS answers without a commit revision, or never
+answers, keeps its saves' holds on `app.image_use` for good, so that image is never swept and stays in the quota. Fix
+in a later step: a reconciliation that reads the record from the member's PDS and settles or releases those holds.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
