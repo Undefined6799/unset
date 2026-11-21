@@ -242,7 +242,8 @@ test("chat_page.setup_saves_key: the key is shown to save and download, checked,
   expect(download.suggestedFilename()).toBe("unset-chat-recovery-key.txt");
   expect(readFileSync(await download.path(), "utf8")).toContain(key);
   // Nothing is stored before the check passes.
-  const vaultWrites = () => stack.homeserver.seen.filter((c) => /account_data\/m\.secret_storage/.test(c.url)).length;
+  const vaultWrites = () =>
+    stack.homeserver.seen.filter((c) => c.method === "PUT" && /account_data\/m\.secret_storage/.test(c.url)).length;
   await page.locator("#key-end").fill("xxxx");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.locator("#key-end-wrong")).toBeVisible();
@@ -317,3 +318,29 @@ for (const scheme of ["light", "dark"] as const) {
     expect((await new AxeBuilder({ page: second.page }).analyze()).violations.map((v) => v.id)).toEqual([]);
   });
 }
+
+test("chat_page.reload_cached_sync: a set-up browser reloaded within Synapse's sync cache is not asked to set up again", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, problems } = await open(browser);
+  const states: (string | null)[] = [];
+  await page.goto("https://unset.cc/");
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
+  // The initial /sync this device made before its vault existed, which Synapse hands back on a quick reload.
+  const before = stack.homeserver.now();
+  await saveKey(page);
+  const vaultWrites = () =>
+    stack.homeserver.seen.filter((c) => c.method === "PUT" && /account_data\/m\.secret_storage/.test(c.url)).length;
+  const written = vaultWrites();
+  stack.homeserver.state.cachedInitialAt = before;
+  await page.goto("https://unset.cc/");
+  const watch = setInterval(async () => states.push(await state(page).catch(() => null)), 100);
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("ready");
+  await page.waitForTimeout(2000);
+  clearInterval(watch);
+  expect(states.filter((s) => s === "save_key" || s === "setting_up")).toEqual([]);
+  expect(await state(page)).toBe("ready");
+  expect(vaultWrites()).toBe(written);
+  expect(problems).toEqual([]);
+});

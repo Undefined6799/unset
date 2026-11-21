@@ -82,7 +82,9 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   let busy = false;
   const report = async () => {
     if (busy) return;
-    const facts = await readFacts(client, crypto, session.userId);
+    // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
+    const facts = await readFacts(client, crypto, session.userId).catch(() => null);
+    if (facts === null) return void fail(UNAVAILABLE);
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
     tell(phase === "ready" ? { kind: "ready" } : { kind: "locked", unlock: tryKey });
