@@ -106,8 +106,10 @@ const textOf = (card: CardView) => {
 
 function change(key: string, made: CardChange) {
   if (made.fields?.text !== undefined) held.set(key, made.fields.text);
-  // Typing into a card supersedes the draft an earlier visit kept for it: its own draft now holds these words.
-  if (offered.has(key)) offered = new Map([...offered].filter(([other]) => other !== key));
+  // Typing into a card supersedes the draft an earlier visit kept for it: its own draft now holds these words. A Width
+  // or Style change does not, so that draft stays offered.
+  if (made.fields?.text !== undefined && offered.has(key))
+    offered = new Map([...offered].filter(([other]) => other !== key));
   edits = edit(edits, data.cards, key, made);
   said = undefined;
   const text = made.fields?.text;
@@ -177,6 +179,9 @@ function keepDrafts(written: readonly string[], before: UnsavedCards) {
   const store = storage();
   if (store === null) return;
   for (const key of written) {
+    // A draft still offered from an earlier visit holds words no Save sent (only its Width or Style changed since): it
+    // stays as it is until the member brings it back or throws it away.
+    if (offered.has(key)) continue;
     const left = edits.get(key);
     const text = left?.fields.text;
     if (left === undefined || text === undefined) {

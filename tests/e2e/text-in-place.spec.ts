@@ -210,3 +210,31 @@ test("words_typed_while_a_draft_is_offered_are_kept", async ({ page }) => {
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
 });
+
+// Codex on b69a0ce: a Width or Style change saved while an earlier visit's draft is offered keeps that draft offered;
+// only new words replace it.
+test("a_layout_change_saved_while_a_draft_is_offered_keeps_the_draft", async ({ page }) => {
+  const word = `layout${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" kept");
+  await openOwnPage(page);
+  const offer = page.getByText(/This device kept unsaved words/);
+  await expect(offer).toBeVisible();
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemradio", { name: "Half width" }).click();
+  await page.keyboard.press("Escape");
+  await expect(offer).toBeVisible();
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await openOwnPage(page);
+  await page.getByRole("button", { name: "Bring them back" }).click();
+  await expect((await editorHolding(page, word)).editor).toContainText(`${word} start kept`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
