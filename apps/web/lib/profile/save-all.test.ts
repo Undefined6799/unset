@@ -79,6 +79,29 @@ describe("readSaveAnswer", () => {
     ).toEqual({ kind: "refused", code: "card.too_long", message: "Too long", card: "b", field: "cards.0.text" });
   });
 
+  // P1.21v follow-up (Codex on c6cddd7): the answer names each written card's new version, so the page settles on it.
+  test("a_save_s_answer_names_the_version_each_written_card_now_has", () => {
+    const versions = [{ key: "a", version: "bafy-a2" }];
+    expect(readSaveAnswer({ type: "success", data: { versions } }, HERE)).toEqual({
+      kind: "saved",
+      versions: new Map([["a", "bafy-a2"]]),
+    });
+    expect(
+      readSaveAnswer(
+        { type: "failure", data: { code: "card.save_partial", message: "Some", saved: ["a"], versions } },
+        HERE,
+      ),
+    ).toEqual({
+      kind: "refused",
+      code: "card.save_partial",
+      message: "Some",
+      saved: ["a"],
+      versions: new Map([["a", "bafy-a2"]]),
+    });
+    const odd = [{ key: "a", version: 3 }, "b", null, { key: 1, version: "x" }];
+    expect(readSaveAnswer({ type: "success", data: { versions: odd } }, HERE)).toEqual({ kind: "saved" });
+  });
+
   test("anything else, a dropped connection or a page error, is a failure the member can try again", () => {
     expect(readSaveAnswer({ type: "error" }, HERE)).toEqual({ kind: "failed" });
     expect(readSaveAnswer({ type: "failure", data: { message: 3 } }, HERE)).toEqual({ kind: "failed" });

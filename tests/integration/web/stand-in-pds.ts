@@ -16,7 +16,11 @@ export type PdsWrite = {
   readonly swapRecord?: string | null;
 };
 
-/** A valid CIDv1 (dag-cbor, sha-256) the stand-in gives every record; nothing here checks content addressing. */
+/**
+ * A valid CIDv1 (dag-cbor, sha-256) the stand-in gives every record it was started with; nothing here checks content
+ * addressing. A record written here gets a CID of its own write instead, so a card's version moves on each write as a
+ * real PDS's does, and a Save on an old version is a conflict.
+ */
 const CID = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -71,6 +75,16 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
   const wrongRepo = () => json(400, { error: "InvalidRequest", message: "not this repo" });
   let commits = 0;
   const head = () => cidOf(commits);
+  const written = new Map<string, string>();
+  const cidOfRecord = (c: string, rkey: string) => written.get(uri(c, rkey)) ?? CID;
+  let recordWrites = 0;
+  /** A new CID for the record just written; negative numbers keep it apart from every head. */
+  const wrote = (c: string, rkey: string) => {
+    recordWrites += 1;
+    const cid = cidOf(-recordWrites);
+    written.set(uri(c, rkey), cid);
+    return cid;
+  };
 
   return async (request: Request): Promise<Response | undefined> => {
     const url = new URL(request.url);
@@ -104,13 +118,17 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
         const value = records.get(rkey);
         return value === undefined
           ? json(400, { error: "RecordNotFound", message: "Could not locate record" })
-          : json(200, { uri: uri(q.get("collection") ?? "", rkey), cid: CID, value });
+          : json(200, {
+              uri: uri(q.get("collection") ?? "", rkey),
+              cid: cidOfRecord(q.get("collection") ?? "", rkey),
+              value,
+            });
       }
       if (method === "listRecords")
         return json(200, {
           records: [...records].map(([rkey, value]) => ({
             uri: uri(q.get("collection") ?? "", rkey),
-            cid: CID,
+            cid: cidOfRecord(q.get("collection") ?? "", rkey),
             value,
           })),
         });
@@ -147,7 +165,13 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
       for (const w of writes) collection(w.collection).set(w.rkey, w.value);
       commits += 1;
       for (const w of writes) onWrite({ method, collection: w.collection, rkey: w.rkey, record: w.value });
-      return json(200, { commit: { cid: head(), rev: "3jzfcijpj2z2b" }, results: [] });
+      // Each update's result names its record and its new CID (@atproto/api 0.30.3 applyWrites UpdateResult).
+      const results = writes.map((w) => ({
+        $type: "com.atproto.repo.applyWrites#updateResult",
+        uri: uri(w.collection, w.rkey),
+        cid: wrote(w.collection, w.rkey),
+      }));
+      return json(200, { commit: { cid: head(), rev: "3jzfcijpj2z2b" }, results });
     }
     const records = collection(input.collection);
     if (method === "putRecord") {
@@ -162,14 +186,14 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
         record: input.record,
         swapRecord: input.swapRecord ?? null,
       });
-      return json(200, { uri: uri(input.collection, rkey), cid: CID });
+      return json(200, { uri: uri(input.collection, rkey), cid: wrote(input.collection, rkey) });
     }
     if (method === "createRecord") {
       const rkey = nextKey();
       records.set(rkey, input.record);
       commits += 1;
       onWrite({ method, collection: input.collection, rkey, record: input.record });
-      return json(200, { uri: uri(input.collection, rkey), cid: CID });
+      return json(200, { uri: uri(input.collection, rkey), cid: wrote(input.collection, rkey) });
     }
     if (method === "deleteRecord") {
       records.delete(input.rkey ?? "");
