@@ -58,7 +58,7 @@ const OWNER = parseDid(`did:plc:${"m".repeat(24)}`) as Did;
 const OTHER = parseDid(`did:plc:${"o".repeat(24)}`) as Did;
 const CARD_A = "3jzfcijpj2z2a";
 const CARD_B = "3jzfcijpj2z2b";
-/** A collection already holding 100 entries, past the editor's 30 for a new card: only an edit can save that many. */
+/** A showcase already holding 50 entries, past the editor's 30 for a new card: only an edit can save that many. */
 const CARD_C = "3jzfcijpj2z2c";
 const NOW = "2026-11-18T00:00:00.000Z";
 
@@ -89,7 +89,7 @@ function fixture(
   cards: Record<string, unknown> = {
     [CARD_A]: readme("First card"),
     [CARD_B]: readme("Second card"),
-    [CARD_C]: storedCollection(100),
+    [CARD_C]: storedCollection(50),
   },
   slow?: Record<string, number>,
 ): StandInFixture {
@@ -200,9 +200,9 @@ const action = (name: string, body: string, headers: Record<string, string> = {}
       ...headers,
     },
   });
-/** The largest collection card the lexicon allows, as the editor's form posts it: 100 entries, each grapheme "a" and
+/** The largest collection card the lexicon allows, as the editor's form posts it: 50 entries, each grapheme "a" and
  * four combining accents (nine bytes, the most that fit the schema's byte limits), and a 2,000-byte uri. */
-function largestCollection(filler: string, entries = 100): string {
+function largestCollection(filler: string, entries = 50): string {
   const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
   const uri = `https://a.example/${filler.repeat(2_000 - 18)}`;
   const form = new URLSearchParams([
@@ -336,7 +336,9 @@ describe("card writes", () => {
     const writes = await writesOf(() => action("reorder", order.map((key) => `order=${key}`).join("&")));
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.profile", rkey: "self" });
-    expect(writes[0]?.record).toMatchObject({ cards: order });
+    expect(writes[0]?.record).toMatchObject({
+      cards: order.map((key) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` })),
+    });
   });
 
   test("the_avatar_shape_is_written_into_the_profile_and_anything_else_is_refused_first", async () => {
@@ -409,25 +411,25 @@ describe("card writes", () => {
   });
 
   test("the_largest_readme_fits", async () => {
-    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(50_000) }).toString();
+    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(10_000) }).toString();
     const fits = await writesOf(async () => expect((await action("create", largest)).status).toBe(303));
     expect(fits).toHaveLength(1);
   });
 
   // The card save cap is 2 MiB (Alex, 2026-11-18 02:17:13Z) so the largest collection still saves as a plain form.
-  // A new card holds the editor's 30 entries (CARD_EDIT_LIMITS); a stored card with the lexicon's 100 can be edited at
-  // that size. interfaces/http/routes/cards.test.ts posted 100 as JSON past a store double, which never built the record.
+  // A new card holds the editor's 30 entries (CARD_EDIT_LIMITS); a stored card with the lexicon's 50 can be edited at
+  // that size (ADR 0086), a form of about 0.7 to 0.9 MB.
   test.each([
     ["an_ascii_uri", "x"],
     ["a_uri_the_form_percent_encodes", "/"],
   ])("the_largest_collection_edit_fits_with_%s", async (_, filler) => {
     const form = `key=${CARD_C}&${largestCollection(filler)}`;
-    expect(Buffer.byteLength(form)).toBeGreaterThan(1024 * 1024);
+    expect(Buffer.byteLength(form)).toBeGreaterThan(640 * 1024);
     const writes = await writesOf(async () => expect((await action("save", form)).status).toBe(303));
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ method: "putRecord", rkey: CARD_C });
     const items = (writes[0]?.record as { content?: { items?: { uri: string }[] } } | undefined)?.content?.items;
-    expect(items).toHaveLength(100);
+    expect(items).toHaveLength(50);
     expect(items?.[0]?.uri).toBe(`https://a.example/${filler.repeat(2_000 - 18)}`);
   });
 
@@ -533,7 +535,7 @@ describe("the one Save (ADR 0074)", () => {
 
   test("a_refusal_names_the_card_and_its_field_in_the_saves_own_names", async () => {
     const writes = await writesOf(async () => {
-      const response = await saveAll([...text(0, CARD_A, "Fine"), ...text(1, CARD_C, "x".repeat(100_001))], {
+      const response = await saveAll([...text(0, CARD_A, "Fine"), ...text(1, CARD_C, "x".repeat(20_001))], {
         accept: "application/json",
       });
       expect(await refusal(response)).toEqual({ code: "card.too_long", card: CARD_C, field: "cards.1.text" });
@@ -622,10 +624,10 @@ const manyCards = (count: number) =>
   );
 
 describe("the card limit", () => {
-  test("two_adds_at_once_at_99_cards_store_one_and_refuse_the_other", async () => {
-    // Each listing is held, and the second tab starts while the first waits on its own: both count 99 before either
+  test("two_adds_at_once_at_49_cards_store_one_and_refuse_the_other", async () => {
+    // Each listing is held, and the second tab starts while the first waits on its own: both count 49 before either
     // creates, as two tabs pressing Save together do. The second create then lands on a repo that moved.
-    const full = await memberServer(undefined, manyCards(99), { listRecords: 400 });
+    const full = await memberServer(undefined, manyCards(49), { listRecords: 400 });
     try {
       const add = () =>
         full.web.fetch(`/${OWNER}?/create`, {
@@ -645,35 +647,37 @@ describe("the card limit", () => {
     }
   });
 
-  // Past one PDS call's 1,000,000-byte body, which the stand-in refuses as the real PDS does: eleven Text cards at
-  // their 100,000-byte maximum (about 1.1 MB, inside the form's 2 MiB) go in two calls, the second swapping on the
-  // commit the first made, so all eleven are saved (ADR 0074 item 1).
-  test("eleven_full_cards_save_in_two_chained_calls", async () => {
-    const stored = manyCards(11);
+  // Past one PDS call's 1,000,000-byte body, which the stand-in refuses as the real PDS does: twenty links cards with
+  // the editor's 30 links of 2,000-byte addresses (about 1.2 MB, inside the form's 2 MiB; ADR 0086's 20,000-byte text
+  // no longer gets there within the 50 cards) go in two calls, the second swapping on the commit the first made, so
+  // all twenty are saved (ADR 0074 item 1).
+  test("twenty_full_cards_save_in_two_chained_calls", async () => {
+    const stored = manyCards(20);
     const keys = Object.keys(stored);
     const opened = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
-    const eleven = await memberServer(undefined, stored);
+    const many = await memberServer(undefined, stored);
     try {
       const body = new URLSearchParams(
         keys.flatMap((key, n): [string, string][] => [
           [`cards.${n}.key`, key],
           [`cards.${n}.version`, opened],
-          [`cards.${n}.kind`, "readme"],
+          [`cards.${n}.kind`, "links"],
           [`cards.${n}.width`, "half"],
-          [`cards.${n}.text`, String(n % 10).repeat(100_000)],
+          ...Array.from({ length: 30 }, (_, m): [string, string] => [
+            `cards.${n}.items.${m}.uri`,
+            `https://a.example/${String((n + m) % 10).repeat(2_000 - 18)}`,
+          ]),
         ]),
       ).toString();
-      const saved = await eleven.web.fetch(`/${OWNER}?/saveAll`, {
+      const saved = await many.web.fetch(`/${OWNER}?/saveAll`, {
         method: "POST",
         body,
         headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
       });
       expect(saved.status).toBe(200);
-      expect(eleven.writes().map((write) => [write.method, write.rkey])).toEqual(
-        keys.map((key) => ["applyWrites", key]),
-      );
+      expect(many.writes().map((write) => [write.method, write.rkey])).toEqual(keys.map((key) => ["applyWrites", key]));
     } finally {
-      await eleven.stop();
+      await many.stop();
     }
   });
 
