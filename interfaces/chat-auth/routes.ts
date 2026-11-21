@@ -1,8 +1,8 @@
 // The door's POST routes (build step 6; ADR 0081 decision 4, ADR 0083 decisions 2, 4 and 5; ADR 0089), behind
 // door.ts's Host, CSRF and rate-limit checks. Redeem reads exactly `{ ticket }`, takes the hop's one-time value and return path from
 // their cookies and clears both whatever happens, and answers the chat page's session: the token, the member's chat
-// ID, the device and its lock key. Log out, and the setup claim and its release, read exactly `{ deviceId }` and need
-// the browser cookie. Each refusal is
+// ID, the device and its lock key. Log out, the setup claim and its release, and the pushkey (ADR 0090) read exactly
+// `{ deviceId }` and need the browser cookie. Each refusal is
 // a catalog code; none carries a ticket, token, key, DID or chat user (SE-3, SE-7).
 import { createHash, randomBytes } from "node:crypto";
 import {
@@ -10,6 +10,8 @@ import {
   type BrowserList,
   claimSetup,
   type DoorPorts,
+  issuePushKey,
+  type PushKeys,
   parseDeviceId,
   parseDoorState,
   type RedeemRefusal,
@@ -186,6 +188,25 @@ export function setupReleaseRoute(ports: SetupPorts): PostRoute {
       const outcome = await releaseSetup(ports, { ...asked, deadline });
       if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
       return answer(200, { released: true });
+    },
+  };
+}
+
+type PushKeyPorts = { readonly list: BrowserList; readonly keys: PushKeys; readonly notifyUrl: string };
+
+/**
+ * POST /push/key: a new pushkey for the device this browser holds, and the internal address its pusher posts to (ADR
+ * 0090 decision 1). The page registers it with the homeserver; the key replaces this entry's last one.
+ */
+export function pushKeyRoute({ list, keys, notifyUrl }: PushKeyPorts, random = randomBytes): PostRoute {
+  return {
+    limit: "default",
+    async handle(request, deadline) {
+      const asked = await deviceOf(request);
+      if (asked.refusal !== undefined) return asked.refusal;
+      const outcome = await issuePushKey({ list, keys, random }, { ...asked, deadline });
+      if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
+      return answer(200, { pushkey: outcome.key, url: notifyUrl });
     },
   };
 }

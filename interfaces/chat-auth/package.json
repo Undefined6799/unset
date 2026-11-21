@@ -5,6 +5,7 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "dependencies": {
+    "@unset/domains-identity": "*",
     "@unset/domains-messaging": "*",
     "@unset/infrastructure-matrix": "*",
     "@unset/infrastructure-net-guard": "*",
