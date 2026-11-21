@@ -98,6 +98,13 @@ export function planCommit(account: IndexAccount, rev: string | null, changes: r
       continue;
     }
     skipped += 1;
+    // A main page we refuse still says who sees the account (ADR 0091), and we cannot read its choice: it is kept as
+    // a page with no cards shown only to its member, so a refusal never shows a page more widely than it may have
+    // asked (fail closed, as an unknown visibility reads; ADR 0078 point 1).
+    if (change.kind === "put" && change.collection === NSID.page) {
+      writes.push({ kind: "page", cid: change.cid, record: REFUSED_PAGE });
+      continue;
+    }
     // A put we refuse under a key we index replaces the record in the repo: an older version indexed under that key
     // goes, as a backfill of the repo would remove it, so the stream and a rebuild show the same (outside review,
     // 2026-11-19). The store's rev guard keeps a newer row.
@@ -108,6 +115,12 @@ export function planCommit(account: IndexAccount, rev: string | null, changes: r
   }
   return { kind: "apply", rev, writes, skipped };
 }
+
+/** What the index keeps for a main page it refuses: no cards, and the most closed choice. */
+export const REFUSED_PAGE: Readonly<Record<string, unknown>> = Object.freeze({
+  $type: NSID.page,
+  visibility: "owner-only",
+});
 
 function isIndexed(collection: string): collection is IndexedCollection {
   return (INDEXED_COLLECTIONS as readonly string[]).includes(collection);

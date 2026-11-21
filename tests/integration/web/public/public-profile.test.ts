@@ -105,7 +105,6 @@ async function indexed(
     displayName: name,
     headline: "<b>Head</b>",
     createdAt: NOW,
-    ...(opts.visibility === undefined ? {} : { visibility: opts.visibility }),
   };
   await withClient(indexer, null, async (c) => {
     await c.query("INSERT INTO idx.account (did, track_requested_at, updated_at) VALUES ($1, now(), now())", [did]);
@@ -121,10 +120,11 @@ async function indexed(
          VALUES ($1, $2, 'cid-p', '3l', $3, $4, false, now())`,
         [did, `at://${did}/sh.unset.profile/self`, record, name],
       );
-    // The main page lists the card, so it shows (ADR 0086 point 3, ADR 0091).
+    // The main page lists the card, so it shows, and says who sees it (ADR 0086 point 3, ADR 0091).
     const page = {
       $type: "sh.unset.page",
       cards: [{ uri: `at://${did}/sh.unset.card/3jzfcijpj2z2a` }],
+      ...(opts.visibility === undefined ? {} : { visibility: opts.visibility }),
       createdAt: NOW,
     };
     await c.query(

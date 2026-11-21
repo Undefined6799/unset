@@ -1,9 +1,11 @@
 // An account's page (ADR 0091): the sh.unset.page record that lists which of its cards show, and in what order, by
 // their at:// addresses. The main page is the record under the key `self`; other keys wait for a later decision on
-// where they show. Every stored entry and field this version does not know is kept as it was (ADR 0038).
+// where they show. The page also says who sees it (`visibility`, ADR 0078 levels; Alex, 2026-11-21 22:38Z: it lives
+// with the page). Every stored entry and field this version does not know is kept as it was (ADR 0038).
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { type CardKey, cardUri, isObject, type RepoDid } from "./cards.ts";
 import { fitsIndex } from "./index-plan.ts";
+import { type PageVisibility, VISIBILITY_VALUES } from "./visibility.ts";
 
 export type PageError = "page.invalid" | "page.too_long";
 export type PageRecord = { readonly $type: "sh.unset.page"; readonly createdAt: string } & Readonly<
@@ -19,14 +21,24 @@ type Built = { readonly ok: true; readonly record: PageRecord } | { readonly ok:
  */
 function withList(existing: unknown, list: readonly unknown[], now: string): Built {
   if (list.length > LIMITS.page.cardsMax) return { ok: false, code: "page.too_long" };
-  const { $type: _type, cards: _old, ...kept } = isObject(existing) ? existing : {};
+  const { cards: _old, ...kept } = isObject(existing) ? existing : {};
+  return built({ ...kept, ...(list.length === 0 ? {} : { cards: list }) }, now);
+}
+
+/**
+ * The page with who sees it set to `visibility`, every other field kept; a first page holds no cards. Public is what
+ * an absent field means, so choosing it removes the field (ADR 0078 point 1).
+ */
+export function withVisibility(visibility: PageVisibility, existing: unknown, now: string): Built {
+  const { visibility: _old, ...kept } = isObject(existing) ? existing : {};
+  return built({ ...kept, ...(visibility === "public" ? {} : { visibility: VISIBILITY_VALUES[visibility] }) }, now);
+}
+
+/** `fields` as the page record, createdAt kept or set; refused when another client broke a field or it is too big. */
+function built(fields: Readonly<Record<string, unknown>>, now: string): Built {
+  const { $type: _type, ...kept } = fields;
   const createdAt = typeof kept.createdAt === "string" ? kept.createdAt : now;
-  const record: PageRecord = {
-    $type: "sh.unset.page",
-    ...kept,
-    ...(list.length === 0 ? {} : { cards: list }),
-    createdAt,
-  };
+  const record: PageRecord = { $type: "sh.unset.page", ...kept, createdAt };
   if (!validateRecord("sh.unset.page", record, "read").ok) return { ok: false, code: "page.invalid" };
   // The index must keep what is written, or the public page would lose its order (index-plan.ts fitsIndex).
   if (!fitsIndex(record)) return { ok: false, code: "page.too_long" };

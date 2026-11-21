@@ -5,7 +5,6 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { fitsIndex } from "./index-plan.ts";
 import { isPlainName, isPlainText } from "./member-text.ts";
-import { type PageVisibility, VISIBILITY_VALUES } from "./visibility.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
@@ -21,8 +20,8 @@ export const EMPTY_PROFILE: ProfileFields = {
 };
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
-/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, Settings › Privacy). */
-export type ProfileEdit = Partial<ProfileFields> & { readonly visibility?: PageVisibility };
+/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile). */
+export type ProfileEdit = Partial<ProfileFields>;
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };
@@ -112,7 +111,7 @@ function storedObject(existing: unknown): Readonly<Record<string, unknown>> {
 
 /**
  * The record to write over `existing` (the stored value, or null for a first profile). The fields sent are replaced, an
- * emptied one removed (a visibility of public too, ADR 0078); every other field (one not sent, avatar, listed,
+ * emptied one removed; every other field (one not sent, avatar, listed,
  * ...) is kept as it was, createdAt too.
  * A stored field the lexicon does not define (another client's, or a newer release's) is kept too: unexpected fields
  * are ignored and kept, never a reason to refuse (atproto.com/specs/lexicon, "Authority and Control"; ADR 0038).
@@ -126,19 +125,12 @@ export function toProfileRecord(
   now: string,
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   const stored = storedObject(existing);
-  const sent: readonly string[] = [
-    ...PROFILE_FIELDS.filter((field) => fields[field] !== undefined),
-    ...(fields.visibility === undefined ? [] : ["visibility"]),
-  ];
+  const sent: readonly string[] = PROFILE_FIELDS.filter((field) => fields[field] !== undefined);
   const kept = Object.fromEntries(Object.entries(stored).filter(([key]) => !sent.includes(key) && key !== "$type"));
   const set: Record<string, string> = {};
   for (const field of PROFILE_FIELDS) {
     const value = fields[field];
     if (value !== undefined && value !== "") set[field] = value;
-  }
-  // Public is what an absent field means, so choosing it clears the field (ADR 0078).
-  if (fields.visibility !== undefined && fields.visibility !== "public") {
-    set.visibility = VISIBILITY_VALUES[fields.visibility];
   }
   const merged: Record<string, unknown> = { ...kept, ...set };
   if (typeof merged.displayName !== "string" || merged.displayName === "") {

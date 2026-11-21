@@ -45,11 +45,6 @@ type Main = {
   website?: l.UriString;
 
   /**
-   * Who apps should show the account's pages to. Absent means public; an unknown value means owner-only. A request to apps, not access control: the records stay public.
-   */
-  visibility?: "public" | "signed-in" | "owner-only" | l.UnknownString;
-
-  /**
    * True asks directories to list the account. Absent or false means not listed; its pages are still reachable at their addresses.
    */
   listed?: boolean;
@@ -75,9 +70,6 @@ const main = /*#__PURE__*/ l.record<"literal:self", Main>(
     ),
     location: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
     website: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
-    visibility: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["public", "signed-in", "owner-only"] }>({ maxLength: 32 }),
-    ),
     listed: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
     createdAt: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "datetime" })),
   }),

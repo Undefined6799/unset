@@ -11,7 +11,7 @@ type $nsid = typeof $nsid;
 
 export { $nsid };
 
-/** One page of an account on unset.sh: the cards it shows, in order, under the account's profile (sh.unset.profile). The page under the record key self is the account's main page, shown at its profile's address. An account may hold other pages under other keys; readers show none of them until they know where it goes. Deleting self leaves the profile shown with no cards. */
+/** One page of an account on unset.sh: the cards it shows, in order, under the account's profile (sh.unset.profile). The page under the record key self is the account's main page, shown at its profile's address. An account may hold other pages under other keys; readers show none of them until they know where it goes. Deleting self leaves the profile shown to everyone, with no cards. */
 type Main = {
   $type: "sh.unset.page";
 
@@ -21,6 +21,11 @@ type Main = {
   cards?: CardRef[];
 
   /**
+   * Who apps should show this page to. Absent means public; an unknown value means owner-only. The main page's choice is the account's: readers apply it to the profile's details shown with the page and wherever they show the account. A request to apps, not access control: the records stay public.
+   */
+  visibility?: "public" | "signed-in" | "owner-only" | l.UnknownString;
+
+  /**
    * When the page was first created.
    */
   createdAt?: l.DatetimeString;
@@ -28,13 +33,16 @@ type Main = {
 
 export type { Main };
 
-/** One page of an account on unset.sh: the cards it shows, in order, under the account's profile (sh.unset.profile). The page under the record key self is the account's main page, shown at its profile's address. An account may hold other pages under other keys; readers show none of them until they know where it goes. Deleting self leaves the profile shown with no cards. */
+/** One page of an account on unset.sh: the cards it shows, in order, under the account's profile (sh.unset.profile). The page under the record key self is the account's main page, shown at its profile's address. An account may hold other pages under other keys; readers show none of them until they know where it goes. Deleting self leaves the profile shown to everyone, with no cards. */
 const main = /*#__PURE__*/ l.record<"any", Main>(
   "any",
   $nsid,
   /*#__PURE__*/ l.object({
     cards: /*#__PURE__*/ l.optional(
       /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<CardRef>((() => cardRef) as any), { maxLength: 100 }),
+    ),
+    visibility: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["public", "signed-in", "owner-only"] }>({ maxLength: 32 }),
     ),
     createdAt: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "datetime" })),
   }),

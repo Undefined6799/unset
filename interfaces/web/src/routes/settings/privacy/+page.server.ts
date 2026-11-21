@@ -1,4 +1,5 @@
-// Settings › Privacy (P1.21y): who sees the member's page (ADR 0078, P1.22a), read from their profile record, and the
+// Settings › Privacy (P1.21y): who sees the member's page (ADR 0078, P1.22a), read from their main page record
+// (ADR 0091), and the
 // member's Search and AI choices (ADR 0062), kept in our database, and what their
 // public page shows when the search title and description are empty, for the preview: the page's address, the
 // profile's name and headline read from the member's own PDS. The gate has already sent a signed-out visitor to
@@ -8,7 +9,7 @@
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { canonicalActorPath, parseHandle } from "@unset/domains-identity";
 import { DISCOVERABILITY_LIMITS, EMPTY_PROFILE, readPageVisibility, readProfileRecord } from "@unset/domains-profile";
-import { loadProfileRecord } from "@unset/infrastructure-pds";
+import { loadPageRecord, loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
 import { pdsSignInRedirect } from "../../../lib/server/pds-failure.ts";
 import { config } from "../../../lib/server/runtime.ts";
@@ -20,8 +21,9 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const did = locals.did;
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   const ctx = { memo: new Map(), deadline: locals.deadline, deadlineAt: locals.deadlineAt };
-  const [read, own] = await Promise.all([
+  const [read, page, own] = await Promise.all([
     loadProfileRecord(services().pds.pdsCall, ctx, did),
+    loadPageRecord(services().pds.pdsCall, ctx, did),
     services().discoverability.get(did, locals.deadline),
   ]);
   if (read.kind !== "ok") {
@@ -36,9 +38,14 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const indexed = own.page?.handle == null ? null : parseHandle(own.page.handle);
   const handle = own.page === null ? services().handles.verifiedHandle(did) : indexed;
   const name = fields.displayName || handle || did;
-  // Who sees the page (ADR 0078), from the record itself: none yet without a profile, unknown when the PDS did not answer.
+  // Who sees the page (ADR 0078), from the main page itself (ADR 0091; no page is public): none yet without a profile,
+  // unknown when the PDS did not answer either read.
   const visibility =
-    read.kind !== "ok" ? "unreadable" : stored === undefined ? "noProfile" : readPageVisibility(stored);
+    read.kind !== "ok" || page.kind !== "ok"
+      ? "unreadable"
+      : stored === undefined
+        ? "noProfile"
+        : readPageVisibility(page.value?.value);
   return {
     shell: settingsShell(request, "/settings/privacy"),
     visibility,

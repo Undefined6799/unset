@@ -7,12 +7,12 @@ export const LIMITS = {
     headline: 200,
     avatarMaxSize: 2_000_000,
     avatarShapeBytes: 32,
-    visibilityBytes: 32,
     location: 100,
     websiteBytes: 2000,
   },
   page: {
     cardsMax: 100,
+    visibilityBytes: 32,
   },
   card: {
     widthBytes: 32,

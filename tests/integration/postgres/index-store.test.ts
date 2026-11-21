@@ -180,6 +180,26 @@ describe("index store", () => {
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
   });
 
+  test("index.a_refused_main_page_is_kept_closed", async () => {
+    // ADR 0091: the main page says who sees the account, so one we cannot read is kept with no cards and shown only to
+    // its member, never dropped (a dropped page would read as public).
+    await commit(A, rev(7), [page(listOf(CARD_2))]);
+    const before = stat("ingest_invalid");
+    const broken: IndexChange = {
+      kind: "put",
+      collection: "sh.unset.page",
+      rkey: "self",
+      cid: CID,
+      record: { $type: "sh.unset.page", cards: 7, createdAt: T },
+    };
+    await commit(A, rev(8), [broken]);
+    expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${A}'`)).toEqual([
+      "owner-only|f",
+    ]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND position IS NOT NULL`)).toEqual(["0"]);
+    expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
+  });
+
   test("index.inactive_account_keeps_nothing_new", async () => {
     track(B, false);
     await commit(B, rev(3), [profile()]);

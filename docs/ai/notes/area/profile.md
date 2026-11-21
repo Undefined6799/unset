@@ -54,8 +54,11 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 (`profile.*`, `card.*`), becomes a record validated against [[lexicons]] (`validateRecord`, `LIMITS`), and
 [[http]] writes it to the member's PDS through [[pds]]. Reads go the other way through the lenient readers.
 
-**Who sees the page (ADR 0078).** `visibility.ts` reads `visibility` from the record (absent public, unknown
-ownerOnly, fail closed) and `pageShownTo` is the one table of who sees what. The listing SQL in
-`infrastructure/postgres/publicProfileStore.ts` must read the field the same way; change both together.
+**Who sees the page (ADR 0078, ADR 0091).** `visibility.ts` reads `visibility` from the main page record
+`sh.unset.page/self`, not the profile (absent or no page public, unknown ownerOnly, fail closed), and `pageShownTo`
+is the one table of who sees what. `page.ts` `withVisibility` writes it; a first choice creates the page. The listing
+SQL in `infrastructure/postgres/publicProfileStore.ts` must read the field the same way; change both together. The
+index keeps a main page it refuses as `REFUSED_PAGE` (no cards, owner-only), never drops it, since a dropped page
+would read as public.
 
 **Links.** [[identity]], [[lexicons]], [[http]], [[pds]]; ADR 0037 and ADR 0051.

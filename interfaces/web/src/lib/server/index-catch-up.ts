@@ -16,7 +16,7 @@ const STEP_MS = 250;
 export const ANSWER_MS = 500;
 
 export type CatchUpDeps = {
-  /** The member's profile record as the public page reads it, or null when the index shows no page for them. */
+  /** The member's main page record as the public page reads it, or null when the index shows no page for them. */
   readonly read: (signal: AbortSignal) => Promise<unknown>;
   readonly now: () => number;
   readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;

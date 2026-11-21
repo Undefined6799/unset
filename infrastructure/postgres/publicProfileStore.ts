@@ -86,14 +86,17 @@ const pageOf = (where: string) => `
   ORDER BY n`;
 const BY_DID = pageOf("p.did = $1");
 const BY_HANDLE = pageOf("p.handle = $1");
-// A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a record with no
-// visibility, or "public", counts, as domains/profile readPageVisibility reads it (anything else fails closed).
-const PUBLIC_PAGE = `(NOT p.record ? 'visibility' OR p.record->'visibility' = '"public"'::jsonb)`;
+// A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a main page with no
+// visibility, or "public", or no main page at all (no choice made), counts, as domains/profile readPageVisibility
+// reads it (anything else fails closed). The choice is the main page's (ADR 0091).
+const PUBLIC_PAGE = `(g.record IS NULL OR NOT g.record ? 'visibility' OR g.record->'visibility' = '"public"'::jsonb)`;
 // The column is chosen from two fixed names, never from input.
 const LISTED = {
   searchEngines: `SELECT p.did, p.handle FROM idx.public_profile p JOIN app.discoverability d USING (did)
+                    LEFT JOIN idx.public_page g USING (did)
                    WHERE d.search_engines AND ${PUBLIC_PAGE} ORDER BY p.did LIMIT $1`,
   aiSearch: `SELECT p.did, p.handle FROM idx.public_profile p JOIN app.discoverability d USING (did)
+               LEFT JOIN idx.public_page g USING (did)
               WHERE d.ai_search AND ${PUBLIC_PAGE} ORDER BY p.did LIMIT $1`,
 } as const;
 

@@ -7,7 +7,7 @@
 // replace the name and headline in the page's title and description. With listing off on the whole site (P1.21b),
 // server.ts and the root layout say noindex on this page too. No images until the media proxy (P3.09): the
 // avatar is the letter, as on the owner's page.
-// Who sees the page is the member's choice (ADR 0078): everyone, signed-in members, or only the member. Anyone the
+// Who sees the page is the member's choice (ADR 0078), kept on the main page record (ADR 0091): everyone, signed-in members, or only the member. Anyone the
 // choice leaves out gets the limited page: the member's name, handle and avatar and one sentence, no cards, no
 // description and no link-preview tags, never indexed. A page that is not public is never offered to search engines
 // or AI search, whatever the Search and AI choices say. The session is read when a cookie is sent (policy.ts), and a
@@ -53,7 +53,8 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
 
   const fields = readProfileRecord(found.record);
   const name = fields.displayName || handle || did;
-  const visibility = readPageVisibility(found.record);
+  // Who sees it is the main page's choice (ADR 0091); an account with no page has made none, so it is public.
+  const visibility = readPageVisibility(found.page);
   const viewer: Viewer = locals.did === undefined ? "visitor" : locals.did === did ? "owner" : "member";
   const shown = pageShownTo(visibility, viewer);
   const who = { did, handle, name, letter: accountLetter(name), avatarShape: readAvatarShape(found.record) };

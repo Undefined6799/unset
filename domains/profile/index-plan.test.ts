@@ -2,7 +2,16 @@
 
 import { LIMITS } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { fitsPage, type IndexChange, MAX_PAGE_BYTES, MAX_RECORD_BYTES, planCommit, recordBytes } from "./index-plan.ts";
+import {
+  fitsPage,
+  type IndexChange,
+  MAX_PAGE_BYTES,
+  MAX_RECORD_BYTES,
+  planCommit,
+  REFUSED_PAGE,
+  recordBytes,
+} from "./index-plan.ts";
+import { readPageVisibility } from "./visibility.ts";
 
 const T = "2026-11-18T00:00:00.000Z";
 const TID = "3jzfcijpj2z2a";
@@ -94,6 +103,17 @@ describe("pages (ADR 0091)", () => {
       writes: [],
       skipped: 0,
     });
+  });
+
+  test("index.closes_a_refused_main_page: kept with no cards and shown only to its member", () => {
+    const broken = page("self", { cards: "not a list", visibility: "public" });
+    expect(planCommit(active, "3jzfcijpj2z2c", [broken])).toEqual({
+      kind: "apply",
+      rev: "3jzfcijpj2z2c",
+      writes: [{ kind: "page", cid: CID, record: REFUSED_PAGE }],
+      skipped: 1,
+    });
+    expect(readPageVisibility(REFUSED_PAGE)).toBe("ownerOnly");
   });
 
   test("index.drops_the_main_page", () => {

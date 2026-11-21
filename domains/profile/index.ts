@@ -75,7 +75,14 @@ export {
   planCommit,
   recordBytes,
 } from "./index-plan.ts";
-export { type PageError, type PageRecord, withCardListed, withCardOrder, withCardUnlisted } from "./page.ts";
+export {
+  type PageError,
+  type PageRecord,
+  withCardListed,
+  withCardOrder,
+  withCardUnlisted,
+  withVisibility,
+} from "./page.ts";
 export {
   APP_LIMITS,
   type AvatarShape,

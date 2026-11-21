@@ -40,7 +40,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "profile.name_required": "Add a name before you save your profile.",
   "profile.conflict": "Your profile changed somewhere else since you opened it. Reload to see it, then save again.",
   "profile.pds_unavailable": "Your sign-in server is not answering, so your profile was not saved. Try again.",
-  "page.invalid": "Your page's list of cards could not be read, so nothing was changed.",
+  "page.invalid": "Your page could not be read, so nothing was changed.",
   "page.too_long": "Your page is too long to add this card. Remove a card, then try again.",
   "card.invalid": "Something in this card could not be read. Check it and try again.",
   "card.kind_unknown": "That kind of card is not available.",

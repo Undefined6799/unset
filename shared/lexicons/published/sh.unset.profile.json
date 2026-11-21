@@ -45,12 +45,6 @@
             "maxLength": 2000,
             "description": "The member's website. An http or https URL; readers ignore any other scheme."
           },
-          "visibility": {
-            "type": "string",
-            "maxLength": 32,
-            "knownValues": ["public", "signed-in", "owner-only"],
-            "description": "Who apps should show the account's pages to. Absent means public; an unknown value means owner-only. A request to apps, not access control: the records stay public."
-          },
           "listed": {
             "type": "boolean",
             "description": "True asks directories to list the account. Absent or false means not listed; its pages are still reachable at their addresses."
