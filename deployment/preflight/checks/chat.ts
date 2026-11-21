@@ -77,7 +77,7 @@ const SYNAPSE_RATE_LIMITS = [
  */
 function synapseSettings(serverName: string): Settings {
   return {
-    tuning: ["enable_set_displayname", "enable_set_avatar_url", "allow_per_room_profiles", ...SYNAPSE_RATE_LIMITS],
+    tuning: SYNAPSE_RATE_LIMITS,
     nested: {
       // A push names no body or sender (ADR 0090 decision 2); whether pushes run and how unread is counted are tuning.
       push: { security: { include_content: false }, tuning: ["enabled", "group_unread_count_by_room"], nested: {} },
@@ -96,6 +96,11 @@ function synapseSettings(serverName: string): Settings {
       allow_profile_lookup_over_federation: false,
       enable_registration: false,
       allow_guest_access: false,
+      // The display name is the member's verified handle (domains/messaging/chat-account.ts): a member who could set a
+      // name, a picture or a per-room name could show someone else's handle as their own (review finding N4).
+      enable_set_displayname: false,
+      enable_set_avatar_url: false,
+      allow_per_room_profiles: false,
       // The rule encrypts every room not asked for as plain; "all" would encrypt the plain kind too (P6.10a).
       encryption_enabled_by_default_for_room_type: "off",
       enable_search: false,
@@ -134,15 +139,16 @@ function masSettings(serverName: string): Settings {
   return {
     tuning: [],
     nested: {
-      // Who may sign up, delete an account outside the door's erasure, or change the email: security. A display name
-      // is tuning.
+      // Who may sign up, delete an account outside the door's erasure, change the email, or set a name other than
+      // the verified handle (review finding N4): all security.
       account: {
         security: {
           account_deactivation_allowed: false,
           password_registration_enabled: false,
           email_change_allowed: false,
+          displayname_change_allowed: false,
         },
-        tuning: ["displayname_change_allowed"],
+        tuning: [],
         nested: {},
       },
     },

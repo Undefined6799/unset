@@ -220,10 +220,6 @@ describe("C36 the chat servers' settings", () => {
   // tuning setting takes any value, and a setting in neither list is still refused.
   test("a_changed_tuning_value_passes", () => {
     for (const [path, value] of [
-      ["enable_set_displayname", true],
-      ["enable_set_avatar_url", true],
-      ["allow_per_room_profiles", true],
-      ["enable_set_displayname", undefined],
       ["push.enabled", false],
       ["push.group_unread_count_by_room", false],
       ["rc_message", { per_second: 1, burst_count: 20 }],
@@ -231,7 +227,21 @@ describe("C36 the chat servers' settings", () => {
     ] as const) {
       expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBeNull();
     }
-    expect(masProblem(edited(mas(), "account.displayname_change_allowed", true), SERVER)).toBeNull();
+  });
+
+  // Review finding N4: the display name is the member's verified handle (domains/messaging/chat-account.ts), so a
+  // member who could set their own name, picture or per-room name could show someone else's handle as their own.
+  test("a_member_set_name_or_picture_fails", () => {
+    for (const key of ["enable_set_displayname", "enable_set_avatar_url", "allow_per_room_profiles"]) {
+      for (const value of [true, undefined])
+        expect(synapseProblem(edited(synapse(), key, value), SERVER), `${key}=${value}`).toBe(
+          `homeserver.yaml: ${key} is not its reviewed value`,
+        );
+    }
+    for (const value of [true, undefined])
+      expect(masProblem(edited(mas(), "account.displayname_change_allowed", value), SERVER)).toBe(
+        "mas.yaml: account.displayname_change_allowed is not its reviewed value",
+      );
   });
 
   test("a_changed_security_value_fails_even_inside_a_tuned_setting", () => {
