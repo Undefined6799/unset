@@ -314,7 +314,8 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
           const init = { bubbles: true, cancelable: true, dataTransfer: g.dragData, clientX: at.x, clientY: at.y };
           const handle = (source as unknown as { closest: (s: string) => Target }).closest("[data-block-handle]");
           for (const name of names) {
-            const target = name === "dragstart" || name === "dragend" ? handle : g.document.elementFromPoint(at.x, at.y);
+            const target =
+              name === "dragstart" || name === "dragend" ? handle : g.document.elementFromPoint(at.x, at.y);
             target?.dispatchEvent(new g.DragEvent(name, init));
           }
         },
