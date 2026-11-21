@@ -28,6 +28,9 @@
       "path": "../../infrastructure/audit"
     },
     {
+      "path": "../../infrastructure/email"
+    },
+    {
       "path": "../../infrastructure/image"
     },
     {

@@ -7,6 +7,7 @@
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
+// P2.10r: invite requests, the in-memory ask window and the owner's mail over SMTP (ADR 0080), when switched on.
 // P2.27: the member's notification inbox and the one way to send into it (ADR 0079).
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
@@ -21,6 +22,7 @@ import {
   TERMS_VERSION,
 } from "@unset/domains-identity";
 import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
+import { createSmtpMailer, type Mailer, parseSmtpUrl } from "@unset/infrastructure-email";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import {
   createNetGuard,
@@ -73,6 +75,7 @@ import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
+import { type AskWindow, createAskWindow, createPendingSends, type PendingSends } from "./invite-requests.ts";
 import { policiesFor } from "./limits.ts";
 import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
@@ -155,7 +158,34 @@ export type Services = {
   readonly drafts: ObjectStore;
   /** Picture uploads (P2.19b; ADR 0070 point 2): open only where uploadsOpen allows, the rows, and review. */
   readonly images: { readonly open: boolean; readonly store: ImageStore; readonly processor: ImageProcessor };
+  /** Invite requests (P2.10r; ADR 0080): null when INVITE_REQUESTS is off; else the ask window, mailer and owner. */
+  readonly inviteRequests: InviteRequests | null;
 };
+
+export type InviteRequests = {
+  readonly window: AskWindow;
+  readonly mailer: Mailer;
+  readonly to: string;
+  /** Mails still going after their answer; shutdown waits for them. */
+  readonly pending: PendingSends;
+};
+
+/** Each SMTP wait (connect, greeting, idle); the route's 20 s deadline bounds the whole send (policy.ts). */
+const MAIL_TIMEOUT_MS = 8000;
+
+/** The invite-request services, or null when off. config.ts's rules have checked all three values when on. */
+function inviteRequestsOf(): InviteRequests | null {
+  const { INVITE_REQUESTS: on, INVITE_REQUEST_SMTP_URL: url, INVITE_REQUEST_TO: to } = config;
+  if (on !== "on") return null;
+  const server = url === undefined ? null : parseSmtpUrl(url.reveal());
+  if (server === null || to === undefined) throw new Error("invite requests: on without their settings");
+  return {
+    window: createAskWindow({ now: () => Date.now() }),
+    mailer: createSmtpMailer({ server, from: config.INVITE_REQUEST_FROM, timeoutMs: MAIL_TIMEOUT_MS }),
+    to: to.reveal(),
+    pending: createPendingSends(),
+  };
+}
 
 /** Review's answer: the main version, the display versions and their manifest (pool.ts ANSWER_OVERHEAD). */
 const REVIEW_ANSWER_BYTES = 8 * 1024 * 1024;
@@ -372,6 +402,7 @@ async function build(): Promise<Services> {
     now: () => performance.now(),
   });
   health.setState("running");
+  const inviteRequests = inviteRequestsOf();
   shutdown.draining.push(() => health.setState("draining"));
   shutdown.close.push(
     async () => clearInterval(sweeper),
@@ -379,6 +410,8 @@ async function build(): Promise<Services> {
     () => pool.end(),
     () => lockPool.pool.end(),
   );
+  // A mail sent after its answer still goes once a deploy stops web (ADR 0080 point 4).
+  if (inviteRequests !== null) shutdown.close.unshift(() => inviteRequests.pending.settled());
   const oauth: OAuthServices = {
     client,
     signInScope: signIn.during,
@@ -408,6 +441,7 @@ async function build(): Promise<Services> {
     discoverability: createDiscoverabilityStore(pool),
     drafts,
     images,
+    inviteRequests,
   };
 }
 

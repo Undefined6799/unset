@@ -85,6 +85,8 @@ export const PAGES: readonly PageFixture[] = [
   signedOut("/welcome/blocked", "app", "/welcome/blocked", false),
   // P2.10: the page an invite link opens, with a well-formed code (it never checks or spends it).
   signedOut(`/join?invite=${JOIN_CODE}`, "public", "/join"),
+  // P2.10r: asking for an invite (closed on the test servers, which send no mail; ADR 0080).
+  signedOut("/request-invite", "public"),
 ];
 
 /** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */
