@@ -23,6 +23,7 @@ import {
   type Conversations,
   type ConversationView,
   canSend,
+  draftAfterSend,
   type Message,
   selectable,
 } from "./core/conversations.ts";
@@ -78,13 +79,14 @@ async function send(event: SubmitEvent) {
   event.preventDefault();
   if (sending || text.trim() === "") return;
   sending = true;
-  const sent = await conversations.send(id, text, replyingTo?.id);
+  // The field stays open while the send goes: only what was sent is cleared, so text typed meanwhile is kept, and a
+  // reply started meanwhile stays too.
+  const [draft, answering] = [text, replyingTo];
+  const sent = await conversations.send(id, draft, answering?.id);
   sending = false;
   failed = !sent;
-  if (sent) {
-    text = "";
-    replyingTo = null;
-  }
+  text = draftAfterSend(draft, text, sent);
+  if (sent && replyingTo === answering) replyingTo = null;
 }
 
 /** In selection mode, the ids selected; null outside it. Only messages Delete is offered on can be in it. */

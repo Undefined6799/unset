@@ -81,7 +81,7 @@ async function send(page: Page, text: string): Promise<void> {
   await page.locator("#message").fill(text);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(messages(page)).toContainText(text);
-  // The composer empties once the send has gone; text typed before then would be cleared with it.
+  // The composer empties once the send has gone; until then Send takes no other, so the next send waits for it.
   await expect(page.locator("#message")).toHaveValue("", { timeout: 60_000 });
 }
 
@@ -138,6 +138,14 @@ async function talking(browser: Browser) {
   await expect(answer.locator("[data-reply-to]")).toContainText("You hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  // Text typed while a send is still going stays in the composer; only what was sent is cleared.
+  await a.page.locator("#message").fill("sent first");
+  await a.page.getByRole("button", { name: "Send" }).click();
+  await a.page.locator("#message").fill("typed meanwhile");
+  await expect(messages(b.page)).toContainText("sent first", { timeout: 60_000 });
+  await expect(a.page.getByRole("button", { name: "Send" })).toBeEnabled();
+  await expect(a.page.locator("#message")).toHaveValue("typed meanwhile");
+  await a.page.locator("#message").fill("");
   await deleting(a, b);
   for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
   return { alice, bob, a, b, aliceKey };
@@ -236,7 +244,7 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
     .chunk as { type: string; content: unknown }[];
   const sent = chunk.filter((e) => e.type === "m.room.encrypted" || e.type === "m.room.message");
-  expect(sent.map((e) => e.type)).toEqual(Array(8).fill("m.room.encrypted"));
+  expect(sent.map((e) => e.type)).toEqual(Array(9).fill("m.room.encrypted"));
   // The four deleted keep no ciphertext on the server (spec v1.18 #redactions).
   expect(sent.filter((e) => Object.keys(e.content as object).length === 0)).toHaveLength(4);
   // The reply's pointer is the one thing beside its ciphertext (ADR 0092 decision 3).

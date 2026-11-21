@@ -7,6 +7,7 @@ import {
   availableOf,
   canSend,
   composerOf,
+  draftAfterSend,
   isQuickReaction,
   type Message,
   nameOf,
@@ -170,5 +171,15 @@ describe("actionsOf", () => {
     expect(selectable(shown, "on")).toEqual(["$mine", "$unreadable"]);
     expect(selectable(shown, "they_left")).toEqual(["$mine", "$unreadable"]);
     expect(selectable(shown, "gone")).toEqual([]);
+  });
+});
+
+describe("draftAfterSend", () => {
+  test("chat.draft_kept_while_sending: a send clears only what it sent; text typed meanwhile, or after a failure, stays", () => {
+    expect(draftAfterSend("hello", "hello", true)).toBe("");
+    expect(draftAfterSend("hello", "next one", true)).toBe("next one");
+    expect(draftAfterSend("hello", "", true)).toBe("");
+    expect(draftAfterSend("hello", "hello", false)).toBe("hello");
+    expect(draftAfterSend("hello", "hello again", false)).toBe("hello again");
   });
 });

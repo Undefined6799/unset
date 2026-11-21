@@ -132,6 +132,14 @@ export type ConversationView = {
 };
 
 /** What the screens can do with conversations; every call reports its outcome, nothing is thrown. */
+/**
+ * What the composer holds once a send finishes: nothing when it still holds exactly what was sent; otherwise what the
+ * member typed meanwhile, or the text that did not go.
+ */
+export function draftAfterSend(sent: string, now: string, delivered: boolean): string {
+  return delivered && now === sent ? "" : now;
+}
+
 /** The messages selection mode gives a checkbox: those Delete is offered on (actionsOf). */
 export function selectable(messages: readonly Message[], composer: Composer): string[] {
   return messages.filter((m) => actionsOf(m, composer).includes("delete")).map((m) => m.id);
