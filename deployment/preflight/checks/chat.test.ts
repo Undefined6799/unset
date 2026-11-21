@@ -198,8 +198,6 @@ describe("C36 the chat servers' settings", () => {
 const SYNAPSE_SERVICE = [
   "  synapse:",
   "    image: s",
-  "    environment:",
-  "      SYNAPSE_CONFIG_PATH: /config/homeserver.yaml",
   "    volumes:",
   "      - ./chat/dev/homeserver.yaml:/config/homeserver.yaml:ro",
   "",
@@ -272,11 +270,14 @@ describe("C36 the chat services", () => {
   });
 
   test("the_config_is_the_one_mounted_file_and_no_override_rides_in", async () => {
-    const extra = SYNAPSE_SERVICE.replace(
-      "    volumes:",
-      "      SYNAPSE_WORKER: synapse.app.generic_worker\n    volumes:",
-    );
-    expect(await run(extra)).toEqual({ pass: false, reason: "synapse sets a name other than its config path" });
+    // Our image starts Synapse with its config path fixed (synapse.Dockerfile ENTRYPOINT), so nothing is set beside it.
+    for (const setting of [
+      "SYNAPSE_CONFIG_PATH: /config/homeserver.yaml",
+      "SYNAPSE_WORKER: synapse.app.generic_worker",
+    ]) {
+      const extra = SYNAPSE_SERVICE.replace("    volumes:", `    environment:\n      ${setting}\n    volumes:`);
+      expect(await run(extra)).toEqual({ pass: false, reason: "synapse sets an environment variable" });
+    }
     const override = MAS_SERVICE.replace("    volumes:", '      MAS_PASSWORDS_ENABLED: "true"\n    volumes:');
     expect(await run(override)).toEqual({ pass: false, reason: "mas sets a name other than its config path" });
     const two = MAS_SERVICE.replace("MAS_CONFIG: /config/mas.yaml", "MAS_CONFIG: /config/mas.yaml:/config/more.yaml");

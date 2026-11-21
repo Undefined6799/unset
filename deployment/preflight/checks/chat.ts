@@ -1,10 +1,11 @@
 // C36 (P6.02; ADR 0086; chat build plan step 1): the chat servers run only with the reviewed settings. A service named
-// synapse or mas reads exactly one config file, mounted read-only, with no setting beside it in its environment: the
-// Synapse image's start.py reads SYNAPSE_CONFIG_PATH and also SYNAPSE_WORKER, UID and GID (docker/start.py:234-314
-// at v1.162.0), and MAS merges every MAS_* variable into its config and splits MAS_CONFIG on ":" into several files
-// (crates/cli/src/commands/mod.rs:90-109 at v1.26.0). The file's top-level keys are exactly the reviewed ones, so no
-// other module, provider or inline secret rides in, and every security setting is its reviewed value. A stack with
-// neither service passes. A reason names a setting from the lists below, never a value (P1.30m).
+// synapse or mas reads exactly one config file, mounted read-only, with no setting beside it in its environment. Our
+// Synapse image starts `synapse.app.homeserver -c /config/homeserver.yaml` (deployment/images/synapse.Dockerfile), so
+// the synapse service sets no variable at all; MAS merges every MAS_* variable into its config and splits MAS_CONFIG
+// on ":" into several files (crates/cli/src/commands/mod.rs:90-109 at v1.26.0), so mas sets MAS_CONFIG alone. The
+// file's top-level keys are exactly the reviewed ones, so no other module, provider or inline secret rides in, and
+// every security setting is its reviewed value. A stack with neither service passes. A reason names a setting from
+// the lists below, never a value (P1.30m).
 import { isDeepStrictEqual } from "node:util";
 import { parseDocument } from "yaml";
 import type { Service } from "../compose-parse.ts";
@@ -15,7 +16,7 @@ const SERVER_NAME: Readonly<Record<Env, string | null>> = { dev: "staging.unset.
 const SECRET = /^\/run\/secrets\/[a-z0-9_]+$/;
 type Doc = Record<string, unknown>;
 
-/** Synapse 1.162.0's settings that must be exactly these (build plan step 1, Synapse table). */
+/** Synapse 1.165.0's settings that must be exactly these (build plan step 1, Synapse table). */
 function synapseSettings(serverName: string): Doc {
   return {
     server_name: serverName,
@@ -146,7 +147,7 @@ export function masProblem(doc: unknown, serverName: string): string | null {
 }
 
 const SERVICES = [
-  { name: "synapse", variable: "SYNAPSE_CONFIG_PATH", path: "/config/homeserver.yaml", problem: synapseProblem },
+  { name: "synapse", variable: null, path: "/config/homeserver.yaml", problem: synapseProblem },
   { name: "mas", variable: "MAS_CONFIG", path: "/config/mas.yaml", problem: masProblem },
 ] as const;
 
@@ -166,7 +167,7 @@ export const c36: Check = {
   },
 };
 
-/** The service reads its one mounted config through one literal variable, and that file is the reviewed one. */
+/** The service reads its one mounted config, through one literal variable where it has one, and that file is the reviewed one. */
 function configProblem(
   inputs: Inputs,
   service: Service,
@@ -175,11 +176,8 @@ function configProblem(
 ): Outcome | null {
   const { name } = service;
   if (service.envFiles.length > 0) return fail(`${name} reads an env file`);
-  if (service.environment.some(([key]) => key !== rule.variable))
-    return fail(`${name} sets a name other than its config path`);
-  const value = service.environment[0]?.[1];
-  if (service.environment.length !== 1 || value === undefined || !("literal" in value) || value.literal !== rule.path)
-    return fail(`${name} does not read exactly its reviewed config path`);
+  const outcome = rule.variable === null ? noEnvironment(service) : configVariable(service, rule.variable, rule.path);
+  if (outcome !== null) return outcome;
   const mounts = service.mounts.filter((m) => m.target === rule.path);
   const mount = mounts[0];
   if (mounts.length !== 1 || mount?.type !== "bind" || !mount.readOnly || mount.source === null)
@@ -189,6 +187,20 @@ function configProblem(
   if (text === "not a regular file") return fail(`${name}'s config is not a regular file`);
   const problem = rule.problem(readStrict(text), serverName);
   return problem === null ? null : fail(problem);
+}
+
+function noEnvironment(service: Service): Outcome | null {
+  return service.environment.length === 0 ? null : fail(`${service.name} sets an environment variable`);
+}
+
+function configVariable(service: Service, variable: string, path: string): Outcome | null {
+  const { name } = service;
+  if (service.environment.some(([key]) => key !== variable))
+    return fail(`${name} sets a name other than its config path`);
+  const value = service.environment[0]?.[1];
+  if (service.environment.length !== 1 || value === undefined || !("literal" in value) || value.literal !== path)
+    return fail(`${name} does not read exactly its reviewed config path`);
+  return null;
 }
 
 /**

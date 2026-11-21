@@ -4,7 +4,7 @@
 # this once inside the postgres container, as its postgres user over the local socket (pg_hba.conf's only superuser
 # line), as docs/human/runbooks/chat-servers.md says. It may run again: what exists is left as it is.
 #
-# Synapse needs its database in the C collation and ctype, UTF8 (synapse docs/postgres.md at v1.162.0, "Set up
+# Synapse needs its database in the C collation and ctype, UTF8 (synapse docs/postgres.md at v1.165.0, "Set up
 # database"), so it is made from template0. Passwords are read as in 00-bootstrap.sh: a backtick \set inside psql,
 # reaching SQL only through :'name' quoting, never through argv or the environment (psql docs, "SQL Interpolation").
 set -euo pipefail

@@ -47,7 +47,13 @@ type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
 
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
-const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
+const LIBRARY_IMAGES = new Set([
+  "docker.io/library/node",
+  "docker.io/library/caddy",
+  "docker.io/library/postgres",
+  // P6.02 (ADR 0086 Decision 1): the Synapse image's base.
+  "docker.io/library/python",
+]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || VENDOR_BASES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
@@ -202,11 +208,11 @@ function sharedRefProblems(lock: Lock): string[] {
 /**
  * What each image is, by its final stage's runtime lock entry, so the rules for a kind reach every image of that kind
  * (amendment 2): a Dockerfile on any other entry, scratch included, fails `every_dockerfile_has_a_known_kind` rather
- * than falling out of every kind's rules; P1.29d added `postgres`. The edge kind's package-manager rule is
+ * than falling out of every kind's rules; P1.29d added `postgres`, P6.02 `synapse` (ADR 0086 Decision 1). The edge kind's package-manager rule is
  * `edge_runtime_has_no_package_manager`: P1.28o removed apk-tools from its Caddy Alpine runtime, and P1.28y fails any
  * edge image whose last apk command does not remove it.
  */
-type Kind = "node" | "edge" | "postgres" | "objects";
+type Kind = "node" | "edge" | "postgres" | "objects" | "synapse";
 /** Lock entry to kind, in kinds.json so the built-image tests iterate the same map (package-manager.image.test.ts). */
 const KIND_BY_FINAL_ENTRY = new Map(
   Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, "kinds.json"), "utf8")) as Record<string, Kind>),
@@ -542,6 +548,7 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["node", []],
   ["postgres", []],
   ["objects", []],
+  ["synapse", []],
 ]);
 
 /** dpkg's maintainer scripts, which the Debian kinds drop once dpkg is gone, word for word as written. */
@@ -565,6 +572,7 @@ const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["node", [DPKG_SCRIPTS_RM]],
   ["postgres", [DPKG_SCRIPTS_RM]],
   ["objects", []],
+  ["synapse", [DPKG_SCRIPTS_RM]], // synapse.Dockerfile, as the node images do
 ]);
 const GLOB = /[*?[{]/;
 /**
@@ -579,6 +587,7 @@ const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
   ["node", ["/opt/yarn-*", ...DPKG_SCRIPT_GLOBS]],
   ["postgres", DPKG_SCRIPT_GLOBS],
   ["objects", []],
+  ["synapse", DPKG_SCRIPT_GLOBS],
 ]);
 
 /** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
@@ -721,6 +730,7 @@ const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
   ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
   ["objects", []], // objects.Dockerfile copies nothing; its S3 identities are a run-time secret
+  ["synapse", ["/opt/synapse/"]], // synapse.Dockerfile: the venv and the server rule inside it
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -797,6 +807,7 @@ const ENV_KEYS_BY_KIND = new Map<Kind, readonly string[]>([
   ["node", ["NODE_ENV"]], // node-app.Dockerfile:30, migrate.Dockerfile:19
   ["postgres", []],
   ["objects", []],
+  ["synapse", []],
 ]);
 const ENV_PAIR = /^([A-Za-z_][A-Za-z0-9_]*)=\S*$/;
 
@@ -861,7 +872,8 @@ const ZLIB_UPGRADE = {
   line:
     "RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade " +
     "zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*",
-  kinds: new Set<Kind>(["node", "postgres"]),
+  // P6.02: the Synapse image's Python base is on the same trixie zlib1g (checked 2026-11-21); Alex to confirm in the PR.
+  kinds: new Set<Kind>(["node", "postgres", "synapse"]),
   expires: "2026-11-30T00:00:00Z",
 } as const;
 const isZlibUpgrade = (text: string, kind: Kind | undefined): boolean =>
@@ -1092,7 +1104,17 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt", "seaweedfs"]);
+    expect(Object.keys(lock)).toEqual([
+      "node",
+      "caddy-builder",
+      "caddy",
+      "postgres",
+      "pds",
+      "newt",
+      "seaweedfs",
+      "python",
+      "mas",
+    ]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1147,6 +1169,30 @@ describe("base images", () => {
     // Fossorial's Newt (P1.37v, ADR 0030 Decision 2), the dev edge's tunnel to Pangolin, run as shipped likewise.
     expect(lock.newt).toStrictEqual({
       ref: "docker.io/fosrl/newt",
+      tag: expect.stringMatching(/^1\.\d+\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    // P6.02 (ADR 0086 Decision 1): the Synapse image's base, which both its stages build on; its final stage deletes
+    // the base's pip and the wheel ensurepip would reinstall it from.
+    expect(lock.python).toStrictEqual({
+      ref: "docker.io/library/python",
+      tag: expect.stringMatching(/^3\.13(?:\.\d+)?-slim-trixie$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: true,
+      stripped: [
+        "/usr/local/lib/python3.13/site-packages/pip",
+        "/usr/local/lib/python3.13/site-packages/pip-26.2.2.dist-info",
+        "/usr/local/lib/python3.13/ensurepip",
+      ],
+    });
+    // MAS (ADR 0086 Decision 1), run as shipped: a runtime entry no Dockerfile builds on.
+    expect(lock.mas).toStrictEqual({
+      ref: "ghcr.io/element-hq/matrix-authentication-service",
       tag: expect.stringMatching(/^1\.\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
@@ -2156,6 +2202,7 @@ const USER_BY_KIND = new Map<Kind, string>([
   ["node", "USER 65532:65532"],
   ["postgres", "USER 999:999"],
   ["objects", "USER 1000:1000"],
+  ["synapse", "USER 991:991"],
 ]);
 
 /** The instructions of the last stage, the one that becomes the image, with continuation lines joined. */

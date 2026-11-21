@@ -24,8 +24,8 @@ mode `0400`, each owned by the one uid that reads it. A value two services need 
 | `mas_signing_key` | `65532:65532` | mas | an RSA private key, PKCS#8 PEM |
 | `mas_chat_admin_client_secret` | `65532:65532` | mas | chat-admin's client secret |
 
-Synapse runs as `991` (the image's default user, `docker/start.py:243-244` at v1.162.0) and MAS as `65532` (its
-distroless `nonroot` base, `Dockerfile:199` at v1.26.0).
+Synapse runs as `991` (our image's `USER`, `deployment/images/synapse.Dockerfile`, upstream's default uid) and MAS as
+`65532` (its distroless `nonroot` base, `Dockerfile:199` at v1.26.0).
 
 ## Make the files
 
@@ -38,7 +38,7 @@ openssl rand -hex 32 > pg_mas_password
 cp pg_mas_password mas_pg_password
 # libpq ignores a passfile that its group or others can read (PostgreSQL 18 libpq docs, "The Password File").
 printf 'postgres:5432:synapse:synapse:%s\n' "$(cat pg_synapse_password)" > synapse_pgpass
-docker run --rm --network none --entrypoint generate_signing_key <the locked Synapse image> > synapse_signing_key
+docker run --rm --network none --entrypoint /opt/synapse/bin/generate_signing_key <the locked Synapse image> > synapse_signing_key
 openssl rand -hex 32 > synapse_macaroon_secret_key
 openssl rand -hex 32 > synapse_form_secret
 openssl rand -hex 32 > synapse_mas_secret
@@ -52,7 +52,7 @@ chown 65532:65532 mas_synapse_secret mas_pg_password mas_encryption mas_signing_
 chmod 0400 pg_synapse_password pg_mas_password synapse_* mas_*
 ```
 
-`generate_signing_key` ships in the Synapse image (`pyproject.toml:221` at v1.162.0) and writes one `ed25519` key.
+`generate_signing_key` ships in the Synapse image's venv (`pyproject.toml:234` at v1.165.0) and writes one `ed25519` key.
 MAS needs at least one RSA key (`docs/reference/configuration.md`, "Signing Keys", at v1.26.0).
 
 ## Make the databases, once
