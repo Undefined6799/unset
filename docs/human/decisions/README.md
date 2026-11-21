@@ -1,11 +1,10 @@
 # Architecture decision records
 
-One file per decision that is expensive to reverse: Context, Decision, Alternatives (at least
-two), Consequences, Compliance (engineering rule DO-1). Number them in order and never rewrite
-an accepted one; supersede it with a new record instead (DO-2). ADR 0001 is the exception agreed
-in decision 35 (D8): it is an append-only log of decisions 1 to 34 and of every later decision's
-one-paragraph entry; new decisions also get their own file.
+One file per decision that is expensive to reverse: Context, Decision, Alternatives (at least two), Consequences,
+Compliance (engineering rule DO-1). Number them in order and never rewrite an accepted one; a later ADR supersedes it
+instead (DO-2).
 
+<<<<<<< HEAD
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-phase-0-defaults.md) | Defaults taken to start Phase 0; append-only decisions log | Proposed (awaiting Alex); log entries accepted as dated |
@@ -89,3 +88,38 @@ one-paragraph entry; new decisions also get their own file.
 | [0081](0081-notifications-stay-until-dismissed.md) | Notifications stay until dismissed: looking changes nothing; dismiss one, the selected or all; the full-window page with a list beside the detail (P2.27b); amends 0079 point 3 | Proposed (awaiting Alex) |
 | [0082](0082-sign-in-history.md) | Sign-in history: the time of each sign-in only, kept 30 days, any entry deletable by the member, a second check later (P2.27c, P2.28) | Accepted 2026-11-21 |
 | [0087](0087-accounts-domain-split-from-identity.md) | Membership rules (account record, onboarding, email gate, legal versions, invites) move from `domains/identity` to a new `domains/accounts`; identity keeps DID and handle verification (P2.00) | Proposed (awaiting Alex) |
+=======
+**Each ADR file is its own record (ADR 0083).** A pull request that adds or accepts an ADR edits that one file and
+nothing shared, so two ADR pull requests never conflict.
+
+- **A new ADR** starts with front matter, and has no `Status:` line:
+
+  ```yaml
+  ---
+  status: Proposed            # Proposed, Accepted or Rejected
+  date: "2026-11-21"
+  step: P1.38y                # optional
+  supersedes:                 # optional; the ADRs or parts this replaces
+    - adr: "0002"
+      part: D8's ADR 0001 log clause   # optional for supersedes, required for amends
+  amends:                     # optional, same shape
+    - adr: "0001"
+      part: the decisions log
+  ---
+  # 0083 — Title
+  ```
+
+- **Accepting it** is the pull request after Alex's line: set `status: Accepted` and add
+  `accepted: { at: "2026-11-21T05:00Z", head: <the head his line named>, line: "<his line>", merged: <commit> }`.
+  `merged` is optional. Once accepted or rejected, the file never changes again.
+- **Superseding** is written in the new ADR only (`supersedes`, `amends`). The index shows it on the older rows once
+  the new ADR is accepted; the older file is not edited.
+- **The index** is generated: it is the Decisions page on docs.unset.sh, built at each publish, and
+  `npm run adr:index` prints the same table. The ADRs from before 0083 keep their rows, as they stood at the
+  cut-over, in [`legacy-index.yaml`](legacy-index.yaml), which never changes. An older ADR still Proposed is accepted
+  by giving its own file front matter; its row keeps the decision text.
+- **ADR 0001** collected decisions 1 to 34 and then, from decision 35 (D8), logged every later decision. The log closed
+  with ADR 0083 and the file no longer changes.
+
+`scripts/docs/adrs.ts` reads the format; the docs test (`npm test`) refuses any other key or value.
+>>>>>>> origin/main
