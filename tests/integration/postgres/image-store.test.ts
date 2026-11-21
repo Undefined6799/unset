@@ -224,7 +224,7 @@ describe("image store", () => {
     test("image.sweep_use_first: an expired upload a save used before the sweep is kept", async () => {
       const did = await member();
       const id = await aged(did, "uploaded", "2 days");
-      expect(await store.addUse(did, id, record(did), null)).toEqual({ width: 10, height: 10 });
+      expect(await store.addUse(did, id, record(did), null)).toEqual({ width: 10, height: 10, created: true });
       expect(await store.sweep(null)).toEqual({ kind: "deleted", images: [] });
       expect(await exists(id)).toBe(true);
     });

@@ -241,7 +241,8 @@
           "height": ["SELECT", "INSERT"],
           "bytes": ["SELECT", "INSERT"],
           "created_at": ["SELECT", "INSERT"],
-          "unused_since": ["SELECT", "UPDATE"]
+          "unused_since": ["SELECT", "UPDATE"],
+          "blob_cid": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
