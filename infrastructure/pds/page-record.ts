@@ -4,9 +4,11 @@
 // page (its visibility) is written alone, with a compare-and-swap on the page (savePageRecord).
 import type { Did } from "@unset/domains-identity";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
+import { PROFILE } from "./profile-record.ts";
 import {
   type BuiltRecord,
   loadRecord,
+  loadRecordPair,
   type PdsCall,
   type SaveOutcome,
   type StoredRecord,
@@ -33,4 +35,13 @@ export function savePageRecord<C extends string>(
   build: (existing: unknown) => BuiltRecord<C>,
 ): Promise<PdsResult<SaveOutcome<C>>> {
   return saveRecord(pdsCall, ctx, did, MAIN_PAGE, build);
+}
+
+/** The member's profile and main page, read in one PDS call (Settings › Privacy shows both). */
+export function loadProfileAndPage(
+  pdsCall: PdsCall,
+  ctx: PdsContext | null,
+  did: Did,
+): Promise<PdsResult<readonly [StoredRecord | null, StoredRecord | null]>> {
+  return loadRecordPair(pdsCall, ctx, did, PROFILE, MAIN_PAGE);
 }

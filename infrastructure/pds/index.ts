@@ -43,7 +43,13 @@ export {
   type CompletedSignIn,
   completeAuthorization,
 } from "./oauth/sign-in.ts";
-export { loadPageRecord, MAIN_PAGE_RKEY, PAGE_COLLECTION, savePageRecord } from "./page-record.ts";
+export {
+  loadPageRecord,
+  loadProfileAndPage,
+  MAIN_PAGE_RKEY,
+  PAGE_COLLECTION,
+  savePageRecord,
+} from "./page-record.ts";
 export {
   createPdsCall,
   PDS_CALL_TIMEOUT_MS,

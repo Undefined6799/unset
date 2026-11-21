@@ -9,7 +9,7 @@
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { canonicalActorPath, parseHandle } from "@unset/domains-identity";
 import { DISCOVERABILITY_LIMITS, EMPTY_PROFILE, readPageVisibility, readProfileRecord } from "@unset/domains-profile";
-import { loadPageRecord, loadProfileRecord } from "@unset/infrastructure-pds";
+import { loadProfileAndPage } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
 import { pdsSignInRedirect } from "../../../lib/server/pds-failure.ts";
 import { config } from "../../../lib/server/runtime.ts";
@@ -21,16 +21,15 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const did = locals.did;
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   const ctx = { memo: new Map(), deadline: locals.deadline, deadlineAt: locals.deadlineAt };
-  const [read, page, own] = await Promise.all([
-    loadProfileRecord(services().pds.pdsCall, ctx, did),
-    loadPageRecord(services().pds.pdsCall, ctx, did),
+  const [read, own] = await Promise.all([
+    loadProfileAndPage(services().pds.pdsCall, ctx, did),
     services().discoverability.get(did, locals.deadline),
   ]);
   if (read.kind !== "ok") {
     const location = pdsSignInRedirect(read);
     if (location !== null) redirect(303, location);
   }
-  const stored = read.kind === "ok" ? read.value?.value : undefined;
+  const stored = read.kind === "ok" ? read.value[0]?.value : undefined;
   const fields = stored === undefined ? EMPTY_PROFILE : readProfileRecord(stored);
   // The address the public page itself uses (routes/@[actor]/+page.server.ts): the handle the indexer verified, else
   // the DID. Not this process's handle cache, which is empty after a restart (Codex on #1842). Before the indexer has
@@ -39,13 +38,9 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const handle = own.page === null ? services().handles.verifiedHandle(did) : indexed;
   const name = fields.displayName || handle || did;
   // Who sees the page (ADR 0078), from the main page itself (ADR 0091; no page is public): none yet without a profile,
-  // unknown when the PDS did not answer either read.
+  // unknown when the PDS did not answer.
   const visibility =
-    read.kind !== "ok" || page.kind !== "ok"
-      ? "unreadable"
-      : stored === undefined
-        ? "noProfile"
-        : readPageVisibility(page.value?.value);
+    read.kind !== "ok" ? "unreadable" : stored === undefined ? "noProfile" : readPageVisibility(read.value[1]?.value);
   return {
     shell: settingsShell(request, "/settings/privacy"),
     visibility,

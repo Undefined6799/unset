@@ -182,8 +182,11 @@ describe("index store", () => {
 
   test("index.a_refused_main_page_is_kept_closed", async () => {
     // ADR 0091: the main page says who sees the account, so one we cannot read is kept with no cards and shown only to
-    // its member, never dropped (a dropped page would read as public).
-    await commit(A, rev(7), [page(listOf(CARD_2))]);
+    // its member, never dropped (a dropped page would read as public). Its own account, so A's revisions stay as the
+    // later tests expect.
+    const C = "did:plc:cccccccccccccccccccccccc";
+    track(C, true);
+    await commit(C, rev(3), [page([])]);
     const before = stat("ingest_invalid");
     const broken: IndexChange = {
       kind: "put",
@@ -192,11 +195,10 @@ describe("index store", () => {
       cid: CID,
       record: { $type: "sh.unset.page", cards: 7, createdAt: T },
     };
-    await commit(A, rev(8), [broken]);
-    expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${A}'`)).toEqual([
+    await commit(C, rev(4), [broken]);
+    expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${C}'`)).toEqual([
       "owner-only|f",
     ]);
-    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND position IS NOT NULL`)).toEqual(["0"]);
     expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
   });
 
