@@ -348,10 +348,26 @@ describe("C36 the chat services", () => {
 });
 
 describe("C36 MAS's networks", () => {
-  const ADMIN = "  chat-admin:\n    image: a\n    networks: [chat_admin_mas]\n";
+  // chat-admin as its own listener check needs it (the next describe): its address on chat_admin, bound.
+  const ADMIN = [
+    "  chat-admin:",
+    "    image: a",
+    "    environment:",
+    "      LISTEN_ADDRESS: 10.250.38.27",
+    "    networks:",
+    "      chat_admin_mas:",
+    "      chat_admin:",
+    "        ipv4_address: 10.250.38.27",
+    "",
+  ].join("\n");
+  const ADMIN_NETWORK =
+    "  chat_admin:\n    internal: true\n    ipam:\n      config:\n        - subnet: 10.250.38.24/29\n";
 
   test("mas_binds_its_fixed_address_on_each_internal_network", async () => {
-    expect(await run(MAS_SERVICE + ADMIN + OTHER)).toEqual({ pass: true, reason: "ok" });
+    expect(await run(MAS_SERVICE + ADMIN + OTHER, "dev", CHAT_NETWORKS + ADMIN_NETWORK)).toEqual({
+      pass: true,
+      reason: "ok",
+    });
     const moved = MAS_SERVICE.replace("ipv4_address: 10.250.38.11", "ipv4_address: 10.250.38.12");
     expect(await run(moved)).toEqual({
       pass: false,
@@ -386,6 +402,118 @@ describe("C36 MAS's networks", () => {
     expect(await run(MAS_SERVICE + third)).toEqual({
       pass: false,
       reason: "web is on chat_mas, which only mas and synapse share",
+    });
+  });
+});
+
+describe("C36 the door's and chat-admin's listeners", () => {
+  // ADR 0090 decision 2: the count port answers GET /count?did= with no authentication, so only the network Synapse and
+  // web share with the door may reach it. Each listener binds the process's address on its one network (its config
+  // refuses 0.0.0.0), and that address is the one Compose gives the process there.
+  const DOOR = [
+    "  chat-auth:",
+    "    image: d",
+    "    environment:",
+    "      LISTEN_ADDRESS: 10.250.38.43",
+    "      COUNT_LISTEN_ADDRESS: 10.250.38.19",
+    '      COUNT_LISTEN_PORT: "8091"',
+    "      COUNT_ORIGIN: http://10.250.38.19:8091",
+    "    networks:",
+    "      chat_edge:",
+    "        ipv4_address: 10.250.38.43",
+    "      chat_count:",
+    "        ipv4_address: 10.250.38.19",
+    "      chat_admin:",
+    "",
+  ].join("\n");
+  const ADMIN = [
+    "  chat-admin:",
+    "    image: a",
+    "    environment:",
+    "      LISTEN_ADDRESS: 10.250.38.27",
+    "    networks:",
+    "      chat_admin:",
+    "        ipv4_address: 10.250.38.27",
+    "",
+  ].join("\n");
+  const PEERS = [
+    "  synapse-peer:",
+    "    image: s",
+    "  web:",
+    "    image: w",
+    "    networks: [chat_count, chat_admin]",
+    "  edge:",
+    "    image: e",
+    "    networks: [chat_edge]",
+    "",
+  ].join("\n");
+  const NETWORKS = [
+    CHAT_NETWORKS,
+    "  chat_count:",
+    "    internal: true",
+    "    ipam:",
+    "      config:",
+    "        - subnet: 10.250.38.16/29",
+    "  chat_admin:",
+    "    internal: true",
+    "    ipam:",
+    "      config:",
+    "        - subnet: 10.250.38.24/29",
+    "  chat_edge:",
+    "    internal: true",
+    "    ipam:",
+    "      config:",
+    "        - subnet: 10.250.38.40/29",
+    "",
+  ].join("\n");
+  const at = (services: string, networks = NETWORKS) => run(services, "dev", networks);
+
+  test("each_listener_binds_its_address_on_its_one_network", async () => {
+    expect(await at(DOOR + ADMIN + PEERS)).toEqual({ pass: true, reason: "ok" });
+    // Synapse's push whitelist holds only the door's count address (homeserver.yaml ip_range_whitelist).
+    expect(await at(DOOR.replace("COUNT_LISTEN_ADDRESS: 10.250.38.19", "COUNT_LISTEN_ADDRESS: 10.250.38.20"))).toEqual({
+      pass: false,
+      reason: "chat-auth's COUNT_LISTEN_ADDRESS is not its reviewed address",
+    });
+    const unbound = DOOR.replace("      COUNT_LISTEN_ADDRESS: 10.250.38.19\n", "");
+    expect(await at(unbound)).toEqual({
+      pass: false,
+      reason: "chat-auth's COUNT_LISTEN_ADDRESS is not its reviewed address",
+    });
+    expect(await at(DOOR.replace("ipv4_address: 10.250.38.19", "ipv4_address: 10.250.38.20"))).toEqual({
+      pass: false,
+      reason: "chat-auth's address on chat_count is not its COUNT_LISTEN_ADDRESS",
+    });
+    expect(
+      await at(DOOR.replace("COUNT_ORIGIN: http://10.250.38.19:8091", "COUNT_ORIGIN: http://chat-auth:8091")),
+    ).toEqual({
+      pass: false,
+      reason: "chat-auth's COUNT_ORIGIN is not its count listener",
+    });
+    expect(await at(ADMIN.replace("LISTEN_ADDRESS: 10.250.38.27", "LISTEN_ADDRESS: 10.250.38.26"))).toEqual({
+      pass: false,
+      reason: "chat-admin's LISTEN_ADDRESS is not its reviewed address",
+    });
+    expect(await at(DOOR.replace("ipv4_address: 10.250.38.43", "ipv4_address: 10.250.38.44"))).toEqual({
+      pass: false,
+      reason: "chat-auth's address on chat_edge is not its LISTEN_ADDRESS",
+    });
+  });
+
+  test("each_listener_network_is_internal_on_its_subnet_with_only_its_peers", async () => {
+    const open = NETWORKS.replace("  chat_count:\n    internal: true\n", "  chat_count:\n    internal: false\n");
+    expect(await at(DOOR, open)).toEqual({ pass: false, reason: "chat_count is not internal" });
+    const wide = NETWORKS.replace("10.250.38.24/29", "10.250.38.0/24");
+    expect(await at(ADMIN, wide)).toEqual({ pass: false, reason: "chat_admin is not on its reviewed subnet" });
+    const stranger = "  pds:\n    image: p\n    networks: [chat_count]\n";
+    expect(await at(DOOR + stranger)).toEqual({
+      pass: false,
+      reason: "pds is on chat_count, which only chat-auth, synapse and web share",
+    });
+    const onEdge = "  web2:\n    image: w\n    networks: [chat_edge]\n";
+    expect(await at(DOOR + onEdge)).toEqual({
+      pass: false,
+      reason: "web2 is on chat_edge, which only chat-auth and edge share",
     });
   });
 });
