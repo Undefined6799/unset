@@ -92,5 +92,13 @@
   "app.notification.did": {
     "strategy": "delete_row",
     "reason": "the person's unopened notifications (P2.27, ADR 0079); they go when the person is erased"
+  },
+  "app.chat_account.did": {
+    "strategy": "delete_row",
+    "reason": "the member's chat mapping (ADR 0010); the row goes when they are erased, and its chat user, with no DID, is queued in app.chat_erasure for the MAS deactivation (ADR 0084)"
+  },
+  "door.browser.did": {
+    "strategy": "delete_row",
+    "reason": "which chat device each of the member's browsers holds and its sealed storage lock key (ADR 0081, ADR 0083); the rows go when they are erased, so no browser's local chat store opens again"
   }
 }

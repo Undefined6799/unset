@@ -60,7 +60,7 @@ services:
       PG_PASSWORD_FILE: /run/secrets/migrate_pg_password
       PG_SSLMODE: disable
       NODE_OPTIONS: --max-old-space-size=192
-    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password]
+    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password, pg_chat_auth_password]
     depends_on:
       postgres:
         condition: service_healthy
@@ -203,6 +203,16 @@ services:
       PDS_WEB_KEY_FILE: /run/secrets/pds_web_key
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
+      # Chat accounts (build step 5; ADR 0081): chat-admin's internal origin and web's Ed25519 key for it, with
+      # that key's id in chat-admin's key file. No chat-admin runs in this stack yet, so queued accounts wait.
+      CHAT_ADMIN_URL: http://chat-admin:8080
+      CHAT_ADMIN_WEB_KEY_FILE: /run/secrets/web_chat_admin_key
+      CHAT_ADMIN_WEB_KID: web-chat
+      # The door the unset.cc sign-in hop returns to (ADR 0025: staging.unset.cc is the staging chat site).
+      CHAT_DOOR_ORIGIN: https://staging.unset.cc
+      # The door's internal count port (ADR 0090 decision 2), read for the chat icon's number: its fixed address on
+      # chat_count, which the door's count listener alone binds. Where no door runs, the icon shows with no number.
+      CHAT_COUNT_URL: http://10.250.38.19:8091
       # The draft image store (P2.21a; ADR 0070): web writes members' drafts under unset-private/drafts/ as its
       # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
       # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.
@@ -223,7 +233,9 @@ services:
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
+    secrets:
+      [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, web_chat_admin_key, pds_web_key,
+       objects_web]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -447,12 +459,18 @@ secrets:
     file: ../../unset-dev-secrets/pg_api_password
   pg_indexer_password:
     file: ../../unset-dev-secrets/pg_indexer_password
+  # The door's chat_auth role password (migration 0038), which migrate sets from it like the others (roles.json).
+  pg_chat_auth_password:
+    file: ../../unset-dev-secrets/pg_chat_auth_password
   web_seal_keyring:
     file: ../../unset-dev-secrets/web_seal_keyring
   web_oauth_client_keys:
     file: ../../unset-dev-secrets/web_oauth_client_keys
   web_pds_admin_key:
     file: ../../unset-dev-secrets/web_pds_admin_key
+  # web's chat-admin signing key (build step 5), Ed25519 PKCS#8 PEM, separate from its pds-admin key.
+  web_chat_admin_key:
+    file: ../../unset-dev-secrets/web_chat_admin_key
   # Web's mark on its own calls to our PDS (P1.21j; Proposed ADR 0071): 64 hex characters; web sends it, the edge
   # compares it to give web's calls their own zones.
   pds_web_key:

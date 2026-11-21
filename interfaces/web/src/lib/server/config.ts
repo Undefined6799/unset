@@ -93,6 +93,21 @@ const inviteConfig = {
 };
 
 /**
+ * Chat (build step 5; ADR 0081 decisions 3 and 5): chat-admin's internal origin, where web queues each member's chat
+ * account, and the Ed25519 private key web signs its envelopes and sign-in tickets with (PKCS#8 PEM, its own key, not
+ * the pds-admin one) with its key id in chat-admin's key file, and the door's origin the sign-in hop returns to.
+ */
+const chatConfig = {
+  CHAT_ADMIN_URL: origin({ protocols: ["http:"] }),
+  CHAT_ADMIN_WEB_KEY: secretFile({ minBytes: 64 }),
+  CHAT_ADMIN_WEB_KID: str({ pattern: /[A-Za-z0-9._-]{1,64}/ }),
+  /** The door on unset.cc (ADR 0025: unset.cc, staging.unset.cc for staging), where the sign-in hop sends the ticket. */
+  CHAT_DOOR_ORIGIN: origin({ protocols: ["https:"] }),
+  /** The door's internal count port (build step 10; ADR 0090 decision 2), where web reads a member's chat count. */
+  CHAT_COUNT_URL: origin({ protocols: ["http:"] }),
+};
+
+/**
  * Members' pictures in the private object store (ADR 0041 Decision 3, ADR 0070 point 2.4): the store's internal origin,
  * the bucket, and web's identity in it, whose actions reach `drafts/*` and list the bucket, nothing else (runbook "The
  * object store's identities"). The key id is a fixed name, not a secret; the secret is a mounted file.
@@ -146,6 +161,7 @@ export const schema = defineEntrypointConfig({
   ...pdsConfig,
   ...onboardingConfig,
   ...inviteConfig,
+  ...chatConfig,
   ...objectStoreConfig,
   ...reviewConfig,
   ...searchConfig,

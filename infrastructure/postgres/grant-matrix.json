@@ -36,6 +36,10 @@
       "database": ["CONNECT"],
       "memberOf": []
     },
+    "chat_auth": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
     "auditor": {
       "database": ["CONNECT"],
       "memberOf": []
@@ -121,6 +125,12 @@
     "mod": {
       "owner": "migrator",
       "grants": {}
+    },
+    "door": {
+      "owner": "migrator",
+      "grants": {
+        "chat_auth": ["USAGE"]
+      }
     }
   },
   "tables": {
@@ -290,6 +300,43 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.chat_account": {
+      "web": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "chat_user": ["SELECT", "INSERT"],
+          "state": ["SELECT", "UPDATE"],
+          "attempts": ["SELECT", "UPDATE"],
+          "due_at": ["SELECT", "UPDATE"],
+          "lease_token": ["SELECT", "UPDATE"],
+          "updated_at": ["UPDATE"],
+          "locked": ["SELECT", "UPDATE"],
+          "lock_due_at": ["SELECT", "UPDATE"],
+          "lock_attempts": ["SELECT", "UPDATE"],
+          "lock_lease": ["SELECT", "UPDATE"]
+        }
+      }
+    },
+    "app.chat_lock_due": {
+      "web": {
+        "columns": {
+          "did": ["SELECT"],
+          "want_locked": ["SELECT"]
+        }
+      }
+    },
+    "app.chat_erasure": {
+      "web": {
+        "columns": {
+          "chat_user": ["SELECT"],
+          "due_at": ["SELECT", "UPDATE"],
+          "attempts": ["SELECT", "UPDATE"],
+          "lease_token": ["SELECT", "UPDATE"],
+          "queued_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {
@@ -455,6 +502,72 @@
         },
         "rowPrivileges": ["DELETE"]
       }
+    },
+    "door.browser": {
+      "chat_auth": {
+        "columns": {
+          "id": ["SELECT", "INSERT"],
+          "browser_hash": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "chat_user": ["SELECT", "INSERT"],
+          "web_session": ["SELECT", "INSERT", "UPDATE"],
+          "device_id": ["SELECT", "INSERT"],
+          "lock_key": ["SELECT", "INSERT"],
+          "last_used_at": ["UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "door.chat_contact": {
+      "chat_auth": {
+        "columns": {
+          "did": ["SELECT"],
+          "chat_user": ["SELECT"]
+        }
+      }
+    },
+    "door.push": {
+      "chat_auth": {
+        "columns": {
+          "browser_id": ["SELECT", "INSERT"],
+          "pushkey_hash": ["SELECT", "INSERT", "UPDATE"],
+          "unread": ["SELECT", "UPDATE"],
+          "counted_at": ["SELECT", "UPDATE"]
+        }
+      }
+    },
+    "door.chat_setup": {
+      "chat_auth": {
+        "columns": {
+          "chat_user": ["SELECT", "INSERT"],
+          "browser_id": ["SELECT", "INSERT", "UPDATE"],
+          "claimed_until": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.chat_session_end": {
+      "web": {
+        "columns": {
+          "chat_user": ["SELECT"],
+          "device_id": ["SELECT"],
+          "due_at": ["UPDATE"],
+          "attempts": ["SELECT", "UPDATE"],
+          "lease_token": ["SELECT", "UPDATE"]
+        }
+      }
+    },
+    "app.end_chat_sessions": {
+      "web": ["EXECUTE"]
+    },
+    "app.claim_chat_session_end": {
+      "web": ["EXECUTE"]
+    },
+    "app.hold_chat_session_end": {
+      "web": ["EXECUTE"]
+    },
+    "app.finish_chat_session_end": {
+      "web": ["EXECUTE"]
     }
   }
 }

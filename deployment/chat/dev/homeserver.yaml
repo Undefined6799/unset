@@ -1,0 +1,126 @@
+# Synapse 1.165.0 for the staging chat server (P6.02; ADR 0086; build plan step 1). Every key and value here is
+# read by preflight C36 (deployment/preflight/checks/chat.ts), which refuses a wrong value and any key it does not
+# list. Secrets are only paths under /run/secrets, never values. Each key is documented in
+# https://github.com/element-hq/synapse/blob/v1.165.0/docs/usage/configuration/config_documentation.md (read
+# 2026-11-21); line numbers below are that file's.
+
+# The domain in every chat id (ADR 0025: staging.unset.cc in development, unset.cc in production; :128, :217).
+server_name: staging.unset.cc
+public_baseurl: https://staging.unset.cc/
+
+# Two client listeners and nothing else: no federation, openid, metrics or replication resource (:498). A listener
+# binds addresses, not networks, so each binds only Synapse's fixed address on the networks it serves (ADR 0086
+# Decision 4; preflight C36 checks Synapse holds exactly these): the first on chat_edge_synapse (.51, the edge's
+# /_matrix/client/) and chat_mas (.2, MAS's calls to /_synapse/mas, which the client resource serves: synapse/rest/
+# synapse/client/__init__.py:71); the second on chat_admin_synapse (.35), chat-admin's alone (ADR 0091 decision 8).
+# Nothing answers on chat_count, where Synapse only pushes out. The socket's address is the client's, never a
+# forwarded header (x_forwarded false), so Synapse records only our own hop.
+listeners:
+  - port: 8008
+    bind_addresses: ["10.250.38.51", "10.250.38.2"]
+    type: http
+    tls: false
+    x_forwarded: false
+    resources:
+      - names: [client]
+        compress: false
+  - port: 8008
+    bind_addresses: ["10.250.38.35"]
+    type: http
+    tls: false
+    x_forwarded: false
+    resources:
+      - names: [client]
+        compress: false
+
+# Its own database and role in our Postgres (:1519). libpq reads the password from a passfile
+# (postgresql.org/docs/current/libpq-connect.html, "passfile"), so the config holds no password. C36 allows exactly
+# these args.
+database:
+  name: psycopg2
+  args:
+    host: postgres
+    dbname: synapse
+    user: synapse
+    passfile: /run/secrets/synapse_pgpass
+    sslmode: disable
+    cp_min: 2
+    cp_max: 5
+
+# Root at WARNING and the access log dropped (log.yaml): its lines carry a user id and an address (:1643).
+log_config: /config/log.yaml
+media_store_path: /data/media
+signing_key_path: /run/secrets/synapse_signing_key
+macaroon_secret_key_path: /run/secrets/synapse_macaroon_secret_key
+form_secret_path: /run/secrets/synapse_form_secret
+
+# Nothing phones home or asks a key server (:3238, :3464).
+report_stats: false
+trusted_key_servers: []
+
+# "Specifying an empty list ([]) here is the recommended way of disabling federation" (:1310).
+federation_domain_whitelist: []
+allow_profile_lookup_over_federation: false
+
+# Nobody registers or browses as a guest; accounts come only from MAS's admin API (:2740, :2886).
+enable_registration: false
+allow_guest_access: false
+
+# Off here, quoted so PyYAML (YAML 1.1) reads the string, not false (:4049): "all" would encrypt the plain kind too.
+# The server rule below encrypts every room not asked for as plain (P6.10a; synapse room.py:1794-1810 at v1.165.0),
+# so a stack without that rule never starts (C36).
+encryption_enabled_by_default_for_room_type: "off"
+
+# No message search index: new messages are not indexed, and searching fails (:439).
+enable_search: false
+
+# Plain rooms carry m.room.retention {max_lifetime: 30 days}, which the purge job deletes; allowed_lifetime_max caps
+# any policy at 30 days. No default_policy, which would apply to rooms without that state and purge encrypted
+# history too. One job with neither lifetime bound, so no room is skipped (:1154).
+retention:
+  enabled: true
+  allowed_lifetime_max: 30d
+  purge_jobs:
+    - interval: 12h
+
+# Names and pictures can't be faked, per room or at all (:2934, :2947, :1028).
+enable_set_displayname: false
+enable_set_avatar_url: false
+allow_per_room_profiles: false
+
+# Profiles are not open to lookups, and there is no member search (:312, :322, :4070).
+require_auth_for_profile_requests: true
+limit_profile_requests_to_users_who_share_rooms: true
+user_directory:
+  enabled: false
+
+# Push (build step 10; ADR 0082 decision 2, ADR 0090 decision 2). The chat page registers an HTTP pusher whose URL the
+# browser sets, so the only private address Synapse may post to is the door's count port, on the network it shares
+# with Synapse and web alone; every other private range stays refused by the default ip_range_blacklist, which the
+# whitelist overrides for this one address and also opens to federation and identity servers, both off here (:448,
+# :484). A push carries the event id and the count, never a body or sender (include_content), and the count is of
+# rooms with unread messages, the chat icon's number (group_unread_count_by_room; :3998).
+ip_range_whitelist: ["10.250.38.19"]
+push:
+  enabled: true
+  include_content: false
+  group_unread_count_by_room: true
+
+# No link previews (:2415). Client addresses are kept one day (:1103).
+url_preview_enabled: false
+# No uploads: the media repository is off, so Synapse serves no media endpoint (:2184).
+enable_media_repo: false
+user_ips_max_age: 1d
+
+# Sign-in is MAS's (:683-702). The endpoint is MAS's listener for Synapse, which serves discovery and oauth.
+matrix_authentication_service:
+  enabled: true
+  endpoint: http://mas:8080/
+  secret_path: /run/secrets/synapse_mas_secret
+
+# The server rule (P6.10a; ADR 0085): every room is encrypted, the default, or plain under the 30-day retention, fixed
+# at creation, and only that kind's events are accepted. Its package is infrastructure/matrix/synapse-module/, which
+# our Synapse image carries (deployment/images/synapse.Dockerfile); it takes no config (:103).
+modules:
+  - module: unset_chat_policy.RoomPolicy
+    config: {}

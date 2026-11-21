@@ -65,6 +65,7 @@ keeps every other host account out:
 | `pg_web_password` | `65532:65532` | migrate | the `web` role's password, set after migrations |
 | `pg_api_password` | `65532:65532` | migrate | the `api` role's password |
 | `pg_indexer_password` | `65532:65532` | migrate | the `indexer` role's password |
+| `pg_chat_auth_password` | `65532:65532` | migrate, chat-auth | the `chat_auth` role's password (`chat-servers.md`) |
 | `pg_web_password` (also) | `65532:65532` | web | the same file: web logs in as `web` with it (P2.04w) |
 | `web_seal_keyring` | `65532:65532` | web | the seal keyring for the OAuth state and token sets |
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
@@ -73,6 +74,7 @@ keeps every other host account out:
 | `pds_admin_keys` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
 | `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
+| `web_chat_admin_key` | `65532:65532` | web, every stack | the Ed25519 private key (PKCS#8 PEM) web signs chat-admin requests and chat sign-in tickets with, kid `web-chat` (build step 5); its own key, never the pds-admin one |
 | `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
 | `objects_web` | `65532:65532` | web, every stack | 64 hex characters: the secret key of web's identity `unset-web` in `objects_s3`; web will not start without it (P2.21a) |
 
@@ -213,6 +215,19 @@ sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-keys unset-dev-sec
 rm unset-dev-secrets/.new-key unset-dev-secrets/.new-keys
 ```
 
+**web's chat-admin key** (build step 5), `web_chat_admin_key`: made the same way with a fresh pair, kid `web-chat`
+(the compose files name it literally). Web mounts it under every stack, so the file must exist before web starts;
+the public half joins chat-admin's key file, as `iss` `web`, when chat-admin runs in the stack:
+
+```sh
+umask 077
+node -e 'const c = require("node:crypto"), fs = require("node:fs");
+  fs.writeFileSync("unset-dev-secrets/.new-key",
+    c.generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });'
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-key unset-dev-secrets/web_chat_admin_key
+rm unset-dev-secrets/.new-key
+```
+
 **Web's PDS key** (P1.21j, ADR 0071). The edge and web both read `pds_web_key`; one value, made once:
 
 ```sh
@@ -285,16 +300,16 @@ its password, DID and email live only with that person (ADR 0026).
 
 ## The dev edge's self-signed leaf (P1.38e, dev only; ADR 0032)
 
-Under dev the edge serves every staging name (the app, the PDS and the docs site, ADR 0075) with one self-signed leaf
+Under dev the edge serves every staging name (the app, the PDS, the docs site, ADR 0075, and the chat site, P6.02) with one self-signed leaf
 certificate that nobody trusts and nothing installs; Pangolin reaches it through Newt without verifying it. Every
 name must be on the leaf: Caddy asks a public CA for a certificate for any site name no loaded certificate covers
 (Caddy v2.11.9 `modules/caddyhttp/autohttps.go:200-207`), and `edge.test.ts` holds the list below to the dev sites. Make the pair on the staging host, in the folder that
 holds `unset-dev-secrets/`, with the host's own OpenSSL (checked with OpenSSL 3.0.13, Ubuntu 24.04's): a P-256 key,
-the three staging names as SANs, no CA flag, 825 days. The key never leaves the host.
+the four staging names as SANs, no CA flag, 825 days. The key never leaves the host.
 
 ```sh
 umask 077
-printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh\n' \
+printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh,DNS:staging.unset.cc\n' \
   > unset-dev-secrets/.leaf.ext
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-secrets/.leaf.key
 openssl req -new -key unset-dev-secrets/.leaf.key -subj "/CN=staging.unset.sh" \
@@ -323,9 +338,10 @@ other Newt setting is written out in `compose.dev.yaml`. The local stack has no 
 | `NEWT_ID` | shown by Pangolin when you create the staging site |
 | `NEWT_SECRET` | shown once, with the id; if lost, regenerate it in Pangolin and replace it here |
 
-Each Pangolin target for the two staging names is `https` to the edge's fixed address, `10.250.37.3`, port 443, with
+Each Pangolin target for the staging names is `https` to the edge's fixed address, `10.250.37.3`, port 443, with
 certificate checks off for that target, since the leaf above is self-signed (ADR 0032, Decisions 4 and 5). Set each
-resource's **TLS Server Name** to its own staging name, `staging.unset.sh` and `staging.unset.ac`: Pangolin 1.24.0 sends
+resource's **TLS Server Name** to its own staging name, `staging.unset.sh`, `staging.unset.ac` and `staging.unset.cc`
+(the chat site, `chat-servers.md`): Pangolin 1.24.0 sends
 no SNI to an IP target otherwise, and the edge refuses a handshake without one (ADR 0032 Decision 5). Newt saves its
 credentials back to `/tmp` inside its container, which holds nothing after a restart; this file stays the only copy on
 the host.
@@ -345,24 +361,25 @@ the host's own `sh`, curl, OpenSSL and GNU `date`, and needs no secret. It print
 status 0, or prints one `FAIL` line per problem and ends with status 1; a failure stops the deploy. For each staging
 name it takes the certificate the edge serves for that name as SNI and checks that it is the one self-signed leaf
 (`-check_ss_sig`, since OpenSSL 3.0.13 accepts a broken self-signature without it), with no CA flag, a P-256 key,
-exactly the three staging names, at most 825 days of validity and more than 30 days left (`-checkend`: this failure is the
+exactly the four staging names, at most 825 days of validity and more than 30 days left (`-checkend`: this failure is the
 only expiry guard, ADR 0032 Decision 1), and that `:80` answers only an empty `308` to its https URL (caddy v2.11.7
-modules/caddyhttp/autohttps.go:229-268). Then it asks the PDS's health route at the edge, and makes one request through
+modules/caddyhttp/autohttps.go:229-268). Then it asks the PDS's health route at the edge, checks that the chat site sends the Matrix client API to Synapse and
+answers 404 for Synapse's admin, federation and key paths and for the door's health route, and makes one request through
 Pangolin to each name. Every network call gives up after 10 seconds (`timeout 10`, `--max-time 10`), so a stalled edge or
 Pangolin fails the check instead of hanging the deploy.
 
 ```sh
 edge=10.250.37.3 failed=0 tmp=$(mktemp -d)
 fail() { echo "FAIL $*"; failed=1; }
-for name in staging.unset.sh staging.unset.ac docs.unset.sh; do
+for name in staging.unset.sh staging.unset.ac docs.unset.sh staging.unset.cc; do
   timeout 10 openssl s_client -connect "$edge:443" -servername "$name" </dev/null 2>/dev/null | openssl x509 >"$tmp/$name.pem" 2>/dev/null \
     || { fail "$name: no certificate over TLS"; continue; }
   leaf="$tmp/$name.pem"
   openssl verify -check_ss_sig -CAfile "$leaf" "$leaf" >/dev/null 2>&1 || fail "$name: not a validly self-signed leaf"
   openssl x509 -in "$leaf" -noout -ext basicConstraints | grep -q 'CA:FALSE' || fail "$name: not marked CA:FALSE"
   openssl x509 -in "$leaf" -noout -text | grep -q 'ASN1 OID: prime256v1' || fail "$name: key is not P-256"
-  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh" ] \
-    || fail "$name: names are not exactly the three staging names"
+  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh,DNS:staging.unset.cc" ] \
+    || fail "$name: names are not exactly the four staging names"
   start=$(date -d "$(openssl x509 -in "$leaf" -noout -startdate | cut -d= -f2)" +%s)
   end=$(date -d "$(openssl x509 -in "$leaf" -noout -enddate | cut -d= -f2)" +%s)
   [ $((end - start)) -le $((825 * 86400)) ] || fail "$name: valid for more than 825 days"
@@ -370,11 +387,16 @@ for name in staging.unset.sh staging.unset.ac docs.unset.sh; do
   [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url} %{size_download}' --resolve "$name:80:$edge" "http://$name/")" \
     = "308 https://$name/ 0" ] || fail "$name: :80 is not only an empty 308 to https"
 done
-for other in staging.unset.ac docs.unset.sh; do
+for other in staging.unset.ac docs.unset.sh staging.unset.cc; do
   cmp -s "$tmp/staging.unset.sh.pem" "$tmp/$other.pem" || fail "$other: not served the same leaf as staging.unset.sh"
 done
 [ "$(curl -sS --max-time 10 -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.ac:443:$edge" https://staging.unset.ac/xrpc/_health)" = 200 ] \
   || fail "staging.unset.ac: the PDS health route does not answer 200 at the edge"
+at_chat() { curl -sS --max-time 10 -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.cc:443:$edge" "https://staging.unset.cc$1"; }
+[ "$(at_chat /_matrix/client/versions)" = 200 ] || fail "staging.unset.cc: the Matrix client API does not answer 200 at the edge"
+for path in /_synapse/admin/v1/server_version /_matrix/federation/v1/version /_matrix/key/v2/server /health; do
+  [ "$(at_chat "$path")" = 404 ] || fail "staging.unset.cc$path: not the edge's 404"
+done
 for url in https://staging.unset.sh/ https://staging.unset.ac/xrpc/_health; do
   [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$url")" = 200 ] || fail "$url: no 200 through Pangolin"
 done

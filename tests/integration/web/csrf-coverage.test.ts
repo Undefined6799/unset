@@ -116,8 +116,11 @@ describe("csrf coverage", () => {
     // a new entry here is one. The OAuth callback consumes the login nonce, stores the sealed token set and creates the
     // session (P2.06), protected by the state and __Host- nonce binding, single-use (plan §2 rule 2). robots.txt and the sitemap only read (ADR 0062).
     const gets = ROUTE_FILES.filter((route) => exports(route.source, "GET")).map((route) => route.path);
+    // The unset.cc sign-in hop (build step 5) writes nothing: it signs a ticket bound to the one-time value the door
+    // set in this browser, and sends it only to the configured door, so a cross-site link signs nobody in (ADR 0081).
     expect(gets).toEqual([
       "/.well-known/security.txt",
+      "/chat/sign-in",
       "/fonts/JetBrainsMono-Variable.woff2",
       "/fonts/SpaceGrotesk-Variable.woff2",
       "/health",

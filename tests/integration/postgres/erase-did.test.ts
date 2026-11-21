@@ -52,7 +52,11 @@ function seedApp(did: string, fill: string): void {
      INSERT INTO app.image_use (image_id, record_uri)
        VALUES (repeat('${fill}', 16)::uuid, 'at://${did}/sh.unset.section/3kaaaaaaaaaaa');
      INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());
-     INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');`,
+     INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');
+     INSERT INTO app.chat_account (did, chat_user) VALUES ('${did}', 'u${fill.slice(1).repeat(20)}');
+     INSERT INTO door.browser (id, browser_hash, did, chat_user, web_session, device_id, lock_key)
+       VALUES (repeat('${fill}', 16)::uuid, ${id}, '${did}', 'u${fill.slice(1).repeat(20)}', repeat('s', 43),
+               'DEVICE0000', 's1.k1.made-up');`,
   );
 }
 
@@ -193,6 +197,8 @@ describe("core.erase_did", () => {
       "app.image_use": 1,
       "app.image_upload": 1,
       "app.notification": 1,
+      "app.chat_account": 1,
+      "door.browser": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -200,6 +206,11 @@ describe("core.erase_did", () => {
     expect(result.counts["audit.event_body"]).toBeGreaterThanOrEqual(1);
     for (const [column, count] of Object.entries(await naming(X))) expect(count, column).toBe(0);
     expect(await naming(Y)).toEqual(before);
+  });
+
+  test("the_chat_user_waits_for_deactivation_without_the_person", () => {
+    // ADR 0084 decision 3: the MAS account is deactivated by its chat user, which outlives the mapping with no DID.
+    expect(lines("SELECT chat_user FROM app.chat_erasure")).toEqual([`u${"a".repeat(20)}`]);
   });
 
   test("the_moderation_lane_keeps_its_rows", () => {
@@ -233,6 +244,8 @@ describe("core.erase_did", () => {
       "app.image_use": 0,
       "app.image_upload": 0,
       "app.notification": 0,
+      "app.chat_account": 0,
+      "door.browser": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,
