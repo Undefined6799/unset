@@ -32,6 +32,9 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   `inline-code` (`code`), `code-block` (`code-brackets`), `undo` and `redo` for the Text editor's formatting bar, as
   Alex asked on 2026-11-20 (03:18:34Z, "use the iconoir icons as replacement", after the list was named), same commit
   and pins: 59 names. `list` and `link` are reused for bullets and links.
+- P1.21v adds `strikethrough` (regular `strikethrough`) for the Text editor's selection bar, as the playground's bar
+  has it, after Alex asked on 2026-11-21 (18:52:12Z) to "match everything that they have"; same commit and pins: 60
+  names.
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.
 - ADR 0087 adds one icon from outside Iconoir: `grip` is Lucide 1.72.0's `icons/grip-vertical.svg` (ISC licence,
   `LICENSE-lucide.txt`, © 2026 Lucide Icons and Contributors), copied byte for byte from

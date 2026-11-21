@@ -232,7 +232,7 @@ export const TEXT_MENUS = {
     numbers: "Ordered list",
     codeBlock: "Code",
   },
-  format: { strong: "Bold", emphasis: "Italic", code: "Inline code", link: "Link" },
+  format: { strong: "Bold", emphasis: "Italic", strike: "Strikethrough", code: "Inline code", link: "Link" },
   /** What an empty line with the caret says. */
   hint: "Type / to choose a block, Shift+Enter for a new one",
   link: {

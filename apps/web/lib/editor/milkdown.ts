@@ -39,6 +39,7 @@ import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 export const EDITOR_COMMANDS = [
   "strong",
   "emphasis",
+  "strike",
   "code",
   "paragraph",
   "heading1",
@@ -103,6 +104,8 @@ function commandFor(name: EditorCommand, state: EditorState): Command {
       return toggleMark(schema.marks.strong as NonNullable<typeof schema.marks.strong>);
     case "emphasis":
       return toggleMark(schema.marks.emphasis as NonNullable<typeof schema.marks.emphasis>);
+    case "strike":
+      return toggleMark(schema.marks.strike_through as NonNullable<typeof schema.marks.strike_through>);
     case "code":
       return toggleMark(schema.marks.inlineCode as NonNullable<typeof schema.marks.inlineCode>);
     case "paragraph":
@@ -128,10 +131,11 @@ function commandFor(name: EditorCommand, state: EditorState): Command {
 function isActive(name: EditorCommand, state: EditorState): boolean {
   const { selection } = state;
   const parent = selection.$from.parent;
-  const mark = { strong: "strong", emphasis: "emphasis", code: "inlineCode" } as const;
+  const mark = { strong: "strong", emphasis: "emphasis", strike: "strike_through", code: "inlineCode" } as const;
   switch (name) {
     case "strong":
     case "emphasis":
+    case "strike":
     case "code": {
       const type = state.schema.marks[mark[name]];
       if (type === undefined) return false;
