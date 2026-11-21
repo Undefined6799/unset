@@ -21,6 +21,10 @@
 //   public m.read (src/client.ts:3911-3924), as Element sends with its "send read receipts" setting on, its default
 //   (TimelinePanel.tsx:963-983): the other person sees "Seen" (ADR 0092 decision 4; spec v1.18 #receipts). The view's
 //   seen is the other person's own m.read (Room.getEventReadUpTo, getReadReceiptForUserId, read-receipt.ts:91-127).
+// - react: Element's ReactionPicker.onChoose (element-web v1.12.35 apps/web/src/components/views/emojipicker/
+//   ReactionPicker.tsx:86-115): this member's own annotation with that key is taken back with redactEvent, otherwise
+//   sendEvent sends an m.reaction annotation, which matrix-js-sdk 43.0.0 never encrypts (src/client.ts:3056). A
+//   message's reactions are the timeline set's relations, as Element reads them (TimelinePanel.tsx:1810-1815).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
 // - send: sendTextMessage (client.ts:3272-3294), only while the composer sends, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
@@ -36,6 +40,7 @@ import {
   type MatrixEvent,
   MatrixEventEvent,
   Preset,
+  RelationType,
   type Room,
   RoomEvent,
   RoomMemberEvent,
@@ -50,6 +55,7 @@ import {
   type ConversationView,
   canSend,
   composerOf,
+  type QuickReaction,
 } from "../core/conversations.ts";
 import {
   directRooms,
@@ -81,6 +87,7 @@ const CHANGES = [
   RoomEvent.MyMembership,
   RoomEvent.LocalEchoUpdated,
   RoomEvent.Receipt,
+  RoomEvent.Redaction,
   RoomStateEvent.Events,
   RoomStateEvent.Members,
   RoomMemberEvent.Membership,
@@ -127,12 +134,20 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     return new Set(decrypted.filter((_, i) => marked[i]).map((e) => e.getId() as string));
   };
 
+  const annotationsOf = (room: Room, eventId: string) =>
+    room
+      .getUnfilteredTimelineSet()
+      .relations.getChildEventsForEvent(eventId, RelationType.Annotation, EventType.Reaction);
+
   const viewOf = async (id: ConversationId): Promise<ConversationView | null> => {
     const room = client.getRoom(id);
     const conversation = room === null ? null : toConversation(room, direct());
     if (room === null || conversation === null || !conversation.available) return null;
     const events = room.getLiveTimeline().getEvents();
-    const messages = toMessages(events, me, await unconfirmedOf(events));
+    const messages = toMessages(events, me, {
+      unconfirmed: await unconfirmedOf(events),
+      annotations: (eventId) => annotationsOf(room, eventId)?.getSortedAnnotationsByKey() ?? null,
+    });
     const other = conversation.with.id;
     const receipt = room.getReadReceiptForUserId(other);
     return {
@@ -172,6 +187,23 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     if (text.trim() === "" || !isAvailable(room) || !canSend(await composerFor(room, other))) return false;
     try {
       await client.sendTextMessage(room.roomId, text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Toggles this member's `key` on the message, as Element's ReactionPicker does; only while the composer sends. */
+  const toggleReaction = async (room: Room, other: string, messageId: string, key: QuickReaction) => {
+    if (!isAvailable(room) || !canSend(await composerFor(room, other))) return false;
+    const mine = annotationsOf(room, messageId)?.getAnnotationsBySender()?.[me] ?? new Set();
+    const own = [...mine].find((e) => !e.isRedacted() && e.getRelation()?.key === key)?.getId();
+    try {
+      if (own !== undefined) await client.redactEvent(room.roomId, own);
+      else {
+        const relation = { rel_type: RelationType.Annotation as const, event_id: messageId, key };
+        await client.sendEvent(room.roomId, EventType.Reaction, { "m.relates_to": relation });
+      }
       return true;
     } catch {
       return false;
@@ -243,6 +275,11 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());
       return room !== null && other !== undefined && (await sendIn(room, other, text));
+    },
+    async react(id, messageId, key) {
+      const room = client.getRoom(id);
+      const other = room === null ? undefined : otherPerson(room, direct());
+      return room !== null && other !== undefined && (await toggleReaction(room, other, messageId, key));
     },
   };
 }

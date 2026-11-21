@@ -1,7 +1,8 @@
 <!--
   One conversation, part of the chat page's shell (ADR 0088; ADR 0055 point 2). The live timeline as the adapter maps
-  it (matrix/conversations.ts toMessages): text, and a plain line for a message this browser cannot decrypt; a message
-  from a device its owner has not confirmed carries a warning, where Element shows its red padlock (ADR 0093). Older
+  it (matrix/conversations.ts toMessages), each message with its menu (ConversationMessage.svelte): text, and a plain
+  line for a message this browser cannot decrypt; a message from a device its owner has not confirmed carries a
+  warning, where Element shows its red padlock (ADR 0093). Older
   messages load on request; the newest is marked read as it is shown, and "Seen" with the time goes under the last
   message the other person has read (ADR 0092 decision 4). The composer is text only and stays off until
   encryption is on for the conversation in this browser (core/conversations.ts composerOf); while the other person has
@@ -11,7 +12,9 @@
   Message text is the sender's own: Svelte escapes it, and nothing here renders markup.
 -->
 <script lang="ts">
+import ConversationMessage from "./ConversationMessage.svelte";
 import {
+  actionsOf,
   type Composer,
   type ConversationId,
   type Conversations,
@@ -69,8 +72,6 @@ async function send(event: SubmitEvent) {
 async function accept() {
   failed = !(await conversations.accept(id));
 }
-
-const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 </script>
 
 <section class="flex flex-col gap-4" data-screen="conversation" data-composer={view?.composer}>
@@ -95,22 +96,12 @@ const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digi
     {/if}
     <ol class="flex flex-col gap-2" aria-label="Messages">
       {#each view.messages as message (message.id)}
-        <li class={message.mine ? "self-end text-right" : "self-start"} data-mine={message.mine}>
-          {#if message.kind === "text"}
-            <p class="bg-muted rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap">{message.text}</p>
-          {:else}
-            <p class="text-muted-foreground text-sm italic" data-unreadable>This message can't be read on this browser</p>
-          {/if}
-          {#if message.unconfirmed}
-            <p class="text-muted-foreground flex items-center gap-1 text-xs" data-mark="unconfirmed">
-              <Icon name="warning" size={16} />Sent from a device that hasn't been confirmed
-            </p>
-          {/if}
-          <time class="text-muted-foreground text-xs" datetime={new Date(message.at).toISOString()}>{time(message.at)}</time>
-          {#if view.seen?.id === message.id}
-            <p class="text-muted-foreground text-xs" data-seen>Seen {time(view.seen.at)}</p>
-          {/if}
-        </li>
+        <ConversationMessage
+          {message}
+          actions={actionsOf(message, view.composer)}
+          seenAt={view.seen?.id === message.id ? view.seen.at : null}
+          onReact={(key) => conversations.react(id, message.id, key)}
+        />
       {/each}
     </ol>
     {#if view.composer === "request"}

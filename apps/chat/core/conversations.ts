@@ -26,6 +26,17 @@ export type Conversation = {
   readonly lastActiveAt: number;
 };
 
+/**
+ * Element's quick reactions (element-web v1.12.35 packages/shared-components/src/core/EmojiPicker/QuickReactions.tsx:
+ * 22), the only keys the server takes (ADR 0092 decision 1). They are what people put on a message, not icons.
+ */
+export const QUICK_REACTIONS = ["👍", "👎", "😄", "🎉", "😕", "❤️", "🚀", "👀"] as const;
+export type QuickReaction = (typeof QUICK_REACTIONS)[number];
+export const isQuickReaction = (key: unknown): key is QuickReaction => QUICK_REACTIONS.some((q) => q === key);
+
+/** One reaction on a message: how many put it there, and whether this member is one of them. */
+export type Reaction = { readonly key: QuickReaction; readonly count: number; readonly mine: boolean };
+
 /** A line of the conversation: text, or a message this browser cannot read. User text is never markup. */
 export type Message = {
   readonly id: string;
@@ -33,7 +44,17 @@ export type Message = {
   readonly at: number;
   /** Sent from a device its owner has not confirmed: shown with a warning (ADR 0093). */
   readonly unconfirmed: boolean;
+  /** Its quick reactions, most first. */
+  readonly reactions: readonly Reaction[];
 } & ({ readonly kind: "text"; readonly text: string } | { readonly kind: "unreadable" });
+
+/** What a member can do with a message from its menu. */
+export type MessageAction = "react";
+
+/** React while the composer sends. */
+export function actionsOf(_message: Message, composer: Composer): readonly MessageAction[] {
+  return canSend(composer) ? ["react"] : [];
+}
 
 /**
  * - on: the composer may send;
@@ -108,6 +129,8 @@ export type Conversations = {
   readonly older: (id: ConversationId) => Promise<void>;
   /** Sends only while the composer is on; false when it was not sent. */
   readonly send: (id: ConversationId, text: string) => Promise<boolean>;
+  /** Puts `key` on the message, or takes this member's own `key` back off it; false when nothing changed. */
+  readonly react: (id: ConversationId, messageId: string, key: QuickReaction) => Promise<boolean>;
 };
 
 /** Who a person is shown as when they have no name of their own: erased, or never named. */

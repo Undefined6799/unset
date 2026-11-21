@@ -2,7 +2,18 @@
 // composer is on. The composer stays off until encryption is on in this browser's crypto (the spike of 2026-11-20 sent
 // plaintext right after createRoom otherwise); while the other person is only invited it is pending and still sends.
 import { describe, expect, test } from "vitest";
-import { availableOf, canSend, composerOf, nameOf, parseChatId, startTarget } from "./conversations.ts";
+import {
+  actionsOf,
+  availableOf,
+  canSend,
+  composerOf,
+  isQuickReaction,
+  type Message,
+  nameOf,
+  parseChatId,
+  QUICK_REACTIONS,
+  startTarget,
+} from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -109,5 +120,26 @@ describe("nameOf", () => {
     ["ubbbbbbbbbbbbbbbbbbbb", "the chat ID's local part, the homeserver's default"],
   ])("chat.name_former_member: %j (%s) is shown as Former member, never as the chat ID", (name) => {
     expect(nameOf(name, THEM)).toBe("Former member");
+  });
+});
+
+describe("reactions", () => {
+  test("chat.quick_reactions: Element's eight, the only keys the server takes (ADR 0092 decision 1)", () => {
+    expect(QUICK_REACTIONS).toEqual(["👍", "👎", "😄", "🎉", "😕", "❤️", "🚀", "👀"]);
+    expect(QUICK_REACTIONS.every(isQuickReaction)).toBe(true);
+    for (const key of ["👍🏽", "❤", "meet me at 5", "", 1, null]) expect(isQuickReaction(key), String(key)).toBe(false);
+  });
+});
+
+describe("actionsOf", () => {
+  const base = { id: "$m", at: 1, unconfirmed: false, reactions: [], replyTo: null } as const;
+  const text = (mine: boolean): Message => ({ ...base, mine, kind: "text", text: "hi" });
+
+  test("chat.react_while_sending: a message may be reacted to only while the composer sends", () => {
+    expect(actionsOf(text(false), "on")).toContain("react");
+    expect(actionsOf(text(true), "pending")).toContain("react");
+    for (const composer of ["request", "gone", "not_encrypted", "they_left", "waiting_for_encryption"] as const)
+      expect(actionsOf(text(false), composer), composer).not.toContain("react");
+    expect(actionsOf({ ...base, mine: false, kind: "unreadable" }, "on")).toContain("react");
   });
 });

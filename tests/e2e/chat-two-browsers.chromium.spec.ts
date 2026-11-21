@@ -62,6 +62,7 @@ async function browserFor(browser: Browser, handle: string) {
 const state = (page: Page) => page.locator("main").getAttribute("data-state");
 const conversation = (page: Page) => page.locator("[data-screen=conversation]");
 const messages = (page: Page) => conversation(page).locator("ol");
+const message = (page: Page, text: string) => messages(page).locator("li[data-message]", { hasText: text });
 const unconfirmed = (page: Page) => messages(page).locator("[data-mark=unconfirmed]");
 
 async function saveKey(page: Page): Promise<string> {
@@ -114,8 +115,18 @@ async function talking(browser: Browser) {
   await send(a.page, "hello from alice");
   await expect(messages(b.page)).toContainText("hello from alice", { timeout: 60_000 });
   // Bob's page marks it read with a public receipt, so Alice sees "Seen" and the time under it (ADR 0092 decision 4).
-  const read = messages(a.page).locator("li", { hasText: "hello from alice" }).locator("[data-seen]");
+  const read = message(a.page, "hello from alice").locator("[data-seen]");
   await expect(read).toHaveText(/^Seen \d/, { timeout: 60_000 });
+  // Bob reacts from the message's actions; Alice sees it, and it goes when Bob takes it back (ADR 0092 decision 1).
+  const bobs = message(b.page, "hello from alice");
+  await bobs.hover();
+  await bobs.getByRole("button", { name: "React", exact: true }).click();
+  await bobs.getByRole("button", { name: "React with 👍" }).click();
+  const thumbs = message(a.page, "hello from alice").locator('[data-reaction="👍"]');
+  await expect(thumbs).toHaveText("👍 1", { timeout: 60_000 });
+  await expect(bobs.locator('[data-reaction="👍"]')).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });
+  await bobs.locator('[data-reaction="👍"]').click();
+  await expect(thumbs).toHaveCount(0, { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
   for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
@@ -142,10 +153,10 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   expect(rooms).toHaveLength(1);
   const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
     .chunk as { type: string; content: unknown }[];
-  const timeline = chunk.filter(
-    (e) => !e.type.startsWith("m.room.") || e.type === "m.room.encrypted" || e.type === "m.room.message",
-  );
-  expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted", "m.room.encrypted"]);
+  const sent = chunk.filter((e) => e.type === "m.room.encrypted" || e.type === "m.room.message");
+  expect(sent.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted", "m.room.encrypted"]);
+  // Beside them only Bob's reaction, which is in the clear by design and was taken back (ADR 0092 decisions 1, 2).
+  expect(chunk.filter((e) => !e.type.startsWith("m.room.")).map((e) => e.type)).toEqual(["m.reaction"]);
   expect(JSON.stringify(chunk)).not.toContain("hello");
   // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup,
   // opened at once: the first browser may not have uploaded the room's keys yet (it waits up to 10 s, matrix-js-sdk

@@ -30,8 +30,10 @@ import {
   type Conversation,
   type ConversationId,
   type ConversationKind,
+  isQuickReaction,
   type Message,
   nameOf,
+  type Reaction,
 } from "../core/conversations.ts";
 
 const MEGOLM = "m.megolm.v1.aes-sha2";
@@ -128,20 +130,23 @@ export function unconfirmedDevice(info: EventEncryptionInfo | null): boolean {
   return info !== null && info.shieldColour === EventShieldColour.RED;
 }
 
-/**
- * The timeline's text messages and unreadable ones, in order; anything else is left out. `unconfirmed` holds the ids
- * of events sent from a device its owner has not confirmed (unconfirmedDevice).
- */
-export function toMessages(
-  events: readonly MatrixEvent[],
-  me: string,
-  unconfirmed: ReadonlySet<string> = new Set(),
-): Message[] {
+/** What toMessages is told about the events beside the events themselves. */
+export type About = {
+  /** Ids of events sent from a device its owner has not confirmed (unconfirmedDevice). */
+  readonly unconfirmed?: ReadonlySet<string>;
+  /** An event's annotations by key, as Relations.getSortedAnnotationsByKey gives them (src/models/relations.ts:263). */
+  readonly annotations?: (eventId: string) => readonly (readonly [string, ReadonlySet<MatrixEvent>])[] | null;
+};
+
+/** The timeline's text messages and unreadable ones, in order, with their reactions; anything else is left out. */
+export function toMessages(events: readonly MatrixEvent[], me: string, about: About = {}): Message[] {
+  const { unconfirmed = new Set(), annotations = () => null } = about;
   const messages: Message[] = [];
   for (const event of events) {
     const id = event.getId();
     if (id === undefined || event.isState()) continue;
-    const base = { id, mine: event.getSender() === me, at: event.getTs(), unconfirmed: unconfirmed.has(id) };
+    const reactions = reactionsOf(annotations(id), me);
+    const base = { id, mine: event.getSender() === me, at: event.getTs(), unconfirmed: unconfirmed.has(id), reactions };
     if (event.isDecryptionFailure()) {
       messages.push({ ...base, kind: "unreadable" });
       continue;
@@ -152,6 +157,25 @@ export function toMessages(
     messages.push({ ...base, kind: "text", text: content.body });
   }
   return messages;
+}
+
+/**
+ * A message's quick reactions, most first as Relations.getSortedAnnotationsByKey orders them (src/models/
+ * relations.ts:263): each key's annotations not redacted, and whether this member is among their senders, as
+ * Element's ReactionPicker reads its own (element-web v1.12.35 apps/web/src/components/views/emojipicker/
+ * ReactionPicker.tsx:68-79). A key outside the quick set, which the server refuses, is left out.
+ */
+export function reactionsOf(
+  byKey: readonly (readonly [string, ReadonlySet<MatrixEvent>])[] | null,
+  me: string,
+): Reaction[] {
+  const reactions: Reaction[] = [];
+  for (const [key, events] of byKey ?? []) {
+    const live = [...events].filter((e) => !e.isRedacted());
+    if (!isQuickReaction(key) || live.length === 0) continue;
+    reactions.push({ key, count: live.length, mine: live.some((e) => e.getSender() === me) });
+  }
+  return reactions;
 }
 
 /**

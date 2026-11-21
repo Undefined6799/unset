@@ -9,6 +9,7 @@ import {
   directRooms,
   findDirect,
   otherMembership,
+  reactionsOf,
   seenOf,
   toConversation,
   toMessages,
@@ -243,10 +244,9 @@ describe("toMessages", () => {
     const from = (body: string) =>
       event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body } });
     const [confirmed, unconfirmed] = [from("a"), from("b")];
-    const marks = toMessages([confirmed, unconfirmed], ME, new Set([unconfirmed.getId() as string])).map((m) => [
-      m.kind,
-      m.unconfirmed,
-    ]);
+    const marks = toMessages([confirmed, unconfirmed], ME, {
+      unconfirmed: new Set([unconfirmed.getId() as string]),
+    }).map((m) => [m.kind, m.unconfirmed]);
     expect(marks).toEqual([
       ["text", false],
       ["text", true],
@@ -305,5 +305,33 @@ describe("seenOf", () => {
     expect(seenOf(events, messages, id(second), undefined)).toBeNull();
     expect(seenOf(events, messages, "$elsewhere", 7)).toBeNull();
     expect(seenOf([theirs, first], toMessages([theirs, first], ME), id(theirs), 7)).toBeNull();
+  });
+});
+
+// Element reads a message's reactions from the timeline set's relations (element-web v1.12.35 TimelinePanel.tsx:
+// 1810-1815) and counts each key's annotations (ReactionsRow.tsx); the SDK aggregates them as events arrive
+// (src/models/event-timeline-set.ts:667-668) and drops a redacted one (src/models/relations.ts:235-251).
+describe("reactionsOf", () => {
+  const annotate = (target: MatrixEvent, key: string, sender: string) =>
+    event({
+      type: "m.reaction",
+      sender,
+      room_id: "!r:unset.cc",
+      content: { "m.relates_to": { rel_type: "m.annotation", event_id: target.getId(), key } },
+    });
+
+  test("chat.reactions_counted: each quick key once with its count, this member's marked, others left out", () => {
+    const r = room("!r:unset.cc", [member(ME, "join"), member(THEM, "join")]);
+    const target = event({ type: "m.room.message", room_id: "!r:unset.cc", content: { msgtype: "m.text", body: "x" } });
+    const reactions = [annotate(target, "👍", THEM), annotate(target, "👍", ME), annotate(target, "🎉", THEM)];
+    r.addLiveEvents([target, ...reactions, annotate(target, "not quick", THEM)], { addToState: false });
+    const relations = r
+      .getUnfilteredTimelineSet()
+      .relations.getChildEventsForEvent(target.getId() as string, "m.annotation", "m.reaction");
+    expect(reactionsOf(relations?.getSortedAnnotationsByKey() ?? null, ME)).toEqual([
+      { key: "👍", count: 2, mine: true },
+      { key: "🎉", count: 1, mine: false },
+    ]);
+    expect(reactionsOf(null, ME)).toEqual([]);
   });
 });
