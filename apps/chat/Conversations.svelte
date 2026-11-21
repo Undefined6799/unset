@@ -1,0 +1,119 @@
+<!--
+  The conversation list, part of the chat page's shell (ADR 0088; ADR 0055 point 2: the shell may lay out with Tailwind,
+  everything else is a stock component). Requests (someone asked to talk; the invite is the request) come first with
+  Accept; each conversation shows the other person's name, its unread count, and a lock when it is encrypted or a
+  "Not encrypted" mark when it is not (ADR 0085). The start route `/?with=<chat ID>` opens the conversation with that
+  person, starting one if there is none (core/conversations.ts startTarget). Names are the other person's own text:
+  Svelte escapes it, and nothing here renders markup.
+-->
+<script lang="ts">
+import { onMount } from "svelte";
+import Conversation from "./Conversation.svelte";
+import {
+  type ConversationId,
+  type Conversations,
+  type Conversation as Item,
+  startTarget,
+} from "./core/conversations.ts";
+import { Icon } from "./lib/components/icon/index.js";
+import * as Alert from "./lib/components/ui/alert/index.js";
+import { Button } from "./lib/components/ui/button/index.js";
+
+let { conversations, me }: { conversations: Conversations; me: string } = $props();
+
+let list: readonly Item[] = $state([]);
+let open: ConversationId | null = $state(null);
+let starting = $state(false);
+let problem: string | null = $state(null);
+const requests = $derived(list.filter((c) => c.request));
+const talks = $derived(list.filter((c) => !c.request));
+
+$effect(() => conversations.watchList((next) => (list = next)));
+
+async function accept(id: ConversationId) {
+  problem = (await conversations.accept(id)) ? null : "The request could not be accepted. Try again in a moment.";
+}
+
+onMount(async () => {
+  const asked = new URLSearchParams(window.location.search).has("with");
+  if (!asked) return;
+  const target = startTarget(window.location.search, me);
+  window.history.replaceState(null, "", "/");
+  if (target === null) {
+    problem = "That chat ID is not one we know.";
+    return;
+  }
+  starting = true;
+  const id = await conversations.start(target);
+  starting = false;
+  if (id === null) problem = "The conversation could not be started. Try again in a moment.";
+  else open = id;
+});
+</script>
+
+{#if open !== null}
+  <Conversation {conversations} id={open} onBack={() => (open = null)} />
+{:else}
+  <div class="flex flex-col gap-4" data-screen="conversations">
+    {#if starting}
+      <p class="text-muted-foreground text-sm">Opening the conversation…</p>
+    {/if}
+    {#if problem !== null}
+      <Alert.Root>
+        <Alert.Description>{problem}</Alert.Description>
+      </Alert.Root>
+    {/if}
+    {#if requests.length > 0}
+      <section class="flex flex-col gap-2" aria-labelledby="requests-heading">
+        <h2 id="requests-heading" class="text-sm font-medium">Requests</h2>
+        <ul class="flex flex-col gap-2">
+          {#each requests as request (request.id)}
+            <li class="flex items-center justify-between gap-2" data-request={request.with.id}>
+              <span class="flex min-w-0 items-center gap-2">
+                {@render mark(request)}
+                <span class="truncate">{request.with.name} wants to talk</span>
+              </span>
+              <Button size="sm" onclick={() => accept(request.id)}>Accept</Button>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
+    {#if talks.length === 0 && requests.length === 0 && !starting}
+      <p class="text-muted-foreground text-sm">No conversations yet.</p>
+    {:else if talks.length > 0}
+      <ul class="flex flex-col gap-1" aria-label="Conversations">
+        {#each talks as talk (talk.id)}
+          <li>
+            <Button
+              variant="ghost"
+              class="w-full justify-between"
+              data-conversation={talk.with.id}
+              onclick={() => (open = talk.id)}
+            >
+              <span class="flex min-w-0 items-center gap-2">
+                {@render mark(talk)}
+                <span class="truncate">{talk.with.name}</span>
+              </span>
+              {#if talk.unread > 0}
+                <span class="bg-primary text-primary-foreground rounded-full px-2 text-xs" data-unread={talk.unread}>
+                  {talk.unread}<span class="sr-only"> unread</span>
+                </span>
+              {/if}
+            </Button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+{/if}
+
+{#snippet mark(item: Item)}
+  {#if item.kind === "encrypted"}
+    <span data-mark="encrypted"><Icon name="private" size={16} label="Encrypted" /></span>
+  {:else}
+    <span class="flex items-center gap-1 text-xs" data-mark="not_encrypted">
+      <Icon name="warning" size={16} />Not encrypted
+    </span>
+  {/if}
+{/snippet}
