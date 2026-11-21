@@ -300,7 +300,8 @@ test("words_put_back_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) 
   await expect(editor).toHaveText(`${word} one`);
   await page.unroute(/\?\/saveAll$/);
   await bar(page).getByRole("button", { name: "Save" }).click();
-  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  // The first Save's "Saved." is still shown, so wait for this Save to leave nothing unsaved before reloading.
+  await expect(bar(page)).not.toContainText("unsaved changes");
   await openOwnPage(page);
   await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one`);
   await expect(page.locator('[data-slot="card"]', { hasText: word })).not.toContainText("two");
