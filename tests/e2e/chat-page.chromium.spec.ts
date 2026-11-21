@@ -15,7 +15,7 @@
 // pusher leaves chat as it is.
 // Chromium only, by its name (playwright.config.ts ignores *chromium.spec.ts for Firefox and WebKit): the CSP check
 // reads Chromium's console wording, as csp.spec.ts does.
-import { readFileSync } from "node:fs";
+import { text as readText } from "node:stream/consumers";
 import { AxeBuilder } from "@axe-core/playwright";
 import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
 import {
@@ -252,7 +252,9 @@ test("chat_page.setup_saves_key: the key is shown to save and download, checked,
     page.getByRole("button", { name: "Download" }).click(),
   ]);
   expect(download.suggestedFilename()).toBe("unset-chat-recovery-key.txt");
-  expect(readFileSync(await download.path(), "utf8")).toContain(key);
+  // A stream, not download.path(): CI drives a browser server, and path() "throws when connected remotely"
+  // (node_modules/playwright-core/types/types.d.ts, Download, 1.64.1).
+  expect(await readText(await download.createReadStream())).toContain(key);
   // Nothing is stored before the check passes.
   const vaultWrites = () =>
     stack.homeserver.seen.filter((c) => c.method === "PUT" && /account_data\/m\.secret_storage/.test(c.url)).length;
