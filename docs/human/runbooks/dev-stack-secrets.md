@@ -75,6 +75,8 @@ keeps every other host account out:
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
 | `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
 | `objects_web` | `65532:65532` | web, every stack | 64 hex characters: the secret key of web's identity `unset-web` in `objects_s3`; web will not start without it (P2.21a) |
+| `web_invite_request_smtp` | `65532:65532` | web, staging | the SMTP URL web sends invite-request mails with (P2.10u, ADR 0080) |
+| `web_invite_request_to` | `65532:65532` | web, staging | the owner's address that receives each invite request (P2.10u) |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -247,7 +249,11 @@ request sent twice.
 ## Invite requests' two files (P2.10r; ADR 0080)
 
 Web's invite-request page is off until `INVITE_REQUESTS=on`. On, web refuses to boot unless two secret files and one
-setting are valid. Both files are owner-only (0600), like the others in this folder; nobody prints them.
+setting are valid. The staging stacks (`compose.dev.yaml`, `compose.dev.source.yaml`) turn it on and mount both files
+since P2.10u, so create them by hand before that deploy, in the secrets folder beside the checkout
+(`../unset-dev-secrets/`), each mode `0400` and owned by `65532:65532` like web's other files; nobody prints them.
+Preflight C9 fails and names the file while either is missing, so the stack never boots half-on. The local stack
+(`compose.local.yaml`) keeps it off and mounts neither.
 
 - `web_invite_request_smtp`: one line, `smtps://resend:<key>@smtp.resend.com:465`. Make a Resend API key for web alone,
   with sending access only and limited to the sending domain, not the PDS's key (Resend dashboard, API Keys, Create).
@@ -256,8 +262,20 @@ setting are valid. Both files are owner-only (0600), like the others in this fol
 - `INVITE_REQUEST_FROM` (plain env, not a secret): a sender on the verified Resend domain, for example the PDS's
   `noreply@` address.
 
-Web reads them as `INVITE_REQUEST_SMTP_URL_FILE` and `INVITE_REQUEST_TO_FILE`; the compose mounts are added with the
-deploy that turns the page on. Turning it off is `INVITE_REQUESTS=off` (or leaving it unset) and a restart; the files
+From the folder that holds the checkout, each value is typed at a hidden prompt, so it lands in no shell history:
+
+```sh
+umask 077
+read -rs -p 'SMTP URL: ' v && printf '%s' "$v" > unset-dev-secrets/.new && unset v
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new unset-dev-secrets/web_invite_request_smtp
+read -rs -p 'Owner address: ' v && printf '%s' "$v" > unset-dev-secrets/.new && unset v
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new unset-dev-secrets/web_invite_request_to
+rm unset-dev-secrets/.new
+```
+
+Web reads them as `INVITE_REQUEST_SMTP_URL_FILE` and `INVITE_REQUEST_TO_FILE`, mounted at
+`/run/secrets/web_invite_request_smtp` and `/run/secrets/web_invite_request_to`; staging's sender is
+`noreply@staging.unset.sh`. Turning it off is `INVITE_REQUESTS=off` (or leaving it unset) and a restart; the files
 may stay. Rotating the key is a new file and a restart.
 
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
