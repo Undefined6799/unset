@@ -1589,6 +1589,7 @@ describe("edge rules on the adapted config (P1.39b)", () => {
       "/setup/release",
       "/push/key",
       "/chat-id",
+      "/chat-name",
       "/assets/index-AbC_12.js",
       "/assets/matrix_sdk_crypto_wasm_bg-Xy9.wasm",
       "/dm/did:plc:abcdefghijklmnopqrstuvwx",

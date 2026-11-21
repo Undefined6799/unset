@@ -58,7 +58,7 @@ export const DEV_CHAT = {
  * /welcome, /welcome/done (#1939) and /sign-out/return, /sign-out/redeem, /sign-out/done (#1950).
  */
 export const CHAT_MATRIX_PATH = String.raw`^/_matrix/client(?:/[^/]*[^/.][^/]*)+/?$`;
-export const CHAT_DOOR_PATH = String.raw`^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$`;
+export const CHAT_DOOR_PATH = String.raw`^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|chat-name|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$`;
 /** Where the dev edge reads the built docs (compose.dev.yaml's one folder bind). */
 export const DOCS_ROOT = "/srv/docs";
 /** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */

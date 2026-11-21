@@ -37,7 +37,7 @@
 			request_header -Cookie
 			import upstream {$MATRIX_UPSTREAM}
 		}
-		@door vars_regexp {http.request.uri.path} ^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$
+		@door vars_regexp {http.request.uri.path} ^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|chat-name|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$
 		route @door {
 			import upstream {$CHAT_UPSTREAM}
 		}

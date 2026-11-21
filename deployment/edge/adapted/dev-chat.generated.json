@@ -430,7 +430,7 @@
                                   "vars_regexp": {
                                     "{http.request.uri.path}": {
                                       "name": "door",
-                                      "pattern": "^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|assets/[\\w-][\\w.-]*|dm/did:[a-z0-9]+:[\\w.:-]+)?$"
+                                      "pattern": "^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|chat-name|assets/[\\w-][\\w.-]*|dm/did:[a-z0-9]+:[\\w.:-]+)?$"
                                     }
                                   }
                                 }
