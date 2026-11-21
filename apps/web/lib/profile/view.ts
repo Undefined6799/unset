@@ -87,7 +87,7 @@ function shownOf(content: CardContent): CardShown {
   }
 }
 
-/** The page's cards, in page order, each with what it shows. */
+/** The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at. */
 export const cardViews = (
   cards: readonly {
     readonly key: string;
@@ -95,14 +95,13 @@ export const cardViews = (
     readonly surface?: CardSurface;
     readonly content: CardContent;
   }[],
+  versions?: ReadonlyMap<string, string>,
 ): CardView[] =>
-  cards.map(({ key, width, surface = "filled", content }) => ({
-    key,
-    width,
-    surface,
-    content,
-    shown: shownOf(content),
-  }));
+  cards.map(({ key, width, surface = "filled", content }) => {
+    const version = versions?.get(key);
+    const shown = { key, width, surface, content, shown: shownOf(content) };
+    return version === undefined ? shown : { ...shown, version };
+  });
 
 /** The profile's website as a link, or null when unset or not http(s). */
 export function websiteLink(website: string): { readonly href: string; readonly text: string } | null {
