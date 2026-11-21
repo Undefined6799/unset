@@ -8,16 +8,25 @@ import type { ProcessLimits, SquareCrop, VersionSpec } from "./processing.ts";
  */
 export const UPLOAD_LIMITS: ProcessLimits = { maxBytes: 64 * 1024 * 1024, maxPixels: 110_000_000, maxEdge: 12_000 };
 
-/** The PDS blob every atproto app sees: Bluesky's post-image ceiling (app.bsky.embed.images, 2,000,000 bytes). */
+/**
+ * The PDS blob every atproto app sees (ADR 0088, amending ADR 0070 point 3): WebP, alpha kept, the longest side up to
+ * 4,096 px and at most 5,000,000 bytes, the size Alex chose for a picture card. A PNG is tried lossless first. A
+ * hard photo gives up pixels before quality: 4,096 then 3,072 px at q90 to q75, then ADR 0070's 2,560 px down to q45.
+ */
 const MAIN: VersionSpec = {
   name: "main",
-  format: "jpeg",
+  format: "webp",
   fit: "inside",
-  size: 2560,
-  quality: 85,
-  minQuality: 45,
-  maxBytes: 2_000_000,
+  size: 4096,
+  quality: 90,
+  minQuality: 75,
+  maxBytes: 5_000_000,
   required: true,
+  smaller: [
+    { size: 3072, minQuality: 75 },
+    { size: 2560, minQuality: 45 },
+  ],
+  losslessFrom: ["png"],
 };
 
 /** The widths pages choose from (srcset); each in AVIF and WebP. Never wider than the picture itself. */

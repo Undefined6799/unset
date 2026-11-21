@@ -28,7 +28,10 @@ export const JOB_CEILING = {
   maxEdge: 16_384,
   versions: 12,
   size: 4096,
-  versionBytes: 4_000_000,
+  /** The main version's 5,000,000 bytes (ADR 0088). */
+  versionBytes: 5_000_000,
+  /** Smaller sizes a version may fall back to (ADR 0088: two). */
+  smaller: 4,
 } as const;
 
 export type Job = { readonly limits: ProcessLimits; readonly versions: readonly VersionSpec[] };
@@ -88,6 +91,9 @@ function parseSpec(v: unknown): VersionSpec | null {
     if (!within(size, 1, JOB_CEILING.maxEdge)) return null;
     crop = { left, top, size };
   }
+  const smaller = parseSmaller(v.smaller, v.size as number, v.quality as number);
+  const losslessFrom = parseLossless(v.losslessFrom, v.format as OutputFormat);
+  if (smaller === null || losslessFrom === null) return null;
   return {
     name: v.name,
     format: v.format as OutputFormat,
@@ -98,7 +104,38 @@ function parseSpec(v: unknown): VersionSpec | null {
     minQuality: v.minQuality,
     maxBytes: v.maxBytes,
     required: v.required,
+    ...(smaller ? { smaller } : {}),
+    ...(losslessFrom ? { losslessFrom } : {}),
   };
+}
+
+/** Smaller sizes, each below the one before and at least 16 px, with a minimum quality up to the first quality. */
+function parseSmaller(
+  raw: unknown,
+  size: number,
+  quality: number,
+): NonNullable<VersionSpec["smaller"]> | undefined | null {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > JOB_CEILING.smaller) return null;
+  const out: { size: number; minQuality: number }[] = [];
+  let above = size;
+  for (const step of raw) {
+    if (!isRecord(step) || !within(step.size, 16, above - 1) || !within(step.minQuality, 1, quality)) return null;
+    out.push({ size: step.size, minQuality: step.minQuality });
+    above = step.size;
+  }
+  return out;
+}
+
+/** Lossless sources: formats we read, each once, and only for a WebP version (sharp writes lossless WebP only). */
+function parseLossless(
+  raw: unknown,
+  format: OutputFormat,
+): NonNullable<VersionSpec["losslessFrom"]> | undefined | null {
+  if (raw === undefined) return undefined;
+  if (format !== "webp" || !Array.isArray(raw) || raw.length < 1) return null;
+  if (!raw.every((f) => SOURCES.includes(f as SourceFormat)) || new Set(raw).size !== raw.length) return null;
+  return raw as SourceFormat[];
 }
 
 type Manifest = {

@@ -41,21 +41,30 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 describe("uploadImageBlob", () => {
-  test("blob.upload: posts the JPEG bytes and answers the blob ref in its JSON form", async () => {
-    const blob = { $type: "blob", ref: { $link: CID }, mimeType: "image/jpeg", size: BYTES.length };
+  test("blob.upload: posts the WebP bytes and answers the blob ref in its JSON form (ADR 0088)", async () => {
+    const blob = { $type: "blob", ref: { $link: CID }, mimeType: "image/webp", size: BYTES.length };
     const { pdsCall, ctx, calls } = pds(() => json({ blob }));
     expect(await uploadImageBlob(pdsCall, ctx, DID, BYTES)).toEqual({ kind: "ok", value: blob });
     expect(calls).toEqual([
-      { path: "/xrpc/com.atproto.repo.uploadBlob", method: "POST", type: "image/jpeg", bytes: BYTES },
+      { path: "/xrpc/com.atproto.repo.uploadBlob", method: "POST", type: "image/webp", bytes: BYTES },
     ]);
   });
 
   test.each([
-    ["another type", { mimeType: "image/png", size: BYTES.length }],
-    ["another size", { mimeType: "image/jpeg", size: BYTES.length + 1 }],
+    ["another type", { mimeType: "image/jpeg", size: BYTES.length }],
+    ["another size", { mimeType: "image/webp", size: BYTES.length + 1 }],
   ])("blob.upload_mismatch: a PDS that answers %s is unavailable, never written", async (_name, answered) => {
     const { pdsCall, ctx } = pds(() => json({ blob: { $type: "blob", ref: { $link: CID }, ...answered } }));
     expect(await uploadImageBlob(pdsCall, ctx, DID, BYTES)).toEqual({ kind: "transient", code: "pds_unavailable" });
+  });
+
+  test("blob.upload_too_large: a PDS refusing the size (PDS 0.5.51 PayloadTooLarge, 413) is a 413 rejection", async () => {
+    const { pdsCall, ctx } = pds(() => json({ error: "PayloadTooLarge", message: "request entity too large" }, 413));
+    expect(await uploadImageBlob(pdsCall, ctx, DID, BYTES)).toEqual({
+      kind: "rejected",
+      xrpcError: "PayloadTooLarge",
+      status: 413,
+    });
   });
 
   test("blob.upload_refused: a PDS error is its result, not a throw", async () => {
