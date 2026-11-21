@@ -10,6 +10,7 @@
     { "path": "domains/notifications" },
     { "path": "domains/profile" },
     { "path": "infrastructure/audit" },
+    { "path": "infrastructure/email" },
     { "path": "infrastructure/firehose" },
     { "path": "infrastructure/image" },
     { "path": "infrastructure/net-guard" },
