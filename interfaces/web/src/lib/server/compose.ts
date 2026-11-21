@@ -7,6 +7,8 @@
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
+// P2.10r: invite requests, the in-memory ask window and the owner's mail over SMTP (ADR 0080), when switched on.
+// P2.27: the member's notification inbox and the one way to send into it (ADR 0079).
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
@@ -19,6 +21,8 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
+import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
+import { createSmtpMailer, type Mailer, parseSmtpUrl } from "@unset/infrastructure-email";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import {
   createNetGuard,
@@ -44,12 +48,14 @@ import {
   createImageStore,
   createInviteStore,
   createLockPool,
+  createNotificationStore,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type Db,
   type DiscoverabilityStore,
   type ImageStore,
   type InviteStore,
@@ -70,6 +76,7 @@ import { pdsIssuerOf } from "./config.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
 import { sweepOrphanImages } from "./image-orphans.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
+import { type AskWindow, createAskWindow, createPendingSends, type PendingSends } from "./invite-requests.ts";
 import { policiesFor } from "./limits.ts";
 import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
@@ -134,6 +141,16 @@ export type Services = {
     readonly issue: (did: Did, deadline?: AbortSignal) => Promise<IssueInviteResult>;
     readonly denied: (did: Did, deadline: AbortSignal) => Promise<void>;
   };
+  /**
+   * P2.27 (ADR 0079): the member's inbox as this browser may see it, and the one way a source sends into it. `sendIn`
+   * runs on the caller's transaction, for a source that must send with its own write (a new sign-in).
+   */
+  readonly notifications: {
+    readonly inbox: (did: Did, idHash: Buffer, deadline: AbortSignal) => Inbox;
+    readonly send: (did: Did, notification: Notification, deadline: AbortSignal) => Promise<NotifyResult>;
+    readonly sendIn: (db: Db, did: Did, notification: Notification) => Promise<NotifyResult>;
+    readonly withdraw: (did: Did, dedupeKey: string, deadline: AbortSignal) => Promise<void>;
+  };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
   /** The signed-in member's own Search and AI choices (ADR 0062). */
@@ -142,7 +159,34 @@ export type Services = {
   readonly drafts: ObjectStore;
   /** Picture uploads (P2.19b; ADR 0070 point 2): open only where uploadsOpen allows, the rows, and review. */
   readonly images: { readonly open: boolean; readonly store: ImageStore; readonly processor: ImageProcessor };
+  /** Invite requests (P2.10r; ADR 0080): null when INVITE_REQUESTS is off; else the ask window, mailer and owner. */
+  readonly inviteRequests: InviteRequests | null;
 };
+
+export type InviteRequests = {
+  readonly window: AskWindow;
+  readonly mailer: Mailer;
+  readonly to: string;
+  /** Mails still going after their answer; shutdown waits for them. */
+  readonly pending: PendingSends;
+};
+
+/** Each SMTP wait (connect, greeting, idle); the route's 20 s deadline bounds the whole send (policy.ts). */
+const MAIL_TIMEOUT_MS = 8000;
+
+/** The invite-request services, or null when off. config.ts's rules have checked all three values when on. */
+function inviteRequestsOf(): InviteRequests | null {
+  const { INVITE_REQUESTS: on, INVITE_REQUEST_SMTP_URL: url, INVITE_REQUEST_TO: to } = config;
+  if (on !== "on") return null;
+  const server = url === undefined ? null : parseSmtpUrl(url.reveal());
+  if (server === null || to === undefined) throw new Error("invite requests: on without their settings");
+  return {
+    window: createAskWindow({ now: () => Date.now() }),
+    mailer: createSmtpMailer({ server, from: config.INVITE_REQUEST_FROM, timeoutMs: MAIL_TIMEOUT_MS }),
+    to: to.reveal(),
+    pending: createPendingSends(),
+  };
+}
 
 /** Review's answer: the main version, the display versions and their manifest (pool.ts ANSWER_OVERHEAD). */
 const REVIEW_ANSWER_BYTES = 8 * 1024 * 1024;
@@ -309,6 +353,19 @@ async function build(): Promise<Services> {
     denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
   };
 
+  const inboxRows = createNotificationStore();
+  const notifications: Services["notifications"] = {
+    inbox: (did, idHash, deadline) => ({
+      list: (limit) => withClient(pool, deadline, (db) => inboxRows.list(db, did, idHash, limit)),
+      open: (id) => withClient(pool, deadline, (db) => inboxRows.open(db, did, idHash, id)),
+      openUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.openUpTo(db, did, idHash, upTo)),
+    }),
+    send: (did, notification, deadline) =>
+      withClient(pool, deadline, (db) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification)),
+    sendIn: (db, did, notification) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification),
+    withdraw: (did, dedupeKey, deadline) => withClient(pool, deadline, (db) => inboxRows.withdraw(db, did, dedupeKey)),
+  };
+
   // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
   const drafts = createObjectStore({
     origin: config.OBJECT_STORE_URL,
@@ -338,6 +395,7 @@ async function build(): Promise<Services> {
         job: "sweep.image_orphan",
         run: () => sweepOrphanImages(drafts, { named: (ids) => images.store.named(ids, null) }),
       },
+      { job: "sweep.notification", run: () => withClient(pool, null, (db) => inboxRows.sweep(db)) },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -350,6 +408,7 @@ async function build(): Promise<Services> {
     now: () => performance.now(),
   });
   health.setState("running");
+  const inviteRequests = inviteRequestsOf();
   shutdown.draining.push(() => health.setState("draining"));
   shutdown.close.push(
     async () => clearInterval(sweeper),
@@ -357,6 +416,8 @@ async function build(): Promise<Services> {
     () => pool.end(),
     () => lockPool.pool.end(),
   );
+  // A mail sent after its answer still goes once a deploy stops web (ADR 0080 point 4).
+  if (inviteRequests !== null) shutdown.close.unshift(() => inviteRequests.pending.settled());
   const oauth: OAuthServices = {
     client,
     signInScope: signIn.during,
@@ -381,10 +442,12 @@ async function build(): Promise<Services> {
     email,
     setEmailConfirmed,
     invites,
+    notifications,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,
     images,
+    inviteRequests,
   };
 }
 

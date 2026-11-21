@@ -6,6 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { PRIVACY_VERSION } from "@unset/domains-identity";
 import type { SavedState } from "@unset/infrastructure-pds";
 import { createOAuthStateStore, createPool } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
@@ -21,6 +22,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "./built-server.ts";
+import { readyMember } from "./members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const provided = inject("postgres");
@@ -442,6 +444,33 @@ describe("signing out", () => {
     expect(rows[0]?.n).toBe(0);
     const other = await web.fetch("/login", { headers: headers({ cookie: `__Host-sid=${second}` }) });
     expect(other.status).toBe(200);
+  });
+
+  // P2.27 (ADR 0079): every sign-in of a member sends one "new sign-in" to the inbox in its own transaction, which
+  // only browsers signed in before it may see; a changed privacy notice is sent once per version at sign-in.
+  test("a_sign_in_tells_the_members_older_browsers_and_a_changed_notice_once", async () => {
+    await signIn();
+    await readyMember(pool, DID as Parameters<typeof readyMember>[1]);
+    await pool.query(
+      "UPDATE app.account SET privacy_version = 'an-older-notice', privacy_notice_seen_version = NULL WHERE did = $1",
+      [DID],
+    );
+    await pool.query("DELETE FROM app.notification WHERE did = $1", [DID]);
+    await signIn();
+    await signIn();
+    const { rows } = await pool.query<{ reason: string; older: boolean; topic: string | null; same: boolean }>(
+      "SELECT n.reason, n.older_sessions_only AS older, n.topic, " +
+        "EXISTS (SELECT 1 FROM app.session s WHERE s.did = n.did AND s.created_at = n.created_at) AS same " +
+        "FROM app.notification n WHERE n.did = $1 ORDER BY n.created_at",
+      [DID],
+    );
+    expect(rows.filter((r) => r.reason === "sign_in")).toEqual([
+      { reason: "sign_in", older: true, topic: null, same: true },
+      { reason: "sign_in", older: true, topic: null, same: true },
+    ]);
+    expect(rows.filter((r) => r.reason === "privacy_notice")).toEqual([
+      { reason: "privacy_notice", older: false, topic: PRIVACY_VERSION, same: false },
+    ]);
   });
 
   test("a_link_or_another_site_cannot_sign_a_member_out", async () => {

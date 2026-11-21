@@ -8,6 +8,7 @@
     { "path": "../interfaces/pds-admin" },
     { "path": "../interfaces/indexer" },
     { "path": "../infrastructure/audit" },
+    { "path": "../infrastructure/email" },
     { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },
     { "path": "../infrastructure/storage" },

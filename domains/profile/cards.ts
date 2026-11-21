@@ -88,6 +88,18 @@ export function parseCardKey(raw: unknown): CardKey | null {
   return /^[A-Za-z0-9._:~-]{1,512}$/.test(raw) ? (raw as CardKey) : null;
 }
 
+declare const cardVersion: unique symbol;
+/** The version of a card as the member's editor opened it: the record's CID, which changes with every write. */
+export type CardVersion = string & { readonly [cardVersion]: true };
+
+/**
+ * A record CID as a PDS returns it: CIDv1 in base32, multibase prefix "b" (atproto.com/specs/data-model, "Link and
+ * CID Formats": CIDv1, base32 in string form). Only compared with what the PDS answers, never parsed further.
+ */
+export function parseCardVersion(raw: unknown): CardVersion | null {
+  return typeof raw === "string" && /^b[a-z2-7]{20,100}$/.test(raw) ? (raw as CardVersion) : null;
+}
+
 /**
  * A published address of plain characters only: letters, digits and . _ + - before the @, dot-separated labels of
  * letters, digits and - after it, at most the lexicon's 254 bytes. Nothing that means something in a mailto: URL

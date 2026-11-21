@@ -2526,6 +2526,30 @@ As built (2026-11-19, Alex: the notice was "permanent on the profile page"): mig
   banner drawn before a newer notice was deployed cannot hide it. When notifications land, this becomes one entry
   there and the seen column its read state.
 
+### P2.27 — Notifications: the inbox, the send call, the bell and the page
+Tags: [SEC]            Depends on: P2.12b, P2.13c            Plan: §4 (decision 25's inbox item superseded by ADR 0079); §6 (sign-in records, ADR 0079 point 4)
+Alex 2026-11-20 20:02Z, 20:22Z, 20:58Z and 21:00Z (plan /mnt/project-files/plans/notifications/plan.md). ADR 0079, Proposed.
+
+**What:** the notification inbox. Migration 0036 adds `app.notification` (reason from a closed list, optional topic
+and dedupe key, `older_sessions_only`, sent time; no text a person typed), web's column grants, the 30-day sweep and
+its line in `core.erase_did`. `domains/notifications` has the one send call, `notify`, and the list the bell (newest 5
+and the count) and `/notifications` (50) read. `apps/web/lib/notifications/reasons.ts` is the one table of each
+reason's words, icon and link; the build holds it to the domain's reasons. Opening deletes; Mark all as read deletes
+up to the newest listed. Two sources send through `notify`: a new sign-in, in the callback's transaction and seen only
+by older browsers, and a changed privacy notice, once per version at sign-in and withdrawn when the banner is dismissed.
+**Tests:** tests/integration/postgres/notification-store.test.ts, tests/integration/web/app/notifications.test.ts
+(denial, the new browser cannot clear it, viewing changes nothing, double and stale posts, one sent after the list, bad
+forms, cross-site, the notice), the sign-in callback test, erase-did, the limits budget, `/notifications` in the e2e
+and axe pages.
+**Not in this step:** the Settings › Privacy keep-30-days choice (P2.27a), export (with the privacy export), module
+senders (ADR 0079 point 6, with the first module), a device-only reminder for an unsaved profile (point 7, with
+in-place editing), email, push, live updates.
+
+### P2.27a — Keep read notifications for 30 days
+Tags: [SEC]            Depends on: P2.27
+**What:** ADR 0079 point 5: the Settings › Privacy choice to keep opened notifications for 30 days instead of deleting
+them on open (a read time on the row, shown as read), inside the same 30-day ceiling.
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit
@@ -3183,6 +3207,39 @@ Reuse (provisional — for reuse review):
 Not in this step: invite management in `admin` (P3.20); signups open/close (P3.16); reserved-label placeholders (Alex's
   runbook, using P2.09's `check-reserved`).
 Diagram: see "Sequence: sign-up with an invite".
+
+### P2.10r — Request an invite
+Tags: [SEC]            Depends on: P2.10            Plan: §5.3 "Login and signup"; ADR 0080
+Asked by Alex 2026-11-20 21:19Z ("a request an invite ... that could send me an email"); the mail names the
+  visitor's address (his card, 21:23Z).
+Where: `interfaces/web/src/routes/request-invite/`, `domains/identity/invite-requests.ts`,
+  `interfaces/web/src/lib/server/invite-requests.ts` (the in-memory window and the mail text), `infrastructure/email/`
+  (the one nodemailer adapter), `limits.ts` policy `inviteRequest`, config `INVITE_REQUESTS` and three mail settings,
+  `shared/config` `optionalSecretFile`; links on `/login` and a bare `/join`.
+Goal: a visitor with no invite leaves one email address and the two sign-up ticks; the owner gets one mail with the
+  address as Reply-To and sends an invite link from their own mailbox. No copy is kept (ADR 0080 point 3).
+Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
+  mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
+Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
+  through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
+
+Threats:
+- The form mails a third party (spam relay). Answered: mail goes only to `INVITE_REQUEST_TO`; the typed address is
+  only a Reply-To (`invite_request.first_ask`).
+- Header injection through the address. Answered: one strict parse, no CR, LF, quote, comma or angle bracket
+  (`parseRequesterEmail` reds; `invite.request_bad_email`).
+- A flood fills the owner's inbox or the provider's quota. Answered: 3 an hour per address, 20 a day site-wide
+  (`invite_request.address_limit`, budget tests); a trap field (`invite_request.trap`). Accepted: 20 junk requests a
+  day refuse real visitors until the bucket refills.
+- The page tells whether an address asked before. Answered: a repeat answers as a first ask
+  (`invite_request.repeat`), and as fast: the mail goes after the answer (`invite_request.same_answer_time`).
+  Accepted: a failed mail is only logged, and the address forgotten so asking again sends again.
+- An address leaks into logs or storage. Answered: none is logged (`invite_request.never_logged`); memory holds only a
+  keyed hash for 30 days. Accepted: Resend holds the mail 30 days in the US (ADR 0065).
+- The provider key goes out in clear. Answered: implicit TLS or required STARTTLS, TLS 1.2+, the certificate checked
+  (`tests/integration/email/smtp.test.ts`).
+ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
+Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19

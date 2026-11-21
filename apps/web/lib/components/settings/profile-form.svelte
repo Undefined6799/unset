@@ -1,6 +1,6 @@
 <!--
   Settings › Profile's form: the four fields of sh.unset.profile that the save can write today (domains/profile
-  PROFILE_FIELDS: name, headline, place, website) and the page layout (ADR 0072, native radios), posted to /profile, the one profile save, which comes back here
+  PROFILE_FIELDS: name, headline, place, website), posted to /profile, the one profile save, which comes back here
   (next=/settings/profile). It works as a plain form with no script; with script the page passes its ready
   `enhance` action and the status its submit handler sets (routes/settings/profile/submit.ts), so the member stays on
   the page, sees a refusal inline with what they typed, and is told when it saved. A refusal that blames a field
@@ -25,8 +25,6 @@ type Values = {
   readonly headline: string;
   readonly location: string;
   readonly website: string;
-  /** The page layout (ADR 0072); an unknown stored value arrives as sidebar. */
-  readonly layout: "sidebar" | "compact";
 };
 type Field = keyof Values;
 const FIELDS: readonly string[] = ["displayName", "headline", "location", "website"] satisfies readonly Field[];
@@ -147,24 +145,6 @@ const fields = $derived([
           <p id="{id}-website-error" class="text-destructive text-sm">{errorFor("website")}</p>
         {/if}
       </div>
-      <fieldset class="grid gap-3">
-        <legend class="mb-1 text-sm font-medium">{T.layout}</legend>
-        {#each T.layouts as option (option.value)}
-          <label class="flex items-start gap-3">
-            <input
-              type="radio"
-              name="layout"
-              value={option.value}
-              checked={values.layout === option.value}
-              aria-describedby="{id}-layout-{option.value}"
-            />
-            <span class="grid gap-0.5">
-              <span class="text-sm font-medium">{option.label}</span>
-              <span id="{id}-layout-{option.value}" class="text-muted-foreground text-sm">{option.hint}</span>
-            </span>
-          </label>
-        {/each}
-      </fieldset>
       {#if refused !== undefined}
         <Alert.Root variant="destructive" id="{id}-refused">
           <Icon name="warning" size={16} />

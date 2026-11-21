@@ -12,6 +12,7 @@ export {
   int,
   list,
   oneOf,
+  optionalSecretFile,
   origin,
   SERVICES,
   secret,
