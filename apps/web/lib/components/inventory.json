@@ -361,6 +361,14 @@
         "origin": "ours",
         "purpose": "The profile's cards in a two-column grid on the stock Card: Text, links, collection, buttons."
       },
+      "limited-profile.svelte": {
+        "origin": "ours",
+        "purpose": "The limited page (ADR 0078): one card centered on the page with only avatar, name, handle and DID and one sentence, for someone the member's page visibility leaves out; a sign-in button when signing in would show the page."
+      },
+      "page-audience.svelte": {
+        "origin": "ours",
+        "purpose": "The notice above a member page that is not public (ADR 0078): who else sees it."
+      },
       "profile-layout.svelte": {
         "origin": "ours",
         "purpose": "The member page's frame: the profile header, then the notices, then one centred card area (ADR 0077)."
@@ -399,9 +407,13 @@
         "origin": "ours",
         "purpose": "Settings › Profile's form: name, headline, place and website, posted to /profile, inline refusal with script."
       },
-      "search-ai-form.svelte": {
+      "search-ai-fields.svelte": {
         "origin": "ours",
-        "purpose": "Settings › Privacy's Search and AI form: two switches, search title and description under a native Advanced disclosure, their honest limits and the search result preview, posted to /settings/search-and-ai (ADR 0062); says when listing is off on the whole site (P1.21b)."
+        "purpose": "Settings › Privacy's Search and AI fields under Public (ADR 0062, ADR 0078): two switches, search title and description under a native Advanced disclosure, their honest limits and the search result preview; says when listing is off on the whole site (P1.21b)."
+      },
+      "privacy-form.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Privacy's one form (ADR 0078): Public, Signed-in members only or Only me as native radios, the Search and AI fields under Public shown by CSS while it is ticked, the disclaimer always shown, each choice's line in a native popover; posted to /settings/search-and-ai; works with no script."
       },
       "search-preview.svelte": {
         "origin": "ours",

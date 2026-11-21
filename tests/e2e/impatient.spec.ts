@@ -173,7 +173,7 @@ test("saving_search_and_ai_three_times_fast_lands_back_on_settings", async ({ pa
   expect((await openPage(page, PRIVACY))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   const seen = trouble(page);
-  await page.getByRole("button", { name: "Save search and AI" }).click({ clickCount: 3, delay: 20 });
+  await page.getByRole("button", { name: "Save privacy" }).click({ clickCount: 3, delay: 20 });
   await page.waitForLoadState("networkidle");
   await landedOn(page, PRIVACY.path, "Privacy");
   expect(seen).toEqual([]);
@@ -238,7 +238,7 @@ test.describe("no script", () => {
   test("saving_search_and_ai_three_times_fast_lands_back_on_settings", async ({ page }) => {
     expect((await openPage(page, PRIVACY))?.status()).toBe(200);
     const seen = trouble(page);
-    await page.getByRole("button", { name: "Save search and AI" }).click({ clickCount: 3, delay: 20 });
+    await page.getByRole("button", { name: "Save privacy" }).click({ clickCount: 3, delay: 20 });
     await page.waitForLoadState("load");
     await landedOn(page, PRIVACY.path, "Privacy");
     expect(seen).toEqual([]);

@@ -232,3 +232,16 @@ export const UNSAVED_BAR = {
   restore: "Bring them back",
   dropDrafts: "Throw them away",
 } as const;
+
+/** The small page anyone but the owner sees when a page is not shown to them (ADR 0078; Alex, 2026-11-20 19:46Z). */
+export const LIMITED_PAGE = {
+  signedIn: "This member shows their page to signed-in members only.",
+  ownerOnly: "This member has chosen to keep their page private.",
+  signIn: "Sign in",
+} as const;
+
+/** Above the whole page when it is not public, so the viewer knows who else sees it (ADR 0078). */
+export const PAGE_AUDIENCE = {
+  signedIn: "Only signed-in members see this page.",
+  ownerOnly: "Only you see this page.",
+} as const;
