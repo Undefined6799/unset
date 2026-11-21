@@ -13,8 +13,8 @@ organisation and it will become source of truth". The plan he was shown is the p
 ## Context
 
 Our lexicons live in `shared/lexicons/schemas/`, where the schema build, the breaking-change check and the
-published-snapshot guard run (ADR 0086). Nothing is published on the network yet. A reader who wants the schemas has
-to find them inside the application repository, and has nowhere obvious to propose a change.
+published-snapshot guard run (ADR 0086, ADR 0091). Nothing is published on the network yet. A reader who wants the
+schemas has to find them inside the application repository, and has nowhere obvious to propose a change.
 
 How others lay theirs out (read 2026-11-21): bluesky-social/atproto keeps `lexicons/<name parts as folders>.json` at
 its root (commit 34063e9); `goat lex` reads `lexicons/` by default and builds each path from the NSID with its dots as

@@ -1,7 +1,7 @@
 # unset.sh lexicons
 
 The [AT Protocol](https://atproto.com) lexicons of [unset.sh](https://unset.sh): the record types an account uses for
-its profile page, under the `sh.unset.*` names.
+its profile and its pages, under the `sh.unset.*` names.
 
 **Status: draft, not yet published on the network.** Until they are published, names, fields and limits may still
 change. Do not build on them yet without expecting changes. This line is removed when they are published.
@@ -13,10 +13,12 @@ Each file under `lexicons/` is one lexicon, at the path its name gives (`sh.unse
 
 Records, stored in an account's repository:
 
-- `sh.unset.profile`: an account's profile page. The name, headline, picture and other identity fields, who the page
-  is meant for, and the ordered list of its cards. One per account, at the record key `self`.
-- `sh.unset.card`: one card on the page. It holds exactly one block, plus an optional width and surface. A card shows
-  only when the profile lists it.
+- `sh.unset.profile`: who an account is: the name, headline, picture and other details shown at the top of its
+  pages, and whether directories may list it. One per account, at the record key `self`.
+- `sh.unset.page`: one page of an account: the ordered list of the cards it shows, and who the page is meant for.
+  The page at the record key `self` is the account's main page; pages under other keys are shown nowhere yet.
+- `sh.unset.card`: one card. It holds exactly one block, plus an optional width and surface. A card shows only on a
+  page that lists it.
 
 Blocks, the content a card holds. Each is its own lexicon, so another record type can reuse it:
 
@@ -29,10 +31,10 @@ Blocks, the content a card holds. Each is its own lexicon, so another record typ
 
 Permission set, for OAuth:
 
-- `sh.unset.authFull`: everything unset.sh writes in an account's repository, which is the profile and its cards.
+- `sh.unset.authFull`: everything unset.sh writes in an account's repository: the profile, its pages and their cards.
 
 What a reader of these records must do (hide a block type it does not know, never render raw HTML from text, accept
-only cards from the profile's own repository) is written in each lexicon's `description` fields.
+only cards from the page's own repository) is written in each lexicon's `description` fields.
 
 ## Where changes are decided
 

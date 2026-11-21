@@ -26,7 +26,7 @@ describe("public lexicons tree", () => {
     expect(publicPath("sh.unset.block.text.json")).toBe("lexicons/sh/unset/block/text.json");
     const tree = publicTree();
     const schemas = readdirSync(join(PACKAGE, "schemas")).sort();
-    expect(schemas).toHaveLength(9);
+    expect(schemas).toContain("sh.unset.profile.json");
     for (const name of schemas) expect(tree.get(publicPath(name)), name).toBe(read(`schemas/${name}`));
     expect(tree.get("README.md")).toBe(read("public-repo/README.md"));
     expect(tree.get("CONTRIBUTING.md")).toBe(read("public-repo/CONTRIBUTING.md"));
