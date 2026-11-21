@@ -82,6 +82,35 @@ describe("createAccount", () => {
   });
 });
 
+describe("changeAccount", () => {
+  test("chat.client_account_envelope: lock, unlock and deactivate each post one envelope naming only the user", async () => {
+    for (const verb of ["account.lock", "account.unlock", "account.deactivate"] as const) {
+      const { guard, seen } = network({
+        status: 200,
+        body: verb === "account.deactivate" ? { deactivated: true } : { locked: verb === "account.lock" },
+      });
+      expect(await createChatAdminClient(guard, settings).changeAccount(USER, verb)).toEqual({ kind: "done" });
+      const [{ request }] = seen as [(typeof seen)[number]];
+      expect(request.url).toBe(`http://chat-admin:8080/v1/${verb}`);
+      const { payload } = JSON.parse(new TextDecoder().decode(request.body as Uint8Array));
+      expect(payload).toMatchObject({ verb, user: USER, name: "", device: "", did: "", sid: "", state: "" });
+    }
+  });
+
+  test.each([
+    ["never made", { status: 200, body: { deactivated: false } }, "account.deactivate", "no_account"],
+    ["no account", { status: 409, body: { error: "no_account" } }, "account.lock", "no_account"],
+    ["bad request", { status: 400, body: { error: "bad_request" } }, "account.lock", "rejected"],
+    ["denied", { status: 403, body: { error: "denied" } }, "account.unlock", "unavailable"],
+    ["down", { status: 503, body: { error: "unavailable" } }, "account.deactivate", "unavailable"],
+    ["odd 200", { status: 200, body: {} }, "account.lock", "unavailable"],
+    ["network", new NetGuardError("egress.timeout"), "account.deactivate", "unavailable"],
+  ] as const)("chat.client_account_answer_%s", async (_name, answer, verb, kind) => {
+    const { guard } = network(answer);
+    expect(await createChatAdminClient(guard, settings).changeAccount(USER, verb)).toEqual({ kind });
+  });
+});
+
 describe("signTicket", () => {
   test("chat.ticket_envelope: a session.mint envelope naming member, session and state, encoded for a URL fragment", () => {
     const { guard, seen } = network({ status: 500, body: {} });

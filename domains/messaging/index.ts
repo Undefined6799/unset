@@ -1,6 +1,6 @@
-// Messaging (Phase 6; ADR 0010, ADR 0081): the chat rules web owns. A member's opaque chat user and its queued
-// creation, the sign-in ticket's parts that web decides, and the door's browser list (ADR 0083), its setup claim (ADR
-// 0089), the chat count and the Message link's lookup (ADR 0090).
+// Messaging (Phase 6; ADR 0010, ADR 0081): the chat rules web owns. A member's opaque chat user, its queued creation
+// and, once erased, its queued deactivation (ADR 0084), the sign-in ticket's parts that web decides, and the door's
+// browser list (ADR 0083), its setup claim (ADR 0089), the chat count and the Message link's lookup (ADR 0090).
 
 export {
   type BrowserEntry,
@@ -26,6 +26,14 @@ export {
   parseChatUser,
   retryDelayS,
 } from "./chat-account.ts";
+export {
+  type ChatAccountChange,
+  type ChatErasureJob,
+  type ChatErasurePorts,
+  ERASE_STUCK_ATTEMPTS,
+  type ErasureCounts,
+  eraseDueAccounts,
+} from "./chat-lifecycle.ts";
 export { type ChatContacts, type ContactOutcome, chatContact } from "./contact.ts";
 export {
   type AccessToken,

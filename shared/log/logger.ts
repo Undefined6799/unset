@@ -103,6 +103,9 @@ const EVENTS = [
   // Build step 5, chat accounts: queued creations that stopped for good this run (`count`; a name MAS holds for someone
   // else, a request chat-admin refused, or too many attempts), for an operator. No DID or chat user.
   "chat.account_failed",
+  // Build step 11, erased members' chat accounts (ADR 0084 decision 3): deactivations still failing after about a day
+  // this run (`count`), for an operator; they keep retrying. No DID or chat user.
+  "chat.erasure_stuck",
   "notifications.read_failed",
   "notifications.send_failed",
   // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), it stopped (`kind` "finished",
