@@ -162,6 +162,17 @@ describe("unsaved cards", () => {
     expect(offeredAfterSave(offered, [], stored)).toBe(offered);
   });
 
+  // Codex on ca2c7b1: an edit that began on another version than the Save sent (a draft brought back while the Save
+  // was on its way) keeps its own version, so the next Save still names the change made elsewhere.
+  test("after_a_save_an_edit_on_another_version_keeps_it", () => {
+    const sent = edit(NO_EDITS, page, "a", { width: "half" });
+    const layout = editsToSave(sent, page)[0];
+    if (layout === undefined) throw new Error("the Width change is unsaved");
+    const restored = new Map(sent).set("a", { ...layout, version: "v-a-old", fields: { text: "Draft" } });
+    const left = afterSave(restored, editsToSave(sent, page), [text("a", "Hi", "v-a2")], page);
+    expect(left.get("a")).toMatchObject({ version: "v-a-old", fields: { text: "Draft" } });
+  });
+
   // Codex on 1bdb437: a card deleted from its menu leaves nothing unsaved behind.
   test("a_card_no_longer_on_the_page_is_no_longer_unsaved", () => {
     const edits = edit(edit(NO_EDITS, page, "a", { fields: { text: "Hello" } }), page, "b", {

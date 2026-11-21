@@ -90,7 +90,8 @@ const sameEdit = (a: Unsaved, b: Pick<Unsaved, "fields" | "width" | "surface">) 
  *   conflict, unless those words are what is now stored;
  * - one put back to what was stored before has no edit left, yet differs from what was just written, so its earlier
  *   state comes back as an edit on the new version;
- * - one the refresh could not read (a failed or partial read) confirms nothing: newer words stay on their version.
+ * - one the refresh could not read (a failed or partial read) confirms nothing: newer words stay on their version;
+ * - an edit that began on another version than was sent (a draft brought back meanwhile) keeps its own.
  * A card the Save did not write keeps its edit as it was.
  */
 export function afterSave(
@@ -106,7 +107,8 @@ export function afterSave(
     const unsaved = edits.get(sent.key) ?? putBack(before, sent);
     next.delete(sent.key);
     if (unsaved === undefined || sameEdit(unsaved, sent)) continue;
-    if (card?.version === undefined || fields === null) next.set(sent.key, unsaved);
+    // An edit that began on another version than was sent (a draft brought back meanwhile) keeps it.
+    if (card?.version === undefined || fields === null || unsaved.version !== sent.version) next.set(sent.key, unsaved);
     else if (!sameEdit(unsaved, { fields, width: card.width, surface: card.surface }))
       next.set(sent.key, { ...unsaved, version: card.version });
   }
