@@ -741,3 +741,18 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0081](0081-notifications-stay-until-dismissed.md)):** looking at a notification no longer deletes it; a member
   dismisses one, the selected or all, and every entry still goes at 30 days. Amends 0079 point 3. Proposed, awaiting
   Alex.
+- **ADR 0080 accepted (Alex, 2026-11-21 01:03Z, against 724bda1; own record:
+  [0080](0080-invite-requests-mail-the-owner.md)):** a visitor may ask for an invite at `/request-invite`; web mails the
+  owner each address over SMTP (always encrypted before the login), keeps only a keyed hash in memory for 30 days, and
+  limits asks to 3 an hour per address and 20 a day site-wide.
+- **ADR 0078 accepted (Alex, 2026-11-21 01:32Z, against 7a73c61; own record:
+  [0078](0078-who-sees-the-profile-page.md)):** a member chooses who sees their page, Public, Signed-in members only or
+  Only me, and anyone left out gets the limited page. For the profile page only, it partly supersedes ADR 0004 (decision
+  37) and decision 35 D7 (ADR 0002); both still hold everywhere else, and their own status lines are unchanged.
+- **Sign-in history (P2.27c, 2026-11-21; own record: [0082](0082-sign-in-history.md)):** the time of each sign-in,
+  nothing else, kept 30 days in a tab beside Notifications; the member may delete any entry, and deleting will need
+  the second check of book P2.28 once it exists. Amends the "no sign-in records" rule for this record. Proposed,
+  awaiting Alex.
+- **ADR 0082 accepted (Alex, 2026-11-21 04:09Z, against 4202269; own record:
+  [0082](0082-sign-in-history.md)):** the time of each sign-in, nothing else, kept 30 days in a tab beside
+  Notifications; the member may delete any entry, and deleting will need the second check of book P2.28 once it exists.

@@ -3,7 +3,8 @@
   address, so the member, who may be active elsewhere on unset.sh, can still be recognised. One card, centered on the
   page (Alex, 20:49Z: "inside an actual card, centered on the page"), with only the avatar, name, handle and DID and one
   sentence; no headline, details or cards. `signIn` is the sign-in address when signing in would show the page (a page
-  for signed-in members), else null (a page only its member sees).
+  for signed-in members), else null (a page only its member sees). `signUp` is the invite-request page when joining
+  would show it and visitors may ask for an invite (ADR 0080), else null.
 -->
 <script lang="ts">
 import { LIMITED_PAGE } from "../../profile/messages.ts";
@@ -19,8 +20,16 @@ let {
   did,
   shape,
   signIn,
-}: { name: string; letter: string; handle: string | null; did: string; shape: AvatarShape; signIn: string | null } =
-  $props();
+  signUp,
+}: {
+  name: string;
+  letter: string;
+  handle: string | null;
+  did: string;
+  shape: AvatarShape;
+  signIn: string | null;
+  signUp: string | null;
+} = $props();
 
 const corners = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
 </script>
@@ -42,6 +51,13 @@ const corners = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
     <p class="m-0 text-sm text-muted-foreground" data-limited={signIn === null ? "ownerOnly" : "signedIn"}>
       {signIn === null ? LIMITED_PAGE.ownerOnly : LIMITED_PAGE.signedIn}
     </p>
-    {#if signIn !== null}<Button href={signIn} data-limited-sign-in>{LIMITED_PAGE.signIn}</Button>{/if}
+    {#if signIn !== null || signUp !== null}
+      <div class="flex flex-wrap justify-center gap-2">
+        {#if signIn !== null}<Button href={signIn} data-limited-sign-in>{LIMITED_PAGE.signIn}</Button>{/if}
+        {#if signUp !== null}
+          <Button href={signUp} variant="outline" data-limited-sign-up>{LIMITED_PAGE.signUp}</Button>
+        {/if}
+      </div>
+    {/if}
   </Card.Root>
 </div>

@@ -9,9 +9,9 @@ one-paragraph entry; new decisions also get their own file.
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-phase-0-defaults.md) | Defaults taken to start Phase 0; append-only decisions log | Proposed (awaiting Alex); log entries accepted as dated |
-| [0002](0002-engineering-rules.md) | Engineering rules from the reading list (decision 35) | Accepted 2026-10-04 |
+| [0002](0002-engineering-rules.md) | Engineering rules from the reading list (decision 35) | Accepted 2026-10-04; D7 partly superseded by 0078 for the profile page |
 | [0003](0003-chat-lookup-private-members.md) | Chat does not reveal private members by handle (decision 36) | Accepted 2026-10-04 |
-| [0004](0004-no-false-sense-of-privacy.md) | No false sense of privacy: show what the network can see (decision 37) | Accepted 2026-10-04 |
+| [0004](0004-no-false-sense-of-privacy.md) | No false sense of privacy: show what the network can see (decision 37) | Accepted 2026-10-04; partly superseded by 0078 for the profile page |
 | [0005](0005-atproto-spaces-destination.md) | Atproto Spaces is the destination for private data (decision 38) | Accepted 2026-10-04 |
 | [0006](0006-private-likes-shown-to-target.md) | Private likes, comments and follows are shown to their target (decision 39) | Accepted 2026-10-04 |
 | [0007](0007-bootstrap-reconciliation.md) | Bootstrap reconciliation: which Phase 0 step changes each bootstrap file | Proposed (awaiting Alex) |
@@ -83,7 +83,8 @@ one-paragraph entry; new decisions also get their own file.
 | [0075](0075-docs-site-on-the-staging-edge.md) | The docs site at docs.unset.sh is a third site on the staging edge, served as files from the checkout with its own CSP and zone (P1.21w) | Accepted 2026-11-20 |
 | [0076](0076-image-uploads-up-to-64-mib.md) | Image uploads up to 64 MiB and 110 megapixels; web, net-guard and review caps, memory and the edge's read window rise with it (P2.19e) | Accepted 2026-11-20 |
 | [0077](0077-one-profile-layout.md) | The profile page has one layout, the header above the cards; the unpublished layout field is removed (P1.21x); supersedes 0072 | Accepted 2026-11-21 |
-| [0078](0078-who-sees-the-profile-page.md) | The member chooses who sees their page: Public, Signed-in members only or Only me; others get a limited page; partly supersedes 0004 and D7 for the profile page (P1.22a) | Proposed (awaiting Alex) |
+| [0078](0078-who-sees-the-profile-page.md) | The member chooses who sees their page: Public, Signed-in members only or Only me; others get a limited page; partly supersedes 0004 and D7 for the profile page (P1.22a) | Accepted 2026-11-21 |
 | [0079](0079-notifications-in-core.md) | Notifications are a core inbox: one send call, one reason table, gone once opened and at 30 days, a sign-in entry only older browsers can clear, and the contract a module will get (P2.27) | Accepted 2026-11-21; point 3 amended by 0081 |
-| [0080](0080-invite-requests-mail-the-owner.md) | Invite requests: web mails the owner each visitor's address over SMTP, keeps no copy, limits by address and site-wide (P2.10r) | Proposed (awaiting Alex) |
+| [0080](0080-invite-requests-mail-the-owner.md) | Invite requests: web mails the owner each visitor's address over SMTP, keeps no copy, limits by address and site-wide (P2.10r) | Accepted 2026-11-21 |
 | [0081](0081-notifications-stay-until-dismissed.md) | Notifications stay until dismissed: looking changes nothing; dismiss one, the selected or all; the full-window page with a list beside the detail (P2.27b); amends 0079 point 3 | Proposed (awaiting Alex) |
+| [0082](0082-sign-in-history.md) | Sign-in history: the time of each sign-in only, kept 30 days, any entry deletable by the member, a second check later (P2.27c, P2.28) | Accepted 2026-11-21 |

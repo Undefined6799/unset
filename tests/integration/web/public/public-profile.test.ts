@@ -5,7 +5,9 @@
 // members only, or only to its member, gives anyone it leaves out the limited page, never the 404, and is never offered
 // to search engines; the session is read when a cookie is sent.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { relative } from "node:path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { CARDS_MAX, toCardRecord } from "@unset/domains-profile";
 import type { SavedSession } from "@unset/infrastructure-pds";
@@ -144,6 +146,9 @@ async function moreCards(did: string, count: number) {
 }
 
 let web: RunningWeb;
+/** A server with invite requests on (ADR 0080), so the limited card offers Sign up. It never sends a mail here. */
+let inviting: RunningWeb;
+let secrets: string;
 beforeAll(async () => {
   buildOnce(provided.port);
   await indexed(SHOWN, { name: "Shown Member" });
@@ -156,10 +161,25 @@ beforeAll(async () => {
   await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signedIn" });
   await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "ownerOnly" });
   await indexed(FUTURE, { name: "Future", visibility: "friendsOfFriends" });
-  web = await startWeb(pg);
+  secrets = mkdtempSync(join(tmpdir(), "public-profile-"));
+  const file = (name: string, text: string): string => {
+    const path = join(secrets, name);
+    writeFileSync(path, text, { mode: 0o600 });
+    return path;
+  };
+  [web, inviting] = await Promise.all([
+    startWeb(pg),
+    startWeb(pg, {
+      INVITE_REQUESTS: "on",
+      INVITE_REQUEST_SMTP_URL_FILE: file("smtp", ["smtps://user", "pass@localhost:1"].join(":")),
+      INVITE_REQUEST_TO_FILE: file("to", "owner@unset.example"),
+      INVITE_REQUEST_FROM: "noreply@unset.example",
+    }),
+  ]);
 }, 120_000);
 afterAll(async () => {
-  await web?.stop();
+  await Promise.all([web?.stop(), inviting?.stop()]);
+  rmSync(secrets, { recursive: true, force: true });
   await indexer.end();
   await webPool.end();
 });
@@ -295,6 +315,19 @@ describe("page visibility (ADR 0078)", () => {
     expect(html).toContain("data-limited-sign-in");
     expect(html).toContain(`/login?next=${encodeURIComponent("/@bea.unset.org")}`);
     expect(html).not.toContain("<script");
+    expect(html).not.toContain("data-limited-sign-up"); // invite requests are off on this server
+  });
+
+  test("signed_in_only_offers_a_visitor_sign_up_when_invite_requests_are_on", async () => {
+    const html = await (
+      await inviting.fetch("/@bea.unset.org", { headers: { "x-forwarded-for": clientAddress() } })
+    ).text();
+    expect(html).toContain("data-limited-sign-in");
+    expect(html).toContain('href="/request-invite" data-limited-sign-up');
+    const ownerOnly = await (
+      await inviting.fetch("/@cy.unset.org", { headers: { "x-forwarded-for": clientAddress() } })
+    ).text();
+    expect(ownerOnly).not.toContain("data-limited-sign-up"); // joining would not show it
   });
 
   test("signed_in_only_shows_a_member_the_whole_page_privately_and_never_indexed", async () => {

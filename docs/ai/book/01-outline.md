@@ -583,6 +583,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.27 | Notifications: the inbox, the send call, the bell and the page | [SEC] | P2.12b, P2.13c | `phase-2.md` |
 | P2.27a | Keep read notifications for 30 days (overtaken by P2.27b) | [SEC] | P2.27 | `phase-2.md` |
 | P2.27b | Notifications: stay until dismissed, the full-window page | [SEC] | P2.27 | `phase-2.md` |
+| P2.27c | Sign-in history: when each sign-in happened, kept 30 days | [SEC] | P2.27b | `phase-2.md` |
+| P2.28 | Ask for a second check before sensitive actions (the list of actions that need it) | [SEC] [ALEX] | P2.27c | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13d | Keep next and handle after a sign-in theme change | [SEC] | P1.25f | `phase-2.md` |
@@ -1510,6 +1512,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
 | P1.38e | Let C18 accept the dev file certificate | [SEC] [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
+| P1.38v | Name only files on the tree in the lint rules | — | — | `phase-1.md` |
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
 | P1.39a | Save the reviewed `caddy adapt` output for each env | [SEC] trusted | — | `phase-1.md` |
@@ -1589,6 +1592,7 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.09d | `pds-admin` in the dev stack (split from P2.09, SE-6) | [SEC] | P2.09 | `phase-2.md` |
 | P2.10 | Invites and `/join?invite=` | [SEC] | P2.09d, P2.09, P2.05, P1.14, P1.14d | `phase-2.md` |
 | P2.10r | Request an invite: the owner gets one mail per visitor address (ADR 0080) | [SEC] | P2.10 | `phase-2.md` |
+| P2.10t | Offer Sign up on the limited page while invite requests are on (ADR 0078, ADR 0080) | — | P2.10r, P1.22a | `phase-2.md` |
 | P2.14 | Module identity seam | [SEC] | P1.16, P2.03 | `phase-2.md` |
 | P2.16b | PDQ hasher (one module for images and video frames) | [SEC] | P1.01 | `phase-2.md` |
 | P2.16 | Image fingerprint stage (interface, local PDQ, fake check) | [SEC] [MOD] | P2.16b, P1.02, P1.12, P1.15 | `phase-2.md` |

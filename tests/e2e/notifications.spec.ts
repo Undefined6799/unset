@@ -4,7 +4,7 @@
 // detail after the pointer rests on it, never near the drag bar, and a click still shows the row. On a phone the
 // detail is its own screen. The "inbox" member (fixtures/servers.ts) has INBOX_SIZE entries; nothing here dismisses
 // one (each test has its own browser context, so the split's stored width starts fresh); the integration tests own
-// dismissing.
+// dismissing. Its Sign-in history tab (P2.27c) has INBOX_SIZE sign-ins, and nothing here deletes one either.
 import { expect, type Page, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
 import { INBOX_SIZE, type PageFixture } from "./pages.ts";
@@ -111,6 +111,41 @@ test.describe("wide screen", () => {
   });
 });
 
+test.describe("sign-in history", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+  const HISTORY: PageFixture = { ...INBOX, path: "/notifications/sign-ins", route: "/notifications/sign-ins" };
+  const history = (page: Page) => page.getByRole("list", { name: "Sign-in history" });
+
+  test("the_tab_opens_it_and_its_list_scrolls_under_a_header_that_stays", async ({ page }) => {
+    await open(page);
+    await page.getByRole("link", { name: "Sign-in history" }).click();
+    await expect(page).toHaveURL(/\/notifications\/sign-ins$/);
+    await expect(history(page).locator("li")).toHaveCount(INBOX_SIZE);
+    await expect(page.getByRole("link", { name: "Sign-in history" })).toHaveAttribute("aria-current", "page");
+    const footer = await page.locator("footer").boundingBox();
+    expect(footer?.y ?? 0).toBeGreaterThanOrEqual(800);
+    const box = history(page).locator("xpath=..");
+    const header = box.locator("> div").first();
+    const before = await header.boundingBox();
+    await box.evaluate((node) => node.scrollBy(0, 200));
+    expect(await box.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    expect((await header.boundingBox())?.y).toBeCloseTo(before?.y ?? 0, 0);
+    // With script the rows say how long ago, and the times are the device's own.
+    await expect(history(page).locator("li").first()).toContainText(/ago|just now/);
+  });
+
+  test("delete_selected_waits_for_a_tick", async ({ page }) => {
+    expect((await openPage(page, HISTORY))?.status()).toBe(200);
+    const button = page.getByRole("button", { name: "Delete selected" });
+    await expect(page.getByRole("checkbox", { name: "Select all" })).toBeVisible(); // the client has run
+    await expect(button).toBeDisabled();
+    await history(page).getByRole("checkbox").first().check();
+    await expect(button).toBeEnabled();
+    await page.getByRole("checkbox", { name: "Select all" }).check();
+    await expect(history(page).getByRole("checkbox", { checked: true })).toHaveCount(INBOX_SIZE);
+  });
+});
+
 test.describe("narrow window", () => {
   // At 900 pixels the list's 2/5 cuts the titles off.
   test.use({ viewport: { width: 900, height: 760 } });
@@ -130,10 +165,13 @@ test.describe("narrow window", () => {
     await expect(lifted).toBeVisible();
     const [rowWidth, liftWidth] = [box.width, (await lifted.boundingBox())?.width ?? 0];
     expect(liftWidth).toBeGreaterThan(rowWidth);
-    // A wheel turn scrolls the list and drops it.
+    // A wheel turn scrolls the list by that turn, once, and not the page, and drops it.
     await page.mouse.wheel(0, 120);
     await expect(lifted).toHaveCount(0);
-    expect(await list(page).evaluate((form) => form.scrollTop)).toBeGreaterThan(0);
+    // A second scroll, of the list or the page, comes within a few frames when it comes.
+    await page.waitForTimeout(300);
+    expect(await list(page).evaluate((form) => form.scrollTop)).toBe(120);
+    expect(await page.evaluate(() => (globalThis as unknown as { scrollY: number }).scrollY)).toBe(0);
     // Once lifted again, a click shows that row.
     const again = await row.boundingBox();
     if (again === null) throw new Error("no row");

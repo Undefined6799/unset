@@ -18,7 +18,7 @@ import {
   serializerCtx,
 } from "@milkdown/core";
 import { history } from "@milkdown/plugin-history";
-import { commonmark, emphasisSchema, strongSchema } from "@milkdown/preset-commonmark";
+import { commonmark, emphasisSchema, headingSchema, strongSchema } from "@milkdown/preset-commonmark";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
 import { isHistoryTransaction, redo, redoDepth, undo, undoDepth } from "@milkdown/prose/history";
 import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model";
@@ -172,6 +172,8 @@ export type MarkdownEditor = {
   readonly run: (command: EditorCommand) => void;
   /** The markdown the editor holds now. */
   readonly markdown: () => string;
+  /** Reports a change still waiting for its frame to `onChange` at once, so a save pressed in that frame sends it. */
+  readonly flush: () => void;
   readonly focus: () => void;
   readonly destroy: () => Promise<void>;
 };
@@ -197,22 +199,40 @@ export type MountOptions = {
 // it shows beside the third. Text already stored that way stays editable.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 const PAGE_LIST_DEPTH = 3;
-function listDepth(doc: ProseNode, pos: number): number {
-  const $pos = doc.resolve(pos);
-  let lists = 0;
-  for (let depth = $pos.depth; depth > 0; depth -= 1) if (ITEM_LISTS.has($pos.node(depth).type.name)) lists += 1;
-  return lists;
+/**
+ * How many flattened shapes `node` and what it holds carry, given its parent, its index there and how many lists hold
+ * it: what the page would show differently from the editor.
+ */
+function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number): number {
+  const holder = parent.type.name;
+  const name = node.type.name;
+  let count = 0;
+  if (ITEM_LISTS.has(name) && lists >= PAGE_LIST_DEPTH) count += 1;
+  if (holder === "blockquote" && (index > 0 || name !== "paragraph")) count += 1;
+  if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
+  if (name === "hardbreak") count += 1;
+  if (!node.isBlock) return count;
+  const inner = lists + (ITEM_LISTS.has(name) ? 1 : 0);
+  node.forEach((child, _offset, at) => {
+    count += shapesIn(child, node, at, inner);
+  });
+  return count;
 }
+/**
+ * Each top-level block's count, kept while the block is: ProseMirror nodes never change, and an edit or a dry run
+ * builds a new node only for the block it touches and shares every other one with the old document. So the bar's
+ * dozen dry runs and the page-shape filter walk the block being edited, not the whole text, on each keystroke.
+ */
+const blockShapes = new WeakMap<ProseNode, number>();
 function flattened(doc: ProseNode): number {
   let count = 0;
-  doc.descendants((node, pos, parent, index) => {
-    const holder = parent?.type.name;
-    const name = node.type.name;
-    if (ITEM_LISTS.has(name) && listDepth(doc, pos) >= PAGE_LIST_DEPTH) count += 1;
-    if (holder === "blockquote" && (index > 0 || name !== "paragraph")) count += 1;
-    if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
-    if (name === "hardbreak") count += 1;
-    return node.isBlock;
+  doc.forEach((block, _offset, index) => {
+    let shapes = blockShapes.get(block);
+    if (shapes === undefined) {
+      shapes = shapesIn(block, doc, index, 0);
+      blockShapes.set(block, shapes);
+    }
+    count += shapes;
   });
   return count;
 }
@@ -230,25 +250,38 @@ const withoutFinalNewline = (markdown: string) => markdown.replace(/\n$/, "");
 
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {
   let frame = 0;
+  let flush: () => void = () => undefined;
   const changes = $prose(
     (ctx) =>
       new Plugin({
         // The bar's state is read in the same step as the change, not a frame later: a press right after the editor
         // opens or right after typing must find its button available.
-        view: (first) => {
-          options.onToolbar(toolbarState(first.state));
+        view: (mounted) => {
+          options.onToolbar(toolbarState(mounted.state));
+          const report = () => {
+            frame = 0;
+            options.onChange(withoutFinalNewline(ctx.get(serializerCtx)(mounted.state.doc)));
+          };
+          // The last change is reported at once when the page goes away before the next frame (a reload right after
+          // typing; WebKit may draw none first), so the words reach the page's drafts.
+          flush = () => {
+            if (frame === 0) return;
+            cancelAnimationFrame(frame);
+            report();
+          };
+          addEventListener("pagehide", flush);
           return {
             update: (view, previous) => {
               if (previous !== view.state) options.onToolbar(toolbarState(view.state));
               if (previous.doc.eq(view.state.doc)) return;
               options.onEdit();
               if (frame !== 0) return;
-              frame = requestAnimationFrame(() => {
-                frame = 0;
-                options.onChange(withoutFinalNewline(ctx.get(serializerCtx)(view.state.doc)));
-              });
+              frame = requestAnimationFrame(report);
             },
-            destroy: () => cancelAnimationFrame(frame),
+            destroy: () => {
+              cancelAnimationFrame(frame);
+              removeEventListener("pagehide", flush);
+            },
           };
         },
       }),
@@ -292,6 +325,13 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           },
         };
       });
+      // A heading shows one level down, as the page shows it (readme.svelte: # is an h2 under the page's own h1), and
+      // carries no id: preset-commonmark 7.23.0 headingSchema.toDOM gives each one an id made from its words, which
+      // would repeat across cards and clash with the page's own anchors. The markdown and parseDOM are unchanged.
+      ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
+        ...prev(schemaCtx),
+        toDOM: (node) => [`h${Math.min(Number(node.attrs.level) + 1, 6)}`, 0],
+      }));
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
         attributes: {
@@ -315,6 +355,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         commandFor(command, view.state)(view.state, view.dispatch, view);
       }),
     markdown: () => withoutFinalNewline(editor.action(getMarkdown())),
+    flush: () => flush(),
     // The view's own focus puts its selection back (prosemirror-view 1.42.9 EditorView.focus calls selectionToDOM),
     // so a second toolbar press acts on the words the first one did; a plain DOM focus drops it.
     focus: () => editor.action((ctx) => ctx.get(editorViewCtx).focus()),

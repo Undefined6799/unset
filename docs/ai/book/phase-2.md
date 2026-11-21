@@ -2569,6 +2569,34 @@ stale posts, the notice seen on dismiss), the domain's id parsing, tests/e2e/not
 "inbox" member), the no-script page.
 **Not in this step:** the Sign-in history tab (P2.27c).
 
+### P2.27c — Sign-in history: when each sign-in happened, kept 30 days
+Tags: [SEC]            Depends on: P2.27b
+Alex 2026-11-20 (the notifications mock-up thread): keep the time only, 30 days, and the member can delete entries;
+2026-11-21 00:57Z: any signed-in browser may delete any entry for now, with the second check of P2.28 later. ADR 0082,
+Proposed; migration 0038.
+
+**What:** `app.sign_in` (id, DID, time; nothing else: no address, device or place), written by the OAuth callback in
+the sign-in's own transaction, only once the account row exists. A Sign-in history tab beside Notifications lists
+the member's sign-ins, newest first, at most 100; each row, the ticked ones or all can be deleted. Web's sweep deletes
+rows older than 30 days; `core.erase_did` and the cascade from `app.account` erase them with the member.
+**Tests:** the store against real Postgres as `web` (scoped to the member, no row before the account, web cannot set
+the time or edit a row, the sweep), the route's denial and largest form, the callback writes one row per sign-in,
+erasure counts the rows, the e2e page and the no-script page.
+**Not in this step:** the second check before deleting (P2.28).
+
+### P2.28 — Ask for a second check before sensitive actions
+Tags: [SEC] [ALEX]            Depends on: P2.27c
+Alex 2026-11-21 00:58Z: "make a note about like the things that we believe will require 2FA, and then when we build
+that, then we can just like add a line to all these features to request the 2FA authentication thing." Not designed
+yet: the identity review (2026-11-18, D3) suggests a fresh sign-in at the PDS (`prompt=login`, whose account has its
+own email 2FA) rather than a second-factor store of our own; the choice is Alex's, with its own ADR, before any code.
+
+**Actions that will need it** (one line each; a thread that builds a sensitive action adds it here, in its own PR):
+- Delete sign-in history entries (P2.27c, ADR 0082).
+
+**What:** one check the interface runs before each listed action, the same everywhere, so adding an action is one
+line. Until it exists, the listed actions run on the signed-in session alone (nothing is live, Alex 00:58Z).
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit
@@ -3237,7 +3265,7 @@ Where: `interfaces/web/src/routes/request-invite/`, `domains/identity/invite-req
   `shared/config` `optionalSecretFile`; links on `/login` and a bare `/join`.
 Goal: a visitor with no invite leaves one email address and the two sign-up ticks; the owner gets one mail with the
   address as Reply-To and sends an invite link from their own mailbox. No copy is kept (ADR 0080 point 3).
-Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
+Not in this step: the "Sign up" button on ADR 0078's limited-page card (built as P2.10t); the compose
   mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
 Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
   through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
@@ -3260,6 +3288,16 @@ Threats:
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
+
+### P2.10t — Offer Sign up on the limited page
+Tags: —            Depends on: P2.10r, P1.22a            Plan: §5.3 "Login and signup"; ADR 0078, ADR 0080
+Asked by Alex 2026-11-20 (a sign-up button on the limited page's card, pointing to request-an-invite for now).
+Where: `apps/web/lib/components/profile/limited-profile.svelte`, `interfaces/web/src/routes/@[actor]/+page.server.ts`.
+Goal: a visitor on a page shown to signed-in members only sees "Sign up" beside "Sign in", leading to
+  `/request-invite`, while invite requests are on; with them off there is no button. A page only its member sees
+  offers neither, since joining would not show it.
+Also carries the acceptance records of ADR 0080 and ADR 0078.
+Done when `signed_in_only_offers_a_visitor_sign_up_when_invite_requests_are_on` was shown red, and check is green.
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19
 Where: `domains/identity/identity-seam/{mint.ts, module-accounts.ts, verify.ts}` (`verify.ts` is the verifier: imports only

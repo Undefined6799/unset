@@ -89,6 +89,10 @@ export const CARD_EDIT = {
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
   width: "Width",
   surface: "Surface",
+  /** The card menu's name for Surface (Alex 2026-11-20: "Style"). */
+  style: "Style",
+  /** Swaps a Text card's editor on the owner's page for its plain Markdown field (ADR 0074 item 4). */
+  showMarkdown: "Show Markdown",
   filled: "Filled",
   outlined: "Outlined",
   plain: "Plain",
@@ -203,11 +207,38 @@ export const TEXT_EDITOR = {
   redo: "Redo",
 } as const;
 
+/** A Text card edited where it stands on the owner's page (ADR 0074 item 4). */
+export const TEXT_IN_PLACE = {
+  label: (name: string) => `Text of the ${name} card`,
+} as const;
+
+/** The bar that holds the owner's unsaved changes (ADR 0074 item 4), and the drafts offered back when the page opens. */
+export const UNSAVED_BAR = {
+  label: "Unsaved changes",
+  count: (cards: number) => (cards === 1 ? "1 card has unsaved changes." : `${cards} cards have unsaved changes.`),
+  save: "Save",
+  saving: "Saving…",
+  discard: "Discard",
+  saved: "Saved.",
+  /** The Save did not reach the server, or its answer could not be read. */
+  failed: "Your changes could not be saved just now. Check your connection and save again.",
+  /** Bigger than the page's form can send at once. */
+  tooLarge: "These changes are too large to save at once. Save fewer cards at a time.",
+  drafts: (cards: number) =>
+    cards === 1
+      ? "This device kept unsaved words for 1 card from an earlier visit."
+      : `This device kept unsaved words for ${cards} cards from an earlier visit.`,
+  draftsLabel: "Unsaved words from an earlier visit",
+  restore: "Bring them back",
+  dropDrafts: "Throw them away",
+} as const;
+
 /** The small page anyone but the owner sees when a page is not shown to them (ADR 0078; Alex, 2026-11-20 19:46Z). */
 export const LIMITED_PAGE = {
   signedIn: "This member shows their page to signed-in members only.",
   ownerOnly: "This member has chosen to keep their page private.",
   signIn: "Sign in",
+  signUp: "Sign up",
 } as const;
 
 /** Above the whole page when it is not public, so the viewer knows who else sees it (ADR 0078). */

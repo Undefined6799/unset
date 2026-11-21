@@ -39,6 +39,7 @@ let { data } = $props();
     did={data.did}
     shape={data.avatarShape}
     signIn={data.limited.signIn}
+    signUp={data.limited.signUp}
   />
 {:else}
 
