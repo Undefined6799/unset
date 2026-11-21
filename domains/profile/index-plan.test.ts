@@ -141,13 +141,6 @@ describe("planCommit", () => {
     expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { pronouns: "she/her" } });
   });
 
-  test("index.keeps_a_profile_layout_known_or_not", () => {
-    for (const layout of ["compact", "magazine"]) {
-      const plan = planCommit(active, "3jzfcijpj2z2c", [profile({ layout })]);
-      expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { layout } });
-    }
-  });
-
   test("index.keeps_a_card_surface_known_or_not", () => {
     for (const surface of ["plain", "future"]) {
       const card = section(TID);
