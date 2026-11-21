@@ -18,7 +18,7 @@ import {
   serializerCtx,
 } from "@milkdown/core";
 import { history } from "@milkdown/plugin-history";
-import { commonmark, emphasisSchema, strongSchema } from "@milkdown/preset-commonmark";
+import { commonmark, emphasisSchema, headingSchema, strongSchema } from "@milkdown/preset-commonmark";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
 import { isHistoryTransaction, redo, redoDepth, undo, undoDepth } from "@milkdown/prose/history";
 import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model";
@@ -310,6 +310,13 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           },
         };
       });
+      // A heading shows one level down, as the page shows it (readme.svelte: # is an h2 under the page's own h1), and
+      // carries no id: preset-commonmark 7.23.0 headingSchema.toDOM gives each one an id made from its words, which
+      // would repeat across cards and clash with the page's own anchors. The markdown and parseDOM are unchanged.
+      ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
+        ...prev(schemaCtx),
+        toDOM: (node) => [`h${Math.min(Number(node.attrs.level) + 1, 6)}`, 0],
+      }));
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
         attributes: {

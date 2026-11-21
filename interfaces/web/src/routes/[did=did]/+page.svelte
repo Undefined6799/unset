@@ -253,7 +253,8 @@ function dropDrafts() {
               oninput={(event) => change(card.key, { fields: { text: event.currentTarget.value } })}
             />
           {:else}
-            {#key `${generation}:${card.key}:${card.version ?? ""}`}
+            <!-- Remounted on Discard, drafts brought back, or new stored text (a save from the card's own form). -->
+            {#key `${generation}:${card.key}:${card.version ?? ""}:${card.content.kind === "readme" ? card.content.text : ""}`}
               <CardText
                 blocks={card.shown.blocks}
                 name={cardName(card.content)}

@@ -446,7 +446,8 @@ test("the_in_place_toolbar_sticks_below_the_site_header", async ({ page }) => {
       .getByRole("link", { name: "Edit" })
       .getAttribute("href");
     await page.goto(new URL(href ?? "", page.url()).toString());
-    const editor = page.getByRole("textbox", { name: "Text" });
+    // Exact: the page's own in-place editor for the card is "Text of the Text card" (ADR 0074 item 4).
+    const editor = page.getByRole("textbox", { name: "Text", exact: true });
     await expect(editor).toHaveAttribute("contenteditable", "true");
     await editor.getByText("Paragraph 30 of a long text.").scrollIntoViewIfNeeded();
     const header = await page.locator("[data-site-header]").boundingBox();
