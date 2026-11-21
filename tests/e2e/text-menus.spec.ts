@@ -85,7 +85,7 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   const watched = watch(page);
   const word = `menus${Date.now()}`;
   const { editor } = await cardWithCaret(page, word, `${word} start`);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("/");
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
   await expect(menu).toBeVisible();
@@ -231,9 +231,9 @@ test("an_empty_line_with_the_caret_says_to_type_a_slash", async ({ page }) => {
   const { editor } = await cardWithCaret(page, word, `${word} start`);
   const hint = editor.locator("[data-placeholder]");
   await expect(hint).toHaveCount(0);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await expect(hint).toHaveCount(1);
-  await expect(hint).toHaveAttribute("data-placeholder", "Type / to choose a block");
+  await expect(hint).toHaveAttribute("data-placeholder", "Type / to choose a block, Shift+Enter for a new one");
   // The hint is drawn by the page, not typed: the words and the saved Markdown do not hold it.
   await expect(editor).not.toContainText("Type /");
   await page.keyboard.type("x");
@@ -245,6 +245,58 @@ test("an_empty_line_with_the_caret_says_to_type_a_slash", async ({ page }) => {
   await expect(hint).toHaveCount(0);
   // An empty line is not saved (milkdown.ts stored), so there is nothing to discard.
   await discardAndRemove(page, word, { changed: false });
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Alex, 2026-11-21: "swap the enter and shift enter everywhere". Enter breaks the line inside a paragraph (a Markdown
+// hard break) and Shift+Enter starts a new block. A heading is one line in Markdown and a list item's line break does
+// not show on the page (parse.ts), so there Enter keeps starting the next block; Shift+Enter leaves a code block.
+test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }) => {
+  const watched = watch(page);
+  const word = `keys${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} start`);
+  const blocks = editor.locator(":scope > *");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("two");
+  await expect(blocks).toHaveCount(2);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("three");
+  await expect(blocks).toHaveCount(2);
+  await expect(editor.locator("p").last().locator("[data-type='hardbreak']")).toHaveCount(1);
+  // Enter twice at the end of a line starts a new block (Milkdown's InsertHardbreak turns a trailing break into one).
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("## Title");
+  await expect(blocks).toHaveCount(3);
+  await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("- a");
+  await expect(blocks.nth(3)).toHaveText("a");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("b");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("c");
+  await expect(editor.locator("ul > li")).toHaveText(["a", "b", "c"]);
+  await expect(editor.locator("li [data-type='hardbreak']")).toHaveCount(0);
+  // Shift+Enter twice ends the list, as Enter twice did: the second, on an empty item, lifts it out.
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("``` ");
+  await page.keyboard.type("x = 1");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("y = 2");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("after");
+  await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
+  await expect(editor.locator("ul > li")).toHaveCount(3);
+  await expect(blocks.last()).toHaveText("after");
+  // The empty line's hint says how to start one.
+  await page.keyboard.press("Shift+Enter");
+  await expect(editor.locator("[data-placeholder]")).toHaveAttribute(
+    "data-placeholder",
+    "Type / to choose a block, Shift+Enter for a new one",
+  );
+  await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
@@ -347,7 +399,7 @@ test("the_bar_skips_a_space_the_menu_marks_its_row_no_ring_and_an_arrow_leaves_a
   await page.waitForTimeout(100);
   await expect(floating).toBeHidden();
   await page.keyboard.press("ControlOrMeta+End");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("/");
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
   const chosen = menu.locator("[aria-selected=true]");
@@ -386,7 +438,7 @@ test.describe("on a phone", () => {
     await page.evaluate((y) => (globalThis as unknown as Scroller).scrollBy(0, y), box.y + box.height - (844 - 60));
     await last.click();
     await page.keyboard.press("End");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Shift+Enter");
     const line = await editor.locator("p").last().boundingBox();
     await page.keyboard.type("/");
     // The first change brings the unsaved bar, which takes its room above the cards: the line typed on stays where it
