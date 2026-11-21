@@ -5,10 +5,11 @@
 // before the token ends, or when the server stops taking it, unless that happens within a minute of signing in, which
 // would only loop.
 import type { ChatState } from "./core/chat.ts";
+import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
 import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
 import { openChat } from "./matrix/client.ts";
 
-const REDEEM_DEADLINE_MS = 10_000;
+const DOOR_DEADLINE_MS = 10_000;
 const TOO_SOON_MS = 60_000;
 /** setTimeout's largest delay (HTML timers, a signed 32-bit count of milliseconds). */
 const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -23,14 +24,20 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
   }
   const ticket = takeTicket(window);
   if (ticket === null) return onState({ kind: "error", code: "chat.no_ticket" });
-  const outcome = await redeem(window.fetch.bind(window), ticket, AbortSignal.timeout(REDEEM_DEADLINE_MS));
+  const outcome = await redeem(window.fetch.bind(window), ticket, AbortSignal.timeout(DOOR_DEADLINE_MS));
   if (outcome.kind === "refused") return onState({ kind: "error", code: outcome.code });
   window.history.replaceState(null, "", outcome.returnTo);
   const signedInAt = Date.now();
   const { session } = outcome;
   window.setTimeout(hop, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
+  const door = window.fetch.bind(window);
+  const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);
   await openChat(session, {
     baseUrl: window.location.origin,
+    setup: {
+      claim: () => claimSetup(door, session.deviceId, deadline()),
+      release: async () => void (await releaseSetup(door, session.deviceId, deadline())),
+    },
     onState,
     onSignedOut: () => {
       if (Date.now() - signedInAt < TOO_SOON_MS) return onState({ kind: "error", code: "chat.session_refused" });

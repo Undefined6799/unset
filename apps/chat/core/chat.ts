@@ -16,14 +16,20 @@ export type UnlockOutcome = "unlocked" | "wrong_key" | "unfinished" | "failed";
 
 /**
  * - signing_in: the hop, the redeem, or the client's first sync is under way.
- * - locked: encryption runs, but this browser cannot read history yet (not cross-signed by the account).
+ * - setting_up: the account's keys are being made or stored (ADR 0089); nothing else is reachable.
+ * - save_key: the new recovery key, to save and check; `save` stores it once the check has passed.
+ * - setup_elsewhere: another browser of the account is setting up right now.
+ * - locked: encryption runs, but this browser cannot read history yet; `unlock` tries a typed recovery key.
  * - ready: this browser is cross-signed and can read history.
  * - signed_out: the server no longer takes the token.
  * - error: a fixed catalog code, never a message from elsewhere.
  */
 export type ChatState =
   | { readonly kind: "signing_in" }
-  | { readonly kind: "locked" }
+  | { readonly kind: "setting_up" }
+  | { readonly kind: "save_key"; readonly key: string; readonly save: () => void }
+  | { readonly kind: "setup_elsewhere" }
+  | { readonly kind: "locked"; readonly unlock: (typed: string) => Promise<UnlockOutcome> }
   | { readonly kind: "ready" }
   | { readonly kind: "signed_out" }
   | { readonly kind: "error"; readonly code: string };

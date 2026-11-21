@@ -1,11 +1,16 @@
 // The chat page end to end (build step 7; ADR 0088), against the stack in fixtures/chat-stack.ts: the built page, the
 // door, real Postgres as `chat_auth`, real chat-admin, with MAS and the homeserver the only stand-ins.
-// What it proves: a load with no session runs the hop; the page redeems in its own context and shows the locked state;
+// What it proves: a load with no session runs the hop; the page redeems in its own context and, for an account with no
+// keys yet, shows "Save your recovery key" (build step 8; ADR 0083 decision 2, ADR 0089): the key in a field a
+// password manager can save, a Download built in the page, a check of its last characters, and only then the vault;
+// a second browser of the account is locked, refuses a wrong key plainly and unlocks with the saved one; the key is
+// never in a request body except as the page's own encryption makes it, nor in storage;
 // after redeem neither web storage, cookies, IndexedDB nor the address holds the token, the lock key or the ticket;
 // the page runs under its CSP with no violation; renewal re-runs the hop for the same device and lock key; a token the
 // server stops taking right after sign-in shows a fixed code instead of looping; axe passes in both themes.
 // Chromium only, by its name (playwright.config.ts ignores *chromium.spec.ts for Firefox and WebKit): the CSP check
 // reads Chromium's console wording, as csp.spec.ts does.
+import { readFileSync } from "node:fs";
 import { AxeBuilder } from "@axe-core/playwright";
 import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
 import {
@@ -22,7 +27,7 @@ const dir = scratch();
 const pageDir = `${dir}/page`;
 let db: ChatDatabase;
 let stack: ChatStack;
-let context: BrowserContext | undefined;
+let contexts: BrowserContext[] = [];
 
 test.beforeAll(async () => {
   // The hook's own budget (playwright.dev/docs/api/class-test#test-set-timeout, 1.64.1): a Vite build and a Postgres
@@ -39,8 +44,8 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await context?.close();
-  context = undefined;
+  await Promise.all(contexts.map((c) => c.close()));
+  contexts = [];
   await stack.close();
 });
 
@@ -48,7 +53,13 @@ type Redeemed = { accessToken: string; storageKey: string; deviceId: string; tic
 
 /** A page that records each redeem (the ticket it sent, the session it got) and every CSP complaint. */
 async function open(browser: Browser, colorScheme: "light" | "dark" = "light") {
-  context = await browser.newContext({ proxy: { server: stack.proxy }, ignoreHTTPSErrors: true, colorScheme });
+  const context = await browser.newContext({
+    proxy: { server: stack.proxy },
+    ignoreHTTPSErrors: true,
+    colorScheme,
+    acceptDownloads: true,
+  });
+  contexts.push(context);
   const page = await context.newPage();
   const redeems: Redeemed[] = [];
   const problems: string[] = [];
@@ -112,13 +123,13 @@ const kept = (page: Page) =>
 
 const hex = (base64url: string) => Buffer.from(base64url, "base64url").toString("hex");
 
-test("chat_page.signs_in_locked: a load with no session hops, redeems in the page and shows the locked card", async ({
+test("chat_page.signs_in_setup: a load with no session hops, redeems in the page and asks to save the key", async ({
   browser,
 }) => {
   const { page, redeems, problems } = await open(browser);
   await page.goto("https://unset.cc/");
-  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
-  expect(await page.locator("h1").textContent()).toBe("Unlock your messages");
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
+  expect(await page.locator("h1").textContent()).toBe("Save your recovery key");
   expect(page.url()).toBe("https://unset.cc/");
   expect(redeems).toHaveLength(1);
   expect(problems).toEqual([]);
@@ -134,7 +145,7 @@ test("chat_page.nothing_kept: after redeem no token, lock key or ticket is in st
 }) => {
   const { context, page, redeems } = await open(browser);
   await page.goto("https://unset.cc/");
-  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
   const [one] = redeems;
   if (one === undefined) throw new Error("no redeem");
   const { text, names } = await kept(page);
@@ -164,7 +175,8 @@ test("chat_page.renews: before the token ends the hop runs again, for the same d
   await page.goto("https://unset.cc/");
   // sessionTtl 75 s: the page renews a minute before the end, about 15 s after signing in.
   await expect.poll(() => redeems.length, { timeout: 40_000 }).toBe(2);
-  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
+  // The reload left setup half-way on this browser, which holds the keys: it is asked again (ADR 0089 decision 2).
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
   const [first, second] = redeems;
   expect(second?.deviceId).toBe(first?.deviceId);
   expect(second?.storageKey).toBe(first?.storageKey);
@@ -183,12 +195,125 @@ test("chat_page.refused_soon: a token refused right after sign-in shows a fixed 
   expect(redeems).toHaveLength(1);
 });
 
+/** Runs setup in `page` to the end and returns the key it showed. */
+async function saveKey(page: Page): Promise<string> {
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
+  const key = await page.locator("#recovery-key").inputValue();
+  await page.locator("#key-end").fill(key.replaceAll(" ", "").slice(-4));
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("ready");
+  return key;
+}
+
+/** The forms the key could take in a body or a store: as shown, without spaces, and its 32 bytes in base64 and hex. */
+function keyForms(key: string): string[] {
+  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let value = 0n;
+  for (const c of key.replaceAll(" ", "")) value = value * 58n + BigInt(ALPHABET.indexOf(c));
+  const bytes = Buffer.from(value.toString(16).padStart(70, "0"), "hex").subarray(2, 34);
+  return [
+    key,
+    key.replaceAll(" ", ""),
+    bytes.toString("base64").replace(/=+$/, ""),
+    bytes.toString("base64url"),
+    bytes.toString("hex"),
+  ];
+}
+
+test("chat_page.setup_saves_key: the key is shown to save and download, checked, then stored; it is never sent or kept", async ({
+  browser,
+}) => {
+  const { page, problems } = await open(browser);
+  const bodies: string[] = [];
+  page.on("request", (r) => bodies.push(r.postData() ?? ""));
+  await page.goto("https://unset.cc/");
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("save_key");
+  const field = page.locator("#recovery-key");
+  const key = await field.inputValue();
+  expect(key).toMatch(/^(\S{4} ){11}\S{4}$/);
+  expect([await field.getAttribute("autocomplete"), await field.getAttribute("readonly")]).toEqual([
+    "new-password",
+    "",
+  ]);
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("unset-chat-recovery-key.txt");
+  expect(readFileSync(await download.path(), "utf8")).toContain(key);
+  // Nothing is stored before the check passes.
+  const vaultWrites = () => stack.homeserver.seen.filter((c) => /account_data\/m\.secret_storage/.test(c.url)).length;
+  await page.locator("#key-end").fill("xxxx");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.locator("#key-end-wrong")).toBeVisible();
+  expect([await state(page), vaultWrites()]).toEqual(["save_key", 0]);
+  await page.locator("#key-end").fill(key.replaceAll(" ", "").slice(-4));
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("ready");
+  expect(vaultWrites()).toBeGreaterThan(0);
+  expect(await page.content()).not.toContain(key);
+  const forms = keyForms(key);
+  const sent = [...bodies, ...stack.homeserver.seen.map((c) => c.body)];
+  expect(sent.filter((b) => forms.some((f) => b.includes(f)))).toEqual([]);
+  const { text } = await kept(page);
+  expect(forms.filter((f) => text.includes(f))).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.second_browser_unlocks: another browser is locked, refuses a wrong key plainly, opens with the key", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const first = await open(browser);
+  await first.page.goto("https://unset.cc/");
+  const key = await saveKey(first.page);
+  const second = await open(browser);
+  await second.page.goto("https://unset.cc/");
+  await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("locked");
+  expect(await second.page.locator("h1").textContent()).toBe("Unlock your messages");
+  const field = second.page.locator("#unlock-key");
+  expect(await field.getAttribute("autocomplete")).toBe("current-password");
+  // A key with its first group changed (its check digit no longer holds), then the right one.
+  const other = key.replace(/^\S{4}/, "EsTb");
+  await field.fill(other);
+  await second.page.getByRole("button", { name: "Unlock" }).click();
+  await expect(second.page.getByRole("alert")).toContainText("That is not your recovery key");
+  expect(await state(second.page)).toBe("locked");
+  await field.fill(key);
+  await second.page.getByRole("button", { name: "Unlock" }).click();
+  await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("ready");
+  expect(second.problems).toEqual([]);
+});
+
+test("chat_page.unlock_before_setup_done: a browser whose account is half set up elsewhere is told so", async ({
+  browser,
+}) => {
+  const first = await open(browser);
+  await first.page.goto("https://unset.cc/");
+  await expect.poll(() => state(first.page), { timeout: 30_000 }).toBe("save_key");
+  const key = await first.page.locator("#recovery-key").inputValue();
+  const second = await open(browser);
+  await second.page.goto("https://unset.cc/");
+  await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("locked");
+  await second.page.locator("#unlock-key").fill(key);
+  await second.page.getByRole("button", { name: "Unlock" }).click();
+  await expect(second.page.getByRole("alert")).toContainText("Setting up is not finished yet");
+});
+
 for (const scheme of ["light", "dark"] as const) {
-  test(`chat_page.axe_${scheme}: the locked card has no accessibility violation`, async ({ browser }) => {
-    const { page } = await open(browser, scheme);
-    await page.goto("https://unset.cc/");
-    await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
-    const { violations } = await new AxeBuilder({ page }).analyze();
-    expect(violations.map((v) => v.id)).toEqual([]);
+  test(`chat_page.axe_${scheme}: the save and unlock cards have no accessibility violation`, async ({ browser }) => {
+    test.setTimeout(90_000);
+    const first = await open(browser, scheme);
+    await first.page.goto("https://unset.cc/");
+    await expect.poll(() => state(first.page), { timeout: 30_000 }).toBe("save_key");
+    expect((await new AxeBuilder({ page: first.page }).analyze()).violations.map((v) => v.id)).toEqual([]);
+    await saveKey(first.page);
+    const second = await open(browser, scheme);
+    await second.page.goto("https://unset.cc/");
+    await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("locked");
+    await second.page.locator("#unlock-key").fill("not a key");
+    await second.page.getByRole("button", { name: "Unlock" }).click();
+    await expect(second.page.getByRole("alert")).toBeVisible();
+    expect((await new AxeBuilder({ page: second.page }).analyze()).violations.map((v) => v.id)).toEqual([]);
   });
 }

@@ -1,8 +1,8 @@
 // What chat-page.chromium.spec.ts runs the chat page against (build step 7; ADR 0088): apps/chat built by Vite, served
 // by the door's own composition root (interfaces/chat-auth/compose.ts) against real Postgres as `chat_auth` (TE-2) and
 // real chat-admin, with web's own client signing the ticket. The fakes are the unmanaged dependencies only (TE-1): MAS
-// (chat-admin's harness) and the homeserver, which answers the client-server API calls a fresh client makes as Synapse
-// would for an account with no keys yet (https://spec.matrix.org/v1.18/client-server-api/). One TLS listener plays the
+// (chat-admin's harness) and the homeserver, which answers the client-server API calls the page makes as Synapse would,
+// keys included, for one account (https://spec.matrix.org/v1.18/client-server-api/). One TLS listener plays the
 // edge: unset.cc's /_matrix/client/* to the homeserver, the rest of unset.cc to the door, and unset.sh's /chat/sign-in
 // to web's half of the hop. The browser reaches it through a CONNECT proxy of its own, as the rest of the harness
 // reaches unset.test (fixtures/servers.ts): the browser may run in Playwright's image (e2e.yml, P0.07n), where no
@@ -88,36 +88,137 @@ function certificate(dir: string): { key: Buffer; cert: Buffer } {
 
 export type FakeHomeserver = ReturnType<typeof fakeHomeserver>;
 
-/** The homeserver: a fresh account with no keys, a quiet sync, and every request kept for the checks. */
+type Json = Record<string, unknown>;
+type Signed = Json & { signatures?: Record<string, Record<string, string>> };
+
+/**
+ * The homeserver, for one account: a quiet sync, and the key endpoints as the spec has them
+ * (https://spec.matrix.org/v1.18/client-server-api/#end-to-end-encryption, #server-side-key-backups,
+ * #client-config), kept in memory so a setup in one browser and an unlock in another meet the same keys. A second,
+ * different signing-key upload is refused as Synapse refuses it under MAS (keys.py SigningKeyUploadServlet: 401 with
+ * the m.oauth flow). Account data and changed device lists reach every browser's sync. Every request is kept, with
+ * its body, for the checks.
+ */
 function fakeHomeserver() {
-  const seen: { method: string; url: string; auth: string }[] = [];
+  const seen: { method: string; url: string; auth: string; body: string }[] = [];
   const state = { refuse: false };
+  const devices: Record<string, Signed> = {};
+  const signing: { master?: Signed; self?: Signed; user?: Signed } = {};
+  const accountData = new Map<string, { content: Json; at: number }>();
+  let backup: Json | null = null;
+  let changedAt = 0;
+  let clock = 1;
   const reply = (res: ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   };
+  const userOf = () => Object.values(devices)[0]?.user_id as string | undefined;
+  const keyIdOf = (key: Signed | undefined) => Object.values((key?.keys as Record<string, string>) ?? {})[0];
+  const merge = (target: Signed | undefined, signed: Signed) => {
+    if (target === undefined) return;
+    for (const [user, sigs] of Object.entries(signed.signatures ?? {})) {
+      target.signatures = { ...target.signatures, [user]: { ...target.signatures?.[user], ...sigs } };
+    }
+  };
+  const sync = (since: number) => {
+    const user = userOf();
+    const events = [...accountData].filter(([, v]) => v.at > since).map(([type, v]) => ({ type, content: v.content }));
+    const lists = user !== undefined && changedAt > since ? { changed: [user], left: [] } : { changed: [], left: [] };
+    return {
+      next_batch: `s${clock}`,
+      rooms: {},
+      account_data: { events },
+      to_device: { events: [] },
+      device_lists: lists,
+    };
+  };
+  const keys = (path: string, method: string, body: Json, res: ServerResponse) => {
+    if (path === "/keys/upload") {
+      const device = body.device_keys as Signed | undefined;
+      if (device !== undefined) devices[device.device_id as string] = device;
+      return reply(res, 200, { one_time_key_counts: { signed_curve25519: 50 } });
+    }
+    if (path === "/keys/query") {
+      const user = userOf();
+      if (user === undefined) return reply(res, 200, { device_keys: {}, failures: {} });
+      const withUser = (key: Signed | undefined): Record<string, Signed> => (key === undefined ? {} : { [user]: key });
+      return reply(res, 200, {
+        device_keys: { [user]: devices },
+        master_keys: withUser(signing.master),
+        self_signing_keys: withUser(signing.self),
+        user_signing_keys: withUser(signing.user),
+        failures: {},
+      });
+    }
+    if (path === "/keys/device_signing/upload") {
+      const master = body.master_key as Signed | undefined;
+      if (master === undefined) return reply(res, 400, { errcode: "M_INVALID_PARAM", error: "No master key" });
+      if (signing.master !== undefined && keyIdOf(master) !== keyIdOf(signing.master)) {
+        const params = { url: "https://account.unset.test/?action=org.matrix.cross_signing_reset" };
+        return reply(res, 401, { session: "dummy", flows: [{ stages: ["m.oauth"] }], params: { "m.oauth": params } });
+      }
+      signing.master = master;
+      signing.self = body.self_signing_key as Signed;
+      signing.user = body.user_signing_key as Signed;
+      changedAt = ++clock;
+      return reply(res, 200, {});
+    }
+    if (path === "/keys/signatures/upload") {
+      for (const forUser of Object.values(body) as Record<string, Signed>[]) {
+        for (const [id, signed] of Object.entries(forUser)) merge(devices[id] ?? signing.master, signed);
+      }
+      changedAt = ++clock;
+      return reply(res, 200, { failures: {} });
+    }
+    if (path === "/room_keys/version" && method === "POST") {
+      backup = { ...body, version: "1", etag: "0", count: 0 };
+      return reply(res, 200, { version: "1" });
+    }
+    if (path.startsWith("/room_keys/version")) {
+      return backup === null
+        ? reply(res, 404, { errcode: "M_NOT_FOUND", error: "No backup" })
+        : reply(res, 200, backup);
+    }
+    if (path === "/room_keys/keys") return reply(res, 200, { etag: "1", count: 0 });
+    return null;
+  };
   const handle = (req: IncomingMessage, res: ServerResponse) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      seen.push({ method: req.method ?? "", url: req.url ?? "", auth: req.headers.authorization ?? "", body: text });
+      answer(req, res, text === "" ? {} : (JSON.parse(text) as Json));
+    });
+  };
+  const answer = (req: IncomingMessage, res: ServerResponse, body: Json) => {
     const url = new URL(req.url ?? "/", "https://unset.cc");
-    seen.push({ method: req.method ?? "", url: req.url ?? "", auth: req.headers.authorization ?? "" });
+    const method = req.method ?? "GET";
     const path = url.pathname.replace(/^\/_matrix\/client\/(v3|v1|unstable)/, "");
     if (url.pathname === "/_matrix/client/versions") return reply(res, 200, { versions: ["v1.11", "v1.12"] });
     if (state.refuse) return reply(res, 401, { errcode: "M_UNKNOWN_TOKEN", error: "Token is not active" });
     if (path === "/sync") {
-      const body = {
-        next_batch: `s${seen.length}`,
-        rooms: {},
-        account_data: { events: [] },
-        to_device: { events: [] },
-      };
-      const wait = url.searchParams.has("since") ? 300 : 0;
-      setTimeout(() => reply(res, 200, body), wait);
+      const since = Number(url.searchParams.get("since")?.slice(1) ?? "0");
+      const wait = url.searchParams.has("since") && clock <= since ? 300 : 0;
+      setTimeout(() => reply(res, 200, sync(since)), wait);
       return;
     }
     if (path === "/capabilities") return reply(res, 200, { capabilities: {} });
     if (path === "/pushrules/") return reply(res, 200, { global: {} });
     if (/^\/user\/[^/]+\/filter$/.test(path)) return reply(res, 200, { filter_id: "f1" });
-    if (path === "/keys/upload") return reply(res, 200, { one_time_key_counts: { signed_curve25519: 50 } });
-    if (path === "/keys/query") return reply(res, 200, { device_keys: {}, failures: {} });
+    const data = /^\/user\/[^/]+\/account_data\/([^/]+)$/.exec(path);
+    if (data !== null) {
+      const type = decodeURIComponent(data[1] ?? "");
+      if (method === "PUT") {
+        accountData.set(type, { content: body, at: ++clock });
+        return reply(res, 200, {});
+      }
+      const stored = accountData.get(type);
+      return stored === undefined
+        ? reply(res, 404, { errcode: "M_NOT_FOUND", error: "Not found" })
+        : reply(res, 200, stored.content);
+    }
+    if (keys(path, method, body, res) !== null) return;
     return reply(res, 404, { errcode: "M_NOT_FOUND", error: "Not found" });
   };
   return { seen, state, handle };
