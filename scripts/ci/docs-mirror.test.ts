@@ -50,7 +50,7 @@ function pushFromElsewhere(remote: string, files: Record<string, string>, subjec
 }
 
 /**
- * A docs repository holding a front page, the lexicons folder and an older copy of ours; the workspace of a run
+ * A docs repository holding a front page, a workflow, the lexicons folder and an older copy of ours; the workspace of a run
  * with that repository checked out one commit deep at `docs-repo`; and `tree` as this run's export.
  */
 function staged(tree: Record<string, string>) {
@@ -60,7 +60,12 @@ function staged(tree: Record<string, string>) {
   git(remote, "init", "--quiet", "--bare");
   pushFromElsewhere(
     remote,
-    { "README.md": "old front page\n", "lexicons/card.md": "card\n", "unset/site/gone.md": "gone\n" },
+    {
+      "README.md": "old front page\n",
+      "lexicons/card.md": "card\n",
+      "unset/site/gone.md": "gone\n",
+      ".github/workflows/gone.yml": "name: gone\n",
+    },
     "Start",
   );
   const workspace = join(dir, "workspace");
@@ -91,7 +96,12 @@ function staged(tree: Record<string, string>) {
   return { remote, run, log, files, show, summary: () => readFileSync(join(dir, "summary"), "utf8") };
 }
 
-const TREE = { "README.md": "front page\n", "unset/site/page.md": "page\n", "unset/human/glossary.md": "words\n" };
+const TREE = {
+  "README.md": "front page\n",
+  ".github/workflows/site.yml": "name: site\n",
+  "unset/site/page.md": "page\n",
+  "unset/human/glossary.md": "words\n",
+};
 
 describe("docs mirror workflow", () => {
   test("runs_only_for_a_push_to_main_that_changes_what_it_copies", () => {
@@ -131,17 +141,23 @@ describe("docs mirror workflow", () => {
   });
 
   test("the_push_step_names_every_path_the_export_writes_and_no_other", () => {
-    // The step removes and stages `unset` and `README.md` by name; the export must write nothing outside them.
+    // The step removes and stages `unset`, `README.md` and `.github` by name; the export must write nothing outside them.
     const top = new Set([...docsTree().keys()].map((path) => path.split("/")[0]));
-    expect([...top].sort()).toEqual(["README.md", "unset"]);
-    expect(pushStep.run).toContain("git rm -r --quiet --ignore-unmatch -- unset README.md\n");
-    expect(pushStep.run).toContain("git add --all -- unset README.md\n");
+    expect([...top].sort()).toEqual([".github", "README.md", "unset"]);
+    expect(pushStep.run).toContain("git rm -r --quiet --ignore-unmatch -- unset README.md .github\n");
+    expect(pushStep.run).toContain("git add --all -- unset README.md .github\n");
   });
 
   test("replaces_its_own_part_in_one_commit_and_leaves_the_rest", () => {
     const docs = staged(TREE);
     expect(docs.run()).toMatchObject({ code: 0 });
-    expect(docs.files()).toEqual(["README.md", "lexicons/card.md", "unset/human/glossary.md", "unset/site/page.md"]);
+    expect(docs.files()).toEqual([
+      ".github/workflows/site.yml",
+      "README.md",
+      "lexicons/card.md",
+      "unset/human/glossary.md",
+      "unset/site/page.md",
+    ]);
     expect(docs.show("README.md")).toBe("front page");
     expect(docs.show("lexicons/card.md")).toBe("card");
     expect(docs.log("%s")).toEqual(["Copy the docs from Undefined6799/unset@0123456", "Start"]);
@@ -173,6 +189,7 @@ describe("docs mirror workflow", () => {
       "Start",
     ]);
     expect(docs.files()).toEqual([
+      ".github/workflows/site.yml",
       "README.md",
       "lexicons/card.md",
       "lexicons/page.md",

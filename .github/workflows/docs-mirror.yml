@@ -1,8 +1,8 @@
 # The human docs, copied to the docs repository (P1.21t; ADR 0092). On a push to main that changes docs/human,
-# docs/site or the docs repository's front page, this builds this repository's part of github.com/unset-sh/docs
-# (scripts/ci/docs-export.ts: the folder `unset/` and README.md) and pushes it as one commit that links its source.
-# Every source repository owns one folder there, named after it, and replaces only that; docs.unset.sh is built from
-# the whole. Nothing is ever read back from the docs repository into this one.
+# docs/site or the docs repository's own files, this builds this repository's part of github.com/unset-sh/docs
+# (scripts/ci/docs-export.ts: the folder `unset/`, README.md and the Pages workflow) and pushes it as one commit that
+# links its source. Every source repository owns one folder there, named after it, and replaces only that;
+# docs.unset.sh is built from the whole. Nothing is ever read back from the docs repository into this one.
 #
 # The push uses a deploy key: an SSH key whose public half is on unset-sh/docs with write access and opens that one
 # repository only (github/docs content/authentication/connecting-to-github-with-ssh/managing-deploy-keys.md, read
@@ -58,15 +58,17 @@ jobs:
           repository: unset-sh/docs
           ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
           path: docs-repo
-      # Only `unset` and README.md are removed and staged, so a page deleted here is deleted there and another source's
-      # folder is never touched, whatever the tree holds. The commit names its source commit.
+      # Only `unset`, README.md and `.github` are removed and staged, so a page deleted here is deleted there and
+      # another source's folder is never touched, whatever the tree holds. The commit names its source commit. A
+      # deploy key is an SSH key and carries no token scope, so it may push a workflow file (unverified until the
+      # first run).
       - name: Replace this repository's part and push one commit
         shell: bash
         run: |
           cd docs-repo
-          git rm -r --quiet --ignore-unmatch -- unset README.md
+          git rm -r --quiet --ignore-unmatch -- unset README.md .github
           cp -R "$RUNNER_TEMP/tree/." .
-          git add --all -- unset README.md
+          git add --all -- unset README.md .github
           if git diff --cached --quiet; then
             echo "The docs repository already holds these docs." >> "$GITHUB_STEP_SUMMARY"
             exit 0

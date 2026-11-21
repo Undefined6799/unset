@@ -1,9 +1,9 @@
 // What this repository sends to the docs repository, github.com/unset-sh/docs (P1.21t; ADR 0092): its own folder,
-// `unset/`, and the docs repository's front page. `node scripts/ci/docs-export.ts <new folder>` writes the tree;
-// docs-mirror.yml pushes it. docs/human and docs/site keep their places beside each other, so `unset/site` builds
-// there as docs/site builds here: hugo.yaml reads the ADRs through `../human/decisions`. Only files git tracks are
-// taken, so build output and anything else left on disk stay out. Node built-ins and git only: the workflow job that
-// runs this holds a deploy key and installs no package.
+// `unset/`, and the docs repository's own files (its front page and its Pages workflow).
+// `node scripts/ci/docs-export.ts <new folder>` writes the tree; docs-mirror.yml pushes it. docs/human and docs/site
+// keep their places beside each other, so `unset/site` builds there as docs/site builds here: hugo.yaml reads the
+// ADRs through `../human/decisions`. Only files git tracks are taken, so build output and anything else left on disk
+// stay out. Node built-ins and git only: the workflow job that runs this holds a deploy key and installs no package.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, lstatSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,8 +14,11 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const FOLDER = "unset";
 /** The human documentation: what a person reads, and the site built from it. docs/ai is working material. */
 const SOURCES = ["docs/human", "docs/site"];
-/** The docs repository's own files, kept here while the site is decided here. */
-const FRONT_PAGE = "deployment/docs-repo/README.md";
+/** The docs repository's own files, kept here while the site is decided here, by their path there. */
+const OWN_FILES = {
+  "README.md": "deployment/docs-repo/README.md",
+  ".github/workflows/site.yml": "deployment/docs-repo/site.yml",
+};
 
 /** Each file of the tree by its path in the docs repository, with the path it is copied from. */
 export function docsTree(root = ROOT): Map<string, string> {
@@ -27,7 +30,7 @@ export function docsTree(root = ROOT): Map<string, string> {
   });
   const tracked = listed.split("\0").filter(Boolean).sort();
   if (tracked.length === 0) throw new Error(`no tracked file under ${SOURCES.join(" or ")}`);
-  const tree = new Map([["README.md", FRONT_PAGE]]);
+  const tree = new Map(Object.entries(OWN_FILES));
   for (const path of tracked) tree.set(`${FOLDER}/${path.slice("docs/".length)}`, path);
   // A link or a submodule would be copied as whatever it points at on the runner.
   for (const path of tree.values())

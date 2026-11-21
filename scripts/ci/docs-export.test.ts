@@ -7,6 +7,8 @@ import { fixtureGitEnv } from "../guards/git-env.ts";
 import { docsTree, writeTree } from "./docs-export.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
+/** The docs repository's own files, as a fixture repository holds them. */
+const OWN = { "deployment/docs-repo/README.md": "front\n", "deployment/docs-repo/site.yml": "name: site\n" };
 
 /** A throwaway repository holding `tracked` (path to text), committed, plus whatever `after` adds untracked. */
 function planted(tracked: Record<string, string>, after?: (root: string) => void): string {
@@ -32,9 +34,13 @@ describe("this repository's folder in the docs repository", () => {
     expect(tree.get("unset/human/decisions/legacy-index.yaml")).toBe("docs/human/decisions/legacy-index.yaml");
     expect(tree.get("unset/human/runbooks/docs-site.md")).toBe("docs/human/runbooks/docs-site.md");
     expect(readFileSync(join(ROOT, "docs/site/hugo.yaml"), "utf8")).toContain("source: ../human/decisions");
-    // The docs repository's own front page is the one file outside the folder.
+    // The docs repository's own files are the only ones outside the folder: its front page and its Pages workflow.
     expect(tree.get("README.md")).toBe("deployment/docs-repo/README.md");
-    expect([...tree.keys()].filter((path) => path !== "README.md" && !path.startsWith("unset/"))).toEqual([]);
+    expect(tree.get(".github/workflows/site.yml")).toBe("deployment/docs-repo/site.yml");
+    expect([...tree.keys()].filter((path) => !path.startsWith("unset/"))).toEqual([
+      "README.md",
+      ".github/workflows/site.yml",
+    ]);
     // Working material for agents is not human documentation.
     expect([...tree.values()].filter((path) => path.startsWith("docs/ai/"))).toEqual([]);
   });
@@ -46,6 +52,7 @@ describe("this repository's folder in the docs repository", () => {
         "docs/human/glossary.md": "g\n",
         "docs/ai/notes/n.md": "n\n",
         "deployment/docs-repo/README.md": "front\n",
+        "deployment/docs-repo/site.yml": "name: site\n",
         "secret.txt": "s\n",
       },
       (at) => {
@@ -56,6 +63,7 @@ describe("this repository's folder in the docs repository", () => {
       },
     );
     expect(Object.fromEntries(docsTree(root))).toEqual({
+      ".github/workflows/site.yml": "deployment/docs-repo/site.yml",
       "README.md": "deployment/docs-repo/README.md",
       "unset/human/glossary.md": "docs/human/glossary.md",
       "unset/site/content/a.md": "docs/site/content/a.md",
@@ -64,7 +72,7 @@ describe("this repository's folder in the docs repository", () => {
 
   test("a_tracked_link_is_refused", () => {
     // A link is copied as what it points at, which may be any file the runner can read.
-    const root = planted({ "docs/site/content/a.md": "a\n", "deployment/docs-repo/README.md": "front\n" }, (at) => {
+    const root = planted({ "docs/site/content/a.md": "a\n", ...OWN }, (at) => {
       symlinkSync("/etc/hostname", join(at, "docs/human-link.md"));
       mkdirSync(join(at, "docs/human"));
       symlinkSync("/etc/hostname", join(at, "docs/human/host.md"));
@@ -75,12 +83,12 @@ describe("this repository's folder in the docs repository", () => {
 
   test("an_empty_folder_is_refused", () => {
     // Pushing nothing would delete every page in the docs repository.
-    const root = planted({ "deployment/docs-repo/README.md": "front\n", "docs/ai/notes/n.md": "n\n" });
+    const root = planted({ ...OWN, "docs/ai/notes/n.md": "n\n" });
     expect(() => docsTree(root)).toThrow("no tracked file under docs/human or docs/site");
   });
 
   test("the_tree_is_written_byte_for_byte_into_a_new_folder", () => {
-    const root = planted({ "docs/site/content/a.md": "a\n", "deployment/docs-repo/README.md": "front\n" });
+    const root = planted({ "docs/site/content/a.md": "a\n", ...OWN });
     const out = join(mkdtempSync(join(tmpdir(), "unset-docs-out-")), "tree");
     writeTree(docsTree(root), root, out);
     expect(readFileSync(join(out, "unset/site/content/a.md"), "utf8")).toBe("a\n");

@@ -38,19 +38,25 @@ Each source repository gets its own key pair, so one can be cut off without the 
 new pair, the public half on unset-sh/docs under that repository's name, the private half in that repository's own
 `docs-mirror` environment. Its workflow replaces only the folder named after it.
 
+Its folder becomes a section of docs.unset.sh under the folder's name (`deployment/docs-repo/site.yml`). The folder
+is Hugo content: an `_index.md` at its top whose front matter gives `title`, `type: docs` with `cascade: { type: docs }`,
+and, to appear in the top bar, a `menus: { main: { weight: N } }` entry; links between its pages are relative, so they
+also work on GitHub. A folder named like a section the site already has, or one holding a link, fails the site build.
+Add the folder to the table in `deployment/docs-repo/README.md`.
+
 ## Rotate
 Repeat steps 4 to 7 with a new pair, replacing the secret's value, then delete the old deploy key on unset-sh/docs.
 Rotate when anyone who could read the private half should no longer, and after any doubt.
 
 ## Cut off (a leak, or anything odd in the docs repository)
 1. Delete the deploy key on unset-sh/docs (Settings, Deploy keys). It stops working at once.
-2. Compare `unset/` and `README.md` there with `node scripts/ci/docs-export.ts <new folder>` run on main here, and
-   look at the other folders' and `.github/`'s history: a deploy key can write any file of that repository. If the
-   history was rewritten, restore it by hand as an owner of the organisation.
+2. Compare `unset/`, `README.md` and `.github/` there with `node scripts/ci/docs-export.ts <new folder>` run on main
+   here, and look at the other folders' history: a deploy key can write any file of that repository. If the history
+   was rewritten, restore it by hand as an owner of the organisation.
 3. Set up a new key. The next copy puts this repository's files back.
 
 ## When a run fails
 - "refused the push three times": the docs repository did not accept the push. Check that the deploy key is there
   with write access and that nothing restricts pushes to the default branch (step 3), then re-run.
-- A failed rebase ("could not apply"): someone changed `unset/` or `README.md` in the docs repository by hand.
-  Nothing was pushed. Revert that commit there, then re-run; the change belongs in this repository.
+- A failed rebase ("could not apply"): someone changed `unset/`, `README.md` or `.github/` in the docs repository by
+  hand. Nothing was pushed. Revert that commit there, then re-run; the change belongs in this repository.

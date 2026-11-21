@@ -39,24 +39,25 @@ GitHub gives a deploy key write access to one whole repository, never to one fol
    another source pushed first, it replays its one commit on top and pushes again, three times at most; a replay
    that does not apply cleanly, or a third refusal, fails the run.
 3. **While the site is decided here, this repository also owns the docs repository's own files**: its `README.md`
-   now, and its Pages workflow with slice 2. They live in `deployment/docs-repo/` and travel with the same push.
+   and its Pages workflow. They live in `deployment/docs-repo/` and travel with the same push.
 4. **One deploy key per source repository.** Its public half is on `unset-sh/docs` with write access; its private
    half is the secret `DOCS_DEPLOY_KEY` of an environment `docs-mirror` in the source repository, whose only
    deployment branch is `main`. Alex makes each pair and places both halves by hand; no agent or thread ever holds a
    private half. A key per source means one source can be cut off without touching the others.
-5. **docs.unset.sh is GitHub Pages on `unset-sh/docs`, built by a workflow there on every push.** It builds
-   `unset/site` with the Hugo image CI pins here, with the other sources' folders as sections of the site, and
-   deploys the result. The staging edge stops serving the docs. This supersedes ADR 0075.
-6. **Slices, each a pull request.** (1) The copy: this record, the export, `docs-mirror.yml`, the runbook. (2) The
-   Pages workflow and how another source's folder becomes a section. (3) Once DNS points at Pages, the docs site, its
-   limit zone and its folder bind leave the staging edge. Until slice 3 lands, the edge keeps serving the manual
-   build as ADR 0075 describes.
+5. **docs.unset.sh is GitHub Pages on `unset-sh/docs`, built by a workflow there on every push**
+   (`deployment/docs-repo/site.yml`). It builds `unset/site` with the Hugo image CI pins here, with each other
+   source's folder copied in as a section of the site under the folder's name, and deploys the result. A folder
+   named like an existing section, a link anywhere, or a build warning fails the run and publishes nothing. The
+   staging edge stops serving the docs. This supersedes ADR 0075.
+6. **Two changes.** The pull request that adds this record carries the copy and the Pages workflow. A second one,
+   once DNS points at Pages, takes the docs site, its limit zone and its folder bind off the staging edge. Until
+   then the edge keeps serving the manual build as ADR 0075 describes.
 7. **The site stays out of search engines until Alex says otherwise**, as it is today.
 
 ## Consequences
 
-- **Mechanism.** A docs change merged to main here is copied to `unset-sh/docs` within the run, and from slice 2 the
-  push there builds and publishes the site. No step is done by hand and no server of ours is involved.
+- **Mechanism.** A docs change merged to main here is copied to `unset-sh/docs` within the run, and the push there
+  builds and publishes the site. No step is done by hand and no server of ours is involved.
 - **A docs-only pull request reaches the public site with no approval.** Such a change already merges by itself when
   CI is green (ADR 0034); it is then copied and published by itself too.
 - **A second long-lived write credential sits in this repository's Actions secrets**, after the lexicons key. A
@@ -72,9 +73,9 @@ GitHub gives a deploy key write access to one whole repository, never to one fol
   from (`interfaces/web/src/hooks.server.ts`). The next copy restores the right files in a source's folder, and deleting
   a deploy key cuts that source off at once.
 - **GitHub hosts the site.** It sees each reader's address, and the response headers are GitHub's: the
-  Content-Security-Policy and `noindex` headers the staging edge sets (ADR 0075 Decision 3) cannot be sent. Slice 2
-  carries what a page can say for itself (a robots tag, and a policy in a `meta` tag, which cannot hold
-  `frame-ancestors`).
+  Content-Security-Policy and `noindex` headers the staging edge sets (ADR 0075 Decision 3) cannot be sent. Each
+  page says what it can for itself: a robots tag, and the policy in a `meta` tag, which governs only what the
+  browser reads after it and cannot hold `frame-ancestors`.
 - **A public site with no login leaves the staging edge**, which then serves only the two sites behind Pangolin's
   login, and docs.unset.sh no longer goes down with the staging host.
 - **A custom domain on Pages can be taken over** if the DNS record outlives the Pages site, so the domain is
@@ -105,5 +106,7 @@ GitHub gives a deploy key write access to one whole repository, never to one fol
 refused. `scripts/ci/docs-mirror.test.ts`: the trigger, the environment, the single use of the secret, no package
 install and no forced push; and the push step, run as written against a throwaway repository: only its own paths
 change, a lost race is replayed, and a clash or a refusal fails. `scripts/guards/workflow-pins.test.ts`
-(`workflow_rules_hold`) holds the workflow to the guard. Acceptance is Alex's line on the pull request that adds
-this record.
+(`workflow_rules_hold`) holds the workflow to the guard. `scripts/ci/docs-site.test.ts` holds the Pages workflow,
+which this repository's guard cannot reach: CI's own Hugo image and build command, GitHub's pinned actions only,
+publish rights in the deploy job alone, and the section step run as written. Acceptance is Alex's line on the pull
+request that adds this record.
