@@ -134,9 +134,14 @@ const statusOf = (fm: FrontMatter): string =>
       ? "Proposed (awaiting Alex)"
       : "Rejected";
 
+/** The one edit still allowed on an older accepted ADR (adrChangeProblem); the index shows it. */
+const SUPERSEDED_LINE = /^Status: Superseded by (\d{4})\.?$/im;
+
 /**
- * The index: one row per ADR file, from its front matter or else its frozen row. An accepted ADR's `supersedes` and
- * `amends` are written onto the rows they name, so the older file is never edited. Assumes adrProblems is clean.
+ * The index: one row per ADR file, from its front matter or else its frozen row. An older ADR keeps its frozen
+ * decision text even once it has front matter, and its frozen status gives way to a "Status: Superseded by NNNN."
+ * line. An accepted ADR's `supersedes` and `amends` are written onto the rows they name, so the older file is never
+ * edited. Assumes adrProblems is clean.
  */
 export function adrIndex(root: string): IndexRow[] {
   const legacy = legacyRows(root);
@@ -148,13 +153,15 @@ export function adrIndex(root: string): IndexRow[] {
     const text = readFileSync(join(root, DECISIONS, file), "utf8");
     const yamlText = frontMatterText(text);
     const fm = yamlText === null ? undefined : parseFrontMatter(yamlText, adrs).value;
+    const row = legacy.get(adr);
     if (fm === undefined) {
-      const row = legacy.get(adr);
-      return { adr, file, decision: row?.decision ?? "(no row)", status: row?.status ?? "(no row)" };
+      const by = SUPERSEDED_LINE.exec(text)?.[1];
+      const status = by ? `Superseded by ${by}` : (row?.status ?? "(no row)");
+      return { adr, file, decision: row?.decision ?? "(no row)", status };
     }
     parsed.set(adr, fm);
     const title = new RegExp(`^# ${adr} — (.+)$`, "m").exec(text)?.[1] ?? "(no title)";
-    return { adr, file, decision: title, status: statusOf(fm) };
+    return { adr, file, decision: row?.decision ?? title, status: statusOf(fm) };
   });
   const byAdr = new Map(rows.map((r) => [r.adr, r]));
   for (const [adr, fm] of parsed) {

@@ -32,7 +32,7 @@ nothing shared, so two ADR pull requests never conflict.
 - **The index** is generated: it is the Decisions page on docs.unset.sh, built at each publish, and
   `npm run adr:index` prints the same table. The ADRs from before 0083 keep their rows, as they stood at the
   cut-over, in [`legacy-index.yaml`](legacy-index.yaml), which never changes. An older ADR still Proposed is accepted
-  by giving its own file front matter.
+  by giving its own file front matter; its row keeps the decision text.
 - **ADR 0001** collected decisions 1 to 34 and then, from decision 35 (D8), logged every later decision. The log closed
   with ADR 0083 and the file no longer changes.
 

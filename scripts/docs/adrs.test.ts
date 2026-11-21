@@ -151,6 +151,21 @@ describe("ADR index", () => {
     );
   });
 
+  test("legacy_adr_keeps_its_frozen_decision_text", () => {
+    // An older ADR accepted by adding front matter keeps its row's decision text, whatever its heading says.
+    const rows = adrIndex(base({ "0002-old.md": adr("0002", "Old", ACCEPTED) }));
+    expect(rows[1]).toEqual({ adr: "0002", file: "0002-old.md", decision: "Old rule", status: "Accepted 2026-11-21" });
+  });
+
+  test("legacy_superseded_line_shown_in_index", () => {
+    // The one edit still allowed on an older accepted ADR shows in the index even with no `supersedes` in 0003.
+    const superseded = adr("0002", "Old rule", null, "Status: Superseded by 0003.\n");
+    const rows = adrIndex(base({ "0002-old.md": superseded, "0003-new.md": adr("0003", "New rule", PROPOSED) }));
+    expect(rows[1]?.status).toBe("Superseded by 0003");
+    const free = adr("0002", "Old rule", null, "Status: Superseded by 0003 (before it was accepted).\n");
+    expect(adrIndex(base({ "0002-old.md": free }))[1]?.status).toBe("Accepted 2026-10-04");
+  });
+
   test("site_index_compared_row_for_row", () => {
     const rows = adrIndex(base({ "0003-new.md": adr("0003", "New rule", PROPOSED) }));
     // Hugo's jsonify writes keys in sorted order: decision, file, status.

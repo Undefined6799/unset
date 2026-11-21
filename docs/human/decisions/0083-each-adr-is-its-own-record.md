@@ -37,11 +37,12 @@ against 79.
    stops changing per ADR.
 3. **The ADRs before 0083 keep one frozen row each.** Their index rows, statuses and notes, as they stood when this
    landed, are in `legacy-index.yaml`. That file never changes again, and the check refuses any edit to it. An older
-   ADR still Proposed is accepted by adding front matter to its own file, which then wins over its row.
+   ADR still Proposed is accepted by adding front matter to its own file, whose status then wins over its row; the
+   row's decision text stays.
 4. **Supersession is written once, in the later ADR.** Once an ADR with `supersedes` or `amends` is accepted, the
    index shows it on the rows it names. The older file is not edited. The one-line "Status: Superseded by NNNN."
-   edit of an older accepted ADR stays allowed as before; an accepted or rejected ADR with front matter never
-   changes at all.
+   edit of an older accepted ADR stays allowed as before, and the index shows it in place of the frozen status; an
+   accepted or rejected ADR with front matter never changes at all.
 5. **The 0001 log is closed.** Its last entry says so. From the commit where `legacy-index.yaml` first exists, the
    check refuses any change to ADR 0001.
 6. **Acceptance records touch one file.** The pull request after Alex's line fills in the `accepted` block of that

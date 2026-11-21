@@ -1,7 +1,8 @@
 {{- /*
   The ADR index (ADR 0083), built from the ADR files the same way `npm run adr:index` builds it
-  (scripts/docs/adrs.ts, adrIndex): a file with front matter gives its title and status; any other file takes its
-  frozen row from legacy-index.yaml; an accepted ADR's supersedes and amends are written onto the rows they name.
+  (scripts/docs/adrs.ts, adrIndex): a file with front matter gives its status, and its title unless it has a frozen row
+  in legacy-index.yaml, whose decision text wins; any other file takes its frozen row, with its status replaced by a
+  "Status: Superseded by NNNN." line; an accepted ADR's supersedes and amends are written onto the rows they name.
   It also publishes the rows as /adr-index.json, which CI compares with adrIndex so the two cannot drift.
   hugo.yaml mounts docs/human/decisions at assets/adrs and its legacy-index.yaml under data/adrs.
 */ -}}
@@ -24,9 +25,14 @@
     {{- else if eq $fm.status "Proposed" -}}
       {{- $status = "Proposed (awaiting Alex)" -}}
     {{- end -}}
+    {{- with index $rows $adr }}{{ $title = .decision }}{{ end -}}
     {{- $rows = merge $rows (dict $adr (dict "file" $file "decision" $title "status" $status)) -}}
   {{- else if not (index $rows $adr) -}}
     {{- errorf "ADR %s has no front matter and no row in legacy-index.yaml" $adr -}}
+  {{- else -}}
+    {{- with findRESubmatch `(?im)^Status: Superseded by (\d{4})\.?$` $text 1 -}}
+      {{- $rows = merge $rows (dict $adr (merge (index $rows $adr) (dict "status" (printf "Superseded by %s" (index (index . 0) 1))))) -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- range $accepted -}}
