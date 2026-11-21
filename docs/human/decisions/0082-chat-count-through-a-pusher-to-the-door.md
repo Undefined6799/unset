@@ -1,8 +1,9 @@
 # 0082 — The chat count reaches unset.sh through a Synapse pusher to the door; unset.sh carries no chat code
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P6.00, minimal chat build). That the badge shows a count and nothing
-else is Alex's decision of 2026-11-20 in the chat planning thread ("New messages: count only at launch"); the path
-the count takes is proposed here.
+Status: Accepted by Alex 2026-11-21 00:55Z: asked in the project chat whether he accepts this record as it stands, he
+answered "yes" (P6.00, minimal chat build, 2026-11-21). That the badge shows a count and nothing else is Alex's
+decision of 2026-11-20 in the chat planning thread ("New messages: count only at launch"); the path the count takes is
+accepted by that answer.
 
 ## Context
 PLAN §5.6 says "the app shell shows no chat badge in the MVP, because chat state lives on the chat origin". On

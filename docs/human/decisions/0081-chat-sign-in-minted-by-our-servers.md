@@ -1,9 +1,10 @@
 # 0081 — Chat sign-in is minted by our servers: web signs a ticket, the door on unset.cc redeems it, chat-admin alone holds the MAS credential
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P6.00, minimal chat build). Two parts are already Alex's decisions of
-2026-11-20 in the chat planning thread: a public door in front of `chat-admin` ("Accepted"), and third-party Matrix
-apps off at launch, with no login provider in MAS. The reversal of PLAN §5.6 that server-minted sessions need is not
-yet recorded as his; the chat architecture plan says it "needs Alex's decision recorded, not just an edit".
+Status: Accepted by Alex 2026-11-21 00:55Z: asked in the project chat whether he accepts this record as it stands, he
+answered "yes" (P6.00, minimal chat build, 2026-11-21). Two parts are already Alex's decisions of 2026-11-20 in the
+chat planning thread: a public door in front of `chat-admin` ("Accepted"), and third-party Matrix apps off at launch,
+with no login provider in MAS. The reversal of PLAN §5.6 that server-minted sessions need is recorded as his by that
+answer.
 
 ## Context
 The accepted plan (PLAN §5.6 bullets 1 to 3; decision 13 in ADR 0001; step book P6.03, P6.04, P6.07) has the member

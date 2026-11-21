@@ -1,8 +1,9 @@
 # 0084 — The chat account follows the Unset account: suspended means locked, deleted means deactivated and erased
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P6.00, minimal chat build). The rule is Alex's of 2026-11-21 in the chat
-planning thread, as the build plan records it: there is no separate chat suspension or chat deletion, and whatever
-happens to the Unset account happens to its chat account. The MAS calls that carry it out are proposed here.
+Status: Accepted by Alex 2026-11-21 00:55Z: asked in the project chat whether he accepts this record as it stands, he
+answered "yes" (P6.00, minimal chat build, 2026-11-21). The rule is Alex's of 2026-11-21 in the chat planning thread,
+as the build plan records it: there is no separate chat suspension or chat deletion, and whatever happens to the Unset
+account happens to its chat account. The MAS calls that carry it out are accepted by that answer.
 
 ## Context
 PLAN §5.6 (Alex, 2026-10-03, step-book questions 46 to 49) already says chat follows the account: suspension locks

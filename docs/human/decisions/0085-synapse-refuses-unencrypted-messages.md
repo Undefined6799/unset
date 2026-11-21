@@ -1,6 +1,7 @@
 # 0085 — Synapse refuses unencrypted messages through one small module, and every new room is encrypted
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P6.00, minimal chat build).
+Status: Accepted by Alex 2026-11-21 00:55Z: asked in the project chat whether he accepts this record as it stands, he
+answered "yes" (P6.00, minimal chat build, 2026-11-21).
 
 ## Context
 The minimal chat promises that a message is end-to-end encrypted. Synapse can make every new room encrypted, but no
