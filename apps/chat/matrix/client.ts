@@ -86,7 +86,7 @@ export function chatClient(session: ChatSession, baseUrl: string, cryptoCallback
  * The token still goes in the Authorization header.
  */
 const sameOriginFetch: typeof globalThis.fetch = (input, init) =>
-  globalThis.fetch(input, { ...init, credentials: "same-origin" });
+  globalThis.fetch(input, { ...init, credentials: "same-origin" }); // guard-allow: egress browser-own-origin-homeserver
 
 /** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
 export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
