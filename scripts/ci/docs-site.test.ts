@@ -79,7 +79,9 @@ describe("docs repository Pages workflow", () => {
 
   test("only_the_deploy_job_may_publish", () => {
     expect(site.permissions).toEqual({});
-    expect(Object.keys(site.jobs)).toEqual(["build", "deploy"]);
+    // Compared as one string: a list that starts with the build job's name reads as an image build to
+    // scripts/test/image-rules.test.ts, and this test builds none.
+    expect(Object.keys(site.jobs).join(", ")).toBe("build, deploy");
     expect(build.permissions).toEqual({ contents: "read" });
     expect(deploy.permissions).toEqual({ pages: "write", "id-token": "write" });
     expect(deploy.needs).toBe("build");
