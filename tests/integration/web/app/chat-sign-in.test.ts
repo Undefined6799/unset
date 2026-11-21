@@ -1,9 +1,11 @@
 // Build step 5 (ADR 0081 decision 3; security pass finding 8): GET /chat/sign-in on the built web server, the unset.sh
 // half of the unset.cc sign-in hop. Postgres as `web` (TE-2). The door is not built yet; its origin is config, and
 // these tests read what web sends it: a 303 to the door's return path with the ticket in the fragment, which no server
-// and no Referer sees. Only a signed-in, onboarded member whose chat account exists gets one.
+// and no Referer sees. Only a signed-in, onboarded member whose chat account exists gets one, or a member at signup's
+// chat step whose chat is not set up yet (review N6): the door's count port, a loopback stand-in here (TE-1), says so.
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http"; // guard-allow: egress a loopback stand-in for the door's count port only
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, PRIVACY_VERSION, parseDid, TERMS_VERSION } from "@unset/domains-identity";
@@ -19,7 +21,7 @@ import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { canonicalize } from "@unset/shared-admin-envelope";
 import { createLogger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, inject, test } from "vitest";
 import { chatAccountsOf } from "../../../support/chat-accounts.ts";
 import { buildOnce, clientAddress, PDS_HOST, type RunningWeb, startWeb } from "../built-server.ts";
 import { readyMember } from "../members.ts";
@@ -99,13 +101,31 @@ async function atChatStep(did: Did) {
   expect(await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, AbortSignal.timeout(5000))).toBe("chat");
 }
 
+// The door's count port as told: a status and a body for /set-up?did=.
+let answer: { status: number; body: string };
+const door: Server = createServer((_request, response) =>
+  response.writeHead(answer.status, { "content-type": "application/json" }).end(answer.body),
+);
+const NOT_SET_UP = { status: 200, body: '{"setUp":false}' };
+
 let web: RunningWeb;
 beforeAll(async () => {
   buildOnce(provided.port);
-  web = await startWeb(pg, { CHAT_DOOR_ORIGIN: DOOR, CHAT_ADMIN_WEB_KEY_FILE: join(keyDir, "key") });
+  await new Promise<void>((done) => door.listen(0, "127.0.0.1", done));
+  const address = door.address();
+  const port = typeof address === "object" && address !== null ? address.port : 0;
+  web = await startWeb(pg, {
+    CHAT_DOOR_ORIGIN: DOOR,
+    CHAT_ADMIN_WEB_KEY_FILE: join(keyDir, "key"),
+    CHAT_COUNT_URL: `http://127.0.0.1:${port}`,
+  });
 }, 120_000);
+beforeEach(() => {
+  answer = NOT_SET_UP;
+});
 afterAll(async () => {
   await web?.stop();
+  await new Promise((done) => door.close(done));
   await pool.end();
 });
 
@@ -131,12 +151,29 @@ describe("GET /chat/sign-in", () => {
 
   test("chat.sign_in_at_chat_step: a member setting up chat in signup gets a ticket, with no confirmed email yet", async () => {
     const { did, cookie } = await signedIn({ stage: "chat" });
+    answer = NOT_SET_UP;
     const response = await get(signInPath(), cookie);
     expect(response.status).toBe(303);
     const location = new URL(response.headers.get("location") ?? "");
     expect(`${location.origin}${location.pathname}`).toBe(`${DOOR}/sign-in/return`);
     const ticket = new URLSearchParams(location.hash.slice(1)).get("ticket") ?? "";
     expect(JSON.parse(Buffer.from(ticket, "base64url").toString("utf8")).payload.did).toBe(did);
+  });
+
+  test("chat.sign_in_chat_step_set_up: a member at the chat step whose chat is set up gets no ticket until signup is done", async () => {
+    const { cookie } = await signedIn({ stage: "chat" });
+    answer = { status: 200, body: '{"setUp":true}' };
+    const response = await get(signInPath(), cookie);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/welcome/chat");
+  });
+
+  test("chat.sign_in_chat_step_door_down: with no clear answer from the door, a member at the chat step gets no ticket", async () => {
+    const { cookie } = await signedIn({ stage: "chat" });
+    answer = { status: 503, body: "" };
+    const response = await get(signInPath(), cookie);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/welcome/chat");
   });
 
   test("chat.sign_in_terms_step: a member who has not accepted the terms gets no ticket and goes to the terms", async () => {
