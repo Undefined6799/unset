@@ -132,7 +132,7 @@
     },
     "createdBy": "P6.03",
     "grantsBy": ["P6.03", "P6.08", "P6.12"],
-    "passwordFrom": null
+    "passwordFrom": "pg_chat_auth_password"
   },
   {
     "name": "auditor",

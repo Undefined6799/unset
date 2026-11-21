@@ -65,6 +65,7 @@ keeps every other host account out:
 | `pg_web_password` | `65532:65532` | migrate | the `web` role's password, set after migrations |
 | `pg_api_password` | `65532:65532` | migrate | the `api` role's password |
 | `pg_indexer_password` | `65532:65532` | migrate | the `indexer` role's password |
+| `pg_chat_auth_password` | `65532:65532` | migrate, chat-auth | the `chat_auth` role's password (`chat-servers.md`) |
 | `pg_web_password` (also) | `65532:65532` | web | the same file: web logs in as `web` with it (P2.04w) |
 | `web_seal_keyring` | `65532:65532` | web | the seal keyring for the OAuth state and token sets |
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |

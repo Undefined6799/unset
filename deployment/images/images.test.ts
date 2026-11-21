@@ -730,7 +730,7 @@ const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
   ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
   ["objects", []], // objects.Dockerfile copies nothing; its S3 identities are a run-time secret
-  ["synapse", ["/opt/synapse/"]], // synapse.Dockerfile: the venv and the server rule inside it
+  ["synapse", ["/opt/synapse/", "/data/"]], // synapse.Dockerfile: the venv and the server rule inside it; the media folder
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */

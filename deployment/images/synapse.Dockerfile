@@ -18,11 +18,16 @@ RUN python -m venv --without-pip /opt/synapse \
 # here, before the copy, so no shipped layer holds it, and a manhole listener fails to start.
 RUN rm /opt/synapse/lib/python3.13/site-packages/synapse/util/manhole.py \
   /opt/synapse/lib/python3.13/site-packages/synapse/util/__pycache__/manhole.cpython-313.pyc
+# homeserver.yaml's media_store_path, empty here: compose mounts a named volume over /data/media, and a fresh volume
+# takes the owner and mode of the directory it covers, so only Synapse's 991 can read or write the media. Made inside
+# /stage and copied by its contents, as pds-admin.Dockerfile's state folder is (#1720).
+RUN mkdir -p -m 0700 /stage/media
 
 FROM ghcr.io/undefined6799/mirror/python@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY --from=build /opt/synapse /opt/synapse/
+COPY --from=build --chown=991:991 --chmod=0700 /stage/ /data/
 # The server rule (P6.10a; ADR 0085), from infrastructure/matrix/synapse-module/ (its folder lands with #1864), into the
 # venv's site-packages, where homeserver.yaml's `modules:` entry imports unset_chat_policy.RoomPolicy.
 COPY infrastructure/matrix/synapse-module/unset_chat_policy /opt/synapse/lib/python3.13/site-packages/unset_chat_policy
