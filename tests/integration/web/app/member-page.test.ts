@@ -507,14 +507,15 @@ describe("the one Save (ADR 0074)", () => {
     const at = (index: unknown) => flat[index as number];
     const listed = at((flat[0] as { versions: number }).versions) as number[];
     const versions = listed.map((i) => at(i) as { key: number; version: number });
-    expect(versions.map((entry) => at(entry.key))).toEqual([CARD_A, CARD_C]);
+    // CARD_C shrinks (a collection of 100 becomes one line), so it is sent first (domains/profile inSizeOrder).
+    expect(versions.map((entry) => at(entry.key))).toEqual([CARD_C, CARD_A]);
     for (const entry of versions) expect(at(entry.version)).toMatch(/^b[a-z2-7]{20,100}$/);
     expect(versions.map((entry) => at(entry.version))).not.toContain(OPENED);
     expect(writes.map((w) => [w.method, w.rkey])).toEqual([
-      ["applyWrites", CARD_A],
       ["applyWrites", CARD_C],
+      ["applyWrites", CARD_A],
     ]);
-    expect(writes[1]?.record).toMatchObject({ width: "half", content: { text: "Second of two" } });
+    expect(writes[0]?.record).toMatchObject({ width: "half", content: { text: "Second of two" } });
     const shown = await (await page(`/${OWNER}`, { cookie })).text();
     expect(shown).toContain("First of two");
     expect(shown).toContain("Second of two");

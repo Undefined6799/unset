@@ -82,7 +82,9 @@ export type CardError =
   | "card.url_invalid"
   | "card.email_invalid"
   | "card.empty"
-  | "card.order_invalid";
+  | "card.order_invalid"
+  /** The member's cards together would pass MAX_PAGE_BYTES (index-plan.ts `fitsPage`). */
+  | "card.page_full";
 /**
  * A refusal; `field`, when one field is to blame, is its path in the editor's input: "text", "title", "heading", or
  * a row's field such as "items.1.uri" (the row's place in the list as read, blank rows left out).

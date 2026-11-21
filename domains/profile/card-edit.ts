@@ -26,6 +26,7 @@ import {
   SURFACES,
   WIDTHS,
 } from "./cards.ts";
+import { fitsIndex } from "./index-plan.ts";
 import { isPlainText } from "./member-text.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
@@ -420,7 +421,9 @@ export function toCardRecord(
     content: { ...old, ...keepElementFields(fresh, sameKind, content.kind) },
     createdAt: typeof createdAt === "string" ? createdAt : now,
   };
-  return validateRecord(NSID, record, "read").ok ? { ok: true, record } : fail("card.invalid");
+  if (!validateRecord(NSID, record, "read").ok) return fail("card.invalid");
+  // The fields an edit keeps count too: the index must keep what is written (index-plan.ts, book P3.12v).
+  return fitsIndex(record) ? { ok: true, record } : fail("card.too_long");
 }
 
 /**

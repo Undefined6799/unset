@@ -37,6 +37,15 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 - A record the index skips (a NUL or lone surrogate Postgres jsonb refuses) shows on the owner's page, read from the
   PDS, but not publicly, read from the index: a profile record skipped makes `/@handle` a 404 (staging break test
   2026-11-21). The text checks above keep such characters out of every save.
+- **Save what the index keeps** (P3.12v). Every profile and card record the save writes must pass `fitsIndex`
+  (index-plan.ts, the indexer's own check), else it is refused (`profile.too_long`, `card.too_long`).
+  `MAX_RECORD_BYTES` equals the pinned PDS's write limit (1,000,000 bytes), so in practice only a record another
+  client wrote past that is refused. A record the index skips shows to its owner (read from the PDS) but not publicly.
+- **One page budget** (P3.12v). `MAX_PAGE_BYTES` (4 MiB) bounds all of a member's cards together, counted by
+  `recordBytes` (JSON in UTF-8): the save (`fitsPage`, `card.page_full`), the indexer (`idx.section.bytes`,
+  `ingest_over_budget`), the public read (stops at it in page order) and the owner's list (`CARD_LIST_BYTES`, held
+  equal by `record-size.test.ts`) all use it. A single card's edit swaps on that card only, so another tab can still
+  pass the budget; the indexer is the hard bound.
 - `web-address.ts`: `withScheme` ("alice.dev" means https://alice.dev) and `isWebAddress` (http or https, no
   credentials, and not on the visitor's own machine or network: localhost, .local, private and link-local IPs; P3.12t).
 
