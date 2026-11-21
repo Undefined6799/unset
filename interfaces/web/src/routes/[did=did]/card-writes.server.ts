@@ -128,6 +128,7 @@ export type CardFailure =
   | "card.pds_unavailable"
   | "card.image_missing"
   | "card.image_unavailable"
+  | "card.image_too_large"
   | "profile.conflict"
   | "profile.pds_unavailable";
 /** A card a Save of several wrote, and the version (record CID) the PDS gave it. */
@@ -281,6 +282,9 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
     const blob = await pictures.upload(main.bytes);
     if (blob.kind !== "ok") {
       await settle([held], [], false);
+      // ADR 0088: a PDS that refuses the picture's size (HTTP 413) gets no smaller copy; the member is told once.
+      if (blob.kind === "rejected" && blob.status === 413)
+        return { ok: false, failed: failed("card.image_too_large", "image") };
       return { ok: false, failed: pdsFailure(blob) };
     }
     await pictures.published(id, blob.value.ref.$link);

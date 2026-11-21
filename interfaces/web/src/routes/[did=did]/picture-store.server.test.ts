@@ -59,7 +59,7 @@ describe("picturesFor", () => {
       ["addUse", [DID, DRAFT, URI]],
       ["notePublished", [DID, DRAFT, CID]],
     ]);
-    expect(keys).toEqual([`drafts/${DID}/i/${DRAFT}/main.jpeg`]);
+    expect(keys).toEqual([`drafts/${DID}/i/${DRAFT}/main.webp`]);
   });
 
   test("picture.settle_deadline: past the request's deadline a use is still taken back under its own", async () => {

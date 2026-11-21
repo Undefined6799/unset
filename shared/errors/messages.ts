@@ -66,6 +66,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.pds_unavailable": "Your sign-in server is not answering, so your card was not saved. Try again.",
   "card.image_missing": "This picture is no longer available. Upload it again, then save.",
   "card.image_unavailable": "Your picture could not be saved just now. Nothing was changed. Try again.",
+  "card.image_too_large":
+    "Your sign-in server would not take a picture this large. Nothing was saved. Choose a smaller picture.",
   "welcome.date_invalid": "That date is not a real calendar date.",
   "welcome.terms_required": "Tick the box to accept the terms and the privacy notice.",
   "welcome.country_required": "Tick the box about where you live.",

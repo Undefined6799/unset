@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: "2026-11-21"
 step: P1.38y
 supersedes:
@@ -8,6 +8,11 @@ supersedes:
 amends:
   - adr: "0001"
     part: the decisions log (closed)
+accepted:
+  at: "2026-11-21T05:34:55Z"
+  head: "1986712"
+  line: "Merge 1889 at 1986712"
+  merged: "00d82b6217ed91f9e8028b73e52052a79b1806bb"
 ---
 # 0083 — Each ADR file is its own record; the index is generated and the 0001 log is closed
 

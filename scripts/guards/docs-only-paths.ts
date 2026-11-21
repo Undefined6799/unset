@@ -8,11 +8,13 @@
 // docs/human/decisions/**, docs/human/engineering/** (CLAUDE.md imports it),
 // docs/human/runbooks/** and docs/human/legal/** (those prefixes compared
 // case-insensitively, because the parent is allowed), under docs/site/** and
-// docs/ai/notes/**, and README.md. Nothing else: no site config, module
-// manifest, vendored script or image (P0.07k). The lexicon generator
-// (shared/lexicons/scripts/build.ts and shared/lexicons/generated/) is not
-// allowed, nor is CLAUDE.md, AGENTS.md, the plan, the step book, .github/,
-// scripts/, or a manifest or lockfile.
+// docs/ai/notes/**, README.md, and docs/ai/INDEX.md by that exact path: the
+// notes guard (scripts/guards/notes.ts) regenerates it from the notes, and
+// fails when it is stale, so every notes change carries it (P1.38z). Nothing
+// else: no site config, module manifest, vendored script or image (P0.07k). The
+// lexicon generator (shared/lexicons/scripts/build.ts and
+// shared/lexicons/generated/) is not allowed, nor is CLAUDE.md, AGENTS.md, the
+// plan, the step book, .github/, scripts/, or a manifest or lockfile.
 
 export type ChangedPath = { path: string; previous?: string };
 
@@ -20,11 +22,13 @@ const HUMAN = "docs/human/";
 /** Under docs/human/ but reviewed as code: ADRs, the rules every agent loads, operator and legal procedure. */
 const REVIEWED = ["decisions", "engineering", "runbooks", "legal"].map((folder) => `${HUMAN}${folder}`);
 const MAX_PATH = 4096;
+/** The notes index, written by scripts/guards/notes.ts from docs/ai/notes/; exact match only. */
+const NOTES_INDEX = "docs/ai/INDEX.md";
 
 /** A single relative path git or the pulls files API can name. `..` and odd forms fail. */
 export function pathAllowed(path: string): boolean {
   if (!safeRelative(path)) return false;
-  if (path === "README.md") return true;
+  if (path === "README.md" || path === NOTES_INDEX) return true;
   if (!path.endsWith(".md")) return false;
   if (path.startsWith("docs/site/") || path.startsWith("docs/ai/notes/")) return true;
   const lower = path.toLowerCase();
