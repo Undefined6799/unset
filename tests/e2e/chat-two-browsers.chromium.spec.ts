@@ -4,8 +4,11 @@
 // page and lifting it brings the same browser back with no unlock (ADR 0084 decisions 1 and 2); deletion ends the
 // account and the other member keeps the conversation (decision 3). It also records the build plan's step-11
 // unverified items as annotations: how fast a lock stops an open page and what the homeserver keeps of an erased
-// account.
+// account. The count (build step 10, ADR 0090) runs through the door's real count port and Postgres store: a chat
+// request and a message reach the member's number, a read clears it, and an old pushkey is rejected. The server rule
+// (P6.10a, ADR 0085) is checked against what the SDK sends for a reaction and a redaction.
 // Chromium only, by its name (playwright.config.ts). Skipped, saying why, when the run is not pointed at the servers.
+import { DatabaseSync } from "node:sqlite";
 import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { type RealServers, type RealStack, realServers, startRealStack } from "./fixtures/chat-servers.ts";
 import {
@@ -113,6 +116,24 @@ async function admin(path: string): Promise<Record<string, unknown>> {
 }
 const note = (type: string, description: string) => test.info().annotations.push({ type, description });
 
+/**
+ * Rows the homeserver keeps for `userId` in its key tables, read from its SQLite database when CHAT_E2E_SYNAPSE_SQLITE
+ * names it (the dev homeserver.yaml's database; read-only), else null.
+ */
+function synapseRows(userId: string): Record<string, number> | null {
+  const path = process.env.CHAT_E2E_SYNAPSE_SQLITE ?? "";
+  if (path === "") return null;
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const tables = ["e2e_room_keys", "e2e_room_keys_versions", "account_data", "e2e_cross_signing_keys"] as const;
+    const count = (table: string) =>
+      Number((db.prepare(`SELECT count(*) AS n FROM ${table} WHERE user_id = ?`).get(userId) as { n: number }).n);
+    return Object.fromEntries(tables.map((table) => [table, count(table)]));
+  } finally {
+    db.close();
+  }
+}
+
 test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser reads history; Log out wipes", async ({
   browser,
 }) => {
@@ -190,6 +211,11 @@ test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversatio
 }) => {
   test.setTimeout(300_000);
   const { alice, a, b } = await talking(browser);
+  // Alice has a key backup on the server before she goes (spec v1.18 GET /room_keys/version).
+  const version = new URL("/_matrix/client/v3/room_keys/version", (servers as RealServers).synapse);
+  const bearer = { authorization: `Bearer ${a.redeems.at(-1)?.accessToken ?? ""}` };
+  const backup = await fetch(version, { headers: bearer }); // guard-allow: egress test, local Synapse only
+  expect(backup.status).toBe(200);
   expect(await stack.chatAdmin.deactivateAccount(alice.user)).toEqual({ kind: "done" });
   await expect.poll(() => state(a.page), { timeout: 180_000, intervals: [500] }).not.toBe("ready");
   // Bob keeps his copy, Alice's messages included, and sees that she left.
@@ -209,4 +235,104 @@ test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversatio
   expect(joined).toEqual([]);
   const devices = (await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}/devices`)).devices as [];
   expect(devices).toEqual([]);
+  // Her key backup and secret storage are gone from the homeserver's database: Synapse 1.165.0's deactivation removes
+  // account data (secret storage is account data, spec v1.18 #secret-storage) and every backup version and session
+  // (handlers/deactivate_account.py:209 and :215, bulk_delete_backup_keys_and_versions_for_user). No admin API reads
+  // them, so this reads the database when the run names it; her cross-signing public keys stay (note).
+  const kept = synapseRows(alice.userId);
+  if (kept !== null) {
+    expect(kept).toMatchObject({ e2e_room_keys: 0, e2e_room_keys_versions: 0, account_data: 0 });
+    note("erased_rows_kept", JSON.stringify(kept));
+  }
+});
+
+type Pusher = { pushkey: string; app_id: string };
+const pushersOf = async (member: { userId: string }) =>
+  ((await admin(`/_synapse/admin/v1/users/${encodeURIComponent(member.userId)}/pushers`)).pushers as Pusher[]) ?? [];
+/** What Synapse sent to `pushkey`, without the key or event ids: the shape and the number. */
+const sentTo = (pushkey: string) =>
+  stack.notifications
+    .map((n) => n.body as { notification?: { counts?: unknown; devices?: { pushkey?: string }[] } & Json })
+    .filter((b) => b.notification?.devices?.some((d) => d.pushkey === pushkey))
+    .map((b) => ({ keys: Object.keys(b.notification ?? {}).sort(), counts: b.notification?.counts ?? null }));
+type Json = Record<string, unknown>;
+
+test("chat_e2e.count: a request and a message reach Alice's stored count; her read clears it; an old key is refused", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const alice = await stack.member(`alice${Date.now()}.unset.name`);
+  const bob = await stack.member(`bob${Date.now()}.unset.name`);
+  const a = await browserFor(browser, alice.handle);
+  await a.page.goto("https://unset.cc/");
+  await saveKey(a.page);
+  await expect.poll(async () => (await pushersOf(alice)).length, { timeout: 30_000 }).toBe(1);
+  const [first] = await pushersOf(alice);
+  const oldKey = first?.pushkey ?? "";
+  expect(await stack.count(alice.did)).toBeNull();
+  // A chat request: Bob starts a conversation with Alice. Synapse counts each pending invite as one (push_tools.py
+  // get_badge_count, v1.165.0 lines 30-33) and pushes it (.m.rule.invite_for_me); ADR 0082 decision 4 expects it.
+  const b = await browserFor(browser, bob.handle);
+  await b.page.goto(`https://unset.cc/?with=${encodeURIComponent(alice.userId)}`);
+  await saveKey(b.page);
+  await expect.poll(() => stack.count(alice.did), { timeout: 60_000 }).toBe(1);
+  note("request_push", JSON.stringify(sentTo(oldKey)));
+  const request = a.page.locator(`[data-request="${bob.userId}"]`);
+  await request.getByRole("button", { name: "Accept" }).click();
+  await expect(conversation(b.page)).toHaveAttribute("data-composer", "on", { timeout: 60_000 });
+  note("count_after_accept", JSON.stringify(await stack.count(alice.did)));
+  // Alice's page is closed, so nothing reads for her: Bob's message is pushed with the number 1.
+  await a.page.close();
+  const before = sentTo(oldKey).length;
+  await send(b.page, "one");
+  await expect.poll(() => sentTo(oldKey).length, { timeout: 60_000 }).toBeGreaterThan(before);
+  expect(sentTo(oldKey).at(-1)?.counts).toEqual({ unread: 1 });
+  expect(await stack.count(alice.did)).toBe(1);
+  note("message_push", JSON.stringify(sentTo(oldKey).slice(before)));
+  // Alice comes back in the same browser (a new sign-in, so a new pushkey) and reads: her number is 0.
+  const again = await a.page.context().newPage();
+  await again.goto("https://unset.cc/");
+  await expect.poll(() => state(again), { timeout: 60_000 }).toBe("ready");
+  await again.locator(`[data-conversation="${bob.userId}"]`).click();
+  await expect(messages(again)).toContainText("one", { timeout: 60_000 });
+  await expect.poll(() => stack.count(alice.did), { timeout: 60_000 }).toBe(0);
+  // The old key no longer belongs to her browser: the door rejects it and keeps her number as it was.
+  const stale = await stack.notify({
+    notification: { counts: { unread: 7 }, devices: [{ app_id: first?.app_id, pushkey: oldKey }] },
+  });
+  expect(stale).toEqual({ status: 200, body: { rejected: [oldKey] } });
+  expect(await stack.count(alice.did)).toBe(0);
+  // Synapse drops the old pusher the next time an event push to it is rejected (httppusher.py:377-392).
+  await send(b.page, "two");
+  await expect
+    .poll(async () => (await pushersOf(alice)).map((p) => p.pushkey), { timeout: 60_000 })
+    .not.toContain(oldKey);
+  expect(await pushersOf(alice)).toHaveLength(1);
+});
+
+test("chat_e2e.reaction_and_redaction: in an encrypted room the server rule refuses both, as the SDK sends them", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const { alice, a } = await talking(browser);
+  const token = a.redeems.at(-1)?.accessToken ?? "";
+  const [room] = (await admin(`/_synapse/admin/v1/users/${encodeURIComponent(alice.userId)}/joined_rooms`))
+    .joined_rooms as string[];
+  const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(room ?? "")}/messages?dir=b&limit=50`))
+    .chunk as { type: string; sender: string; event_id: string }[];
+  const own = chunk.find((e) => e.type === "m.room.encrypted" && e.sender === alice.userId)?.event_id ?? "";
+  const client = async (path: string, body: Json) => {
+    const url = new URL(`/_matrix/client/v3/rooms/${encodeURIComponent(room ?? "")}${path}`, servers?.synapse);
+    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    const init = { method: "PUT", headers, body: JSON.stringify(body) };
+    const answer = await fetch(url, init); // guard-allow: egress test, local Synapse only
+    return { status: answer.status, errcode: ((await answer.json()) as { errcode?: string }).errcode };
+  };
+  // matrix-js-sdk 43.0.0 sends a reaction unencrypted, as m.reaction (src/client.ts:3056-3068), and a redaction
+  // unencrypted (lines 3070-3074). ADR 0085 decisions 1 and 2: an encrypted room takes only Megolm ciphertext and
+  // refuses every redaction.
+  const relation = { "m.relates_to": { rel_type: "m.annotation", event_id: own, key: "yes" } };
+  expect(await client(`/send/m.reaction/r${Date.now()}`, relation)).toEqual({ status: 403, errcode: "M_FORBIDDEN" });
+  const redact = await client(`/redact/${encodeURIComponent(own)}/d${Date.now()}`, { reason: "mine" });
+  expect(redact).toEqual({ status: 403, errcode: "M_FORBIDDEN" });
 });
