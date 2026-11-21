@@ -73,7 +73,7 @@ No `main.ts`. The commands and the workflows are on [compose](compose/), [prefli
 | `sigstore-root` | `.github/workflows/sigstore-root.yml` | `fetch` (`workflow_dispatch` only) |
 | `local-stack` | `.github/workflows/local-stack.yml` | `changes`, `green`, `red` |
 
-`pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. With `deployment/pds/Dockerfile` and `source.lock.json` present, that script builds the recipe and writes `pds-ui-proof.json` under `RUNNER_TEMP` only after `verifyInputs` returns. Both files absent, it prints `pds-ui: no candidate recipe or source lock` and returns. The script is under `scripts/`.
+`pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. With `deployment/pds/pds.Dockerfile` and `source.lock.json` present, that script builds the recipe and writes `pds-ui-proof.json` under `RUNNER_TEMP` only after `verifyInputs` returns. Both files absent, it prints `pds-ui: no candidate recipe or source lock` and returns. The script is under `scripts/`.
 
 | Job | File | What runs |
 | --- | --- | --- |

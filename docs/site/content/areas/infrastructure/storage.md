@@ -42,7 +42,7 @@ Declared in `infrastructure/storage/package.json`: `aws4fetch` 1.0.20. `object-s
 | Package export `.` | `infrastructure/storage/index.ts` |
 | Factory | `createObjectStore` |
 
-No `main.ts`, no CLI and no Compose service for this package. No file under `interfaces/` or `apps/` calls `createObjectStore`. `infrastructure/storage/object-store.test.ts` passes a test `fetch`. `tests/integration/storage/object-store.test.ts` passes the platform `fetch`.
+No `main.ts`, no CLI and no Compose service for this package. `interfaces/web/src/lib/server/compose.ts` calls `createObjectStore` for the `drafts` store, through net-guard, and `interfaces/media/compose.ts` calls it for reads. `infrastructure/storage/object-store.test.ts` passes a test `fetch`. `tests/integration/storage/object-store.test.ts` passes the platform `fetch`.
 
 ## Data
 
