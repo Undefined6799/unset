@@ -21,6 +21,8 @@ import { clipboard } from "@milkdown/plugin-clipboard";
 import { history } from "@milkdown/plugin-history";
 import { commonmark, emphasisSchema, headingSchema, imageSchema, strongSchema } from "@milkdown/preset-commonmark";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
+import { dropCursor } from "@milkdown/prose/dropcursor";
+import { gapCursor } from "@milkdown/prose/gapcursor";
 import { isHistoryTransaction, redo, redoDepth, undo, undoDepth } from "@milkdown/prose/history";
 import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model";
 import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
@@ -28,6 +30,7 @@ import { type Command, type EditorState, Plugin, Selection, TextSelection } from
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
+import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 
 /** The toolbar's actions, by name. */
@@ -251,6 +254,14 @@ function flattened(doc: ProseNode): number {
   return count;
 }
 // Undo and redo only go back to what the member had, so they pass.
+/**
+ * Crepe 7.23.0's cursor feature (prosemirror-dropcursor 1.8.4 and prosemirror-gapcursor 1.4.1, as @milkdown/prose
+ * ships them): a line shows where a dragged block will land, and the caret can stop between two blocks no text can
+ * hold, such as below a last code block, where typing starts a new line.
+ */
+const dropLine = $prose(() => dropCursor({ width: 2, color: false, class: "rounded-full bg-ring" }));
+const gapCaret = $prose(() => gapCursor());
+
 const pageShapes = $prose(
   () =>
     new Plugin({
@@ -423,6 +434,8 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .use(pageShapes)
     .use(history)
     .use(changes)
+    .use(dropLine)
+    .use(gapCaret)
     .create();
   return {
     run: (command) =>
