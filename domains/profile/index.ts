@@ -7,6 +7,7 @@ export {
   parseCardInput,
   pictureLink,
   reorderCards,
+  TEXT_EDIT_BYTES,
   toCardRecord,
 } from "./card-edit.ts";
 export {
@@ -32,6 +33,7 @@ export {
   parseCardKey,
   parseCardVersion,
   parseDraftImageId,
+  parseNewCardKey,
   parseRepoDid,
   type RepoDid,
   readCard,
@@ -66,12 +68,21 @@ export {
   type IndexPlan,
   type IndexWrite,
   inSizeOrder,
+  MAIN_PAGE_RKEY,
   MAX_PAGE_BYTES,
   MAX_RECORD_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
   recordBytes,
 } from "./index-plan.ts";
+export {
+  type PageError,
+  type PageRecord,
+  withCardListed,
+  withCardOrder,
+  withCardUnlisted,
+  withVisibility,
+} from "./page.ts";
 export {
   APP_LIMITS,
   type AvatarShape,
@@ -89,14 +100,13 @@ export {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
-  withCardOrder,
 } from "./profile.ts";
 export {
+  PAGE_VISIBILITIES,
   type PageShown,
-  PROFILE_VISIBILITIES,
-  type ProfileVisibility,
+  type PageVisibility,
   pageShownTo,
-  parseProfileVisibility,
-  readProfileVisibility,
+  parsePageVisibility,
+  readPageVisibility,
   type Viewer,
 } from "./visibility.ts";

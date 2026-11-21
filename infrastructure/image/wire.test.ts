@@ -62,6 +62,48 @@ describe("job", () => {
   });
 });
 
+describe("job, ADR 0088", () => {
+  const main: VersionSpec = {
+    ...spec("main", true, 5_000_000),
+    format: "webp",
+    size: 4096,
+    quality: 90,
+    minQuality: 75,
+    smaller: [
+      { size: 3072, minQuality: 75 },
+      { size: 2560, minQuality: 45 },
+    ],
+    losslessFrom: ["png"],
+  };
+  const withMain = (v: VersionSpec): Job => ({ ...job, versions: [v] });
+
+  test("the 4,096 px, 5,000,000-byte main version with its smaller sizes and lossless PNG round-trips", () => {
+    expect(parseJob(encodeJob(withMain(main)))).toEqual(withMain(main));
+    expect(parseJob(encodeJob(withMain({ ...main, maxBytes: 5_000_001 })))).toBeNull();
+  });
+
+  test("refuses smaller sizes that do not shrink, sit out of range, are too many, or ask a quality above the first", () => {
+    const bad: NonNullable<VersionSpec["smaller"]>[] = [
+      [{ size: 4096, minQuality: 75 }],
+      [
+        { size: 2560, minQuality: 75 },
+        { size: 3072, minQuality: 45 },
+      ],
+      [{ size: 8, minQuality: 45 }],
+      [{ size: 2560, minQuality: 95 }],
+      [{ size: 2560, minQuality: 0 }],
+      [3000, 2900, 2800, 2700, 2600].map((size) => ({ size, minQuality: 45 })),
+    ];
+    for (const smaller of bad) expect(parseJob(encodeJob(withMain({ ...main, smaller })))).toBeNull();
+  });
+
+  test("refuses lossless sources that are not formats we read, and lossless on anything but WebP", () => {
+    const unknown = { ...main, losslessFrom: ["gif"] } as unknown as VersionSpec;
+    expect(parseJob(encodeJob(withMain(unknown)))).toBeNull();
+    expect(parseJob(encodeJob(withMain({ ...main, format: "jpeg" })))).toBeNull();
+  });
+});
+
 describe("frame", () => {
   test("round-trips the versions with their bytes", () => {
     const decoded = decodeFrame(ok([version("main", "aaaa"), version("small", "bb")]), job);

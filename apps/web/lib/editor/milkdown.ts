@@ -21,6 +21,8 @@ import { clipboard } from "@milkdown/plugin-clipboard";
 import { history } from "@milkdown/plugin-history";
 import { commonmark, emphasisSchema, headingSchema, imageSchema, strongSchema } from "@milkdown/preset-commonmark";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
+import { dropCursor } from "@milkdown/prose/dropcursor";
+import { gapCursor } from "@milkdown/prose/gapcursor";
 import { isHistoryTransaction, redo, redoDepth, undo, undoDepth } from "@milkdown/prose/history";
 import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model";
 import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
@@ -28,6 +30,8 @@ import { type Command, type EditorState, Plugin, Selection, TextSelection } from
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
+import "@milkdown/prose/gapcursor/style/gapcursor.css";
+import { enterKeys } from "./enter-keys.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 
 /** The toolbar's actions, by name. */
@@ -251,6 +255,14 @@ function flattened(doc: ProseNode): number {
   return count;
 }
 // Undo and redo only go back to what the member had, so they pass.
+/**
+ * Crepe 7.23.0's cursor feature (prosemirror-dropcursor 1.8.4 and prosemirror-gapcursor 1.4.1, as @milkdown/prose
+ * ships them): a line shows where a dragged block will land, and the caret can stop between two blocks no text can
+ * hold, such as below a last code block, where typing starts a new line.
+ */
+const dropLine = $prose(() => dropCursor({ width: 2, color: false, class: "rounded-full bg-ring" }));
+const gapCaret = $prose(() => gapCursor());
+
 const pageShapes = $prose(
   () =>
     new Plugin({
@@ -386,16 +398,21 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       });
       // A heading shows one level down, as the page shows it (readme.svelte: # is an h2 under the page's own h1), and
       // carries no id: preset-commonmark 7.23.0 headingSchema.toDOM gives each one an id made from its words, which
-      // would repeat across cards and clash with the page's own anchors. parseDOM reads it back one level up, so a
-      // paste (plugin-clipboard 7.23.0 draws pasted Markdown with toDOM and parses that) or a copy between cards keeps
-      // its level; a pasted h1 is the top level, as an h2 is.
+      // would repeat across cards and clash with the page's own anchors. It says its level instead (data-level), so a
+      // paste of Markdown (plugin-clipboard 7.23.0 draws it with toDOM and parses that) or a copy between cards reads
+      // it back as it was; a heading pasted from another site keeps its own level, h1 as "#" and h2 as "##" (staging,
+      // 2026-11-21: reading every hN one level up made a pasted h1 and h2 both "#").
       ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
         ...prev(schemaCtx),
-        parseDOM: [1, 2, 3, 4, 5, 6].map((shown) => ({
-          tag: `h${shown}`,
-          getAttrs: () => ({ level: Math.max(shown - 1, 1) }),
-        })),
-        toDOM: (node) => [`h${Math.min(Number(node.attrs.level) + 1, 6)}`, 0],
+        parseDOM: [
+          ...[1, 2, 3, 4, 5].map((level) => ({ tag: `h${level + 1}[data-level="${level}"]`, attrs: { level } })),
+          ...[1, 2, 3, 4, 5, 6].map((level) => ({ tag: `h${level}`, attrs: { level } })),
+        ],
+        toDOM: (node) => [
+          `h${Math.min(Number(node.attrs.level) + 1, 6)}`,
+          { "data-level": String(node.attrs.level) },
+          0,
+        ],
       }));
       // An image shows its alt text and loads nothing: the page shows it as a link (parse.ts) until the media proxy,
       // and a remote address would be refused by the page's img-src anyway (preset-commonmark 7.23.0 imageSchema.toDOM
@@ -423,6 +440,9 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .use(pageShapes)
     .use(history)
     .use(changes)
+    .use(dropLine)
+    .use(gapCaret)
+    .use(enterKeys)
     .create();
   return {
     run: (command) =>

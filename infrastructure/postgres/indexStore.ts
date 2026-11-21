@@ -12,6 +12,7 @@ import {
   type IndexAccount,
   type IndexChange,
   type IndexWrite,
+  MAIN_PAGE_RKEY,
   MAX_PAGE_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
@@ -360,7 +361,8 @@ export async function queueJob(tx: PoolClient, did: string, kind: JobKind): Prom
 
 /**
  * A commit's writes in the order they are applied, so each one is judged with room the others make: deletes first,
- * then the profile, then the sections that shrink the account, then the other sections, as the save sends them
+ * then the profile, then the sections that shrink the account, then the other sections, as the save sends them, then
+ * the page
  * (domains/profile `inSizeOrder`). A commit that keeps the account within MAX_PAGE_BYTES then never passes it
  * partway (the sizes in between only fall, then rise to the commit's own total), so a Save that grows one card and
  * shrinks another is indexed whole (Codex review of #1911).
@@ -379,15 +381,18 @@ export async function inApplyOrder(tx: PoolClient, did: string, writes: readonly
     ...writes.filter((write) => write.kind === "profile"),
     ...sections.filter((write) => change(write) < 0),
     ...sections.filter((write) => change(write) >= 0),
+    // Last, so the cards' places are set over the commit's own cards (a new card's row is there by then).
+    ...writes.filter((write) => write.kind === "page"),
   ];
 }
 
 export async function applyWrite(tx: PoolClient, did: string, rev: string, write: IndexWrite): Promise<void> {
   if (write.kind === "profile") return putProfile(tx, did, rev, write);
+  if (write.kind === "page") return putPage(tx, did, rev, write);
   if (write.kind === "section") return putSection(tx, did, rev, write);
   const uri = `at://${did}/${write.collection}/${write.rkey}`;
   // A delete older than the row it would remove leaves the row: the row came from a later commit.
-  const table = write.collection === "sh.unset.profile" ? "idx.profile" : "idx.section";
+  const table = TABLES[write.collection];
   const { rowCount } = await tx.query(`DELETE FROM ${table} WHERE did = $1 AND uri = $2 AND rev <= $3`, [
     did,
     uri,
@@ -395,8 +400,15 @@ export async function applyWrite(tx: PoolClient, did: string, rev: string, write
   ]);
   if (rowCount === 0) return;
   await replaceBlobs(tx, did, uri, []);
-  if (table === "idx.profile") await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
+  if (table === "idx.page") await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
 }
+
+/** The table each indexed collection's rows live in; the name is chosen from these, never from input. */
+const TABLES = {
+  "sh.unset.profile": "idx.profile",
+  "sh.unset.page": "idx.page",
+  "sh.unset.card": "idx.section",
+} as const;
 
 async function putProfile(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "profile" }>) {
   const uri = `at://${did}/sh.unset.profile/self`;
@@ -411,12 +423,24 @@ async function putProfile(tx: PoolClient, did: string, rev: string, write: Extra
   );
   if (rowCount === 0) return;
   await replaceBlobs(tx, did, uri, write.blobs);
-  // Each card's place in the profile's `cards` list of at:// addresses (ADR 0086), or null when it is not listed.
+}
+
+/** The main page (ADR 0091), and each card's place in its `cards` list of at:// addresses, or null when not listed. */
+async function putPage(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "page" }>) {
+  const uri = `at://${did}/sh.unset.page/${MAIN_PAGE_RKEY}`;
+  const { rowCount } = await tx.query(
+    `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at) VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (did) DO UPDATE SET uri = excluded.uri, cid = excluded.cid, rev = excluded.rev,
+       record = excluded.record, indexed_at = excluded.indexed_at
+     WHERE excluded.rev >= idx.page.rev`,
+    [did, uri, write.cid, rev, write.record],
+  );
+  if (rowCount === 0) return;
   await tx.query(
     `UPDATE idx.section s SET position = (
-       SELECT (o.ord - 1)::integer FROM jsonb_array_elements(p.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
+       SELECT (o.ord - 1)::integer FROM jsonb_array_elements(g.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
         WHERE o.ref ->> 'uri' = s.uri ORDER BY o.ord LIMIT 1)
-       FROM idx.profile p WHERE p.did = s.did AND s.did = $1`,
+       FROM idx.page g WHERE g.did = s.did AND s.did = $1`,
     [did],
   );
 }
@@ -434,9 +458,9 @@ async function putSection(tx: PoolClient, did: string, rev: string, write: Extra
   const { rowCount } = await tx.query(
     `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, bytes, position, indexed_at)
      VALUES ($1, $2::types.did, $3, $4, $5, $6, $7, (
-       SELECT (o.ord - 1)::integer FROM idx.profile p,
-              jsonb_array_elements(p.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
-        WHERE p.did = $2::types.did AND o.ref ->> 'uri' = $1::types.at_uri::text ORDER BY o.ord LIMIT 1), now())
+       SELECT (o.ord - 1)::integer FROM idx.page g,
+              jsonb_array_elements(g.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
+        WHERE g.did = $2::types.did AND o.ref ->> 'uri' = $1::types.at_uri::text ORDER BY o.ord LIMIT 1), now())
      ON CONFLICT (uri) DO UPDATE SET cid = excluded.cid, rev = excluded.rev, record = excluded.record,
        bytes = excluded.bytes, position = excluded.position, indexed_at = excluded.indexed_at
      WHERE excluded.rev >= idx.section.rev AND idx.section.did = excluded.did`,

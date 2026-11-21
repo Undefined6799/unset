@@ -22,12 +22,44 @@ let {
   message?: string;
   /** Whether that message is a refusal. */
   refused: boolean;
-  onsave: () => void;
+  onsave: (event: MouseEvent) => void;
   ondiscard: () => void;
 } = $props();
+
+const shown = $derived(count > 0 || message !== undefined);
+
+/**
+ * What the member is looking at: the field they type in, else the first card on the screen. The bar takes its room
+ * in the page above the cards, so showing or hiding it moves them by its height. Chromium and Firefox keep the words
+ * in place with CSS scroll anchoring; WebKit has none, so on an iPhone the line being typed on jumped down by the
+ * bar's height at the first change, off the screen near the bottom (staging, 2026-11-21). Measured before the bar
+ * comes or goes and put back after, the words stay where they were in every browser; where the browser already kept
+ * them, nothing has moved and nothing is scrolled.
+ */
+function lookedAt(): { element: Element; top: number } | undefined {
+  const active = document.activeElement;
+  const typing = active !== null && active !== document.body && active.closest("[data-unsaved-bar]") === null;
+  const element = typing
+    ? active
+    : [...document.querySelectorAll("[data-slot='card']")].find((card) => card.getBoundingClientRect().bottom > 0);
+  return element === undefined ? undefined : { element, top: element.getBoundingClientRect().top };
+}
+
+let before: ReturnType<typeof lookedAt>;
+// $effect.pre runs before this component's own DOM is updated (svelte 5.57 `$effect.pre`), $effect after it.
+$effect.pre(() => {
+  void shown;
+  before = lookedAt();
+});
+$effect(() => {
+  void shown;
+  if (before === undefined || !before.element.isConnected) return;
+  const moved = before.element.getBoundingClientRect().top - before.top;
+  if (moved !== 0) scrollBy(0, moved);
+});
 </script>
 
-{#if count > 0 || message !== undefined}
+{#if shown}
   <div
     role="region"
     aria-label={UNSAVED_BAR.label}

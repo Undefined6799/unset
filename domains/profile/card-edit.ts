@@ -46,6 +46,13 @@ const OWN_FIELDS: Record<CardKind, readonly string[]> = {
  * How many rows the editor may write per list, under the lexicon's (ADR 0051 point 5: app limits may change, the
  * schema's may not). Reads keep the lexicon's limits, so a card another client wrote with more still shows in full.
  */
+/**
+ * The most UTF-8 bytes of Markdown the editor writes into a Text card, under the lexicon's 20,000 (Alex 2026-11-21
+ * 18:55Z: about 1,500 words is plenty, and a longer text takes a second card). The app's limit may change, the
+ * schema's may not; reads keep the lexicon's, so a longer card another client wrote still shows.
+ */
+export const TEXT_EDIT_BYTES = 10_000;
+
 export const CARD_EDIT_LIMITS = {
   links: 30,
   collection: 30,
@@ -145,7 +152,9 @@ function layoutOf(raw: unknown, kind: "links" | "collection"): Field<CardLayout>
 function readReadme(input: Obj): Field<CardContent> {
   const read = field(input.text, true);
   if (!read.ok) return under("text", read);
-  return read.value === "" ? fail("card.required", "text") : { ok: true, value: { kind: "readme", text: read.value } };
+  if (read.value === "") return fail("card.required", "text");
+  if (new TextEncoder().encode(read.value).length > TEXT_EDIT_BYTES) return fail("card.too_long", "text");
+  return { ok: true, value: { kind: "readme", text: read.value } };
 }
 
 function readLinks(input: Obj): Field<CardContent> {
@@ -259,7 +268,7 @@ const SIZING_PICTURE = {
   image: {
     $type: "blob",
     ref: { $link: "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku" },
-    mimeType: "image/jpeg",
+    mimeType: "image/webp",
     size: 1,
   },
   aspectRatio: { width: 1, height: 1 },

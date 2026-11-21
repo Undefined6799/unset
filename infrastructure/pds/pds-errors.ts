@@ -102,6 +102,10 @@ export function opFailure(error: unknown): OpFailure {
   const status = statusOf(error);
   if (status === 401) return { kind: "unauthorized" };
   if (status === 429) return { kind: "rate_limited" };
+  // A body the PDS will not take (ADR 0088). uploadBlob defines no error of its own, so @atproto/xrpc 0.8.18 throws a
+  // plain XRPCError (dist/types.js: no `name` of its own, `error` from the body, else "PayloadTooLarge" from the code),
+  // which the rule below would read as unexpected. A proxy's bare 413 reads the same.
+  if (status === 413) return { kind: "rejected", xrpcError: errorCode(error) ?? "PayloadTooLarge", status };
   if (status === 403 && error instanceof Error && error.name === "ScopeMissingError") {
     const scope = record(error)?.scope;
     return typeof scope === "string" ? { kind: "scope_missing", scope } : { kind: "scope_missing" };

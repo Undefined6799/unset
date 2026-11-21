@@ -2,7 +2,6 @@
 // input once into checked fields; toProfileRecord builds the sh.unset.profile record we write to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import type { CardKey, RepoDid } from "./cards.ts";
 import { MAX_RECORD_BYTES } from "./index-plan.ts";
 import {
   APP_LIMITS,
@@ -13,7 +12,6 @@ import {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
-  withCardOrder,
 } from "./profile.ts";
 
 const good = {
@@ -123,7 +121,6 @@ describe("toProfileRecord", () => {
       $type: "sh.unset.profile",
       displayName: "Old",
       headline: "Old line",
-      cards: [{ uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzfcijpj2z2a" }],
       listed: true,
       createdAt: "2026-10-01T00:00:00.000Z",
     };
@@ -132,7 +129,6 @@ describe("toProfileRecord", () => {
       ok: true,
       record: {
         $type: "sh.unset.profile",
-        cards: [{ uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzfcijpj2z2a" }],
         listed: true,
         displayName: good.displayName,
         location: good.location,
@@ -210,32 +206,6 @@ describe("readProfileRecord", () => {
 
   test("anything that is not an object reads as an empty profile", () => {
     for (const value of [null, "profile", 3, ["a"]]) expect(readProfileRecord(value)).toEqual(EMPTY_PROFILE);
-  });
-});
-
-describe("withCardOrder", () => {
-  const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as RepoDid;
-  const T = "2026-10-23T03:00:00.000Z";
-  const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1 };
-
-  test("sets the order and keeps every other field", () => {
-    const built = withCardOrder(OWNER, ["b", "a"] as CardKey[], stored, "2027-01-01T00:00:00.000Z");
-    const uri = (key: string) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` });
-    expect(built).toEqual({ ok: true, record: { ...stored, cards: [uri("b"), uri("a")] } });
-  });
-
-  test("an empty order is written as no order", () => {
-    const built = withCardOrder(OWNER, [], { ...stored, cards: [{ uri: `at://${OWNER}/sh.unset.card/a` }] }, T);
-    expect(built.ok && "cards" in built.record).toBe(false);
-  });
-
-  test("there is no order without a profile", () => {
-    expect(withCardOrder(OWNER, ["a"] as CardKey[], null, T)).toEqual({ ok: false, code: "profile.name_required" });
-  });
-
-  test("an order past the lexicon's count is too long", () => {
-    const order = Array.from({ length: LIMITS.profile.cardsMax + 1 }, (_, i) => `k${i}`) as CardKey[];
-    expect(withCardOrder(OWNER, order, stored, T)).toEqual({ ok: false, code: "profile.too_long" });
   });
 });
 

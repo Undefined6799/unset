@@ -8,7 +8,8 @@ import { type CardStore, type CardWrites, cardWrites } from "./card-writes.serve
 type ListResult = Awaited<ReturnType<CardStore["list"]>>;
 type PdsResult<T> = { readonly kind: "ok"; readonly value: T } | Exclude<ListResult, { kind: "ok" }>;
 type StoredCard = Extract<ListResult, { kind: "ok" }>["value"]["cards"][number];
-type CardKey = Parameters<CardStore["remove"]>[0];
+type CardKey = Parameters<CardWrites["remove"]>[0];
+type Written = Extract<Awaited<ReturnType<CardStore["write"]>>, { kind: "ok" }>["value"];
 type CardContent = Parameters<CardWrites["create"]>[0];
 const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as Parameters<typeof cardWrites>[0];
 /** The profile's card list as it is written: the owner's card addresses (ADR 0086). */
@@ -25,6 +26,7 @@ const readme = (text: string) => ({
 /** A README card as parseCardInput reads `{ kind: "readme", text }`. */
 const input = (text = "Hello") => ({ content: { kind: "readme", text } as CardContent, width: "full" as const });
 const KEY = "3k2abc" as CardKey;
+const NEW_KEY = "3knewkey2aaaa" as CardKey;
 
 type CardVersion = Parameters<CardWrites["saveAll"]>[0][number]["version"];
 type Calls = {
@@ -32,16 +34,29 @@ type Calls = {
   swaps: string[];
   saved: unknown[];
   removed: string[];
+  page: unknown[];
   profile: unknown[];
   many: { updates: unknown[]; swapCommit: string }[];
 };
 const HEAD = "bafyhead";
 
+/** The stored main page: it lists the two stored cards, so both show (ADR 0086 point 3, ADR 0091). */
+const PAGE = { $type: "sh.unset.page", createdAt: T1, cards: listed("a", "b") };
+const PROFILE = { $type: "sh.unset.profile", displayName: "A", createdAt: T1 };
+
+/**
+ * A store over two listed cards. Each card-and-list write is recorded (the card created or removed, the page it
+ * wrote, the head it swapped on) and answered from `answers` in turn, then as written. `profile` is the stored
+ * profile (null: none), which a profile write builds over.
+ */
 function store(
   over: Partial<CardStore> = {},
-  stored: unknown = { $type: "sh.unset.profile", displayName: "A", createdAt: T1 },
+  stored: unknown = PAGE,
+  answers: readonly Written["kind"][] = [],
+  profile: unknown = PROFILE,
 ) {
-  const calls: Calls = { created: [], swaps: [], saved: [], removed: [], profile: [], many: [] };
+  const calls: Calls = { created: [], swaps: [], saved: [], removed: [], page: [], profile: [], many: [] };
+  const queue = [...answers];
   const base: CardStore = {
     list: async () =>
       ok({
@@ -53,27 +68,27 @@ function store(
         overflow: false,
       }),
     head: async () => ok(HEAD),
-    newKey: () => "3knewkey2aaaa" as CardKey,
-    create: async (record, swapCommit) => {
-      calls.created.push(record);
+    profile: async () => ok(profile === null ? null : { value: profile, cid: "p" }),
+    page: async () => ok(stored === null ? null : { value: stored, cid: "g" }),
+    newKey: () => NEW_KEY,
+    write: async (change, swapCommit) => {
       calls.swaps.push(swapCommit);
-      return ok({ kind: "created", key: "new" });
+      if (change.card?.kind === "create") calls.created.push(change.card.record);
+      if (change.card?.kind === "delete") calls.removed.push(change.card.key);
+      if (change.page !== undefined) calls.page.push({ ok: true, ...change.page });
+      return ok({ kind: queue.shift() ?? "written" } as Written);
     },
     save: async (key, build) => {
       const built = build(readme("old"));
       calls.saved.push({ key, built });
       return ok(built.ok ? { kind: "saved" } : { kind: "refused", code: built.code });
     },
-    remove: async (key) => {
-      calls.removed.push(key);
-      return ok(undefined);
-    },
     saveMany: async (updates, swapCommit) => {
       calls.many.push({ updates: [...updates], swapCommit });
       return ok({ kind: "saved" });
     },
     saveProfile: async (build) => {
-      const built = build(stored);
+      const built = build(profile);
       calls.profile.push(built);
       return ok(built.ok ? { kind: "saved" } : { kind: "refused", code: built.code });
     },
@@ -101,6 +116,55 @@ describe("cardWrites", () => {
     ]);
   });
 
+  test("card.create_listed: a new card is written with the profile listing it last, in the same write", async () => {
+    // ADR 0086 point 3: only listed cards show, so a card and its entry land together or not at all.
+    const { writes, calls } = store();
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "saved" });
+    expect(calls.page).toEqual([{ ok: true, exists: true, record: { ...PAGE, cards: listed("a", "b", NEW_KEY) } }]);
+    expect(calls.swaps).toEqual([HEAD]);
+  });
+
+  test("card.create_once: a new card takes the key its form named", async () => {
+    const formKey = "3kformkey2aaa" as CardKey;
+    const { writes, calls } = store();
+    expect(await writes.create(input().content, "full", undefined, formKey)).toEqual({ kind: "saved" });
+    expect(calls.page).toEqual([{ ok: true, exists: true, record: { ...PAGE, cards: listed("a", "b", formKey) } }]);
+  });
+
+  test("card.create_once: the same form sent again after its card landed is saved, and nothing more is written", async () => {
+    const { writes, calls } = store();
+    // Card "a" is stored as readme("A"): the same form, with the same words, is the card already there.
+    expect(await writes.create(input("A").content, "full", undefined, "a" as CardKey)).toEqual({ kind: "saved" });
+    expect(calls.swaps).toEqual([]);
+  });
+
+  test("card.create_once: a page that kept an old key adds the new card under a fresh key", async () => {
+    // Back to an earlier draw of the page, or a refresh that failed after a save: the key names a card already
+    // stored, but this form says something else, so it is a new card and is never answered saved unwritten.
+    const { writes, calls } = store();
+    expect(await writes.create(input("Other").content, "full", undefined, "a" as CardKey)).toEqual({ kind: "saved" });
+    expect(calls.created).toHaveLength(1);
+    expect(calls.page).toEqual([{ ok: true, exists: true, record: { ...PAGE, cards: listed("a", "b", NEW_KEY) } }]);
+  });
+
+  test("card.create_once: two sends at once write one card; the second finds it on the read after its swap failed", async () => {
+    const card = (key: string) => ({ key, value: readme("A"), cid: "c" });
+    const lists = [
+      [card("a"), card("b")],
+      [card("a"), card("b"), card(NEW_KEY)],
+    ];
+    const list = async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false });
+    const { writes, calls } = store({ list }, PAGE, ["changed"]);
+    expect(await writes.create(input("A").content, "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    expect(calls.created).toHaveLength(1); // the try the PDS refused, as the first send had landed
+  });
+
+  test("a card cannot be added before there is a profile to list it, and nothing is written", async () => {
+    const { writes, calls } = store({}, PAGE, [], null);
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "profile.name_required" });
+    expect(calls.swaps).toEqual([]);
+  });
+
   test("a member with the most cards a page shows cannot add another", async () => {
     const full = Array.from({ length: 50 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
     const { writes, calls } = store({ list: async () => ok({ cards: full, complete: true, overflow: false }) });
@@ -119,16 +183,7 @@ describe("cardWrites", () => {
 
   test("a repo that changed meanwhile is counted again once, and the card is added if there is still room", async () => {
     const heads = ["h1", "h2"];
-    let creates = 0;
-    const { writes, calls } = store({
-      head: async () => ok(heads.shift() ?? "none"),
-      create: async (record, swapCommit) => {
-        calls.created.push(record);
-        calls.swaps.push(swapCommit);
-        creates += 1;
-        return ok(creates === 1 ? { kind: "changed" } : { kind: "created", key: "new" });
-      },
-    });
+    const { writes, calls } = store({ head: async () => ok(heads.shift() ?? "none") }, PAGE, ["changed"]);
     expect(await writes.create(input().content, "full")).toEqual({ kind: "saved" });
     expect(calls.swaps).toEqual(["h1", "h2"]);
   });
@@ -136,26 +191,14 @@ describe("cardWrites", () => {
   test("two tabs at 49 cards: the second count sees 50 and nothing more is written", async () => {
     const at = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: readme("A"), cid: "c" }));
     const lists = [at(49), at(50)];
-    const { writes, calls } = store({
-      list: async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false }),
-      create: async (record, swapCommit) => {
-        calls.created.push(record);
-        calls.swaps.push(swapCommit);
-        return ok({ kind: "changed" });
-      },
-    });
+    const list = async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false });
+    const { writes, calls } = store({ list }, PAGE, ["changed"]);
     expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "card.too_many" });
     expect(calls.created).toHaveLength(1); // the first try, which the PDS refused: nothing was written
   });
 
   test("a repo that keeps changing is not tried a third time; the member is asked to save again", async () => {
-    const { writes, calls } = store({
-      create: async (record, swapCommit) => {
-        calls.created.push(record);
-        calls.swaps.push(swapCommit);
-        return ok({ kind: "changed" });
-      },
-    });
+    const { writes, calls } = store({}, PAGE, ["changed", "changed"]);
     expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "card.cards_changed" });
     expect(calls.created).toHaveLength(2);
   });
@@ -165,8 +208,8 @@ describe("cardWrites", () => {
     const { writes, calls } = store({ list: async () => ok({ cards: over, complete: false, overflow: true }) });
     expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "card.too_many" });
     expect(await writes.reorder(over.map((card) => card.key))).toEqual({ kind: "failed", code: "card.overflow" });
-    expect(await writes.remove(KEY)).toEqual({ kind: "saved" });
-    expect([calls.created, calls.profile, calls.removed]).toEqual([[], [], [KEY]]);
+    expect(await writes.remove("k5" as CardKey)).toEqual({ kind: "saved" });
+    expect([calls.created, calls.page, calls.removed]).toEqual([[], [], ["k5"]]);
   });
 
   test("an edit is built over the stored card and saved under its key", async () => {
@@ -189,10 +232,36 @@ describe("cardWrites", () => {
     });
   });
 
-  test("a delete removes the card under its key", async () => {
+  test("card.remove_listed: a delete removes the card and its entry in the page's list, in one write", async () => {
     const { writes, calls } = store();
-    expect(await writes.remove(KEY)).toEqual({ kind: "saved" });
-    expect(calls.removed).toEqual([KEY]);
+    expect(await writes.remove("a" as CardKey)).toEqual({ kind: "saved" });
+    expect(calls.removed).toEqual(["a"]);
+    expect(calls.page).toEqual([{ ok: true, exists: true, record: { ...PAGE, cards: listed("b") } }]);
+    expect(calls.swaps).toEqual([HEAD]);
+  });
+
+  test("a card already gone leaves the list; one never listed is deleted alone; neither is an error", async () => {
+    const gone = store({}, { ...PAGE, cards: listed("a", "b", KEY) });
+    expect(await gone.writes.remove(KEY)).toEqual({ kind: "saved" });
+    expect([gone.calls.removed, gone.calls.page]).toMatchObject([[], [{ record: { cards: listed("a", "b") } }]]);
+    const unlisted = store({}, { ...PAGE, cards: listed("b") });
+    expect(await unlisted.writes.remove("a" as CardKey)).toEqual({ kind: "saved" });
+    expect([unlisted.calls.removed, unlisted.calls.page]).toEqual([["a"], []]);
+  });
+
+  test("a delete on a repo that changed meanwhile is read again once, then the member is asked again", async () => {
+    const once = store({}, PAGE, ["changed"]);
+    expect(await once.writes.remove("a" as CardKey)).toEqual({ kind: "saved" });
+    expect(once.calls.swaps).toHaveLength(2);
+    const busy = store({}, PAGE, ["changed", "changed"]);
+    expect(await busy.writes.remove("a" as CardKey)).toEqual({ kind: "failed", code: "card.cards_changed" });
+  });
+
+  test("a card the cut-short list does not hold cannot be judged, so nothing is deleted", async () => {
+    const cut = { cards: [{ key: "a", value: readme("A"), cid: "c" }], complete: false, overflow: false };
+    const { writes, calls } = store({ list: async () => ok(cut) });
+    expect(await writes.remove(KEY)).toEqual({ kind: "failed", code: "card.list_incomplete" });
+    expect(calls.swaps).toEqual([]);
   });
 
   test("a list the read cut short is not a count: adding and moving are refused, nothing is written", async () => {
@@ -201,13 +270,13 @@ describe("cardWrites", () => {
     const { content, width } = input();
     expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.list_incomplete" });
     expect(await writes.reorder(["a"])).toEqual({ kind: "failed", code: "card.list_incomplete" });
-    expect([calls.created, calls.profile]).toEqual([[], []]);
+    expect([calls.created, calls.page]).toEqual([[], []]);
   });
 
-  test("a reorder names each shown card once and writes the order into the profile", async () => {
+  test("a reorder names each shown card once and writes the order into the page", async () => {
     const { writes, calls } = store();
     expect(await writes.reorder(["b", "a"])).toEqual({ kind: "saved" });
-    expect(calls.profile).toMatchObject([{ ok: true, record: { displayName: "A", cards: listed("b", "a") } }]);
+    expect(calls.page).toMatchObject([{ ok: true, record: { $type: "sh.unset.page", cards: listed("b", "a") } }]);
   });
 
   test("a hidden card is not part of the order, so the page's order still matches", async () => {
@@ -217,9 +286,10 @@ describe("cardWrites", () => {
       { key: "bad/key", value: readme("B"), cid: "c" },
     ];
     const list = async () => ok({ cards, complete: true, overflow: false });
-    const { writes, calls } = store({ list });
+    const { writes, calls } = store({ list }, { ...PAGE, cards: listed("h", "a") });
     expect(await writes.reorder(["a"])).toEqual({ kind: "saved" });
-    expect(calls.profile).toMatchObject([{ ok: true, record: { cards: listed("a") } }]);
+    // The hidden card's entry stays, after the ordered ones, so a newer version can still show it (ADR 0038).
+    expect(calls.page).toMatchObject([{ ok: true, record: { cards: listed("a", "h") } }]);
   });
 
   test("an order that is not exactly the shown cards is refused before any write", async () => {
@@ -227,21 +297,44 @@ describe("cardWrites", () => {
     for (const order of [["a"], ["a", "a"], ["a", "z"], "a,b", ["a", "b", "c"]]) {
       expect(await writes.reorder(order)).toEqual({ kind: "failed", code: "card.order_invalid" });
     }
-    expect(calls.profile).toEqual([]);
+    expect(calls.page).toEqual([]);
   });
 
-  test("no profile yet means no order to write", async () => {
-    const { writes } = store({}, null);
-    expect(await writes.reorder(["a", "b"])).toEqual({ kind: "failed", code: "profile.name_required" });
+  test("no page yet shows no card, so the only order is the empty one and nothing is written", async () => {
+    const { writes, calls } = store({}, null);
+    expect(await writes.reorder([])).toEqual({ kind: "saved" });
+    expect(await writes.reorder(["a"])).toEqual({ kind: "failed", code: "card.order_invalid" });
+    expect(calls.swaps).toEqual([]);
+  });
+
+  test("card.create_first_page: a first card starts the main page in the same write", async () => {
+    const { writes, calls } = store({}, null);
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "saved" });
+    expect(calls.page).toEqual([
+      { ok: true, exists: false, record: { $type: "sh.unset.page", cards: listed(NEW_KEY), createdAt: NOW } },
+    ]);
+  });
+
+  test("a card another tab listed meanwhile must be in the order; an entry with no card stays after it", async () => {
+    // The order is checked on the page read on the head the write swaps on, so a stale order never drops it.
+    const { writes, calls } = store({}, { ...PAGE, cards: listed("a", "b", "c") });
+    const cards = [..."abc"].map((key) => ({ key, value: readme(key), cid: "c" }));
+    const three = store(
+      { list: async () => ok({ cards, complete: true, overflow: false }) },
+      { ...PAGE, cards: listed("a", "b", "c") },
+    );
+    expect(await three.writes.reorder(["b", "a"])).toEqual({ kind: "failed", code: "card.order_invalid" });
+    expect(await writes.reorder(["b", "a"])).toEqual({ kind: "saved" });
+    expect(calls.page).toMatchObject([{ record: { cards: listed("b", "a", "c") } }]);
   });
 
   test("an outage is a retryable failure and an ended session sends the member to sign in", async () => {
     const down = async () => ({ kind: "transient", code: "pds_unavailable" }) as const;
-    expect(await store({ create: down }).writes.create(input().content, "full")).toEqual({
+    expect(await store({ write: down }).writes.create(input().content, "full")).toEqual({
       kind: "failed",
       code: "card.pds_unavailable",
     });
-    expect(await store({ remove: async () => ({ kind: "auth_dead" }) }).writes.remove(KEY)).toEqual({
+    expect(await store({ write: async () => ({ kind: "auth_dead" }) }).writes.remove("a" as CardKey)).toEqual({
       kind: "redirect",
       location: "/login?error=login.session_ended",
     });
@@ -255,7 +348,7 @@ describe("cardWrites", () => {
     const { writes, calls } = store();
     expect(await writes.avatarShape("roundedSquare")).toEqual({ kind: "saved" });
     expect(calls.profile[0]).toMatchObject({ ok: true, record: { displayName: "A", avatarShape: "rounded-square" } });
-    expect(await store({}, null).writes.avatarShape("round")).toEqual({
+    expect(await store({}, PAGE, [], null).writes.avatarShape("round")).toEqual({
       kind: "failed",
       code: "profile.name_required",
     });

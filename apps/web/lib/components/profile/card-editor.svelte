@@ -43,6 +43,7 @@ let {
   width,
   surface = "filled",
   cardKey,
+  newKey,
   trigger,
   icon,
   triggerClass = "",
@@ -62,6 +63,8 @@ let {
   surface?: CardSurface;
   /** The card being saved; absent, the form adds a card. */
   cardKey?: string;
+  /** The key a card this form adds takes (the page's newCardKey), so the form sent twice adds it once. */
+  newKey?: string;
   /** The link that opens the editor: with script it opens the dialog, without it goes to `href`. */
   trigger: { readonly label: string; readonly href: string } | null;
   /** Draw the trigger as this icon alone, its label the hidden name (the card's own controls). */
@@ -280,7 +283,7 @@ const buttonRows = $derived([
 
 {#snippet fields()}
   <form id={formId} method="POST" {action} class="grid gap-4" use:enhance={saveCard} oninvalidcapture={() => showTab("write")}>
-    {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{/if}
+    {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{:else if newKey !== undefined}<input type="hidden" name="newKey" value={newKey} />{/if}
     <input type="hidden" name="kind" value={kind} />
     <Choice label={CARD_EDIT.width} name="width" value={typedOr("width", width)} options={WIDTHS} />
     <Choice label={CARD_EDIT.surface} name="surface" value={typedOr("surface", surface)} options={SURFACES} />

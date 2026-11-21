@@ -4,7 +4,7 @@ A member's profile and cards are records in that member's own repository. The me
 
 ## Route
 
-- [`interfaces/web/src/routes/[did=did]/`](../../../interfaces/web/src/routes/[did=did]) is the member's own page, at `/<DID>`. It loads the profile and cards from the member's PDS. Its form actions create, edit, delete and reorder cards, and save the avatar shape. A path that is not a DID, or another member's DID, is a 404. A visitor is sent to sign in.
+- [`interfaces/web/src/routes/[did=did]/`](../../../interfaces/web/src/routes/[did=did]) is the member's own page, at `/<DID>`. It loads the profile and cards from the member's PDS. Its form actions create, edit, delete and reorder cards, and save the avatar shape. Only the cards the main page's `cards` list names show, in its order, so a new card and its entry in the list are written in one commit, and so are a deleted card and the list without it ([ADR 0086](../decisions/0086-cards-hold-reusable-blocks.md) point 3). The list lives on the `sh.unset.page` record under the key `self`, and the first card creates it ([ADR 0091](../decisions/0091-a-page-record-holds-the-card-list.md)). A path that is not a DID, or another member's DID, is a 404. A visitor is sent to sign in.
 - [`interfaces/web/src/routes/profile/`](../../../interfaces/web/src/routes/profile) is `POST /profile`, the one profile save. It has no page: a GET is a 404. The DID is the session's.
 - [`interfaces/web/src/routes/settings/profile/`](../../../interfaces/web/src/routes/settings/profile) is the settings page. The profile form posts to `/profile`, and the save returns to `/settings/profile?saved`, so the page says it saved even with no script. Search and AI is on Settings › Privacy ([public indexing](public-indexing.md)).
 - [`interfaces/web/src/routes/@[actor]/`](../../../interfaces/web/src/routes/@[actor]) is the public page. It reads the index, not the PDS. The own page's View as public link opens it at `/@<DID>`.
@@ -20,11 +20,12 @@ The own page reads through [`own-profile.server.ts`](../../../interfaces/web/src
 [`domains/profile/`](../../../domains/profile) checks the fields and builds the records.
 
 - [`profile.ts`](../../../domains/profile/profile.ts) reads and writes `sh.unset.profile` (display name, headline, location, website).
+- [`page.ts`](../../../domains/profile/page.ts) writes the main page `sh.unset.page/self`, which lists the cards in order.
 - [`cards.ts`](../../../domains/profile/cards.ts) reads `sh.unset.card` cards, each holding one `sh.unset.block.*` block. A card this version does not accept is hidden.
 - [`card-edit.ts`](../../../domains/profile/card-edit.ts) checks a card before it is written.
 - [`web-address.ts`](../../../domains/profile/web-address.ts) accepts a plain `http` or `https` address.
 
-The record shapes are [`shared/lexicons/schemas/sh.unset.profile.json`](../../../shared/lexicons/schemas/sh.unset.profile.json) and [`sh.unset.card.json`](../../../shared/lexicons/schemas/sh.unset.card.json) with the blocks beside it ([ADR 0051](../decisions/0051-profile-cards-lexicon.md), [ADR 0086](../decisions/0086-cards-hold-reusable-blocks.md)).
+The record shapes are [`shared/lexicons/schemas/sh.unset.profile.json`](../../../shared/lexicons/schemas/sh.unset.profile.json), [`sh.unset.page.json`](../../../shared/lexicons/schemas/sh.unset.page.json) and [`sh.unset.card.json`](../../../shared/lexicons/schemas/sh.unset.card.json) with the blocks beside it ([ADR 0051](../decisions/0051-profile-cards-lexicon.md), [ADR 0086](../decisions/0086-cards-hold-reusable-blocks.md), [ADR 0091](../decisions/0091-a-page-record-holds-the-card-list.md)).
 
 ## Adapter
 

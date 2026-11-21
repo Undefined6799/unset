@@ -2,6 +2,8 @@
 // The card writes behind the card routes (ADR 0051): create, edit, delete and reorder a member's cards on their own
 // PDS. Records are built by domains/profile; the PDS calls come from infrastructure/pds through `CardStore`, bound to
 // the session's DID in the composition root, so no write here can reach another member's repo.
+
+import { isDeepStrictEqual } from "node:util";
 import {
   type AvatarShape,
   CARDS_MAX,
@@ -14,45 +16,53 @@ import {
   type DraftImageId,
   fitsPage,
   inSizeOrder,
+  type PageError,
   type ProfileError,
+  pageCards,
   parseCardVersion,
   pictureLink,
   type RepoDid,
   reorderCards,
-  shownCards,
   toCardRecord,
   withAvatarShape,
+  withCardListed,
   withCardOrder,
+  withCardUnlisted,
 } from "@unset/domains-profile";
 import type {
   BuiltRecord,
+  CardChange,
   CardList,
-  CreateOutcome,
+  ListedOutcome,
+  PageChange,
   PdsResult,
   SaveManyOutcome,
   SaveOutcome,
+  StoredRecord,
   UploadedBlob,
 } from "@unset/infrastructure-pds";
 import { pdsSignInRedirect } from "../../lib/server/pds-failure.ts";
 
-/** The member's own card and profile records, already bound to their DID and this request's deadline. */
+/** The member's own card, page and profile records, already bound to their DID and this request's deadline. */
 export type CardStore = {
   readonly list: () => Promise<PdsResult<CardList>>;
-  /** The CID of the repo's head commit, read before a count the create depends on. */
+  /** The CID of the repo's head commit, read before the reads a write depends on. */
   readonly head: () => Promise<PdsResult<string>>;
+  /** The stored profile record, or null when there is none. */
+  readonly profile: () => Promise<PdsResult<StoredRecord | null>>;
+  /** The stored main page record (ADR 0091), or null when there is none. */
+  readonly page: () => Promise<PdsResult<StoredRecord | null>>;
   /** A record key for a card web names before writing it (a TID, as the PDS picks). */
   readonly newKey: () => CardKey;
-  /** Creates the card only if the repo's head is still `swapCommit`; under `key`, or one the PDS picks. */
-  readonly create: (
-    record: Readonly<Record<string, unknown>>,
+  /** A card created or deleted with the page that lists it, in one commit, only if the head is still `swapCommit`. */
+  readonly write: (
+    change: { readonly card?: CardChange; readonly page?: PageChange },
     swapCommit: string,
-    key?: CardKey,
-  ) => Promise<PdsResult<CreateOutcome>>;
+  ) => Promise<PdsResult<ListedOutcome>>;
   readonly save: (
     key: CardKey,
     build: (existing: unknown) => BuiltRecord<CardError>,
   ) => Promise<PdsResult<SaveOutcome<CardError | "card.missing">>>;
-  readonly remove: (key: CardKey) => Promise<PdsResult<void>>;
   /** Writes over the cards all at once, only if the repo's head is still `swapCommit`. */
   readonly saveMany: (
     updates: readonly { readonly key: CardKey; readonly record: Readonly<Record<string, unknown>> }[],
@@ -106,6 +116,7 @@ export type PictureStore = {
 export type CardFailure =
   | CardError
   | ProfileError
+  | PageError
   | "card.missing"
   | "card.too_many"
   | "card.overflow"
@@ -117,6 +128,7 @@ export type CardFailure =
   | "card.pds_unavailable"
   | "card.image_missing"
   | "card.image_unavailable"
+  | "card.image_too_large"
   | "profile.conflict"
   | "profile.pds_unavailable";
 /** A card a Save of several wrote, and the version (record CID) the PDS gave it. */
@@ -150,7 +162,11 @@ export type CardEdit = {
 };
 
 export type CardWrites = {
-  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
+  /**
+   * `key`, when given, is the one the add form named, so the same form sent twice (a double click, a retry after a
+   * lost answer) adds one card: a key already stored is answered as saved.
+   */
+  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface, key?: CardKey) => Promise<CardWrite>;
   readonly save: (key: CardKey, content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
   /** Every changed card at once, all or none (ADR 0074). */
   readonly saveAll: (edits: readonly CardEdit[]) => Promise<CardWrite>;
@@ -187,6 +203,18 @@ const landed = (key: CardKey, written: unknown, rev: string | undefined): Landed
   shown: pictureLink(written),
   rev: rev ?? null,
 });
+/**
+ * Whether a stored card is the record a create would write: the same fields as JSON, its creation time aside. A
+ * picture stored in another JSON form compares unequal, so a resend adds a second card rather than losing one.
+ */
+function sameCard(stored: unknown, record: unknown): boolean {
+  const plain = (value: unknown): unknown => {
+    const { createdAt: _at, ...rest } = JSON.parse(JSON.stringify(value ?? null)) ?? {};
+    return rest;
+  };
+  return isDeepStrictEqual(plain(stored), plain(record));
+}
+
 /** A write the PDS did not answer may still have landed. */
 const unanswered = (result: PdsResult<unknown>): boolean => result.kind === "transient";
 
@@ -254,6 +282,9 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
     const blob = await pictures.upload(main.bytes);
     if (blob.kind !== "ok") {
       await settle([held], [], false);
+      // ADR 0088: a PDS that refuses the picture's size (HTTP 413) gets no smaller copy; the member is told once.
+      if (blob.kind === "rejected" && blob.status === 413)
+        return { ok: false, failed: failed("card.image_too_large", "image") };
       return { ok: false, failed: pdsFailure(blob) };
     }
     await pictures.published(id, blob.value.ref.$link);
@@ -291,6 +322,20 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
     return { ok: true, edits: out };
   };
 
+  /** The repo's head, then the cards and the main page as they stand on it, for a write that swaps on that head. */
+  const readRepo = async (): Promise<
+    | { readonly ok: true; readonly head: string; readonly list: CardList; readonly page: StoredRecord | null }
+    | { readonly ok: false; readonly failed: CardWrite }
+  > => {
+    const head = await store.head();
+    if (head.kind !== "ok") return { ok: false, failed: pdsFailure(head) };
+    const list = await store.list();
+    if (list.kind !== "ok") return { ok: false, failed: pdsFailure(list) };
+    const page = await store.page();
+    if (page.kind !== "ok") return { ok: false, failed: pdsFailure(page) };
+    return { ok: true, head: head.value, list: list.value, page: page.value };
+  };
+
   const outcome = <C extends CardFailure>(result: PdsResult<SaveOutcome<C>>): CardWrite => {
     if (result.kind !== "ok") return pdsFailure(result);
     if (result.value.kind === "conflict") return failed("card.conflict");
@@ -298,44 +343,72 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
   };
 
   return {
-    // The page reads CARDS_MAX cards, so one past it would be stored and never shown. The count and the create are tied
-    // to one repo state (DA-4: compare-and-swap at the PDS): the head is read first, and the create swaps on it, so
-    // a card added elsewhere meanwhile (another tab) makes the PDS refuse it and nothing is written. Counted once more
-    // then, since an unrelated write to the repo also moves the head; a second refusal asks the member to save again.
-    // A list cut short by the read budget (card-records.ts) is not a count: the add is refused.
-    // A new picture is published once, after the first count passes, under a key web picks so its use is recorded
-    // before the write; a retry reuses it.
-    create: async (content, width, surface) => {
+    // The page reads CARDS_MAX cards, so one past it would be stored and never shown. The count, the page's list
+    // and the create are tied to one repo state (DA-4: compare-and-swap at the PDS): the head is read first, and the
+    // card and the page listing it are written in one commit swapping on it (ADR 0086 point 3, ADR 0091: only listed
+    // cards show, so the two never land apart), so a card or page written elsewhere meanwhile (another tab) makes the PDS
+    // refuse it and nothing is written. Read once more then, since an unrelated write to the repo also moves the head;
+    // a second refusal asks the member to save again. A list cut short by the read budget (card-records.ts) is not a
+    // count: the add is refused. The card's key is picked once, before the first write (a picture's use is recorded
+    // under it), and a retry reuses it and the published picture.
+    create: async (content, width, surface, named) => {
       const early = draftOf(content) === null ? toCardRecord(content, width, null, now(), surface) : null;
       if (early !== null && !early.ok) return failed(early.code, early.field);
       let record = early?.record ?? null;
       let held: Held | null = null;
+      let key = named ?? store.newKey();
       const done = async (result: CardWrite, unsure = false) => {
         await settle(held === null ? [] : [held], [], unsure);
         return result;
       };
+      /** Publishes a new picture under `key` and builds the record; null when there is nothing to do. */
+      const prepare = async (): Promise<CardWrite | null> => {
+        if (record !== null) return null;
+        const published = await publish(content, key);
+        if (!published.ok) return published.failed;
+        held = published.held;
+        const built = toCardRecord(published.content, width, null, now(), surface);
+        if (!built.ok) return done(failed(built.code, built.field));
+        record = built.record;
+        return null;
+      };
+      // A page shows only beside a profile (ADR 0091), so there is no card to add before there is a profile.
+      const profile = await store.profile();
+      if (profile.kind !== "ok") return pdsFailure(profile);
+      if (profile.value === null) return failed("profile.name_required");
       for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
-        const head = await store.head();
-        if (head.kind !== "ok") return done(pdsFailure(head));
-        const listed = await store.list();
-        if (listed.kind !== "ok") return done(pdsFailure(listed));
-        if (listed.value.overflow || listed.value.cards.length >= CARDS_MAX) return done(failed("card.too_many"));
-        if (!listed.value.complete) return done(failed("card.list_incomplete"));
-        if (record === null) {
-          const published = await publish(content, store.newKey());
-          if (!published.ok) return published.failed;
-          held = published.held;
-          const built = toCardRecord(published.content, width, null, now(), surface);
-          if (!built.ok) return done(failed(built.code, built.field));
-          record = built.record;
+        const repo = await readRepo();
+        if (!repo.ok) return done(repo.failed);
+        const { list, page } = repo;
+        // The form's key already stored: the same form sent again is answered as saved (checked before the count, so
+        // a resend at the last free place is too). A page that kept an old key (back to an earlier draw, a refresh
+        // that failed after a save) carries other words, so that is a new card, under a fresh key.
+        const stored = list.cards.find((card) => card.key === key);
+        if (stored !== undefined) {
+          const unready = await prepare();
+          if (unready !== null) return unready;
+          if (sameCard(stored.value, record)) return done(SAVED);
+          await settle(held === null ? [] : [held], [], false);
+          held = null;
+          record = early?.record ?? null;
+          key = store.newKey();
         }
+        if (list.overflow || list.cards.length >= CARDS_MAX) return done(failed("card.too_many"));
+        if (!list.complete) return done(failed("card.list_incomplete"));
+        const listed = withCardListed(owner, key, page?.value ?? null, now());
+        if (!listed.ok) return done(failed(listed.code));
+        const unready = await prepare();
+        if (unready !== null) return unready;
+        if (record === null) return done(failed("card.cards_changed")); // prepare built it; this only narrows the type
         // All the member's cards must still fit one page (domains/profile MAX_PAGE_BYTES), counted on this same list.
-        if (!fitsPage(listed.value.cards, [{ key: null, record }])) return done(failed("card.page_full"));
-        const created = await store.create(record, head.value, held?.key);
-        if (created.kind !== "ok") return done(pdsFailure(created), unanswered(created));
+        if (!fitsPage(list.cards, [{ key: null, record }])) return done(failed("card.page_full"));
+        const card: CardChange = { kind: "create", key, record };
+        const written = await store.write({ card, page: pageChange(listed.record, page) }, repo.head);
+        if (written.kind !== "ok") return done(pdsFailure(written), unanswered(written));
+        if (written.value.kind === "too_large") return done(failed("card.save_too_large"));
         // A new record had no uses before; one with a picture settles its held use under the create's revision.
-        if (created.value.kind === "created") {
-          if (held !== null) await settle([held], [landed(held.key, record, created.value.rev)], false);
+        if (written.value.kind === "written") {
+          if (held !== null) await settle([held], [landed(key, record, written.value.rev)], false);
           return SAVED;
         }
       }
@@ -425,27 +498,57 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
       }
       return done(failed("card.cards_changed"), []);
     },
-    // A deleted card's record uses no picture any more; their copies go a week later.
+    // The card and its entry in the page's list go in one commit on the head read first (ADR 0086 point 3), so a
+    // list never keeps a card it lost or loses one another tab added; a moved head is read once more. Only a card the
+    // list read holds is deleted (the PDS refuses to delete a missing record); a list cut short that lacks it cannot
+    // say. A page another client broke is left as it is: an entry with no card shows nothing. A deleted card's
+    // record uses no picture any more; their copies go a week later.
     remove: async (key) => {
-      const removed = await store.remove(key);
-      if (removed.kind !== "ok") return pdsFailure(removed);
-      await pictures.drop(key);
-      return SAVED;
+      for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
+        const repo = await readRepo();
+        if (!repo.ok) return repo.failed;
+        const stored = repo.list.cards.some((card) => card.key === key);
+        if (!stored && !repo.list.complete) return failed("card.list_incomplete");
+        const unlisted = withCardUnlisted(owner, key, repo.page?.value ?? null, now());
+        const record = unlisted.ok ? unlisted.record : null;
+        const change = {
+          ...(stored ? { card: { kind: "delete", key } as const } : {}),
+          ...(record === null ? {} : { page: pageChange(record, repo.page) }),
+        };
+        const written = await store.write(change, repo.head);
+        if (written.kind !== "ok") return pdsFailure(written);
+        if (written.value.kind === "too_large") return failed("page.too_long");
+        if (written.value.kind === "written") {
+          await pictures.drop(key);
+          return SAVED;
+        }
+      }
+      return failed("card.cards_changed");
     },
-    // The order names the cards the page shows (domains/profile `shownCards`, as the page reads them), so a hidden card never
-    // makes a correct order look stale. A card added in another tab meanwhile fails the check; the editor reloads.
-    // An incomplete list cannot check an order, so the move is refused; past the cap the member deletes a card first.
+    // The order names the cards the page shows (domains/profile `pageCards`, as the page reads them, from the list read
+    // on the head the write swaps on), so a hidden card never makes a correct order look stale, and a card another tab
+    // added or removed meanwhile fails the check or moves the head; the editor reloads. An incomplete list cannot check
+    // an order, so the move is refused; past the cap the member deletes a card first.
     reorder: async (requested) => {
-      const listed = await store.list();
-      if (listed.kind !== "ok") return pdsFailure(listed);
-      if (listed.value.overflow) return failed("card.overflow");
-      if (!listed.value.complete) return failed("card.list_incomplete");
-      const order = reorderCards(
-        requested,
-        shownCards(listed.value.cards).map((card) => card.key),
-      );
-      if (!order.ok) return failed(order.code);
-      return outcome(await store.saveProfile((existing) => withCardOrder(owner, order.order, existing, now())));
+      for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
+        const repo = await readRepo();
+        if (!repo.ok) return repo.failed;
+        if (repo.list.overflow) return failed("card.overflow");
+        if (!repo.list.complete) return failed("card.list_incomplete");
+        const stored = repo.page?.value ?? null;
+        const shown = pageCards(owner, stored, repo.list.cards).map((card) => card.key);
+        const order = reorderCards(requested, shown);
+        if (!order.ok) return failed(order.code);
+        // No page shows no card, so the only order is the empty one, and there is nothing to write.
+        if (repo.page === null) return SAVED;
+        const built = withCardOrder(owner, order.order, stored, now());
+        if (!built.ok) return failed(built.code);
+        const written = await store.write({ page: pageChange(built.record, repo.page) }, repo.head);
+        if (written.kind !== "ok") return pdsFailure(written);
+        if (written.value.kind === "too_large") return failed("page.too_long");
+        if (written.value.kind === "written") return SAVED;
+      }
+      return failed("card.cards_changed");
     },
     // A profile write, so a refusal reads as one: the profile changed elsewhere, or the PDS did not answer.
     avatarShape: async (shape) => {
@@ -459,6 +562,12 @@ export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, 
     },
   };
 }
+
+/** The page record to write, created when none is stored. */
+const pageChange = (record: Readonly<Record<string, unknown>>, stored: StoredRecord | null): PageChange => ({
+  record,
+  exists: stored !== null,
+});
 
 type BuiltUpdates = { readonly key: CardKey; readonly record: Readonly<Record<string, unknown>> }[];
 type BuiltEdits =

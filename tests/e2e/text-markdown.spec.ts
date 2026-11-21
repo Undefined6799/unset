@@ -105,7 +105,7 @@ test("pasted_markdown_becomes_formatting_and_pasted_html_loads_nothing", async (
   const watched = watch(page);
   const word = `paste${Date.now()}`;
   const { editor } = await cardWithCaret(page, word);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await paste(page, { "text/plain": "## Title\n\n- item\n\n**bold** and [site](https://example.com)" });
   // "##" is the card's second level, an h3 under the card's h2, as the page shows it.
   await expect(editor.locator("h3")).toHaveText("Title");
@@ -114,7 +114,7 @@ test("pasted_markdown_becomes_formatting_and_pasted_html_loads_nothing", async (
   await expect(editor.locator("a")).toHaveAttribute("href", /^https:\/\/example\.com\/?$/);
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await caretAtEnd(page, word);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await paste(page, {
     "text/html":
       // Styled HTML (a sheet or style attributes) is refused by the CSP and reported, a known item while Crepe is weighed.
@@ -136,17 +136,17 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   const word = `typed${Date.now()}`;
   const { editor } = await cardWithCaret(page, word);
   // An empty line.
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("after");
-  // Shift+Enter breaks the line inside the paragraph.
   await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("after");
+  // Enter breaks the line inside the paragraph.
+  await page.keyboard.press("Enter");
   await page.keyboard.type("next line");
   await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(1);
-  // Enter in a quote starts the quote's next paragraph.
-  await page.keyboard.press("Enter");
+  // Shift+Enter in a quote starts the quote's next paragraph.
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("> first");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("second");
   await expect(editor.locator("blockquote p")).toHaveCount(2);
   const { card, editor: reopened } = await saveAndReopen(page, word);
@@ -169,4 +169,30 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   await page.keyboard.press("Escape");
   await removeCard(page, word);
   await giveBackWrites(page, 3);
+});
+
+// Staging, 2026-11-21: headings pasted from another site changed level (h1 and h2 both stored as "#", h3 as "##"),
+// while a copy inside the editor kept them. A pasted heading keeps its level; the editor and the page draw each one
+// a level down, under the page's own h1, and the editor's own drawn headings say their level so a copy keeps it.
+test("headings_pasted_from_another_site_keep_their_level", async ({ page }) => {
+  const word = `levels${Date.now()}`;
+  const { card } = await cardWithCaret(page, word);
+  // At the end of the line, whose words the paste's first paragraph joins, as a paste does.
+  await paste(page, {
+    "text/html": "<p>, intro</p><h1>Top</h1><h2>Second</h2><h3>Third</h3><p>words</p>",
+    "text/plain": ", intro\n\nTop\n\nSecond\n\nThird\n\nwords",
+  });
+  await expect(card).toContainText("Third");
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await expect(field).toHaveValue(`${word} start, intro\n\n# Top\n\n## Second\n\n### Third\n\nwords`);
+  const shown = page.locator('[data-slot="card"]', { has: field });
+  await shown.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+  await giveBackWrites(page, 2);
 });

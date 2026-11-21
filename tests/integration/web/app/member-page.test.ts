@@ -82,6 +82,10 @@ function readme(text: string) {
   return built.record;
 }
 
+/** The main page's card list naming `keys`, at most the lexicon's 100. */
+const listOf = (keys: readonly string[]) =>
+  keys.slice(0, 100).map((key) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` }));
+
 /** The owner's DID document, naming their PDS. It claims no handle, so the page shows none (identity's tests own that). */
 function fixture(
   writesFile: string,
@@ -110,7 +114,13 @@ function fixture(
       origin: PDS,
       did: OWNER,
       records: {
-        "sh.unset.profile": { self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: NOW } },
+        "sh.unset.profile": {
+          self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: NOW },
+        },
+        // The main page lists the stored cards, up to the lexicon's 100, so they show (ADR 0086 point 3, ADR 0091).
+        "sh.unset.page": {
+          self: { $type: "sh.unset.page", createdAt: NOW, cards: listOf(Object.keys(cards)) },
+        },
         "sh.unset.card": cards,
       },
       writesFile,
@@ -312,12 +322,32 @@ describe("card writes", () => {
     });
     expect(response?.status).toBe(303);
     expect(response?.headers.get("location")).toBe(`/${OWNER}`);
-    expect(writes).toHaveLength(1);
+    // The card and the main page listing it land in one commit (ADR 0086 point 3, ADR 0091).
+    expect(writes).toHaveLength(2);
     expect(writes[0]).toMatchObject({
       method: "createRecord",
       collection: "sh.unset.card",
       record: { $type: "sh.unset.card", width: "half" },
     });
+    expect(writes[1]).toMatchObject({ method: "applyWrites", collection: "sh.unset.page", rkey: "self" });
+    const cards = (writes[1]?.record as { cards?: { uri: string }[] } | undefined)?.cards;
+    expect(cards?.at(-1)).toEqual({ uri: `at://${OWNER}/sh.unset.card/${writes[0]?.rkey}` });
+    expect(await (await page(`/${OWNER}`, { cookie })).text()).toContain("Hello");
+  });
+
+  test("the_same_add_form_sent_twice_adds_one_card", async () => {
+    // card.create_once: the add form carries the key its page drew, so a double click or a retry adds the card once.
+    const html = await (await page(`/${OWNER}?add=readme`, { cookie })).text();
+    const newKey = /name="newKey" value="([a-z2-7]{13})"/.exec(html)?.[1];
+    expect(newKey).toBeDefined();
+    const form = new URLSearchParams({ newKey: newKey ?? "", kind: "readme", width: "full", text: "Once" }).toString();
+    const writes = await writesOf(async () => {
+      expect((await action("create", form)).status).toBe(303);
+      expect((await action("create", form)).status).toBe(303);
+    });
+    expect(writes.filter((w) => w.method === "createRecord")).toEqual([
+      expect.objectContaining({ collection: "sh.unset.card", rkey: newKey }),
+    ]);
   });
 
   test("a_save_replaces_the_named_card_only_if_it_has_not_changed", async () => {
@@ -330,12 +360,12 @@ describe("card writes", () => {
     expect(await (await page(`/${OWNER}`, { cookie })).text()).toContain("Edited");
   });
 
-  test("a_reorder_writes_the_order_into_the_profile_record", async () => {
+  test("a_reorder_writes_the_order_into_the_main_page", async () => {
     const shown = member.writes().filter((w) => w.method === "createRecord");
     const order = [CARD_C, CARD_B, CARD_A, ...shown.map((w) => w.rkey)];
     const writes = await writesOf(() => action("reorder", order.map((key) => `order=${key}`).join("&")));
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.profile", rkey: "self" });
+    expect(writes[0]).toMatchObject({ method: "applyWrites", collection: "sh.unset.page", rkey: "self" });
     expect(writes[0]?.record).toMatchObject({
       cards: order.map((key) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` })),
     });
@@ -384,15 +414,39 @@ describe("card writes", () => {
       const data = flat[0] as Record<string, number>;
       const at = (name: string) => flat[data[name] ?? -1];
       expect([at("code"), at("field")]).toEqual(["card.url_invalid", "items.2.uri"]);
-      // What was typed comes back too, for the editor drawn in place with no script.
-      expect(flat).toContain("not a url");
+    });
+    expect(writes).toEqual([]);
+  });
+
+  // The page's script keeps what was typed in its open editor (card-editor.svelte saveCard), so its refusal is the
+  // code, message and field alone; only the page drawn again with no script shows the typed words (staging change
+  // test 2026-11-21, finding 5: a 140 KB card came back whole). Kit's client sends both headers (kit 3.2.0
+  // src/runtime/app/forms/client.js).
+  test("a_refused_card_echoes_what_was_typed_only_to_the_page_with_no_script", async () => {
+    const typed = "é".repeat(70_000);
+    const form = new URLSearchParams({ kind: "readme", width: "full", text: typed }).toString();
+    const writes = await writesOf(async () => {
+      const script = await action("create", form, { accept: "application/json", "x-sveltekit-action": "true" });
+      expect(script.status).toBe(400);
+      const answer = await script.text();
+      expect(answer).toContain("card.too_long");
+      expect(answer).not.toContain("éééé");
+      expect(Buffer.byteLength(answer)).toBeLessThan(2_048);
+      const page = await action("create", form);
+      expect(page.status).toBe(400);
+      expect(await page.text()).toContain(typed);
     });
     expect(writes).toEqual([]);
   });
 
   test("a_remove_deletes_the_named_card", async () => {
     const writes = await writesOf(() => action("remove", `key=${CARD_B}`));
-    expect(writes).toEqual([{ method: "deleteRecord", collection: "sh.unset.card", rkey: CARD_B }]);
+    expect(writes).toMatchObject([
+      { method: "deleteRecord", collection: "sh.unset.card", rkey: CARD_B },
+      { method: "applyWrites", collection: "sh.unset.page", rkey: "self" },
+    ]);
+    const cards = (writes[1]?.record as { cards?: { uri: string }[] } | undefined)?.cards ?? [];
+    expect(cards.map((card) => card.uri)).not.toContain(`at://${OWNER}/sh.unset.card/${CARD_B}`);
   });
 
   test("a_bad_key_is_a_missing_card_and_an_unknown_kind_is_refused_before_any_write", async () => {
@@ -411,9 +465,9 @@ describe("card writes", () => {
   });
 
   test("the_largest_readme_fits", async () => {
-    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(10_000) }).toString();
+    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(5_000) }).toString();
     const fits = await writesOf(async () => expect((await action("create", largest)).status).toBe(303));
-    expect(fits).toHaveLength(1);
+    expect(fits.filter((write) => write.method === "createRecord")).toHaveLength(1);
   });
 
   // The card save cap is 2 MiB (Alex, 2026-11-18 02:17:13Z) so the largest collection still saves as a plain form.
@@ -438,7 +492,7 @@ describe("card writes", () => {
       expect((await action("create", largestCollection("/", 30))).status).toBe(303);
       expect((await action("create", largestCollection("x", 31))).status).toBe(400);
     });
-    expect(writes).toHaveLength(1);
+    expect(writes.filter((write) => write.method === "createRecord")).toHaveLength(1);
   });
 
   test("a_body_past_2_mib_is_refused_with_no_write", async () => {
@@ -564,7 +618,7 @@ describe("the one Save (ADR 0074)", () => {
 describe("an unavailable PDS", () => {
   let down: Member;
   beforeAll(async () => {
-    down = await memberServer(["getRecord", "listRecords", "createRecord"]);
+    down = await memberServer(["getRecord", "listRecords", "applyWrites"]);
   }, 120_000);
   afterAll(async () => {
     await down?.stop();

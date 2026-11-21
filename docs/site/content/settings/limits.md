@@ -105,10 +105,10 @@ Configurable per stack in the compose files.
 | `LIMITS.profile.headline` | `200` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarMaxSize` | `2000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarShapeBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.profile.visibilityBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.location` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.websiteBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.profile.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.page.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.page.visibilityBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.widthBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.surfaceBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.textBytes` | `20000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
@@ -143,6 +143,7 @@ Configurable per stack in the compose files.
 | `CARD_EDIT_LIMITS.links` | `30` | card editor rows per list | `domains/profile/card-edit.ts` |
 | `CARD_EDIT_LIMITS.collection` | `30` | card editor rows per list | `domains/profile/card-edit.ts` |
 | `CARD_EDIT_LIMITS.buttons` | `5` | card editor rows per list | `domains/profile/card-edit.ts` |
+| `TEXT_EDIT_BYTES` | `10000` | card editor Markdown bytes | `domains/profile/card-edit.ts` |
 | `DISCOVERABILITY_LIMITS.title` | `70` | Search and AI text | `domains/profile/discoverability.ts` |
 | `DISCOVERABILITY_LIMITS.description` | `200` | Search and AI text | `domains/profile/discoverability.ts` |
 | `MAX_AI_SEARCH_PAGES` | `10000` | robots and sitemap | `domains/profile/crawlers.ts` |

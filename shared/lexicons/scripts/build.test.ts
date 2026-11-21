@@ -50,6 +50,7 @@ describe("schema build checks", () => {
       "schemas/sh.unset.block.showcase.json",
       "schemas/sh.unset.block.text.json",
       "schemas/sh.unset.card.json",
+      "schemas/sh.unset.page.json",
       "schemas/sh.unset.profile.json",
     ]);
     // "object" is not a legal property type (vault lesson lexicon-docs-need-strict-parse-test).
@@ -187,10 +188,11 @@ describe("schema build checks", () => {
     );
   });
 
-  test("first_set_covers_the_profile_and_its_cards_only", () => {
+  test("first_set_covers_the_profile_its_pages_and_cards_only", () => {
     // ADR 0086 (Alex, 2026-11-21): follows left the first set; a feature that writes another record adds it later.
+    // ADR 0091 added the page.
     expect(setOf(authFull()).permissions).toEqual([
-      { type: "permission", resource: "repo", collection: ["sh.unset.profile", "sh.unset.card"] },
+      { type: "permission", resource: "repo", collection: ["sh.unset.profile", "sh.unset.page", "sh.unset.card"] },
     ]);
   });
 

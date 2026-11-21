@@ -2,12 +2,13 @@
 // vets its host here and connects only to the pinned addresses (a CI guard sends all such traffic through this folder).
 export { type Classification, classifyAddress, isInternalName } from "./src/classify.ts";
 export { resolveTxt, type TxtOptions, type TxtResolver } from "./src/dns.ts";
-export { type FetchDefaults, guardedFetch, libraryFetch } from "./src/libraryFetch.ts";
+export { type FetchDefaults, guardedFetch, libraryFetch, objectStoreFetch } from "./src/libraryFetch.ts";
 export {
   atproto,
   atprotoBlobUpload,
   DEFAULT_REQUEST_BYTES,
   internalPolicy,
+  OBJECT_STORE_BYTES,
   objectStore,
   type Policy,
   pdsAdmin,

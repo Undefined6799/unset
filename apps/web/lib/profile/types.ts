@@ -7,7 +7,7 @@ export type CardLayout = "list" | "carousel" | "grid";
 export type AvatarShape = "round" | "roundedSquare";
 export type CardSurface = "filled" | "outlined" | "plain";
 /** Who sees the member's page (ADR 0078), as domains/profile reads it. */
-export type ProfileVisibility = "public" | "signedIn" | "ownerOnly";
+export type PageVisibility = "public" | "signedIn" | "ownerOnly";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
 
@@ -114,8 +114,8 @@ export type CardView = {
 
 /**
  * How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS), and `text`, the README's maxlength:
- * the lexicon's limit in UTF-8 bytes (shared/lexicons LIMITS.card.textBytes). maxlength counts UTF-16 code units,
- * never more than a text's UTF-8 bytes, so it never stops a README the lexicon accepts, and it keeps a no-script save
+ * the editor's limit in UTF-8 bytes (domains/profile TEXT_EDIT_BYTES). maxlength counts UTF-16 code units,
+ * never more than a text's UTF-8 bytes, so it never stops a README the editor accepts, and it keeps a no-script save
  * far under the form's body cap (staging walkthrough 2026-11-18 round two: 2.2 MiB pasted, the text lost).
  */
 export type CardEditLimits = {

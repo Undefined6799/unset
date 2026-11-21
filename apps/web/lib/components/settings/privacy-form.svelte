@@ -12,7 +12,7 @@
   With no profile yet, or a profile the PDS did not return, there is no choice to show: only Search and AI.
 -->
 <script lang="ts">
-import type { ProfileVisibility } from "../../profile/types.ts";
+import type { PageVisibility } from "../../profile/types.ts";
 import { PAGE_VISIBILITY as T } from "../../settings/messages.ts";
 import { Icon } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
@@ -28,7 +28,7 @@ let {
   catchingUp = false,
 }: {
   /** The stored choice; `noProfile` when there is no page yet, `unreadable` when the PDS did not answer. */
-  visibility: ProfileVisibility | "noProfile" | "unreadable";
+  visibility: PageVisibility | "noProfile" | "unreadable";
   /** search-ai-fields.svelte's props. */
   search: {
     readonly values: {
@@ -48,7 +48,7 @@ let {
 } = $props();
 
 const id = $props.id();
-const CHOICES: readonly ProfileVisibility[] = ["public", "signedIn", "ownerOnly"];
+const CHOICES: readonly PageVisibility[] = ["public", "signedIn", "ownerOnly"];
 const known = $derived(visibility !== "noProfile" && visibility !== "unreadable");
 </script>
 

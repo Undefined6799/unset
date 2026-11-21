@@ -13,12 +13,14 @@ export { $nsid };
 /** Everything unset.sh writes in an account's repository. */
 const main = /*#__PURE__*/ l.permissionSet(
   $nsid,
-  [/*#__PURE__*/ l.permission("repo", { collection: ["sh.unset.profile", "sh.unset.card"] })],
+  [/*#__PURE__*/ l.permission("repo", { collection: ["sh.unset.profile", "sh.unset.page", "sh.unset.card"] })],
   {
     title: "unset.sh profile page",
     "title:lang": { en: "unset.sh profile page" },
-    detail: "Create and edit your unset.sh profile page and its cards. Nothing else in your account.",
-    "detail:lang": { en: "Create and edit your unset.sh profile page and its cards. Nothing else in your account." },
+    detail: "Create and edit your unset.sh profile, its pages and their cards. Nothing else in your account.",
+    "detail:lang": {
+      en: "Create and edit your unset.sh profile, its pages and their cards. Nothing else in your account.",
+    },
   },
 );
 
