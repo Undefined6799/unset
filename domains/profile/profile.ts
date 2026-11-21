@@ -154,8 +154,10 @@ export function toProfileRecord(
 }
 
 /**
- * The profile record with its card order set (ADR 0086: the `cards` list of at:// addresses of `owner`'s cards); every
- * other field is kept, as toProfileRecord keeps it. An empty order is no order. There is no order without a profile.
+ * The profile record with its card order set (ADR 0086: the `cards` list of at:// addresses of `owner`'s cards): the
+ * cards in `order` first, then every stored entry the order does not name, kept as it was (a card this version
+ * hides, another client's entry), since a card the list drops leaves the page (ADR 0086 point 3; ADR 0038). Every
+ * other field is kept, as toProfileRecord keeps it. An empty list is no list. There is no order without a profile.
  */
 export function withCardOrder(
   owner: RepoDid,
@@ -165,13 +167,62 @@ export function withCardOrder(
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   const built = toProfileRecord({}, existing, now);
   if (!built.ok) return built;
-  const { cards: _old, ...rest } = built.record;
-  if (order.length > LIMITS.profile.cardsMax) return { ok: false, code: "profile.too_long" };
-  const cards = order.map((key) => ({ uri: cardUri(owner, key) }));
-  const record: ProfileRecord = order.length === 0 ? rest : { ...rest, cards };
-  // "read" as in toProfileRecord: a field another client added is kept, and every field the lexicon defines is checked.
-  if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
-  return { ok: true, record };
+  const ordered = order.map((key) => ({ uri: cardUri(owner, key) }));
+  const rest = storedList(built.record).filter((entry) => !order.some((key) => names(owner, key)(entry)));
+  return withList(built.record, [...ordered, ...rest]);
+}
+
+/** The profile's stored `cards` entries, unchecked, and whether one of them names `owner`'s card `key`. */
+function storedList(record: ProfileRecord): readonly unknown[] {
+  return Array.isArray(record.cards) ? record.cards : [];
+}
+const names = (owner: RepoDid, key: CardKey) => (entry: unknown) =>
+  typeof entry === "object" && entry !== null && (entry as { readonly uri?: unknown }).uri === cardUri(owner, key);
+
+/** The record checked as toProfileRecord checks it, with `cards` set to `list`, or the field gone when it is empty. */
+function withList(
+  record: ProfileRecord,
+  list: readonly unknown[],
+): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
+  if (list.length > LIMITS.profile.cardsMax) return { ok: false, code: "profile.too_long" };
+  const { cards: _old, ...rest } = record;
+  const next: ProfileRecord = list.length === 0 ? rest : { ...rest, cards: list };
+  if (!validateRecord("sh.unset.profile", next, "read").ok) return { ok: false, code: "profile.invalid" };
+  return { ok: true, record: next };
+}
+
+/**
+ * The profile record with `owner`'s new card `key` at the end of its list, so the card shows (ADR 0086 point 3). Every
+ * entry already stored is kept as it is, another client's too (ADR 0038). There is no list without a profile.
+ */
+export function withCardListed(
+  owner: RepoDid,
+  key: CardKey,
+  existing: unknown,
+  now: string,
+): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
+  const built = toProfileRecord({}, existing, now);
+  if (!built.ok) return built;
+  const list = storedList(built.record);
+  return list.some(names(owner, key)) ? built : withList(built.record, [...list, { uri: cardUri(owner, key) }]);
+}
+
+/**
+ * The profile record without the entries that name `owner`'s card `key`, every other entry kept; null when there is
+ * nothing to write (no profile, or the card is not listed).
+ */
+export function withCardUnlisted(
+  owner: RepoDid,
+  key: CardKey,
+  existing: unknown,
+  now: string,
+): { readonly ok: true; readonly record: ProfileRecord | null } | { readonly ok: false; readonly code: ProfileError } {
+  if (existing === null || existing === undefined) return { ok: true, record: null };
+  const built = toProfileRecord({}, existing, now);
+  if (!built.ok) return built;
+  const list = storedList(built.record);
+  const kept = list.filter((entry) => !names(owner, key)(entry));
+  return kept.length === list.length ? { ok: true, record: null } : withList(built.record, kept);
 }
 
 /** How the avatar is cropped (ADR 0051; the lexicon's avatarShape known values). */

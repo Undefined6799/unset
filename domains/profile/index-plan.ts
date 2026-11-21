@@ -28,7 +28,10 @@ export const MAX_RECORD_BYTES = 1_000_000;
  * list already stopped at (book P3.12v; the number is Alex's to set).
  */
 export const MAX_PAGE_BYTES = 4 * 1024 * 1024;
-/** Sections kept per account: the profile lists at most LIMITS.profile.cardsMax, and unlisted ones show after. */
+/**
+ * Sections kept per account: the profile lists at most LIMITS.profile.cardsMax. Unlisted ones are kept too (they do
+ * not show, ADR 0086 point 3), so a later list that names them needs no new read of the repo.
+ */
 export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.profile.cardsMax;
 
 /** One proven change from a commit, with the record in its JSON form (blob refs as `{ $type: "blob", ref: { $link } }`). */

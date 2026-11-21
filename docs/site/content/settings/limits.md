@@ -143,6 +143,7 @@ Configurable per stack in the compose files.
 | `CARD_EDIT_LIMITS.links` | `30` | card editor rows per list | `domains/profile/card-edit.ts` |
 | `CARD_EDIT_LIMITS.collection` | `30` | card editor rows per list | `domains/profile/card-edit.ts` |
 | `CARD_EDIT_LIMITS.buttons` | `5` | card editor rows per list | `domains/profile/card-edit.ts` |
+| `TEXT_EDIT_BYTES` | `10000` | card editor Markdown bytes | `domains/profile/card-edit.ts` |
 | `DISCOVERABILITY_LIMITS.title` | `70` | Search and AI text | `domains/profile/discoverability.ts` |
 | `DISCOVERABILITY_LIMITS.description` | `200` | Search and AI text | `domains/profile/discoverability.ts` |
 | `MAX_AI_SEARCH_PAGES` | `10000` | robots and sitemap | `domains/profile/crawlers.ts` |
