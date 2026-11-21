@@ -1,0 +1,340 @@
+// Text cards edited where they stand on the owner's page (ADR 0074 item 4): no Edit press, one Save for every changed
+// card in the bar above the name, sticky under the site header; unsaved words kept on this device and offered back
+// when the page opens, never merged on their own; Discard throws them away. All under the app's real CSP. The card
+// added is deleted again.
+import { expect, type Page, test } from "@playwright/test";
+import { addCard, OWN_PAGE } from "./cards.ts";
+import { openPage, pageNoise, watch } from "./observe.ts";
+
+/** The in-place editor of the Text card that holds `word`, once the page has loaded it. */
+async function editorHolding(page: Page, word: string) {
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  const editor = card.locator("[data-text-in-place] [contenteditable]");
+  await expect(editor).toHaveAttribute("contenteditable", "true");
+  return { card, editor };
+}
+
+async function openOwnPage(page: Page) {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+}
+
+async function removeCard(page: Page, word: string) {
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await expect(card).toHaveCount(0);
+}
+
+const bar = (page: Page) =>
+  page.getByRole("region", { name: "Unsaved changes" }).and(page.locator("[data-unsaved-bar]"));
+
+test("a_text_card_is_edited_in_place_and_saved_from_the_bar", async ({ page }) => {
+  const watched = watch(page);
+  const word = `inplace${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} first` });
+  await openOwnPage(page);
+  await expect(bar(page)).toHaveCount(0);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" and more");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} first and more`);
+  await expect(bar(page)).toHaveCount(0);
+  await removeCard(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+test("unsaved_words_are_offered_back_after_a_reload_and_discard_drops_them", async ({ page }) => {
+  const word = `draft${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} kept` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" typed");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // Leaving asks nothing (Alex 2026-11-20): the words wait on the device.
+  await openOwnPage(page);
+  await expect(bar(page)).toHaveCount(0);
+  const offer = page.getByText("This device kept unsaved words for 1 card from an earlier visit.");
+  await expect(offer).toBeVisible();
+  await page.getByRole("button", { name: "Bring them back" }).click();
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await expect((await editorHolding(page, word)).editor).toContainText(`${word} kept typed`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await expect(bar(page)).toHaveCount(0);
+  await expect((await editorHolding(page, word)).editor).toHaveText(`${word} kept`);
+  await openOwnPage(page);
+  await expect(offer).toHaveCount(0);
+  await removeCard(page, word);
+});
+
+test("the_bar_sticks_under_the_site_header", async ({ page }) => {
+  const word = `sticky${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, {
+    kind: "readme",
+    width: "full",
+    surface: "filled",
+    text: `${word}\n\n${"line\n\n".repeat(80)}`,
+  });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("ControlOrMeta+End");
+  await editor.pressSequentially(" end");
+  await expect(bar(page)).toBeVisible();
+  await page.mouse.wheel(0, 3000);
+  const header = await page.locator("[data-site-header]").boundingBox();
+  await expect(async () => {
+    const box = await bar(page).boundingBox();
+    expect(Math.round(box?.y ?? -1)).toBe(Math.round((header?.y ?? 0) + (header?.height ?? 0)));
+  }).toPass();
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Review of f6c6a2f: the editors stay open while a Save is on its way, so words typed meanwhile must stay unsaved, with
+// their draft, and the editor must not be redrawn under the member's caret when the answer comes.
+test("words_typed_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) => {
+  const word = `during${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\?\/saveAll$/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
+  await editor.pressSequentially(" three");
+  release();
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // The same editor, still focused: typing goes on where it was.
+  await expect(editor).toBeFocused();
+  await editor.pressSequentially(" four");
+  await expect(editor).toContainText(`${word} one two three four`);
+  await page.unroute(/\?\/saveAll$/);
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two`);
+  await expect(page.getByText("This device kept unsaved words for 1 card from an earlier visit.")).toBeVisible();
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await removeCard(page, word);
+});
+
+// Codex review of f6c6a2f: a Save sent to sign in again wrote nothing, so the words stay in this device's drafts.
+test("a_save_sent_to_sign_in_again_keeps_the_words_as_drafts", async ({ page }) => {
+  const word = `ended${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} kept` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" unsent");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // The action's answer when the sign-in has ended (+page.server.ts write: 303 to the sign-in page), as kit sends it.
+  await page.route(/\?\/saveAll$/, (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ type: "redirect", status: 303, location: "/login?error=login.session_ended" }),
+    }),
+  );
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await page.waitForURL(/\/login/);
+  await page.unroute(/\?\/saveAll$/);
+  await openOwnPage(page);
+  await expect(page.getByText("This device kept unsaved words for 1 card from an earlier visit.")).toBeVisible();
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await removeCard(page, word);
+});
+
+// Codex on 1bdb437: a card deleted from its menu with unsaved words leaves no count in the bar and no draft behind.
+test("a_card_deleted_with_unsaved_words_leaves_nothing_unsaved", async ({ page }) => {
+  const word = `gone${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} here` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" typed");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await removeCard(page, word);
+  await expect(bar(page)).toHaveCount(0);
+  await openOwnPage(page);
+  await expect(page.getByText(/This device kept unsaved words/)).toHaveCount(0);
+});
+
+// Codex on 4fca548: typing into a card while an earlier visit's draft is offered keeps the new words on the device,
+// so leaving afterwards loses nothing.
+test("words_typed_while_a_draft_is_offered_are_kept", async ({ page }) => {
+  const word = `offer${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  let { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" old");
+  await openOwnPage(page);
+  const offer = page.getByText(/This device kept unsaved words/);
+  await expect(offer).toBeVisible();
+  ({ editor } = await editorHolding(page, word));
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" new");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  const drop = page.getByRole("button", { name: "Throw them away" });
+  if (await drop.isVisible()) await drop.click();
+  await openOwnPage(page);
+  await page.getByRole("button", { name: "Bring them back" }).click();
+  await expect((await editorHolding(page, word)).editor).toContainText(`${word} start new`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Codex on b69a0ce: a Width or Style change saved while an earlier visit's draft is offered keeps that draft offered;
+// only new words replace it.
+test("a_layout_change_saved_while_a_draft_is_offered_keeps_the_draft", async ({ page }) => {
+  const word = `layout${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" kept");
+  await openOwnPage(page);
+  const offer = page.getByText(/This device kept unsaved words/);
+  await expect(offer).toBeVisible();
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemradio", { name: "Half width" }).click();
+  await page.keyboard.press("Escape");
+  await expect(offer).toBeVisible();
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await openOwnPage(page);
+  await page.getByRole("button", { name: "Bring them back" }).click();
+  await expect((await editorHolding(page, word)).editor).toContainText(`${word} start kept`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Codex on edc4570: while an earlier visit's draft is offered, a Width change discarded leaves the draft, and Throw
+// them away removes it even with a Width change unsaved.
+test("discarding_a_layout_change_keeps_an_offered_draft_and_throwing_it_away_removes_it", async ({ page }) => {
+  const word = `answer${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" kept");
+  const offer = page.getByText(/This device kept unsaved words/);
+  const half = async () => {
+    await page
+      .locator('[data-slot="card"]', { hasText: word })
+      .getByRole("button", { name: /^More for / })
+      .click();
+    await page.getByRole("menuitemradio", { name: "Half width" }).click();
+    await page.keyboard.press("Escape");
+    await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  };
+  await openOwnPage(page);
+  await half();
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await openOwnPage(page);
+  await expect(offer).toBeVisible();
+  await half();
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await openOwnPage(page);
+  await expect(offer).toHaveCount(0);
+  await removeCard(page, word);
+});
+
+// Codex on b7db900: words put back to what was stored while a Save is on its way stay as typed, and unsaved.
+test("words_put_back_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) => {
+  const word = `back${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\?\/saveAll$/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
+  for (let i = 0; i < " two".length; i += 1) await editor.press("Backspace");
+  await expect(editor).toHaveText(`${word} one`);
+  release();
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await expect(editor).toHaveText(`${word} one`);
+  await page.unroute(/\?\/saveAll$/);
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  // The first Save's "Saved." is still shown, so wait for this Save to leave nothing unsaved before reloading.
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one`);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).not.toContainText("two");
+  await removeCard(page, word);
+});
+
+// Codex on d91bf83: the editor reports its words once a frame, so a Save pressed in the same frame as the last
+// keystroke must still send them. The words and the press are one task here, so no frame comes between them.
+test("words_typed_in_the_frame_of_the_save_are_saved", async ({ page }) => {
+  const word = `frame${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // ProseMirror reads the typed words from its MutationObserver, a microtask; the press comes in the next one, so the
+  // editor holds the words and no frame has run.
+  type Button = { textContent: string | null; click: () => void };
+  type Doc = {
+    execCommand: (command: string, ui: boolean, value: string) => boolean;
+    querySelectorAll: (s: string) => Iterable<Button>;
+  };
+  await editor.evaluate(async (node: { ownerDocument: Doc }) => {
+    const doc = node.ownerDocument;
+    doc.execCommand("insertText", false, " three");
+    await Promise.resolve();
+    [...doc.querySelectorAll("[data-unsaved-bar] button")].find((button) => button.textContent === "Save")?.click();
+  });
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two three`);
+  await removeCard(page, word);
+});
