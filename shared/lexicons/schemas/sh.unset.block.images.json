@@ -1,0 +1,34 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.block.images",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["images"],
+      "description": "One picture, or a small set shown together.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000,
+          "description": "Heading shown above the pictures."
+        },
+        "fit": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["contain", "cover"],
+          "description": "contain shows each picture whole in its own proportions; cover crops them to fill their space, as CSS object-fit does. Absent or unknown means contain."
+        },
+        "images": {
+          "type": "array",
+          "maxLength": 20,
+          "items": {
+            "type": "ref",
+            "ref": "sh.unset.block.defs#image"
+          },
+          "description": "In display order. One picture shows alone; more show as a set."
+        }
+      }
+    }
+  }
+}

@@ -390,7 +390,7 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     expect(saved.headers.get("location")).toBe("/settings/privacy?saved#privacy");
     const [written] = up.writes().slice(before);
     expect(written).toMatchObject({
-      record: { displayName: "Mara Lind", headline: "Night trains.", visibility: "signedIn" },
+      record: { displayName: "Mara Lind", headline: "Night trains.", visibility: "signed-in" },
     });
     const html = await (await privacyPage(up, "?saved")).text();
     expect(html).toContain("Privacy saved.");
@@ -458,7 +458,7 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
       expect(performance.now() - started).toBeGreaterThanOrEqual(4_500);
       expect(await (await privacyPage(up, "?saved=pending")).text()).toContain("still catching up");
       // The index already has the choice: "Privacy saved." at once.
-      await indexed("signedIn");
+      await indexed("signed-in");
       const fast = await saveChoices(up, "visibility=signedIn&title=&description=");
       expect(fast.headers.get("location")).toBe("/settings/privacy?saved#privacy");
       expect(await (await privacyPage(up, "?saved")).text()).not.toContain("still catching up");
@@ -476,7 +476,7 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     const before = up.writes().length;
     const response = await saveChoices(up, `visibility=ownerOnly&title=${"x".repeat(71)}&description=`);
     expect(response.status).toBe(303);
-    expect(up.writes().slice(before)[0]?.record).toMatchObject({ visibility: "ownerOnly" });
+    expect(up.writes().slice(before)[0]?.record).toMatchObject({ visibility: "owner-only" });
     await saveChoices(up, "visibility=public&title=&description=");
   });
 

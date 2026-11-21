@@ -32,6 +32,8 @@ export {
   parseCardKey,
   parseCardVersion,
   parseDraftImageId,
+  parseRepoDid,
+  type RepoDid,
   readCard,
   type ShownCardContent,
   type StoredCardRecord,

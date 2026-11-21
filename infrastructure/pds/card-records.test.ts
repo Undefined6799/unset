@@ -1,4 +1,4 @@
-// The member's sh.unset.section records (profile cards, ADR 0051), over pdsCall. The XRPC client is the real
+// The member's sh.unset.card records (profile cards, ADR 0051), over pdsCall. The XRPC client is the real
 // @atproto/api Agent over a fake fetchHandler, so the requests it sends and the errors it parses are the library's own.
 import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
@@ -21,7 +21,7 @@ const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Did;
 const CID = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
 const CID2 = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae";
 const log: Logger = { info: () => undefined, warn: () => undefined, error: () => undefined, logError: () => undefined };
-const card = { $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text: "Hi" }, createdAt: "x" };
+const card = { $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text: "Hi" }, createdAt: "x" };
 
 type Call = { url: URL; method: string; body: unknown };
 function pds(answer: (call: Call) => Response) {
@@ -52,7 +52,7 @@ const params = (call: Call | undefined) => Object.fromEntries(call?.url.searchPa
 
 const rkey = (n: number) => `3jzfcijpj2z${String(n).padStart(3, "0")}`;
 const record = (n: number, value: unknown = card) => ({
-  uri: `at://${DID}/sh.unset.section/${rkey(n)}`,
+  uri: `at://${DID}/sh.unset.card/${rkey(n)}`,
   cid: CID,
   value,
 });
@@ -87,10 +87,10 @@ describe("listCardRecords", () => {
     });
     expect(result.kind === "ok" && result.value.cards[0]).toEqual({ key: rkey(0), cid: CID, value: card });
     expect(calls.map(params)).toEqual([
-      { repo: DID, collection: "sh.unset.section", limit: "10" },
-      { repo: DID, collection: "sh.unset.section", limit: "10", cursor: rkey(9) },
-      { repo: DID, collection: "sh.unset.section", limit: "10", cursor: rkey(19) },
-      { repo: DID, collection: "sh.unset.section", limit: "10", cursor: rkey(22) },
+      { repo: DID, collection: "sh.unset.card", limit: "10" },
+      { repo: DID, collection: "sh.unset.card", limit: "10", cursor: rkey(9) },
+      { repo: DID, collection: "sh.unset.card", limit: "10", cursor: rkey(19) },
+      { repo: DID, collection: "sh.unset.card", limit: "10", cursor: rkey(22) },
     ]);
   });
 
@@ -120,7 +120,7 @@ describe("listCardRecords", () => {
   test("a page of large cards under the page budget is read in full, in a few calls", async () => {
     // Codex review of #1911: 29 Text cards of 60,000 quotation marks, about 120 KB of JSON each (3.5 MB together,
     // under the 4 MiB budget). Eight fit one response under the 1 MiB cap; nine do not.
-    const quotes = { ...card, content: { $type: "sh.unset.section#readme", text: '"'.repeat(60_000) } };
+    const quotes = { ...card, content: { $type: "sh.unset.block.text", text: '"'.repeat(60_000) } };
     const { pdsCall, ctx, calls } = pds(holding(29, (_n, limit) => limit > 8, quotes));
     expect(keys(await listCardRecords(pdsCall, ctx, DID))).toMatchObject({ complete: true, overflow: false });
     expect(calls.length).toBeLessThanOrEqual(10);
@@ -152,7 +152,7 @@ describe("listCardRecords", () => {
 
   test("the byte budget counts UTF-8 bytes, so multibyte cards meet the same bound", async () => {
     // 100 cards of 15,000 CJK characters: 1.5 million UTF-16 units but 4.5 MB of UTF-8, past the 4 MiB budget.
-    const big = { ...card, content: { $type: "sh.unset.section#readme", text: "\u6f22".repeat(15_000) } };
+    const big = { ...card, content: { $type: "sh.unset.block.text", text: "\u6f22".repeat(15_000) } };
     const { pdsCall, ctx } = pds(holding(100, () => false, big));
     expect(keys(await listCardRecords(pdsCall, ctx, DID))).toMatchObject({ complete: false });
   });
@@ -175,7 +175,7 @@ describe("listCardRecords", () => {
     const { pdsCall, ctx } = pds(() =>
       Response.json({
         records: [
-          { uri: "at://did:plc:bbbbbbbbbbbbbbbbbbbbbbbb/sh.unset.section/3jzfcijpj2z2a", cid: CID, value: card },
+          { uri: "at://did:plc:bbbbbbbbbbbbbbbbbbbbbbbb/sh.unset.card/3jzfcijpj2z2a", cid: CID, value: card },
           { uri: `at://${DID}/sh.unset.profile/self`, cid: CID, value: card },
         ],
       }),
@@ -193,7 +193,7 @@ describe("createCardRecord", () => {
     expect(key).toMatch(/^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/);
     expect(newCardKey() > key).toBe(true);
     const { pdsCall, ctx, calls } = pds(() =>
-      Response.json({ uri: `at://${DID}/sh.unset.section/${key}`, cid: CID, commit: { cid: CID2, rev: REV } }),
+      Response.json({ uri: `at://${DID}/sh.unset.card/${key}`, cid: CID, commit: { cid: CID2, rev: REV } }),
     );
     // The commit's revision comes back, by which saves of one card settle their pictures in order.
     expect(await createCardRecord(pdsCall, ctx, DID, card, CID2, key)).toEqual({
@@ -205,7 +205,7 @@ describe("createCardRecord", () => {
 
   test("creates the record and lets the PDS pick its key", async () => {
     const { pdsCall, ctx, calls } = pds(() =>
-      Response.json({ uri: `at://${DID}/sh.unset.section/3jzfcijpj2z2c`, cid: CID }),
+      Response.json({ uri: `at://${DID}/sh.unset.card/3jzfcijpj2z2c`, cid: CID }),
     );
     expect(await createCardRecord(pdsCall, ctx, DID, card, CID2)).toEqual({
       kind: "ok",
@@ -213,7 +213,7 @@ describe("createCardRecord", () => {
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.repo.createRecord");
-    expect(calls[0]?.body).toEqual({ repo: DID, collection: "sh.unset.section", record: card, swapCommit: CID2 });
+    expect(calls[0]?.body).toEqual({ repo: DID, collection: "sh.unset.card", record: card, swapCommit: CID2 });
   });
 
   test("a repo whose commit moved on is reported as changed, and nothing is retried here", async () => {
@@ -232,7 +232,7 @@ describe("saveCardRecords", () => {
   test("each_card_written_comes_back_with_the_version_the_pds_gave_it", async () => {
     const result = (rkey: string, cid: string) => ({
       $type: "com.atproto.repo.applyWrites#updateResult",
-      uri: `at://${DID}/sh.unset.section/${rkey}`,
+      uri: `at://${DID}/sh.unset.card/${rkey}`,
       cid,
     });
     const { pdsCall, ctx } = pds(() =>
@@ -278,8 +278,8 @@ describe("saveCardRecords", () => {
       repo: DID,
       swapCommit: CID2,
       writes: [
-        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section", rkey: "k1", value: card },
-        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section", rkey: "k2", value: other },
+        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.card", rkey: "k1", value: card },
+        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.card", rkey: "k2", value: other },
       ],
     });
   });
@@ -413,8 +413,8 @@ describe("saveCardRecord", () => {
   test("writes over the stored card with swapRecord set to the CID it read", async () => {
     const { pdsCall, ctx, calls } = pds((call) =>
       call.url.pathname.endsWith("getRecord")
-        ? Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID, value: card })
-        : Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID2 }),
+        ? Response.json({ uri: `at://${DID}/sh.unset.card/k1`, cid: CID, value: card })
+        : Response.json({ uri: `at://${DID}/sh.unset.card/k1`, cid: CID2 }),
     );
     const seen: unknown[] = [];
     const result = await saveCardRecord(pdsCall, ctx, DID, "k1", (existing) => {
@@ -423,10 +423,10 @@ describe("saveCardRecord", () => {
     });
     expect(result).toEqual({ kind: "ok", value: { kind: "saved" } });
     expect(seen).toEqual([card]);
-    expect(params(calls[0])).toEqual({ repo: DID, collection: "sh.unset.section", rkey: "k1" });
+    expect(params(calls[0])).toEqual({ repo: DID, collection: "sh.unset.card", rkey: "k1" });
     expect(calls[1]?.body).toEqual({
       repo: DID,
-      collection: "sh.unset.section",
+      collection: "sh.unset.card",
       rkey: "k1",
       record: { ...card, width: "half" },
       swapRecord: CID,
@@ -436,8 +436,8 @@ describe("saveCardRecord", () => {
   test("card.save_rev: a write that made a commit answers its revision", async () => {
     const { pdsCall, ctx } = pds((call) =>
       call.url.pathname.endsWith("getRecord")
-        ? Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID, value: card })
-        : Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID2, commit: { cid: CID2, rev: REV } }),
+        ? Response.json({ uri: `at://${DID}/sh.unset.card/k1`, cid: CID, value: card })
+        : Response.json({ uri: `at://${DID}/sh.unset.card/k1`, cid: CID2, commit: { cid: CID2, rev: REV } }),
     );
     const result = await saveCardRecord(pdsCall, ctx, DID, "k1", () => ({ ok: true, record: { ...card } }));
     expect(result).toEqual({ kind: "ok", value: { kind: "saved", rev: REV } });
@@ -455,7 +455,7 @@ describe("saveCardRecord", () => {
   test("a change made in between is a conflict", async () => {
     const { pdsCall, ctx } = pds((call) =>
       call.url.pathname.endsWith("getRecord")
-        ? Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID, value: card })
+        ? Response.json({ uri: `at://${DID}/sh.unset.card/k1`, cid: CID, value: card })
         : Response.json({ error: "InvalidSwap", message: "Record was at CID2" }, { status: 400 }),
     );
     const result = await saveCardRecord(pdsCall, ctx, DID, "k1", () => ({ ok: true, record: card }));
@@ -468,6 +468,6 @@ describe("deleteCardRecord", () => {
     const { pdsCall, ctx, calls } = pds(() => Response.json({}));
     expect(await deleteCardRecord(pdsCall, ctx, DID, "k1")).toEqual({ kind: "ok", value: undefined });
     expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.repo.deleteRecord");
-    expect(calls[0]?.body).toEqual({ repo: DID, collection: "sh.unset.section", rkey: "k1" });
+    expect(calls[0]?.body).toEqual({ repo: DID, collection: "sh.unset.card", rkey: "k1" });
   });
 });

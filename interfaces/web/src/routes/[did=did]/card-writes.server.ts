@@ -17,6 +17,7 @@ import {
   type ProfileError,
   parseCardVersion,
   pictureLink,
+  type RepoDid,
   reorderCards,
   shownCards,
   toCardRecord,
@@ -189,7 +190,8 @@ const landed = (key: CardKey, written: unknown, rev: string | undefined): Landed
 /** A write the PDS did not answer may still have landed. */
 const unanswered = (result: PdsResult<unknown>): boolean => result.kind === "transient";
 
-export function cardWrites(store: CardStore, now: () => string, pictures: PictureStore): CardWrites {
+/** `owner` is the member whose repository the store writes; the card list names their cards by address. */
+export function cardWrites(owner: RepoDid, store: CardStore, now: () => string, pictures: PictureStore): CardWrites {
   const pdsFailure = (result: Exclude<PdsResult<unknown>, { kind: "ok" }>): CardWrite => {
     const location = pdsSignInRedirect(result);
     return location === null ? failed("card.pds_unavailable") : { kind: "redirect", location };
@@ -443,7 +445,7 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
         shownCards(listed.value.cards).map((card) => card.key),
       );
       if (!order.ok) return failed(order.code);
-      return outcome(await store.saveProfile((existing) => withCardOrder(order.order, existing, now())));
+      return outcome(await store.saveProfile((existing) => withCardOrder(owner, order.order, existing, now())));
     },
     // A profile write, so a refusal reads as one: the profile changed elsewhere, or the PDS did not answer.
     avatarShape: async (shape) => {

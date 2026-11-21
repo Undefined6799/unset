@@ -2,6 +2,7 @@
 // from it must validate before it goes to the member's PDS. Reading is in cards.ts.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import {
+  BLOCKS,
   type CardButton,
   type CardContent,
   type CardEntry,
@@ -14,6 +15,7 @@ import {
   type CardWidth,
   DEFAULT_LAYOUT,
   type Failed,
+  FIT_VALUES,
   FITS,
   isEmailAddress,
   isObject,
@@ -21,6 +23,7 @@ import {
   NSID,
   type Obj,
   oneOf,
+  PRESET_VALUES,
   PRESETS,
   parseDraftImageId,
   SURFACES,
@@ -36,7 +39,7 @@ const OWN_FIELDS: Record<CardKind, readonly string[]> = {
   links: ["title", "layout", "items"],
   collection: ["title", "layout", "items"],
   buttons: ["heading", "text", "buttons"],
-  image: ["image", "caption", "fit"],
+  image: ["images", "fit"],
 };
 
 /**
@@ -46,7 +49,7 @@ const OWN_FIELDS: Record<CardKind, readonly string[]> = {
 export const CARD_EDIT_LIMITS = {
   links: 30,
   collection: 30,
-  buttons: LIMITS.section.buttonsMax,
+  buttons: LIMITS.card.buttonsMax,
 } as const satisfies Partial<Record<CardKind, number>>;
 
 type Field<T> = { readonly ok: true; readonly value: T } | Failed;
@@ -148,7 +151,7 @@ function readReadme(input: Obj): Field<CardContent> {
 function readLinks(input: Obj): Field<CardContent> {
   const head = fields({ title: field(input.title) });
   const layout = layoutOf(input.layout, "links");
-  const raw = list(input.items, LIMITS.section.linksMax);
+  const raw = list(input.items, LIMITS.card.linksMax);
   if (!head.ok) return head;
   if (!layout.ok) return layout;
   if (!raw.ok) return raw;
@@ -161,7 +164,7 @@ function readLinks(input: Obj): Field<CardContent> {
 function readCollection(input: Obj): Field<CardContent> {
   const head = fields({ title: field(input.title) });
   const layout = layoutOf(input.layout, "collection");
-  const raw = list(input.items, LIMITS.section.entriesMax);
+  const raw = list(input.items, LIMITS.card.entriesMax);
   if (!head.ok) return head;
   if (!layout.ok) return layout;
   if (!raw.ok) return raw;
@@ -179,7 +182,7 @@ function readButtons(input: Obj): Field<CardContent> {
   const head = fields({ heading: field(input.heading), text: field(input.text, true) });
   if (!head.ok) return head;
   if (head.value.heading === "") return fail("card.required", "heading");
-  const raw = list(input.buttons, LIMITS.section.buttonsMax);
+  const raw = list(input.buttons, LIMITS.card.buttonsMax);
   if (!raw.ok) return raw;
   const buttons = filled(all("buttons", raw.value, readButtonInput));
   return buttons.ok ? { ok: true, value: { kind: "buttons", ...head.value, buttons: buttons.value } } : buttons;
@@ -236,7 +239,8 @@ const EPOCH = "1970-01-01T00:00:00.000Z";
  * with "at $.content.items[1].label" (card-edit.test.ts pins it). A message in any other form names no field.
  */
 function tooLongField(errors: readonly string[]): string | undefined {
-  if (/ at \$\.content\.image\.alt$/.test(errors[0] ?? "")) return "alt";
+  const picture = / at \$\.content\.images\[0\]\.(alt|caption)$/.exec(errors[0] ?? "");
+  if (picture !== null) return picture[1];
   const path = / at \$\.content\.([a-z]+)(?:\[(\d+)\]\.([a-z]+))?$/i.exec(errors[0] ?? "");
   if (path === null) return undefined;
   const [, name = "", index, inner] = path;
@@ -261,8 +265,13 @@ const SIZING_PICTURE = {
   aspectRatio: { width: 1, height: 1 },
 };
 
+/** A picture card's one picture as its images block holds it: file, proportions, alt text and caption. */
+function pictureEntry(content: Extract<CardContent, { kind: "image" }>, picture: Obj): Obj {
+  return { ...picture, alt: content.alt, ...set({ caption: content.caption }) };
+}
+
 function toLexicon(content: CardContent): Record<string, unknown> {
-  const $type = `${NSID}#${content.kind}`;
+  const $type = BLOCKS[content.kind];
   switch (content.kind) {
     case "image": {
       const { picture } = content;
@@ -270,7 +279,7 @@ function toLexicon(content: CardContent): Record<string, unknown> {
         picture.kind === "published"
           ? { image: picture.blob, aspectRatio: { width: picture.width, height: picture.height } }
           : SIZING_PICTURE;
-      return { $type, image: { ...image, alt: content.alt }, ...set({ caption: content.caption }), fit: content.fit };
+      return { $type, images: [pictureEntry(content, image)], fit: FIT_VALUES[content.fit] };
     }
     case "readme":
       return { $type, text: content.text };
@@ -294,8 +303,11 @@ function toLexicon(content: CardContent): Record<string, unknown> {
         ...set({ heading: content.heading, text: content.text }),
         buttons: content.buttons.map((b) =>
           b.kind === "email"
-            ? { $type: `${NSID}#emailButton`, address: b.address }
-            : { $type: `${NSID}#linkButton`, ...set({ preset: b.preset, uri: b.uri, label: b.label }) },
+            ? { $type: `${BLOCKS.buttons}#email`, address: b.address }
+            : {
+                $type: `${BLOCKS.buttons}#link`,
+                ...set({ preset: PRESET_VALUES[b.preset], uri: b.uri, label: b.label }),
+              },
         ),
       };
   }
@@ -336,7 +348,7 @@ function keepElementFields(fresh: Obj, old: Obj, kind: CardKind): Obj {
 
 function rows(content: unknown, kind: CardKind): number {
   const list = ELEMENTS[kind];
-  if (list === undefined || !isObject(content) || content.$type !== `${NSID}#${kind}`) return 0;
+  if (list === undefined || !isObject(content) || content.$type !== BLOCKS[kind]) return 0;
   const value = content[list];
   return Array.isArray(value) ? value.length : 0;
 }
@@ -352,17 +364,24 @@ function withinEditLimit(fresh: Obj, existing: unknown, kind: CardKind): boolean
   return rows(fresh, kind) <= Math.max(limit, stored);
 }
 
+/** The first picture a stored images block holds, or null. */
+function storedPicture(content: unknown): Obj | null {
+  if (!isObject(content) || content.$type !== BLOCKS.image || !Array.isArray(content.images)) return null;
+  const first: unknown = content.images[0];
+  return isObject(first) && isObject(first.image) ? first : null;
+}
+
 /**
- * The picture object a picture card writes: a published one as built, the card's stored one with the new alt text
- * when it is kept (its blob ref and ratio are the PDS's own), and never a draft web has not published.
+ * The picture entry a picture card writes: a published one as built, the card's stored one with the new alt text
+ * and caption when it is kept (its blob ref and ratio are the PDS's own), and never a draft web has not published.
  */
 function pictureToWrite(content: Extract<CardContent, { kind: "image" }>, existing: unknown): Field<Obj> {
   if (content.picture.kind === "draft") return fail("card.invalid");
-  if (content.picture.kind === "published") return { ok: true, value: toLexicon(content).image as Obj };
-  const stored = isObject(existing) && isObject(existing.content) ? existing.content : {};
-  const image = stored.$type === `${NSID}#image` && isObject(stored.image) ? stored.image : null;
-  if (image === null || !isObject(image.image)) return fail("card.required", "image");
-  return { ok: true, value: { ...image, alt: content.alt } };
+  if (content.picture.kind === "published") return { ok: true, value: (toLexicon(content).images as Obj[])[0] ?? {} };
+  const image = storedPicture(isObject(existing) ? existing.content : undefined);
+  if (image === null) return fail("card.required", "image");
+  const { alt: _a, caption: _c, ...kept } = image;
+  return { ok: true, value: pictureEntry(content, kept) };
 }
 
 /**
@@ -371,9 +390,8 @@ function pictureToWrite(content: Extract<CardContent, { kind: "image" }>, existi
  * through @atproto/api, whose blob is a decoded BlobRef that serialises to that form, reads the same as a plain one.
  */
 export function pictureLink(record: unknown): string | null {
-  if (!isObject(record) || !isObject(record.content) || record.content.$type !== `${NSID}#image`) return null;
-  const image = record.content.image;
-  if (!isObject(image) || image.image === undefined) return null;
+  const image = isObject(record) ? storedPicture(record.content) : null;
+  if (image === null) return null;
   const blob: unknown = JSON.parse(JSON.stringify(image.image));
   const link = isObject(blob) && isObject(blob.ref) ? blob.ref.$link : undefined;
   return typeof link === "string" ? link : null;
@@ -398,7 +416,7 @@ export function toCardRecord(
   const picture = content.kind === "image" ? pictureToWrite(content, existing) : null;
   if (picture !== null && !picture.ok) return picture;
   const lexicon = toLexicon(content);
-  const fresh = picture === null ? lexicon : { ...lexicon, image: picture.value };
+  const fresh = picture === null ? lexicon : { ...lexicon, images: [picture.value] };
   const appearance = surface === undefined || surface === "filled" ? {} : { surface };
   const sized: CardRecord = {
     $type: NSID,

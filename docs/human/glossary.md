@@ -103,7 +103,7 @@ word in the code that is not here and not plain English has found a defect: add 
 | **`ops.report`** | The definer through which a service records one of its own health metrics in `ops.metric`. |
 | **`permissionSetCheck`** | The monitor that checks our published permission set resolves with the expected content (P1.35's monitor; Phase 5 polls it when the lexicon authority moves). |
 | **`release.json`** | The CI release manifest: the commit and each service image by digest; deploys read it. |
-| **`sh.unset.follow`** | Our follow record, written when a public member follows an unset.sh account (one with an `sh.unset.profile` record); a follow of a Bluesky account is `app.bsky.graph.follow`. |
+| **`sh.unset.follow`** | Planned, not yet a lexicon (ADR 0086 took it out of the first permission set): our follow record, written when a public member follows an unset.sh account (one with an `sh.unset.profile` record); a follow of a Bluesky account is `app.bsky.graph.follow`. |
 | **Bluesky picture proxy** | P4.21a: `media` fetches a Bluesky post's picture from the author's PDS, checks its CID and fingerprint, re-encodes it and serves it, so viewers never contact Bluesky. |
 
 ## Editor pass (2026-10-03)

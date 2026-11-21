@@ -4,37 +4,29 @@
 
 import { l } from "@atproto/lex-schema";
 
-const $nsid = "sh.unset.follow";
+const $nsid = "sh.unset.block.text";
 
 type $nsid = typeof $nsid;
 
 export { $nsid };
 
-/** The account follows the subject. Same shape as app.bsky.graph.follow. */
+/** Formatted text, shown like a README. */
 type Main = {
-  $type: "sh.unset.follow";
+  $type?: "sh.unset.block.text";
 
   /**
-   * DID of the followed account.
+   * Markdown: CommonMark, which readers may extend with common syntax such as GFM tables, task lists and strikethrough. Syntax a reader does not support is shown as plain text. Readers never render raw HTML and keep only http and https links. Each reader chooses how to show a picture in the text, for example as a link, or loaded through its own proxy so the address never learns who reads it.
    */
-  subject: l.DidString;
-
-  /**
-   * When the follow was made.
-   */
-  createdAt: l.DatetimeString;
+  text: string;
 };
 
 export type { Main };
 
-/** The account follows the subject. Same shape as app.bsky.graph.follow. */
-const main = /*#__PURE__*/ l.record<"tid", Main>(
-  "tid",
+/** Formatted text, shown like a README. */
+const main = /*#__PURE__*/ l.typedObject<Main>(
   $nsid,
-  /*#__PURE__*/ l.object({
-    subject: /*#__PURE__*/ l.string({ format: "did" }),
-    createdAt: /*#__PURE__*/ l.string({ format: "datetime" }),
-  }),
+  "main",
+  /*#__PURE__*/ l.object({ text: /*#__PURE__*/ l.string({ maxLength: 20000 }) }),
 );
 
 export { main };

@@ -20,11 +20,11 @@ The own page reads through [`own-profile.server.ts`](../../../interfaces/web/src
 [`domains/profile/`](../../../domains/profile) checks the fields and builds the records.
 
 - [`profile.ts`](../../../domains/profile/profile.ts) reads and writes `sh.unset.profile` (display name, headline, location, website).
-- [`cards.ts`](../../../domains/profile/cards.ts) reads `sh.unset.section` cards. A card this version does not accept is hidden.
+- [`cards.ts`](../../../domains/profile/cards.ts) reads `sh.unset.card` cards, each holding one `sh.unset.block.*` block. A card this version does not accept is hidden.
 - [`card-edit.ts`](../../../domains/profile/card-edit.ts) checks a card before it is written.
 - [`web-address.ts`](../../../domains/profile/web-address.ts) accepts a plain `http` or `https` address.
 
-The record shapes are [`shared/lexicons/schemas/sh.unset.profile.json`](../../../shared/lexicons/schemas/sh.unset.profile.json) and [`sh.unset.section.json`](../../../shared/lexicons/schemas/sh.unset.section.json) ([ADR 0051](../decisions/0051-profile-cards-lexicon.md)).
+The record shapes are [`shared/lexicons/schemas/sh.unset.profile.json`](../../../shared/lexicons/schemas/sh.unset.profile.json) and [`sh.unset.card.json`](../../../shared/lexicons/schemas/sh.unset.card.json) with the blocks beside it ([ADR 0051](../decisions/0051-profile-cards-lexicon.md), [ADR 0086](../decisions/0086-cards-hold-reusable-blocks.md)).
 
 ## Adapter
 

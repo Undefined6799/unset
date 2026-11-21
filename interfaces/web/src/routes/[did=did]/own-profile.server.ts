@@ -10,6 +10,7 @@ import {
   type ProfileFields,
   pageCards,
   parseCardVersion,
+  type RepoDid,
   readAvatarShape,
   readProfileRecord,
 } from "@unset/domains-profile";
@@ -42,7 +43,7 @@ export type OwnProfileReads = {
  * The profile first, then the cards, one after the other on the same session: a failed first read skips the second.
  * Either failing hides the profile, and an ended session sends the member to sign in.
  */
-export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile> {
+export async function loadOwnProfile(owner: RepoDid, reads: OwnProfileReads): Promise<OwnProfile> {
   const profile = await reads.profile();
   if (profile.kind !== "ok") return failure(profile);
   const cards = await reads.cards();
@@ -53,7 +54,7 @@ export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
     avatarShape: readAvatarShape(record),
-    cards: pageCards(record, cards.value.cards),
+    cards: pageCards(owner, record, cards.value.cards),
     versions: new Map(
       cards.value.cards.flatMap((stored) => {
         const version = parseCardVersion(stored.cid);
