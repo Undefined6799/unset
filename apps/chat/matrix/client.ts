@@ -21,7 +21,17 @@ import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations } from "./conversation-service.ts";
 import { BACKUP_WAIT_MS, backupSettled } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
-import { createKeyHolder, type Keys, makeKey, phaseOf, readFacts, storeKey, unlock } from "./recovery.ts";
+import {
+  createKeyHolder,
+  type Keys,
+  makeKey,
+  phaseOf,
+  RESTORE_AGAIN_MS,
+  readFacts,
+  restoreBackup,
+  storeKey,
+  unlock,
+} from "./recovery.ts";
 
 const UNAVAILABLE = "chat.unavailable";
 const SETUP_FAILED = "chat.setup_failed";
@@ -78,9 +88,11 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const client = chatClient(session, options.baseUrl, holder.callbacks);
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
+  let restoreAgain: ReturnType<typeof setTimeout> | undefined;
   const chat = {
     stop: () => {
       stopped = true;
+      clearTimeout(restoreAgain);
       client.stopClient();
     },
   };
@@ -154,7 +166,10 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;
     const outcome = await unlock(keys, session.userId, typed).finally(() => (busy = false));
-    if (outcome === "unlocked") await report();
+    if (outcome !== "unlocked") return outcome;
+    // Keys the account's other browsers had not uploaded yet are read once more, when they have (RESTORE_AGAIN_MS).
+    restoreAgain = setTimeout(() => void restoreBackup(crypto), RESTORE_AGAIN_MS);
+    await report();
     return outcome;
   };
   /** ADR 0089 decision 3: claim, make the key (and the signing keys), show it; `save` stores it once checked. */

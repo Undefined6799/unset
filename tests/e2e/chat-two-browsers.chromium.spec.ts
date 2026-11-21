@@ -111,16 +111,6 @@ async function admin(path: string): Promise<Record<string, unknown>> {
   const answer = await fetch(url, { headers: { authorization: `Bearer ${token}` } }); // guard-allow: egress test, local Synapse only
   return (await answer.json()) as Record<string, unknown>;
 }
-/** How many of the room's sessions the member's key backup holds, read as that member (client-server API). */
-async function backedUp(token: string, roomId: string): Promise<number> {
-  const base = (servers as RealServers).synapse;
-  const auth = { authorization: `Bearer ${token}` };
-  const version = await fetch(new URL("/_matrix/client/v3/room_keys/version", base), { headers: auth }); // guard-allow: egress test, local Synapse only
-  const { version: v } = (await version.json()) as { version: string };
-  const url = new URL(`/_matrix/client/v3/room_keys/keys/${encodeURIComponent(roomId)}?version=${v}`, base);
-  const keys = await fetch(url, { headers: auth }); // guard-allow: egress test, local Synapse only
-  return Object.keys(((await keys.json()) as { sessions?: object }).sessions ?? {}).length;
-}
 const note = (type: string, description: string) => test.info().annotations.push({ type, description });
 
 test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser reads history; Log out wipes", async ({
@@ -139,13 +129,9 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   );
   expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted"]);
   expect(JSON.stringify(chunk)).not.toContain("hello from");
-  // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup. The
-  // SDK asks the backup for a missing key once per decryption (matrix-js-sdk 43.0.0
-  // src/rust-crypto/PerSessionKeyBackupDownloader.ts:158-184) and the first browser uploads after up to 10 s
-  // (backup.ts:70), so the second browser is opened once the backup holds both of the room's sessions.
-  await expect
-    .poll(() => backedUp(a.redeems[0]?.accessToken ?? "", rooms[0] ?? ""), { timeout: 60_000 })
-    .toBeGreaterThanOrEqual(2);
+  // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup,
+  // opened at once: the first browser may not have uploaded the room's keys yet (it waits up to 10 s, matrix-js-sdk
+  // 43.0.0 src/rust-crypto/backup.ts:70), and the page asks the backup again once it has (matrix/recovery.ts).
   const a2 = await browserFor(browser, alice.handle);
   await a2.page.goto("https://unset.cc/");
   await expect.poll(() => state(a2.page), { timeout: 60_000 }).toBe("locked");
