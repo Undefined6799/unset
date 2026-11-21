@@ -86,7 +86,7 @@ until a bump re-runs them. `npm audit` lists nothing for the new packages.
 ## Compliance
 `interfaces/chat-auth/door.test.ts` (the document, its exact CSP, the built files, 404 and 405) and `page.test.ts`;
 `apps/chat/core/sign-in.test.ts`, `apps/chat/matrix/client.test.ts`, `apps/chat/svelte-check.test.ts` and
-`apps/chat/lib/components/stock.test.ts`; `tests/integration/chat-auth/chat-page.test.ts` runs the built page in
+`apps/chat/lib/components/stock.test.ts`; `tests/e2e/chat-page.chromium.spec.ts` runs the built page in
 Chromium against the door, real Postgres, real chat-admin and a stand-in homeserver: hop, redeem, locked card, no
 CSP violation, nothing kept in storage or the address, renewal for the same device and key, no loop, axe in both
 themes. dependency-cruiser's `vendor-sdk-one-adapter` row for matrix-js-sdk.

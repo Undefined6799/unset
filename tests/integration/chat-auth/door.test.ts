@@ -18,7 +18,7 @@ import { compose } from "../../../interfaces/chat-auth/compose.ts";
 import { schema } from "../../../interfaces/chat-auth/config.ts";
 import { type FakeMas, fakeMas, startService } from "../chat-admin/harness.ts";
 
-/** The redeem routes need no page; the page itself is chat-page.test.ts's. */
+/** The redeem routes need no page; the page itself is tests/e2e/chat-page.chromium.spec.ts's. */
 const PAGE = { html: "<!doctype html>", files: new Map() };
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
