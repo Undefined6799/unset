@@ -738,6 +738,10 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0089](0089-one-browser-runs-recovery-key-setup.md)):** the door keeps a 15-minute claim so only one browser at a
   time makes an account's recovery key; the key is shown and checked before the vault is written. Accepted by Alex
   2026-11-21.
+- **Chat count keys and Message lookup (P6.12, 2026-11-21; own record:
+  [0090](0090-chat-count-keys-and-message-lookup.md)):** the door issues a pushkey per browser entry and keeps one
+  number for each, answers Synapse and web on an internal port of its own, and resolves a profile's Message link only
+  for a signed-in browser to a member whose page shows. Accepted by Alex 2026-11-21.
 - **Idle plain chats deleted by chat-admin (P6.04a, 2026-11-21; own record:
   [0091](0091-idle-plain-chats-deleted-by-chat-admin.md)):** a fixed, signed `rooms.sweep` command from a scheduled
   web job makes chat-admin mint a two-minute Synapse admin session for a service user through MAS, delete each plain
