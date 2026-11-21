@@ -1,11 +1,16 @@
 ---
-status: Proposed
+status: Accepted
 date: "2026-11-21"
 step: P6.02
+accepted:
+  at: "2026-11-21T23:39:58Z"
+  head: "f13b8d9e1a77288e1f1d879bb13782138a095449"
+  line: "Accept (decision card: Accept the record for how staging chat gets past the Pangolin login?)"
 ---
 # 0105 — staging.unset.cc is published through Pangolin's login, as a fourth site on the staging edge
 
-Record: Proposed 2026-11-21 (P6.02), awaiting Alex's acceptance line. Records Alex's choice of 2026-11-21, "Yes,
+Record: Accepted by Alex, 2026-11-21 23:39:58Z, on a decision card ("Accept the record for how staging chat gets
+past the Pangolin login?": Accept). Proposed 2026-11-21 (P6.02). Records Alex's choice of 2026-11-21, "Yes,
 behind Pangolin" ("the staging chat is also gonna be behind the same Pangolin login as staging.onset"). Builds on ADRs
 0025 (public domains), 0030 and 0032 (Pangolin and Newt in front of the staging edge), 0093 decision 6 and 0099.
 
