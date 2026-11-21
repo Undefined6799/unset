@@ -559,6 +559,40 @@ test("letters_typed_straight_after_pressing_save_stay_in_the_words", async ({ pa
   await removeCard(page, word);
 });
 
+// Review of c753f37: only a pointer press hands the keys back to the words. A member who reached Save by Tab is not
+// in the middle of a word, so Enter or Space pressed twice there saves once and puts nothing in the card.
+test("enter_or_space_pressed_twice_on_save_saves_once_and_leaves_the_words", async ({ page }) => {
+  const word = `keysave${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  let saves = 0;
+  page.on("request", (request) => {
+    if (/\?\/saveAll$/.test(request.url())) saves += 1;
+  });
+  for (const [key, typed] of [
+    ["Enter", " one"],
+    ["Space", " two"],
+  ] as const) {
+    await editor.click();
+    await editor.press("End");
+    await page.keyboard.type(typed);
+    const before = saves;
+    const saved = page.waitForResponse(/\?\/saveAll$/);
+    await bar(page).getByRole("button", { name: "Save" }).focus();
+    await page.keyboard.press(key);
+    await page.keyboard.press(key);
+    await saved;
+    await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+    await expect(bar(page)).not.toContainText("unsaved");
+    expect(saves - before).toBe(1);
+  }
+  await expect(editor).toHaveText(`${word} start one two`);
+  await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(0);
+  await removeCard(page, word);
+});
+
 // Codex on b9d96b6: the Markdown field (Show Markdown) is a way back too, so a Save from it returns there and not to
 // the editor the member typed in before.
 test("after_a_save_from_the_markdown_field_typing_goes_on_there", async ({ page }) => {
