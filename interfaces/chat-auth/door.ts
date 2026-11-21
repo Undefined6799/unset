@@ -1,7 +1,8 @@
 // The unset.cc door's request handler (build step 6; ADR 0081 decision 4): a fixed table of routes, and in front of
 // every one the same checks in order: the Host, the CSRF gate on every method but GET and HEAD (plan §2 rule 14), the
 // route and its method, then the client's rate-limit bucket, then the route under the request's deadline (RE-1).
-// Every answer carries the kit's security headers and no-store; each is one log line of route template, method,
+// Every answer carries the kit's security headers and no-store, but the chat page's content-hashed files, which are
+// cached for good (ADR 0088 decision 1); each is one log line of route template, method,
 // status and a fixed reason word, never a path, query, cookie, ticket, DID or address (SE-7).
 import { randomBytes } from "node:crypto";
 import {
@@ -14,7 +15,10 @@ import {
   safeReturnPath,
 } from "@unset/shared-http";
 import { HOP_MAX_AGE_S, RETURN_COOKIE, STATE_COOKIE, setCookie } from "./cookies.ts";
-import { RETURN_PAGE, RETURN_PATH, RETURN_SCRIPT, returnPageCsp, SCRIPT_PATH } from "./return-page.ts";
+import { ASSETS, type ChatPage, pageCsp } from "./page.ts";
+
+/** The hop's landing path, where web sends the ticket (interfaces/web chat-sign-in.ts DOOR_RETURN_PATH). */
+const RETURN_PATH = "/sign-in/return";
 
 export type DoorLog = { route: string; method: string; status: number; reason?: string };
 
@@ -37,6 +41,8 @@ export type DoorDeps = {
   readonly random?: (bytes: number) => Buffer;
   readonly log: (line: DoorLog) => void;
   readonly deadlineMs?: number;
+  /** The chat page (ADR 0088): its document at "/" and RETURN_PATH, its built files under ASSETS. */
+  readonly page: ChatPage;
   readonly posts: Readonly<Record<string, PostRoute>>;
 };
 
@@ -73,21 +79,44 @@ function startSignIn(url: URL, deps: DoorDeps): DoorAnswer {
   return { response: new Response(null, { status: 303, headers }) };
 }
 
-const page = (body: string, type: string, extra: Record<string, string> = {}): DoorAnswer => ({
-  response: new Response(body, { status: 200, headers: { ...BASE, ...NO_REFERRER, "content-type": type, ...extra } }),
+const IMMUTABLE = { "cache-control": "public, max-age=31536000, immutable" };
+
+/** The page's document, under its own CSP. */
+const pageDocument: GetRoute = (_url, deps) => ({
+  response: new Response(deps.page.html, {
+    status: 200,
+    headers: {
+      ...BASE,
+      ...NO_REFERRER,
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": pageCsp(deps.origin),
+    },
+  }),
 });
+
+/** One of the page's built files, by its exact path; anything else under ASSETS is 404. */
+const pageFile: GetRoute = (url, deps) => {
+  const file = deps.page.files.get(url.pathname);
+  if (file === undefined) return refuse(404, "not_found");
+  return {
+    response: new Response(file.body, { status: 200, headers: { ...BASE, "content-type": file.type, ...IMMUTABLE } }),
+  };
+};
 
 type GetRoute = (url: URL, deps: DoorDeps) => DoorAnswer;
 const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   "/health": { limit: "default", handle: () => ({ response: json(200, { ok: true }) }) },
   "/sign-in": { limit: "sign-in", handle: startSignIn },
-  [RETURN_PATH]: {
-    limit: "default",
-    handle: (_url, deps) =>
-      page(RETURN_PAGE, "text/html; charset=utf-8", { "content-security-policy": returnPageCsp(deps.origin) }),
-  },
-  [SCRIPT_PATH]: { limit: "default", handle: () => page(RETURN_SCRIPT, "text/javascript; charset=utf-8") },
+  "/": { limit: "default", handle: pageDocument },
+  [RETURN_PATH]: { limit: "default", handle: pageDocument },
+  [ASSETS]: { limit: "default", handle: pageFile },
 };
+
+/** The route a path falls under: its own, the built files' one, or "/*" for everything else. */
+function routeOf(path: string, posts: DoorDeps["posts"]): string {
+  if (path in GETS || path in posts) return path;
+  return path.startsWith(ASSETS) && path.length > ASSETS.length ? ASSETS : "/*";
+}
 
 export function createDoor(deps: DoorDeps) {
   const csrf = createCsrfGate(deps.origin);
@@ -113,7 +142,7 @@ export function createDoor(deps: DoorDeps) {
 
   return async (request: Request, peer: string | undefined): Promise<Response> => {
     const path = new URL(request.url).pathname;
-    const route = path in GETS || path in deps.posts ? path : "/*";
+    const route = routeOf(path, deps.posts);
     let result: DoorAnswer;
     try {
       result = await answer(request, peer, route);

@@ -1,15 +1,23 @@
 // The door's GET half (build step 6; ADR 0081 decision 4; security pass finding 8): /sign-in sets the one-time value
-// in a __Host- cookie and sends the tab to web; /sign-in/return is a page that runs one hashed-path script and no
-// inline code; every other path is 404, every other method 405, a foreign Host 421, and every POST passes the CSRF
-// gate first. Each answer is one log line of route template, status and reason only (SE-7).
+// in a __Host- cookie and sends the tab to web; / and /sign-in/return are the chat page (ADR 0088) and its built files
+// are served under /assets/; every other path is 404, every other method 405, a foreign Host 421, and every POST
+// passes the CSRF gate first. Each answer is one log line of route template, status and reason only (SE-7).
 import { createRateLimiter } from "@unset/shared-http";
 import { describe, expect, test } from "vitest";
 import { createDoor, type DoorLog } from "./door.ts";
+import type { ChatPage } from "./page.ts";
 
 const ORIGIN = "https://unset.cc";
 const WEB = "https://unset.sh";
 const STATE = Buffer.alloc(32, 7);
 const STATE_TEXT = STATE.toString("base64url");
+const PAGE: ChatPage = {
+  html: "<!doctype html><title>Messages</title>",
+  files: new Map([
+    ["/assets/index-abc.js", { body: new TextEncoder().encode("export {};"), type: "text/javascript; charset=utf-8" }],
+    ["/assets/crypto-abc.wasm", { body: new Uint8Array([0, 97, 115, 109]), type: "application/wasm" }],
+  ]),
+};
 
 function door(limit = 100) {
   const lines: DoorLog[] = [];
@@ -27,6 +35,7 @@ function door(limit = 100) {
     clientIp: () => null,
     random: () => STATE,
     log: (line) => lines.push(line),
+    page: PAGE,
     posts: {},
   });
   const get = (path: string, headers: Record<string, string> = {}) =>
@@ -87,27 +96,50 @@ describe("GET /sign-in", () => {
   });
 });
 
-describe("GET /sign-in/return", () => {
-  test("door.return_page: a page with a path-scoped script, strict CSP, no referrer and no inline script", async () => {
-    const res = await door().get("/sign-in/return");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
-    expect(res.headers.get("content-security-policy")).toBe(
-      `default-src 'none'; script-src ${ORIGIN}/sign-in/return.js; connect-src ${ORIGIN}/sign-in/redeem; ` +
-        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'",
-    );
-    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
-    expect(res.headers.get("x-frame-options")).toBe("DENY");
-    const html = await res.text();
-    expect(html).toContain('<script src="/sign-in/return.js" defer></script>');
-    expect(html.match(/<script/g)).toHaveLength(1);
-  });
+describe("the chat page", () => {
+  const CSP =
+    `default-src 'none'; script-src ${ORIGIN}/assets/ 'wasm-unsafe-eval'; style-src ${ORIGIN}/assets/; ` +
+    `font-src ${ORIGIN}/assets/; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; ` +
+    "form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types svelte-trusted-html";
 
-  test("door.return_script: served as JavaScript with no-store", async () => {
-    const res = await door().get("/sign-in/return.js");
+  test.each([["/"], ["/sign-in/return"]])(
+    "door.page_document: %s is the page, with its CSP, no referrer and no-store",
+    async (path) => {
+      const res = await door().get(path);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+      expect(res.headers.get("content-security-policy")).toBe(CSP);
+      expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("x-frame-options")).toBe("DENY");
+      expect(await res.text()).toBe(PAGE.html);
+    },
+  );
+
+  test("door.page_files: a built file is served with its type, cached for good, under the door's default CSP", async () => {
+    const res = await door().get("/assets/index-abc.js");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
-    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(res.headers.get("content-security-policy")).toBe("default-src 'none'; frame-ancestors 'none'");
+    expect(await res.text()).toBe("export {};");
+    const wasm = await door().get("/assets/crypto-abc.wasm");
+    expect(wasm.headers.get("content-type")).toBe("application/wasm");
+  });
+
+  test.each([["/assets/other.js"], ["/assets/"], ["/assets/%2e%2e/index.html"], ["/sign-in/return.js"], ["/c/x"]])(
+    "door.page_unknown: %s is 404",
+    async (path) => {
+      expect((await door().get(path)).status).toBe(404);
+    },
+  );
+
+  test("door.page_files_get_only: a POST to a built file is 405", async () => {
+    const res = await door().handle(
+      new Request(`${ORIGIN}/assets/index-abc.js`, { method: "POST", headers: { host: "unset.cc", origin: ORIGIN } }),
+      undefined,
+    );
+    expect(res.status).toBe(405);
   });
 });
 
