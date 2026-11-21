@@ -45,7 +45,7 @@ const profile: Extract<IndexChange, { kind: "put" }> = {
   collection: "sh.unset.profile",
   rkey: "self",
   cid: CID,
-  record: { $type: "sh.unset.profile", displayName: "Ada", createdAt: "2026-11-18T00:00:00.000Z", cards: [] },
+  record: { $type: "sh.unset.profile", displayName: "Ada", createdAt: "2026-11-18T00:00:00.000Z" },
 };
 const lines = (query: string) => postgres.sql("unset", query).split("\n").filter(Boolean);
 const publicDids = () => lines("SELECT did FROM idx.public_profile ORDER BY did");

@@ -22,6 +22,7 @@ import {
 import {
   latestCommit,
   listCardRecords,
+  loadPageRecord,
   loadProfileRecord,
   newCardKey,
   saveCardRecord,
@@ -98,6 +99,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     accountView(services(), did, locals.issuerOrigin, locals.deadline),
     loadOwnProfile(owner, {
       profile: () => loadProfileRecord(pdsCall, ctx, did),
+      page: () => loadPageRecord(pdsCall, ctx, did),
       cards: () => listCardRecords(pdsCall, ctx, did),
     }),
   ]);
@@ -150,6 +152,7 @@ function writesFor(did: Did, locals: App.Locals) {
     list: () => listCardRecords(pdsCall, ctx, did),
     head: () => latestCommit(pdsCall, ctx, did),
     profile: () => loadProfileRecord(pdsCall, ctx, did),
+    page: () => loadPageRecord(pdsCall, ctx, did),
     newKey: () => newCardKey() as CardKey,
     write: (change, swapCommit) => writeCardAndList(pdsCall, ctx, did, change, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),

@@ -187,8 +187,9 @@ describe("listCardRecords", () => {
 });
 
 describe("writeCardAndList", () => {
-  // ADR 0086 point 3: a card shows only when the profile lists it, so the card and the list land in one commit.
-  const profile = { $type: "sh.unset.profile", displayName: "Ada", createdAt: "x", cards: [{ uri: "at://x" }] };
+  // ADR 0086 point 3, ADR 0091: a card shows only when the main page lists it, so the card and the list land in one
+  // commit.
+  const page = { $type: "sh.unset.page", createdAt: "x", cards: [{ uri: "at://x" }] };
   const written = () => Response.json({ commit: { cid: CID2, rev: REV }, results: [] });
 
   test("newCardKey makes record keys that sort in time", () => {
@@ -197,11 +198,11 @@ describe("writeCardAndList", () => {
     expect(newCardKey() > key).toBe(true);
   });
 
-  test("card.create_listed: a new card and the profile listing it go in one applyWrites, on the head given", async () => {
+  test("card.create_listed: a new card and the page listing it go in one applyWrites, on the head given", async () => {
     const { pdsCall, ctx, calls } = pds(written);
     const change = {
       card: { kind: "create", key: "k1", record: card },
-      profile: { record: profile, exists: true },
+      page: { record: page, exists: true },
     } as const;
     // The commit's revision comes back, by which saves of one card settle their pictures in order.
     expect(await writeCardAndList(pdsCall, ctx, DID, change, CID)).toEqual({
@@ -215,25 +216,25 @@ describe("writeCardAndList", () => {
       swapCommit: CID,
       writes: [
         { $type: "com.atproto.repo.applyWrites#create", collection: "sh.unset.card", rkey: "k1", value: card },
-        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.profile", rkey: "self", value: profile },
+        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.page", rkey: "self", value: page },
       ],
     });
   });
 
-  test("a first profile is created, never written over another", async () => {
+  test("a first page is created, never written over another", async () => {
     const { pdsCall, ctx, calls } = pds(written);
-    await writeCardAndList(pdsCall, ctx, DID, { profile: { record: profile, exists: false } }, CID);
+    await writeCardAndList(pdsCall, ctx, DID, { page: { record: page, exists: false } }, CID);
     expect(calls[0]?.body).toMatchObject({ writes: [{ $type: "com.atproto.repo.applyWrites#create", rkey: "self" }] });
   });
 
-  test("a deleted card and the profile without it go in one call", async () => {
+  test("a deleted card and the page without it go in one call", async () => {
     const { pdsCall, ctx, calls } = pds(written);
-    const change = { card: { kind: "delete", key: "k1" }, profile: { record: profile, exists: true } } as const;
+    const change = { card: { kind: "delete", key: "k1" }, page: { record: page, exists: true } } as const;
     expect(await writeCardAndList(pdsCall, ctx, DID, change, CID)).toMatchObject({ value: { kind: "written" } });
     expect(calls[0]?.body).toMatchObject({
       writes: [
         { $type: "com.atproto.repo.applyWrites#delete", collection: "sh.unset.card", rkey: "k1" },
-        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.profile" },
+        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.page" },
       ],
     });
   });
