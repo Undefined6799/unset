@@ -7,10 +7,23 @@
 // replace the name and headline in the page's title and description. With listing off on the whole site (P1.21b),
 // server.ts and the root layout say noindex on this page too. No images until the media proxy (P3.09): the
 // avatar is the letter, as on the owner's page.
+// Who sees the page is the member's choice (ADR 0078): everyone, signed-in members, or only the member. Anyone the
+// choice leaves out gets the limited page: the member's name, handle and avatar and one sentence, no cards, no
+// description and no link-preview tags, never indexed. A page that is not public is never offered to search engines
+// or AI search, whatever the Search and AI choices say. The session is read when a cookie is sent (policy.ts), and a
+// page rendered for a member is private and never stored (hooks.server.ts), so a visitor's copy is never theirs.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { canonicalActorPath, type Did, parseActor, parseDid, parseHandle } from "@unset/domains-identity";
-import { CARDS_MAX, pageCards, readAvatarShape, readProfileLayout, readProfileRecord } from "@unset/domains-profile";
+import {
+  CARDS_MAX,
+  pageCards,
+  pageShownTo,
+  readAvatarShape,
+  readProfileRecord,
+  readProfileVisibility,
+  type Viewer,
+} from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
@@ -39,32 +52,45 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
 
   const fields = readProfileRecord(found.record);
   const name = fields.displayName || handle || did;
-  const { searchEngines, title, description } = found.discoverability;
+  const visibility = readProfileVisibility(found.record);
+  const viewer: Viewer = locals.did === undefined ? "visitor" : locals.did === did ? "owner" : "member";
+  const shown = pageShownTo(visibility, viewer);
+  const who = { did, handle, name, letter: accountLetter(name), avatarShape: readAvatarShape(found.record) };
+  if (shown.kind === "limited") {
+    setHeaders({ "cache-control": PROFILE_CACHE, "x-robots-tag": "noindex" });
+    return {
+      shell: SHELL,
+      ...who,
+      limited: { signIn: shown.signIn ? `/login?next=${encodeURIComponent(canonical)}` : null },
+    };
+  }
+  const listed = shown.crawlable && found.discoverability.searchEngines;
+  const { title, description } = found.discoverability;
   setHeaders(
-    searchEngines ? { "cache-control": PROFILE_CACHE } : { "cache-control": PROFILE_CACHE, "x-robots-tag": "noindex" },
+    listed ? { "cache-control": PROFILE_CACHE } : { "cache-control": PROFILE_CACHE, "x-robots-tag": "noindex" },
   );
   const cards = cardViews(pageCards(found.record, found.sections).slice(0, CARDS_MAX));
   return {
-    shell: searchEngines ? LISTED_SHELL : SHELL,
-    // What search results and link previews show: only what the page itself shows, or the member's own overrides.
-    meta: {
-      title: title || name,
-      description: description || fields.headline,
-      url: `${config.PUBLIC_ORIGIN}${canonical}`,
-    },
-    did,
-    handle,
-    name,
-    letter: accountLetter(name),
+    shell: listed ? LISTED_SHELL : SHELL,
+    // What search results and link previews show: only what the page itself shows, or the member's own overrides. A
+    // page not shown to everyone gives link previews nothing to show.
+    meta: shown.crawlable
+      ? {
+          title: title || name,
+          description: description || fields.headline,
+          url: `${config.PUBLIC_ORIGIN}${canonical}`,
+        }
+      : null,
+    // Who else sees the page, when not everyone does (ADR 0078).
+    audience: visibility === "public" ? null : visibility,
+    ...who,
     headline: fields.headline,
     location: fields.location,
     website: websiteLink(fields.website),
-    avatarShape: readAvatarShape(found.record),
-    layout: readProfileLayout(found.record),
     // At most what the owner's own page reads (infrastructure/pds card-records.ts MAX_CARDS): the index may hold up to
     // twice that (MAX_SECTIONS_PER_ACCOUNT), and a visitor never sees more cards than the member does.
     cards,
-    // The compact header's panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
+    // The header's About panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
     contact: contactAction(cards),
   };
 };

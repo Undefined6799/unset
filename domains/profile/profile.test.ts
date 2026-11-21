@@ -9,7 +9,6 @@ import {
   parseAvatarShape,
   parseProfileFields,
   readAvatarShape,
-  readProfileLayout,
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
@@ -113,7 +112,7 @@ describe("toProfileRecord", () => {
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
   });
 
-  test("a partial edit (Settings › Profile sends the side column only) keeps every field it does not send", () => {
+  test("a partial edit (Settings › Profile sends the profile fields only) keeps every field it does not send", () => {
     const existing = { $type: "sh.unset.profile", ...goodStored, createdAt: "2026-10-01T00:00:00.000Z" };
     const built = toProfileRecord({ location: "Montréal" }, existing, NOW);
     expect(built).toEqual({
@@ -227,49 +226,5 @@ describe("avatar shape", () => {
 
   test("there is no shape without a profile to hold it", () => {
     expect(withAvatarShape("round", null, T)).toEqual({ ok: false, code: "profile.name_required" });
-  });
-});
-
-// ADR 0072: the page layout is a profile-wide presentation choice. Absent or unknown reads as sidebar, so every
-// profile stored before it keeps its look until its owner chooses compact.
-describe("page layout", () => {
-  const T = "2026-11-20T03:00:00.000Z";
-  const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1 };
-
-  test("reads sidebar when absent or unknown, and the stored known value otherwise", () => {
-    expect(readProfileLayout(stored)).toBe("sidebar");
-    expect(readProfileLayout({ ...stored, layout: "magazine" })).toBe("sidebar");
-    expect(readProfileLayout({ ...stored, layout: 7 })).toBe("sidebar");
-    expect(readProfileLayout({ ...stored, layout: "compact" })).toBe("compact");
-    expect(readProfileLayout(null)).toBe("sidebar");
-  });
-
-  test("a save reads the choice strictly", () => {
-    expect(parseProfileFields({ layout: "compact" })).toEqual({ ok: true, fields: { layout: "compact" } });
-    expect(parseProfileFields({ layout: "sidebar" })).toEqual({ ok: true, fields: { layout: "sidebar" } });
-    expect(parseProfileFields({ layout: "magazine" })).toEqual({ ok: false, field: "layout", code: "profile.invalid" });
-    expect(parseProfileFields({ layout: ["compact"] })).toEqual({
-      ok: false,
-      field: "layout",
-      code: "profile.invalid",
-    });
-  });
-
-  test("compact is stored, sidebar clears the field, and leaving it out keeps what was stored", () => {
-    const compact = toProfileRecord({ layout: "compact" }, stored, T);
-    expect(compact).toEqual({ ok: true, record: { ...stored, layout: "compact" } });
-    expect(toProfileRecord({ layout: "sidebar" }, { ...stored, layout: "compact" }, T)).toEqual({
-      ok: true,
-      record: stored,
-    });
-    expect(toProfileRecord({ headline: "New" }, { ...stored, layout: "magazine" }, T)).toEqual({
-      ok: true,
-      record: { ...stored, headline: "New", layout: "magazine" },
-    });
-  });
-
-  test("the stored record validates against the lexicon", () => {
-    const built = toProfileRecord({ layout: "compact" }, stored, T);
-    expect(built.ok && validateRecord("sh.unset.profile", built.record, "read").ok).toBe(true);
   });
 });

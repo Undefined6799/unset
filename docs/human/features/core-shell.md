@@ -27,6 +27,8 @@ The core shell is a skip link, a two-row header, the main region and a footer. T
 
 The bare shell is the main region alone, centred. The sign-in page uses it.
 
+The site and core headers stick to the top of the page as it scrolls. Each has a fixed height, which [`apps/web/app.css`](../../../apps/web/app.css) names as `--site-header-height`. The page's `scroll-padding-top` uses it, so an anchor lands below the header, and a bar that sticks under the header uses `top: var(--site-header-height)`. [`tests/e2e/sticky-header.spec.ts`](../../../tests/e2e/sticky-header.spec.ts) holds the drawn height and the variable equal.
+
 The theme form posts to `/prefs/theme`. Sign out posts to `/logout`. A changed privacy notice is a banner whose dismiss form posts to `/privacy-notice/seen`.
 
 ## UI pieces
@@ -43,6 +45,6 @@ Each header menu is a `popover="auto"` element, with a title and a Close button.
 
 The page scrolls as one document. The header and main share a column with `min-h-svh`, and the footer follows that column, so the footer starts below the first screen.
 
-Below the `sm` breakpoint the search field and the Create, Messages and Notifications buttons are hidden. A search button and a More actions button take their place and open the same panels. On a coarse pointer the icon controls use a larger target (`pointer-coarse:size-11`).
+Below the `sm` breakpoint the search field and the Create, Messages and Notifications buttons are hidden. A search button and a More actions button take their place and open the same panels. On a coarse pointer the icon controls use a larger target (`pointer-coarse:size-11`). The Notifications button carries the unread count, and so does More actions on a phone ([notifications](notifications.md)).
 
 Links, forms and these popovers work with no script. The member's own page, settings, the welcome steps, confirm-email, the invite page and the signed-out page set `csr` to true and add the client on top. The theme picker then saves in place and leaves the menu open. The form still posts when that save does not come back as the usual redirect.

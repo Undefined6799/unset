@@ -158,7 +158,7 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 | Chat (core, Alex 2026-10-02) | Matrix client on `unset.cc` (our own, no fallback client; decision 11 revised; ADR 0025), identity bridge, `chat-admin` seeding service; §5.6 | ~5–7k |
 | **Total** | | **≈20–24k core, plus chat 5–7k; tests (12–18k) outside the number** (review, 2026-10-02) |
 
-**Deferred until the first plugin needs them (decision 25):** the plugin manifest, registry and boundary lint, nav slots, mail transport, the generic notification inbox, cron hooks, the tenancy tables and the fixture plugin. No `plugin-api` package exists until then; the requirements are recorded in §5.5.
+**Deferred until the first plugin needs them (decision 25):** the plugin manifest, registry and boundary lint, nav slots, mail transport, the generic notification inbox (since superseded: notifications are core, ADR 0079), cron hooks, the tenancy tables and the fixture plugin. No `plugin-api` package exists until then; the requirements are recorded in §5.5.
 
 **Out of core:**
 - **RSS module.** Prefs go to an app-DB table; no PDS patch.

@@ -1,6 +1,5 @@
-// The member page laid out as the profile-card mockup (Alex 2026-11-17): the side column left of the cards on a wide
-// screen and above them on a phone, with nothing scrolling sideways at 320px; each card's controls sit at its top
-// right and show when the keyboard reaches them; the add buttons close the grid.
+// The member page: the profile header above the cards on every screen (ADR 0077), with nothing scrolling sideways at
+// 320px; each card's controls sit at its top right and are always shown; the add buttons close the grid.
 import { expect, type Page, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
@@ -40,7 +39,7 @@ async function removeReadme(page: Page) {
 }
 
 // The card's controls are always shown, not only on hover (Alex 2026-11-18: phones have no hover).
-test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", async ({ page }) => {
+test("the_header_sits_above_the_cards_and_controls_are_always_shown", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
@@ -48,7 +47,7 @@ test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", asy
   try {
     const name = await page.getByRole("heading", { level: 1 }).boundingBox();
     const readme = await page.getByRole("heading", { level: 2, name: "Layout check" }).boundingBox();
-    expect(name !== null && readme !== null && name.x + name.width <= readme.x).toBe(true);
+    expect(name !== null && readme !== null && name.y + name.height <= readme.y).toBe(true);
     await expect(page.getByRole("link", { name: "Add card" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/settings/profile");
     const edit = card.getByRole("link", { name: "Edit" });
@@ -84,7 +83,7 @@ test.describe("phone", () => {
     await expect(target).toHaveAttribute("data-touched", "true");
   });
 
-  test("the_side_column_sits_above_the_cards_and_nothing_scrolls_sideways", async ({ page }) => {
+  test("the_header_sits_above_the_cards_and_nothing_scrolls_sideways", async ({ page }) => {
     expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
     const card = await withReadme(page);
@@ -108,17 +107,8 @@ test.describe("phone", () => {
   });
 });
 
-// Alex, 2026-11-18 staging review: the side column sits at the left, under the header's menu button, not centred.
-test("the_avatar_lines_up_under_the_menu_button_on_a_wide_screen", async ({ page }) => {
-  await page.setViewportSize({ width: 1600, height: 900 });
-  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
-  const menu = await page.locator('header button[popovertarget="core-menu"]').boundingBox();
-  const avatar = await page.getByRole("link", { name: "Change picture shape" }).boundingBox();
-  expect(Math.abs((avatar?.x ?? -99) - (menu?.x ?? 99))).toBeLessThanOrEqual(2);
-});
-
-// The avatar's shape (sh.unset.profile avatarShape) is saved from the avatar's own dialog and shown on the page.
-test("the_owner_sets_the_avatar_shape_from_the_avatar", async ({ page }) => {
+// The avatar's shape (sh.unset.profile avatarShape) is saved from the Shape button's dialog and shown on the page.
+test("the_owner_sets_the_avatar_shape_from_the_shape_button", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   const avatar = page.getByRole("link", { name: "Change picture shape" });

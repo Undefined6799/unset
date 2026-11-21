@@ -75,6 +75,7 @@ function loadField(key: string, field: Field<unknown>, env: Env): { value: unkno
   const read = readRaw(key, field.kind, env);
   if ("problem" in read) return read;
   if (read.raw === undefined || read.raw.trim() === "") {
+    if (field.optional === true) return { value: undefined };
     if (field.default === undefined || SECRET_KINDS.has(field.kind)) return { problem: "missing" };
     // A copy, so freezing the loaded config never freezes the schema's own default.
     return { value: Array.isArray(field.default) ? [...field.default] : field.default };

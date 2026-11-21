@@ -88,5 +88,9 @@
   "app.image_upload.did": {
     "strategy": "delete_row",
     "reason": "the member's upload times for the hourly and daily limits, kept a day; they go when the member is erased"
+  },
+  "app.notification.did": {
+    "strategy": "delete_row",
+    "reason": "the person's unopened notifications (P2.27, ADR 0079); they go when the person is erased"
   }
 }

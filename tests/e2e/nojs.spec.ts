@@ -190,7 +190,6 @@ test.describe("javascript disabled", () => {
       "core-menu": ["Saved", "Your communities", "Help"],
       "create-menu": ["New post", "Share a link", "Ask a question"],
       "messages-menu": ["Open inbox"],
-      "notifications-menu": ["View all notifications"],
     };
     for (const [id, names] of Object.entries(soon)) {
       for (const name of names)
@@ -205,6 +204,10 @@ test.describe("javascript disabled", () => {
       "href",
       "/me",
     );
+    // P2.27: notifications are built; a visitor's panel asks them to sign in with the header's button.
+    const notifications = page.locator("#notifications-menu");
+    await expect(notifications).toContainText("Sign in to see your notifications.");
+    await expect(notifications.getByRole("link", { includeHidden: true })).toHaveCount(0);
   });
 
   // P2.05s: "No thanks" on the signed-out box is a form, so it works with no script, and it goes home.

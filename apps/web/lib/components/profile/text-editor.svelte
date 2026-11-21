@@ -150,7 +150,9 @@ function backToText(event: Event) {
 <div class="grid gap-2">
   <Label id={labelId} for={id}>{label}</Label>
   <div class="grid rounded-md border focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 {editor === undefined ? 'hidden' : ''}" aria-invalid={invalid}>
-    <div role="toolbar" aria-label={TEXT_EDITOR.toolbar} class="sticky top-0 z-10 flex flex-wrap gap-1 border-b bg-background p-1">
+    <!-- The bar sticks under the site header on the page (?edit=, app.css --site-header-height) and at the top of the
+         dialog, which scrolls on its own. -->
+    <div role="toolbar" aria-label={TEXT_EDITOR.toolbar} class="sticky top-(--site-header-height) z-10 in-data-[slot=dialog-content]:top-0 flex flex-wrap gap-1 border-b bg-background p-1">
       <!-- A press keeps the editor's focus and selection (mousedown is not let move focus to the bar), so it acts on
            the words the member chose and, on a phone, the keyboard stays open. -->
       <DropdownMenu.Root>

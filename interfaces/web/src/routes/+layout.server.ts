@@ -10,6 +10,7 @@ import { safeReturnPath } from "@unset/shared-http";
 import { shellAccount } from "../lib/server/account.ts";
 import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
 import { services } from "../lib/server/compose.ts";
+import { bellView } from "../lib/server/notifications.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { config } from "../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
@@ -34,7 +35,8 @@ function appOpenDeps(): AppOpenDeps {
   return { readAccount: (did, deadline) => accounts.get(did, deadline), versions, log };
 }
 
-export const load: ServerLoad = async ({ locals, request, route, url }) => {
+export const load: ServerLoad = async (event) => {
+  const { locals, request, route, url } = event;
   const member = locals.did !== undefined;
   const prefs: ShellData["prefs"] =
     policyOf(route.id)?.group === "app" || member
@@ -57,6 +59,9 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
   // The changed privacy notice banner (P2.12b), as the app gate decided it for this request; it names the version it
   // shows so its dismiss records that one and no newer.
   const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
+  // The bell (P2.27): the newest few and the unread count, brought by the session read on every page a member opens,
+  // so it is current with no script, no polling and no statement of its own. Undefined for a visitor.
+  const notifications = locals.did === undefined ? undefined : await bellView(event);
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
   const siteNoindex = config.SEARCH_LISTING !== "on";
   return {
@@ -65,6 +70,7 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
     appOpen: open,
     prefs,
     privacyNotice,
+    notifications,
     signInHref: signInHref(url.pathname),
     siteNoindex,
   };
