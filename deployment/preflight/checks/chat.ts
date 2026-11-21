@@ -3,8 +3,8 @@
 // Synapse image's start.py reads SYNAPSE_CONFIG_PATH and also SYNAPSE_WORKER, UID and GID (docker/start.py:234-314
 // at v1.162.0), and MAS merges every MAS_* variable into its config and splits MAS_CONFIG on ":" into several files
 // (crates/cli/src/commands/mod.rs:90-109 at v1.26.0). The file's top-level keys are exactly the reviewed ones, so no
-// module, provider or inline secret rides in, and every security setting is its reviewed value. A stack with neither
-// service passes. A reason names a setting from the lists below, never a value (P1.30m).
+// other module, provider or inline secret rides in, and every security setting is its reviewed value. A stack with
+// neither service passes. A reason names a setting from the lists below, never a value (P1.30m).
 import { isDeepStrictEqual } from "node:util";
 import { parseDocument } from "yaml";
 import type { Service } from "../compose-parse.ts";
@@ -51,6 +51,8 @@ function synapseSettings(serverName: string): Doc {
       endpoint: "http://mas:8080/",
       secret_path: "/run/secrets/synapse_mas_secret",
     },
+    // The server rule and nothing else (P6.10a; ADR 0085): it refuses any config, so none is given.
+    modules: [{ module: "unset_chat_policy.EncryptedOnly", config: {} }],
   };
 }
 const SYNAPSE_SECRET_PATHS = ["signing_key_path", "macaroon_secret_key_path", "form_secret_path"];
@@ -159,7 +161,8 @@ export const c36: Check = {
       const outcome = configProblem(inputs, service, rule, serverName);
       if (outcome !== null) return outcome;
     }
-    return pass();
+    const mas = inputs.compose.services.find((s) => s.name === "mas");
+    return (mas === undefined ? null : masNetworkProblem(inputs, mas)) ?? pass();
   },
 };
 
@@ -186,6 +189,36 @@ function configProblem(
   if (text === "not a regular file") return fail(`${name}'s config is not a regular file`);
   const problem = rule.problem(readStrict(text), serverName);
   return problem === null ? null : fail(problem);
+}
+
+/**
+ * MAS's two listeners bind fixed addresses (mas.yaml), which keep each on one network only if MAS holds exactly those
+ * addresses there (ADR 0086 Decision 4). So MAS joins chat_db and the two MAS networks and nothing else, has each
+ * listener's address on its network, each network is internal on its reviewed subnet, and only Synapse shares one and
+ * only chat-admin the other.
+ */
+const MAS_NETWORKS = [
+  { name: "chat_mas", subnet: "10.250.38.0/29", address: "10.250.38.3", peer: "synapse" },
+  { name: "chat_admin_mas", subnet: "10.250.38.8/29", address: "10.250.38.11", peer: "chat-admin" },
+] as const;
+const MAS_JOINS = ["chat_db", ...MAS_NETWORKS.map((n) => n.name)];
+
+function masNetworkProblem(inputs: Inputs, mas: Service): Outcome | null {
+  if (mas.networkMode !== null || mas.networks.some((n) => !MAS_JOINS.includes(n)))
+    return fail("mas joins a network other than chat_db, chat_mas and chat_admin_mas");
+  for (const { name, subnet, address, peer } of MAS_NETWORKS) {
+    const held = mas.addresses.filter(([network]) => network === name);
+    if (held.length !== 1 || held[0]?.[1] !== address)
+      return fail(`mas's address on ${name} is not its listener's bind`);
+    const network = inputs.compose.networks.find((n) => n.name === name);
+    if (network === undefined || !network.internal) return fail(`${name} is not internal`);
+    if (network.subnet !== subnet) return fail(`${name} is not on its reviewed subnet`);
+    const stranger = inputs.compose.services.find(
+      (s) => s.networks.includes(name) && s.name !== "mas" && s.name !== peer,
+    );
+    if (stranger !== undefined) return fail(`${stranger.name} is on ${name}, which only mas and ${peer} share`);
+  }
+  return null;
 }
 
 /**

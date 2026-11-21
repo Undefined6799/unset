@@ -75,3 +75,9 @@ matrix_authentication_service:
   enabled: true
   endpoint: http://mas:8080/
   secret_path: /run/secrets/synapse_mas_secret
+
+# The server rule (P6.10a; ADR 0085): refuses every room event but an encrypted one. Its package is
+# infrastructure/matrix/synapse-module/, which our Synapse image is to carry; it takes no config (:103).
+modules:
+  - module: unset_chat_policy.EncryptedOnly
+    config: {}

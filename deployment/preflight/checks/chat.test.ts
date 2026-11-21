@@ -83,8 +83,22 @@ describe("C36 the chat servers' settings", () => {
     );
   });
 
+  test("synapse_loads_exactly_the_server_rule", () => {
+    const rule = { module: "unset_chat_policy.EncryptedOnly", config: {} };
+    const reason = "homeserver.yaml: modules is not its reviewed value";
+    for (const modules of [
+      undefined,
+      [],
+      [{ ...rule, config: { allow_plain: true } }],
+      [rule, { module: "other.Module", config: {} }],
+      [{ module: "unset_chat_policy.Other", config: {} }],
+    ]) {
+      expect(synapseProblem(edited(synapse(), "modules", modules), SERVER), JSON.stringify(modules)).toBe(reason);
+    }
+  });
+
   test("synapse_refuses_unreviewed_settings_and_inline_secrets", () => {
-    for (const key of ["modules", "oidc_providers", "app_service_config_files", "macaroon_secret_key", "form_secret"]) {
+    for (const key of ["oidc_providers", "app_service_config_files", "macaroon_secret_key", "form_secret"]) {
       expect(synapseProblem(edited(synapse(), key, "x"), SERVER), key).toBe(
         "homeserver.yaml: a setting the preflight does not allow",
       );
@@ -197,12 +211,35 @@ const MAS_SERVICE = [
   "      MAS_CONFIG: /config/mas.yaml",
   "    volumes:",
   "      - ./chat/dev/mas.yaml:/config/mas.yaml:ro",
+  "    networks:",
+  "      chat_db:",
+  "      chat_mas:",
+  "        ipv4_address: 10.250.38.3",
+  "      chat_admin_mas:",
+  "        ipv4_address: 10.250.38.11",
+  "",
+].join("\n");
+/** The chat networks as ADR 0086 Decision 4 has them: fixed subnets, every one internal. */
+const CHAT_NETWORKS = [
+  "networks:",
+  "  chat_db:",
+  "    internal: true",
+  "  chat_mas:",
+  "    internal: true",
+  "    ipam:",
+  "      config:",
+  "        - subnet: 10.250.38.0/29",
+  "  chat_admin_mas:",
+  "    internal: true",
+  "    ipam:",
+  "      config:",
+  "        - subnet: 10.250.38.8/29",
   "",
 ].join("\n");
 const OTHER = "  web:\n    image: w\n";
 
-const run = (services: string, env: Env = "dev") => {
-  const compose = parseCompose(`name: unset-dev\nservices:\n${services}`, "/repo/deployment/c.yaml");
+const run = (services: string, env: Env = "dev", networks = CHAT_NETWORKS) => {
+  const compose = parseCompose(`name: unset-dev\nservices:\n${services}${networks}`, "/repo/deployment/c.yaml");
   // As loadCompose hands them over: each bind source resolved against the project directory (inputs.ts).
   for (const service of compose.services)
     service.mounts = service.mounts.map((m) =>
@@ -255,5 +292,48 @@ describe("C36 the chat services", () => {
     expect(await run(writable)).toEqual({ pass: false, reason: "synapse does not mount its config read-only once" });
     const absent = SYNAPSE_SERVICE.replace("./chat/dev/homeserver.yaml:", "./chat/dev/none.yaml:");
     expect((await run(absent)).reason).toMatch(/^input missing: /);
+  });
+});
+
+describe("C36 MAS's networks", () => {
+  const ADMIN = "  chat-admin:\n    image: a\n    networks: [chat_admin_mas]\n";
+
+  test("mas_binds_its_fixed_address_on_each_internal_network", async () => {
+    expect(await run(MAS_SERVICE + ADMIN + OTHER)).toEqual({ pass: true, reason: "ok" });
+    const moved = MAS_SERVICE.replace("ipv4_address: 10.250.38.11", "ipv4_address: 10.250.38.12");
+    expect(await run(moved)).toEqual({
+      pass: false,
+      reason: "mas's address on chat_admin_mas is not its listener's bind",
+    });
+    const loose = MAS_SERVICE.replace("        ipv4_address: 10.250.38.3\n", "");
+    expect(await run(loose)).toEqual({ pass: false, reason: "mas's address on chat_mas is not its listener's bind" });
+    const outside = MAS_SERVICE.replace("      chat_db:\n", "      chat_db:\n      app:\n");
+    expect(await run(outside, "dev", `${CHAT_NETWORKS}  app: {}\n`)).toEqual({
+      pass: false,
+      reason: "mas joins a network other than chat_db, chat_mas and chat_admin_mas",
+    });
+  });
+
+  test("the_chat_networks_are_internal_with_their_subnets", async () => {
+    const open = CHAT_NETWORKS.replace("  chat_mas:\n    internal: true\n", "  chat_mas:\n    internal: false\n");
+    expect(await run(MAS_SERVICE, "dev", open)).toEqual({ pass: false, reason: "chat_mas is not internal" });
+    const wide = CHAT_NETWORKS.replace("10.250.38.8/29", "10.250.38.0/24");
+    expect(await run(MAS_SERVICE, "dev", wide)).toEqual({
+      pass: false,
+      reason: "chat_admin_mas is not on its reviewed subnet",
+    });
+  });
+
+  test("only_chat_admin_shares_the_admin_network_and_only_synapse_the_other", async () => {
+    const stranger = "  web:\n    image: w\n    networks: [chat_admin_mas]\n";
+    expect(await run(MAS_SERVICE + stranger)).toEqual({
+      pass: false,
+      reason: "web is on chat_admin_mas, which only mas and chat-admin share",
+    });
+    const third = "  web:\n    image: w\n    networks: [chat_mas]\n";
+    expect(await run(MAS_SERVICE + third)).toEqual({
+      pass: false,
+      reason: "web is on chat_mas, which only mas and synapse share",
+    });
   });
 });
