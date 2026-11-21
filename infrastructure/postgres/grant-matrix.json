@@ -179,7 +179,8 @@
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
           "email_checked_at": ["SELECT", "UPDATE"],
-          "issuer_origin": ["SELECT", "INSERT"]
+          "issuer_origin": ["SELECT", "INSERT"],
+          "notifications_seen_at": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -275,7 +276,8 @@
           "did": ["SELECT"],
           "reason": ["SELECT"],
           "topic": ["SELECT"],
-          "created_at": ["SELECT"]
+          "created_at": ["SELECT"],
+          "seen": ["SELECT"]
         }
       }
     },
