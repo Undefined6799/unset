@@ -3,7 +3,5 @@
 // value the door set in this browser, so a cross-site link to it signs nobody in anywhere (csrf-coverage.test.ts).
 import type { RequestHandler } from "@sveltejs/kit";
 import { chatSignIn } from "../../../lib/server/chat-sign-in.ts";
-import { gateSession } from "../../../lib/server/session.ts";
 
-export const GET: RequestHandler = (event) =>
-  chatSignIn(gateSession(event), event.url.searchParams, event.locals.deadline);
+export const GET: RequestHandler = (event) => chatSignIn(event);

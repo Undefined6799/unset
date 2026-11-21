@@ -12,7 +12,8 @@
 // it as direct; the start route makes exactly the room our server accepts, keeps the composer off until the other
 // person has joined, then sends only ciphertext; a second start finds the same room; a bad chat ID starts nothing.
 // The count (build step 10; ADR 0090): once ready the page registers one pusher with the door's key, and a refused
-// pusher leaves chat as it is.
+// pusher leaves chat as it is. Signup's chat step (book P6.17): opened at /welcome, the page saves the key on two
+// cards, registers the pusher, then offers the way back to unset.sh through the door.
 // Chromium only, by its name (playwright.config.ts ignores *chromium.spec.ts for Firefox and WebKit): the CSP check
 // reads Chromium's console wording, as csp.spec.ts does.
 import { readFileSync } from "node:fs";
@@ -520,6 +521,22 @@ test("chat_page.pusher_once: once ready the page registers one pusher with the d
   // A later trust change repaints the page but registers nothing more.
   await page.waitForTimeout(1000);
   expect(stack.homeserver.pushers).toHaveLength(1);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.signup_step: from signup's chat step the page saves the key, registers the pusher, then goes back", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { page, problems } = await open(browser);
+  await page.goto("https://unset.cc/welcome");
+  await saveKey(page);
+  // Ready is said only once the pusher is registered, so the way back never comes before the count works.
+  expect(stack.homeserver.pushers).toHaveLength(1);
+  expect(new URL(page.url()).pathname).toBe("/welcome");
+  await expect(page.getByRole("heading", { name: "Your messages are set up" })).toBeVisible();
+  await page.getByRole("link", { name: "Continue" }).click();
+  await page.waitForURL("https://unset.sh/welcome/chat");
   expect(problems).toEqual([]);
 });
 

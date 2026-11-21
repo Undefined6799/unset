@@ -7,6 +7,8 @@
   download; on the second the key is hidden and the member types its last characters, the check Element makes before
   it writes the vault (ADR 0089 decision 3); "Show my key again" goes back. The page is still in save_key throughout,
   so nothing is stored until the check passes.
+  Opened from signup's chat step (book P6.17), at /welcome, a ready page offers the way back to unset.sh, through the
+  door's fixed /welcome/done, instead of the conversations.
   The key fields follow Chromium's documented form shape, a username field (hidden) and a password field marked
   new-password to save and current-password to fill
   (https://www.chromium.org/developers/design-documents/form-styles-that-chromium-understands/, read 2026-11-21;
@@ -38,6 +40,10 @@ const checking = $derived.by(() => {
   const now = view as ChatState;
   return now.kind === "save_key" && checkingKey === now.key;
 });
+/** Opened from signup's chat step: the door serves the page there and takes the tab back from WELCOME_DONE. */
+const WELCOME_PATH = "/welcome";
+const WELCOME_DONE = "/welcome/done";
+const welcoming = $derived((view as ChatState).kind === "ready" && window.location.pathname === WELCOME_PATH);
 
 /** What a password manager files the key under. */
 const KEY_NAME = "Messages recovery key";
@@ -73,7 +79,11 @@ const CHECK_WORDS = {
   title: "Check your recovery key",
   text: `To check you have saved it, type the last ${CHECK_LENGTH} characters of your recovery key.`,
 } as const;
-const words = $derived(checking ? CHECK_WORDS : WORDS[view.kind]);
+const WELCOME_WORDS = {
+  title: "Your messages are set up",
+  text: "Your recovery key is saved. Go back to unset.sh to finish signing up.",
+} as const;
+const words = $derived(checking ? CHECK_WORDS : welcoming ? WELCOME_WORDS : WORDS[view.kind]);
 
 const UNLOCK_PROBLEMS = {
   wrong_key: "That is not your recovery key. Check it and try again.",
@@ -129,7 +139,7 @@ onMount(() => {
   <Card.Root>
     <Card.Header>
       <Card.Title><h1>{words.title}</h1></Card.Title>
-      {#if view.kind !== "ready"}<Card.Description>{words.text}</Card.Description>{/if}
+      {#if view.kind !== "ready" || welcoming}<Card.Description>{words.text}</Card.Description>{/if}
     </Card.Header>
     {#if view.kind === "save_key" && !checking}
       <Card.Content>
@@ -202,6 +212,10 @@ onMount(() => {
           {/if}
           <Button type="submit" disabled={unlocking}>{unlocking ? "Unlocking…" : "Unlock"}</Button>
         </form>
+      </Card.Content>
+    {:else if welcoming}
+      <Card.Content>
+        <Button href={WELCOME_DONE}>Continue</Button>
       </Card.Content>
     {:else if view.kind === "ready"}
       <Card.Content>

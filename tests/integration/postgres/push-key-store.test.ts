@@ -2,7 +2,8 @@
 // the chat count, against real Postgres connected as `chat_auth`, the door's own role (TE-2). A key is kept only as its
 // hash on its own browser entry; a new key replaces the entry's last and keeps its number; a notification for a key
 // no entry holds changes nothing; the member's number is the one counted last over their browsers; and the key and its
-// number go with the entry (Log out, an ended device, erasure through core.erase_did's delete of door.browser).
+// number go with the entry (Log out, an ended device, erasure through core.erase_did's delete of door.browser). A
+// member counts as set up while any of their browsers holds a key (the onboarding chat step, ADR 0083 decision 2).
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { relative } from "node:path";
 import type { Did } from "@unset/domains-identity";
@@ -112,6 +113,18 @@ describe("push key store", () => {
     await keys.record(pushKeyHash(kb), 1, deadline());
     expect(await keys.latest(did, deadline())).toBe(1);
     expect(await keys.latest(stranger.did, deadline())).toBe(9);
+  });
+
+  test("door.push_set_up: a member is set up once one of their browsers was given a key, and not before", async () => {
+    const did = newDid();
+    const [entry, stranger] = [await signedIn(did), await signedIn()];
+    expect(await keys.registered(did, deadline())).toBe(false);
+    await keys.issue(stranger, pushKeyHash(newKey()), deadline());
+    expect(await keys.registered(did, deadline())).toBe(false);
+    await keys.issue(entry, pushKeyHash(newKey()), deadline());
+    expect(await keys.registered(did, deadline())).toBe(true);
+    await list.remove(entry, deadline());
+    expect(await keys.registered(did, deadline())).toBe(false);
   });
 
   test("door.push_follows_entry: when the entry is removed its key and number go with it", async () => {

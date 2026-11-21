@@ -586,11 +586,12 @@ describe("the terms step", () => {
     );
   });
 
-  test("accepting_goes_to_the_chat_step_and_continuing_to_verify_email", async () => {
+  test("accepting_goes_to_the_chat_step_which_continuing_alone_does_not_finish", async () => {
+    // Finishing the chat step needs chat set up on unset.cc (chat-step.test.ts); here no door answers, so it fails closed.
     const { cookie } = await atTerms();
     expect(location(await post("/welcome/terms", accept(), cookie))).toBe("/welcome/chat");
-    expect(location(await post("/welcome/chat", "", cookie))).toBe("/verify-email");
-    expect(location(await get("/welcome", cookie))).toBe("/verify-email");
+    expect(location(await post("/welcome/chat", "", cookie))).toBe("/welcome/chat");
+    expect(location(await get("/welcome", cookie))).toBe("/welcome/chat");
   });
 });
 
@@ -601,14 +602,6 @@ describe("leaving and finishing onboarding", () => {
     await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", AbortSignal.timeout(5000));
     expect((await get("/test-routes/members", cookie)).status).toBe(200);
     expect(location(await get("/welcome/terms", cookie))).toBe("/me");
-  });
-
-  test("the_chat_step_with_a_confirmed_email_goes_to_the_profile", async () => {
-    const { did, cookie } = await signedIn();
-    await accounts.confirmAdult(did, AbortSignal.timeout(5000));
-    await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, AbortSignal.timeout(5000));
-    await withTransaction(pool, null, (tx) => sessions.setEmailConfirmed(tx, { did }, true));
-    expect(location(await post("/welcome/chat", "", cookie))).toBe("/me");
   });
 
   test("a_finished_member_on_any_step_returns_to_the_profile", async () => {

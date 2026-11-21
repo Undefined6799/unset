@@ -497,6 +497,28 @@ describe("the chat count (ADR 0082, ADR 0090)", () => {
     expect(rows.rowCount).toBe(0);
   });
 
+  const setUpOf = async (did: string) => {
+    const res = await internal(`/set-up?${new URLSearchParams({ did })}`);
+    return [res.status, await res.json()];
+  };
+
+  test("door.set_up: web's onboarding read says a member is set up once a browser of theirs took a key", async () => {
+    const { tab, deviceId } = await signedIn();
+    expect(await setUpOf(ALICE)).toEqual([200, { setUp: false }]);
+    await tab.post("/push/key", { deviceId });
+    expect(await setUpOf(ALICE)).toEqual([200, { setUp: true }]);
+    expect(await setUpOf(BOB)).toEqual([200, { setUp: false }]);
+  });
+
+  test("door.set_up_strict: a bad or repeated DID is 400, a POST 405, and the public door does not serve it", async () => {
+    const { tab } = await signedIn();
+    expect((await internal("/set-up?did=nope")).status).toBe(400);
+    expect((await internal(`/set-up?did=${ALICE}&did=${BOB}`)).status).toBe(400);
+    expect((await internal(`/set-up?did=${ALICE}&x=1`)).status).toBe(400);
+    expect((await internal(`/set-up?did=${ALICE}`, { method: "POST" })).status).toBe(405);
+    expect((await tab.get(`/set-up?did=${ALICE}`)).status).toBe(404);
+  });
+
   test("door.count_rises_and_falls: an event's number and a read's badge update reach web's read", async () => {
     const { tab, deviceId } = await signedIn();
     const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };

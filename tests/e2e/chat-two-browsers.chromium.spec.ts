@@ -4,7 +4,8 @@
 // page and lifting it brings the same browser back with no unlock (ADR 0084 decisions 1 and 2); deletion ends the
 // account and the other member keeps the conversation (decision 3). It also records the build plan's step-11
 // unverified items as annotations: how fast a lock stops an open page and what the homeserver keeps of an erased
-// account.
+// account. Signup's chat step (book P6.17): opened at /welcome, a new member saves the key on two cards, the pusher is
+// registered at Synapse, and the page then offers the way back to unset.sh.
 // Chromium only, by its name (playwright.config.ts). Skipped, saying why, when the run is not pointed at the servers.
 import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { type RealServers, type RealStack, realServers, startRealStack } from "./fixtures/chat-servers.ts";
@@ -160,6 +161,28 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   await send(b.page, "still here");
   await expect(messages(a2.page)).toContainText("still here", { timeout: 60_000 });
   for (const p of [a, b, a2]) expect(p.problems).toEqual([]);
+});
+
+test("chat_e2e.signup_step: from signup a new member saves the key, has a pusher at Synapse, and goes back", async ({
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  const carol = await stack.member(`carol${Date.now()}.unset.name`);
+  const c = await browserFor(browser, carol.handle);
+  await c.page.goto("https://unset.cc/welcome");
+  await saveKey(c.page);
+  await expect(c.page.getByRole("heading", { name: "Your messages are set up" })).toBeVisible();
+  // The count's pusher is registered before the way back shows (ADR 0082 decision 1). Synapse 1.162.0 admin API
+  // GET /_synapse/admin/v1/users/<user_id>/pushers (synapse/rest/admin/users.py PushersRestServlet).
+  const listed = await admin(`/_synapse/admin/v1/users/${encodeURIComponent(carol.userId)}/pushers`);
+  expect(listed.total).toBe(1);
+  expect((listed.pushers as { app_id: string; kind: string }[])[0]).toMatchObject({
+    kind: "http",
+    app_id: "sh.unset.count",
+  });
+  await c.page.getByRole("link", { name: "Continue" }).click();
+  await c.page.waitForURL("https://unset.sh/welcome/chat");
+  expect(c.problems).toEqual([]);
 });
 
 test("chat_e2e.suspend_and_back: a lock stops Alice's open page; an unlock brings the same browser back", async ({
