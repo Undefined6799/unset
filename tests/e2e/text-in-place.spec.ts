@@ -374,6 +374,15 @@ test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }
   await removeCard(page, word);
 });
 
+/**
+ * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
+ * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
+ * after this one (text-markdown.spec.ts) is not refused.
+ */
+async function giveBackWrites(page: Page, used: number) {
+  await page.waitForTimeout(used * 2_000 + 1_000);
+}
+
 /** The own page opened while the editor's script is held, with every Text card listening and none drawn yet. */
 async function openHeld(page: Page) {
   await holdEditorScript(page, { ms: 1500 });
@@ -411,6 +420,7 @@ test("keys_typed_before_the_editor_opens_go_only_to_the_card_pressed_last", asyn
   await page.unroute("**/_app/immutable/**/*.js");
   await removeCard(page, first);
   await removeCard(page, second);
+  await giveBackWrites(page, 4);
 });
 
 // Codex on 46550e5: a key the card cannot replay (Backspace, Enter, an arrow) ends the keys it keeps, so the words
@@ -430,6 +440,7 @@ test("a_key_typed_before_the_editor_opens_that_cannot_be_replayed_ends_the_kept_
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await page.unroute("**/_app/immutable/**/*.js");
   await removeCard(page, word);
+  await giveBackWrites(page, 2);
 });
 
 test("a_click_on_the_card_around_the_words_puts_the_caret_in_them", async ({ page }) => {
@@ -479,6 +490,41 @@ test("after_a_save_typing_goes_on_where_it_was", async ({ page }) => {
   await expect(bar(page)).toContainText("1 card has unsaved changes.");
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
+});
+
+// Codex on b9d96b6: the Markdown field (Show Markdown) is a way back too, so a Save from it returns there and not to
+// the editor the member typed in before.
+test("after_a_save_from_the_markdown_field_typing_goes_on_there", async ({ page }) => {
+  const word = `plainback${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { card, editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(" one");
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await field.click();
+  await field.press("End");
+  await page.keyboard.type(" two");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await expect(field).toBeFocused();
+  await page.keyboard.type(" three");
+  await expect(field).toHaveValue(`${word} start one two three`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  // A field's value is no text the card's filter finds, so the card is found by its field to show its words again.
+  await page
+    .locator('[data-slot="card"]', { has: field })
+    .getByRole("button", { name: /^More for / })
+    .click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await removeCard(page, word);
+  await giveBackWrites(page, 3);
 });
 
 test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) => {
