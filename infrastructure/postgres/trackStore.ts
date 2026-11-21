@@ -142,7 +142,7 @@ async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, reco
     write.kind === "profile"
       ? [`at://${did}/sh.unset.profile/self`]
       : write.kind === "section"
-        ? [`at://${did}/sh.unset.section/${write.rkey}`]
+        ? [`at://${did}/sh.unset.card/${write.rkey}`]
         : [],
   );
   for (const table of ["idx.profile", "idx.section"]) {

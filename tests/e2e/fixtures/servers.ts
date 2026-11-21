@@ -239,7 +239,7 @@ function indexedMember(): string {
       VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', $j$${JSON.stringify(profile)}$j$,
         'Public Member', false, now());
     INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-      VALUES ('at://${did}/sh.unset.section/3jzfcijpj2z2a', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l',
+      VALUES ('at://${did}/sh.unset.card/3jzfcijpj2z2a', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l',
         $j$${JSON.stringify(card.record)}$j$, 0, now());`;
 }
 

@@ -10,13 +10,16 @@ type PdsResult<T> = { readonly kind: "ok"; readonly value: T } | Exclude<ListRes
 type StoredCard = Extract<ListResult, { kind: "ok" }>["value"]["cards"][number];
 type CardKey = Parameters<CardStore["remove"]>[0];
 type CardContent = Parameters<CardWrites["create"]>[0];
+const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as Parameters<typeof cardWrites>[0];
+/** The profile's card list as it is written: the owner's card addresses (ADR 0086). */
+const listed = (...keys: string[]) => keys.map((k) => ({ uri: `at://${OWNER}/sh.unset.card/${k}` }));
 
 const NOW = "2026-11-17T06:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
 const ok = <T>(value: T): PdsResult<T> => ({ kind: "ok", value });
 const readme = (text: string) => ({
-  $type: "sh.unset.section",
-  content: { $type: "sh.unset.section#readme", text },
+  $type: "sh.unset.card",
+  content: { $type: "sh.unset.block.text", text },
   createdAt: T1,
 });
 /** A README card as parseCardInput reads `{ kind: "readme", text }`. */
@@ -85,7 +88,7 @@ function store(
     settle: async () => undefined,
     drop: async () => undefined,
   };
-  return { writes: cardWrites({ ...base, ...over }, () => NOW, pictures), calls };
+  return { writes: cardWrites(OWNER, { ...base, ...over }, () => NOW, pictures), calls };
 }
 
 describe("cardWrites", () => {
@@ -94,12 +97,12 @@ describe("cardWrites", () => {
     const { content, width } = input("Hi");
     expect(await writes.create(content, width)).toEqual({ kind: "saved" });
     expect(calls.created).toEqual([
-      { $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text: "Hi" }, createdAt: NOW },
+      { $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text: "Hi" }, createdAt: NOW },
     ]);
   });
 
   test("a member with the most cards a page shows cannot add another", async () => {
-    const full = Array.from({ length: 100 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
+    const full = Array.from({ length: 50 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
     const { writes, calls } = store({ list: async () => ok({ cards: full, complete: true, overflow: false }) });
     const { content, width } = input();
     expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.too_many" });
@@ -130,9 +133,9 @@ describe("cardWrites", () => {
     expect(calls.swaps).toEqual(["h1", "h2"]);
   });
 
-  test("two tabs at 99 cards: the second count sees 100 and nothing more is written", async () => {
+  test("two tabs at 49 cards: the second count sees 50 and nothing more is written", async () => {
     const at = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: readme("A"), cid: "c" }));
-    const lists = [at(99), at(100)];
+    const lists = [at(49), at(50)];
     const { writes, calls } = store({
       list: async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false }),
       create: async (record, swapCommit) => {
@@ -204,19 +207,19 @@ describe("cardWrites", () => {
   test("a reorder names each shown card once and writes the order into the profile", async () => {
     const { writes, calls } = store();
     expect(await writes.reorder(["b", "a"])).toEqual({ kind: "saved" });
-    expect(calls.profile).toMatchObject([{ ok: true, record: { displayName: "A", cards: ["b", "a"] } }]);
+    expect(calls.profile).toMatchObject([{ ok: true, record: { displayName: "A", cards: listed("b", "a") } }]);
   });
 
   test("a hidden card is not part of the order, so the page's order still matches", async () => {
     const cards: StoredCard[] = [
       { key: "a", value: readme("A"), cid: "c" },
-      { key: "h", value: { $type: "sh.unset.section", content: { $type: "x" } }, cid: "c" },
+      { key: "h", value: { $type: "sh.unset.card", content: { $type: "x" } }, cid: "c" },
       { key: "bad/key", value: readme("B"), cid: "c" },
     ];
     const list = async () => ok({ cards, complete: true, overflow: false });
     const { writes, calls } = store({ list });
     expect(await writes.reorder(["a"])).toEqual({ kind: "saved" });
-    expect(calls.profile).toMatchObject([{ ok: true, record: { cards: ["a"] } }]);
+    expect(calls.profile).toMatchObject([{ ok: true, record: { cards: listed("a") } }]);
   });
 
   test("an order that is not exactly the shown cards is refused before any write", async () => {
@@ -251,7 +254,7 @@ describe("cardWrites", () => {
   test("an avatar shape is written into the profile, and its refusals read as the profile's", async () => {
     const { writes, calls } = store();
     expect(await writes.avatarShape("roundedSquare")).toEqual({ kind: "saved" });
-    expect(calls.profile[0]).toMatchObject({ ok: true, record: { displayName: "A", avatarShape: "roundedSquare" } });
+    expect(calls.profile[0]).toMatchObject({ ok: true, record: { displayName: "A", avatarShape: "rounded-square" } });
     expect(await store({}, null).writes.avatarShape("round")).toEqual({
       kind: "failed",
       code: "profile.name_required",
@@ -272,11 +275,13 @@ describe("cardWrites", () => {
 // Review of #1911: all of a member's cards together must fit one page (domains/profile MAX_PAGE_BYTES, 4 MiB),
 // counted on the list the write is checked against, so the index never leaves out a card the owner saved.
 describe("a page's cards together fit one page", () => {
-  // Forty-one Text cards of 100,000 characters: about 4.1 MB, just under the budget.
-  const full = "a".repeat(100_000);
+  // Stored cards of 101,800 characters (written by another app, or before ADR 0086's 20,000-byte text): forty-one
+  // are about 4.18 MB, just under the budget, so one new Text card at the limit does not fit and forty leave room.
+  const stored = "a".repeat(101_800);
+  const full = "a".repeat(20_000);
   const page = (cards: number) =>
     ok({
-      cards: Array.from({ length: cards }, (_, i) => ({ key: `k${i}`, value: readme(full), cid: "c" })),
+      cards: Array.from({ length: cards }, (_, i) => ({ key: `k${i}`, value: readme(stored), cid: "c" })),
       complete: true,
       overflow: false,
     });
@@ -308,8 +313,8 @@ describe("a page's cards together fit one page", () => {
     // Codex review of #1911: a Save past one applyWrites body lands in several commits, judged one at a time.
     const stored = {
       cards: [
-        { key: "a", value: readme("a".repeat(35_000)), cid: "c" },
-        { key: "b", value: readme("b".repeat(65_000)), cid: "c" },
+        { key: "a", value: readme("a".repeat(7_000)), cid: "c" },
+        { key: "b", value: readme("b".repeat(13_000)), cid: "c" },
       ],
       complete: true,
       overflow: false,
@@ -322,7 +327,7 @@ describe("a page's cards together fit one page", () => {
       content: { kind: "readme", text } as CardContent,
       width: "full" as const,
     });
-    expect(await writes.saveAll([edit("a", "a".repeat(65_000)), edit("b", "b".repeat(45_000))])).toEqual({
+    expect(await writes.saveAll([edit("a", "a".repeat(13_000)), edit("b", "b".repeat(9_000))])).toEqual({
       kind: "saved",
     });
     expect(calls.many.map((call) => (call.updates as { key: string }[]).map((u) => u.key))).toEqual([["b", "a"]]);
@@ -331,7 +336,7 @@ describe("a page's cards together fit one page", () => {
   test("a Save of several cards past the budget is refused and nothing is written", async () => {
     const stored = { cards: [{ key: "k0", value: readme("A"), cid: "c" }], complete: true, overflow: false };
     const { writes, calls } = store({ list: async () => ok(stored) });
-    const big = { kind: "readme", text: "a".repeat(100_000) } as CardContent;
+    const big = { kind: "readme", text: full } as CardContent;
     const edits = Array.from({ length: 1 }, () => ({
       key: "k0" as CardKey,
       version: "c" as Parameters<CardWrites["saveAll"]>[0][number]["version"],

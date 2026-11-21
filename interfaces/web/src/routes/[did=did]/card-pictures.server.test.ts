@@ -11,6 +11,7 @@ type CardKey = Parameters<CardStore["remove"]>[0];
 type CardContent = Parameters<CardWrites["create"]>[0];
 type CardVersion = Parameters<CardWrites["saveAll"]>[0][number]["version"];
 type DraftId = Parameters<PictureStore["use"]>[0];
+const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as Parameters<typeof cardWrites>[0];
 
 const NOW = "2026-11-20T23:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
@@ -39,15 +40,15 @@ const picture = (draft: DraftId | null = DRAFT): CardContent => ({
   fit: "contain",
 });
 const readme = (text: string) => ({
-  $type: "sh.unset.section",
-  content: { $type: "sh.unset.section#readme", text },
+  $type: "sh.unset.card",
+  content: { $type: "sh.unset.block.text", text },
   createdAt: T1,
 });
 const storedPicture = {
-  $type: "sh.unset.section",
+  $type: "sh.unset.card",
   content: {
-    $type: "sh.unset.section#image",
-    image: { image: { ...BLOB, ref: { $link: OLD }, size: 9 }, alt: "Old", aspectRatio: { width: 4, height: 3 } },
+    $type: "sh.unset.block.images",
+    images: [{ image: { ...BLOB, ref: { $link: OLD }, size: 9 }, alt: "Old", aspectRatio: { width: 4, height: 3 } }],
   },
   createdAt: T1,
 };
@@ -119,13 +120,12 @@ function stack(over: Over = {}) {
     },
     ...over.pictures,
   };
-  return { writes: cardWrites(store, () => NOW, pictures), log, written };
+  return { writes: cardWrites(OWNER, store, () => NOW, pictures), log, written };
 }
 
 const PUBLISHED = {
-  $type: "sh.unset.section#image",
-  image: { image: BLOB, alt: "A lake", aspectRatio: { width: 2560, height: 1707 } },
-  caption: "Morning",
+  $type: "sh.unset.block.images",
+  images: [{ image: BLOB, alt: "A lake", aspectRatio: { width: 2560, height: 1707 }, caption: "Morning" }],
   fit: "contain",
 };
 
@@ -142,7 +142,7 @@ describe("a new picture card", () => {
       `create ${NEW_KEY}`,
       `settle ${NEW_KEY} ${REV} ${LINK} ${DRAFT}`,
     ]);
-    expect(written).toEqual([{ $type: "sh.unset.section", content: PUBLISHED, createdAt: NOW }]);
+    expect(written).toEqual([{ $type: "sh.unset.card", content: PUBLISHED, createdAt: NOW }]);
   });
 
   test("picture.create_full: a page with no room is refused before any use or upload", async () => {
@@ -230,7 +230,7 @@ describe("an edited picture card", () => {
     const { writes, log, written } = stack();
     expect(await writes.save("p" as CardKey, picture(null), "full")).toEqual({ kind: "saved" });
     expect(log).toEqual(["save p", `settle p ${REV} ${OLD} -`]);
-    expect(written).toMatchObject([{ content: { image: { image: { size: 9 }, alt: "A lake" } } }]);
+    expect(written).toMatchObject([{ content: { images: [{ image: { size: 9 }, alt: "A lake" }] } }]);
   });
 
   test("picture.save_refused: a write the PDS refuses releases the new use", async () => {

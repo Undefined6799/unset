@@ -1,4 +1,4 @@
-// P2.19b: a picture card (sh.unset.section#image, ADR 0070) as the editor sends it and as it is written. The editor
+// P2.19b: a picture card (an sh.unset.block.images block, ADR 0070 and 0086) as the editor sends it and as it is written. The editor
 // sends a draft id or nothing (keep the card's picture); the record carries the PDS blob once web has published it.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
@@ -15,12 +15,11 @@ const BLOB = {
   size: 1_200_000,
 };
 const OTHER_BLOB = { ...BLOB, ref: { $link: "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe" } };
-const stored = (content: Record<string, unknown>) => ({ $type: "sh.unset.section", content, createdAt: T1 });
+const stored = (content: Record<string, unknown>) => ({ $type: "sh.unset.card", content, createdAt: T1 });
 const storedPicture = (extra: Record<string, unknown> = {}) =>
   stored({
-    $type: "sh.unset.section#image",
-    image: { image: OTHER_BLOB, alt: "Old words", aspectRatio: { width: 3, height: 2 } },
-    caption: "Old caption",
+    $type: "sh.unset.block.images",
+    images: [{ image: OTHER_BLOB, alt: "Old words", aspectRatio: { width: 3, height: 2 }, caption: "Old caption" }],
     ...extra,
   });
 
@@ -69,14 +68,16 @@ describe("parseCardInput, picture", () => {
   });
 
   test("image.parse_too_long: alt text and caption past the lexicon's graphemes are refused by name", () => {
-    expect(parseCardInput({ kind: "image", image: DRAFT, alt: "a".repeat(LIMITS.section.imageAlt + 1) })).toEqual({
+    expect(parseCardInput({ kind: "image", image: DRAFT, alt: "a".repeat(LIMITS.card.imageAlt + 1) })).toEqual({
       ok: false,
       code: "card.too_long",
       field: "alt",
     });
-    expect(
-      parseCardInput({ kind: "image", image: DRAFT, caption: "a".repeat(LIMITS.section.imageCaption + 1) }),
-    ).toEqual({ ok: false, code: "card.too_long", field: "caption" });
+    expect(parseCardInput({ kind: "image", image: DRAFT, caption: "a".repeat(LIMITS.card.imageCaption + 1) })).toEqual({
+      ok: false,
+      code: "card.too_long",
+      field: "caption",
+    });
   });
 });
 
@@ -86,18 +87,19 @@ describe("toCardRecord, picture", () => {
     expect(built).toEqual({
       ok: true,
       record: {
-        $type: "sh.unset.section",
+        $type: "sh.unset.card",
         width: "half",
         content: {
-          $type: "sh.unset.section#image",
-          image: { image: BLOB, alt: "A lake at dawn", aspectRatio: { width: 2560, height: 1707 } },
-          caption: "Morning",
+          $type: "sh.unset.block.images",
+          images: [
+            { image: BLOB, alt: "A lake at dawn", aspectRatio: { width: 2560, height: 1707 }, caption: "Morning" },
+          ],
           fit: "contain",
         },
         createdAt: NOW,
       },
     });
-    expect(built.ok && validateRecord("sh.unset.section", built.record, "write").ok).toBe(true);
+    expect(built.ok && validateRecord("sh.unset.card", built.record, "write").ok).toBe(true);
   });
 
   test("image.record_kept: keeping the picture keeps its blob and ratio and writes the new alt text", () => {
@@ -107,20 +109,21 @@ describe("toCardRecord, picture", () => {
       ok: true,
       record: {
         content: {
-          image: { image: OTHER_BLOB, alt: "New words", aspectRatio: { width: 3, height: 2 } },
-          fit: "fill",
+          images: [{ image: OTHER_BLOB, alt: "New words", aspectRatio: { width: 3, height: 2 } }],
+          fit: "cover",
           future: "kept",
         },
         createdAt: T1,
       },
     });
-    expect(built.ok && "caption" in (built.record.content as object)).toBe(false);
+    const images = built.ok ? (built.record.content as { images: object[] }).images : [];
+    expect(images.length === 1 && !("caption" in (images[0] ?? {}))).toBe(true);
   });
 
   test("image.record_keep_nothing: keeping a picture a card does not have is refused on the image field", () => {
     const keep: CardContent = { kind: "image", picture: { kind: "kept" }, alt: "", caption: "", fit: "contain" };
     expect(toCardRecord(keep, "full", null, NOW)).toEqual({ ok: false, code: "card.required", field: "image" });
-    const readme = stored({ $type: "sh.unset.section#readme", text: "Hi" });
+    const readme = stored({ $type: "sh.unset.block.text", text: "Hi" });
     expect(toCardRecord(keep, "full", readme, NOW)).toEqual({ ok: false, code: "card.required", field: "image" });
   });
 
@@ -144,7 +147,10 @@ describe("pictureLink", () => {
       return OTHER_BLOB;
     }
   }
-  const decoded = stored({ $type: "sh.unset.section#image", image: { image: new DecodedBlob(), alt: "" } });
+  const decoded = stored({
+    $type: "sh.unset.block.images",
+    images: [{ image: new DecodedBlob(), alt: "", aspectRatio: { width: 3, height: 2 } }],
+  });
 
   test("image.link: the blob a picture card shows is named by its CID, in JSON form or decoded", () => {
     expect(pictureLink(storedPicture())).toBe(OTHER_BLOB.ref.$link);
@@ -152,8 +158,8 @@ describe("pictureLink", () => {
   });
 
   test("image.link_none: another kind, no record or a malformed picture shows no blob", () => {
-    expect(pictureLink(stored({ $type: "sh.unset.section#readme", text: "Hi" }))).toBeNull();
+    expect(pictureLink(stored({ $type: "sh.unset.block.text", text: "Hi" }))).toBeNull();
     expect(pictureLink(null)).toBeNull();
-    expect(pictureLink(stored({ $type: "sh.unset.section#image", image: { image: { ref: 7 } } }))).toBeNull();
+    expect(pictureLink(stored({ $type: "sh.unset.block.images", images: [{ image: { ref: 7 } }] }))).toBeNull();
   });
 });

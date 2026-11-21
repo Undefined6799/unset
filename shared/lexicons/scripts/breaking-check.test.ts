@@ -52,7 +52,7 @@ describe("breaking-check", () => {
 
   test("breaking_check_detects_new_required", () => {
     const next = original("sh.unset.profile");
-    record(next).required.push("headline");
+    record(next).required = ["headline"];
     expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
       "sh.unset.profile#main: headline became required",
     ]);
@@ -67,15 +67,15 @@ describe("breaking-check", () => {
   });
 
   test("breaking_check_detects_other_narrowing", () => {
-    const next = original("sh.unset.section");
+    const next = original("sh.unset.card");
     const props = record(next).properties;
     Object.assign(props.width ?? {}, { type: "integer" });
     Object.assign(props.width ?? {}, { minimum: 1 });
     next.defs.main = { ...next.defs.main, key: "literal:self" };
-    expect(breakingProblems(next, original("sh.unset.section"), {})).toEqual([
-      "sh.unset.section#main: record key changed from tid to literal:self",
-      "sh.unset.section#main.width: type changed from string to integer",
-      "sh.unset.section#main.width: minimum changed from none to 1",
+    expect(breakingProblems(next, original("sh.unset.card"), {})).toEqual([
+      "sh.unset.card#main: record key changed from tid to literal:self",
+      "sh.unset.card#main.width: type changed from string to integer",
+      "sh.unset.card#main.width: minimum changed from none to 1",
     ]);
   });
 
@@ -109,10 +109,11 @@ describe("breaking-check", () => {
   test("breaking_check_detects_widened_value_set", () => {
     // atproto.com/specs/lexicon, "Lexicon Evolution": new data must be valid under the old Lexicon, and closed unions
     // can not change. An added enum value or blob type, or a dropped enum, lets new data fail the old schema.
-    const next = original("sh.unset.profile");
-    const props = record(next).properties;
-    Object.assign(props.avatar ?? {}, { accept: ["image/png", "image/jpeg", "image/webp", "image/avif", "image/gif"] });
-    expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
+    const jpeg = original("sh.unset.profile");
+    Object.assign(record(jpeg).properties.avatar ?? {}, { accept: ["image/png", "image/jpeg"] });
+    const next = structuredClone(jpeg);
+    Object.assign(record(next).properties.avatar ?? {}, { accept: ["image/png", "image/jpeg", "image/gif"] });
+    expect(breakingProblems(next, jpeg, {})).toEqual([
       "sh.unset.profile#main.avatar: accept now also allows image/gif",
     ]);
     const before = original("sh.unset.profile");
@@ -143,30 +144,35 @@ describe("breaking-check", () => {
   });
 
   test("breaking_check_permission_set_add_requires_flag", () => {
-    const next = original("sh.unset.authApp");
+    const next = original("sh.unset.authFull");
     set(next).permissions.push({ type: "permission", resource: "repo", collection: ["sh.unset.video"] });
-    expect(breakingProblems(next, original("sh.unset.authApp"), {})).toEqual([
-      "sh.unset.authApp: adds repo:sh.unset.video, which widens every existing grant; needs --approved-by-alex=<PR>",
+    expect(breakingProblems(next, original("sh.unset.authFull"), {})).toEqual([
+      "sh.unset.authFull: adds repo:sh.unset.video, which widens every existing grant; needs --approved-by-alex=<PR>",
     ]);
-    expect(breakingProblems(next, original("sh.unset.authApp"), { approvedByAlex: 900 })).toEqual([]);
+    expect(breakingProblems(next, original("sh.unset.authFull"), { approvedByAlex: 900 })).toEqual([]);
   });
 
   test("breaking_check_permission_set_removal_fails", () => {
-    const next = original("sh.unset.authApp");
-    set(next).permissions.pop();
+    const before = original("sh.unset.authFull");
+    set(before).permissions.push({
+      type: "permission",
+      resource: "repo",
+      collection: ["sh.unset.like"],
+      action: ["create", "delete"],
+    });
     const removed =
-      "sh.unset.authApp: removes repo:sh.unset.follow?action=create&action=delete; retire the feature first";
-    expect(breakingProblems(next, original("sh.unset.authApp"), {})).toEqual([removed]);
+      "sh.unset.authFull: removes repo:sh.unset.like?action=create&action=delete; retire the feature first";
+    expect(breakingProblems(original("sh.unset.authFull"), before, {})).toEqual([removed]);
     // Alex's flag does not make a removal pass here; it needs its own reviewed step.
-    expect(breakingProblems(next, original("sh.unset.authApp"), { approvedByAlex: 900 })).toEqual([removed]);
+    expect(breakingProblems(original("sh.unset.authFull"), before, { approvedByAlex: 900 })).toEqual([removed]);
   });
 
   test("breaking_check_permission_set_consent_text_requires_flag", () => {
-    const next = original("sh.unset.authApp");
+    const next = original("sh.unset.authFull");
     set(next).title = "Something else";
-    expect(breakingProblems(next, original("sh.unset.authApp"), {})).toEqual([
-      "sh.unset.authApp: changes the consent text users see (title); needs --approved-by-alex=<PR>",
+    expect(breakingProblems(next, original("sh.unset.authFull"), {})).toEqual([
+      "sh.unset.authFull: changes the consent text users see (title); needs --approved-by-alex=<PR>",
     ]);
-    expect(breakingProblems(next, original("sh.unset.authApp"), { approvedByAlex: 900 })).toEqual([]);
+    expect(breakingProblems(next, original("sh.unset.authFull"), { approvedByAlex: 900 })).toEqual([]);
   });
 });

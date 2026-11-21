@@ -46,9 +46,9 @@ describe("scopes", () => {
         "atproto",
         "repo:sh.unset.profile?action=update",
         "repo:sh.unset.profile?action=delete",
-        "repo:sh.unset.section?action=create",
-        "repo:sh.unset.section?action=update",
-        "repo:sh.unset.section?action=delete",
+        "repo:sh.unset.card?action=create",
+        "repo:sh.unset.card?action=update",
+        "repo:sh.unset.card?action=delete",
         "account:email?action=read",
       ],
     });

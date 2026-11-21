@@ -124,7 +124,7 @@ async function indexed(
     await c.query(
       `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
        VALUES ($1, $2, '3jzfcijpj2z2a', 'cid-s', '3l', $3, 0, now())`,
-      [`at://${did}/sh.unset.section/3jzfcijpj2z2a`, did, card.record],
+      [`at://${did}/sh.unset.card/3jzfcijpj2z2a`, did, card.record],
     );
   });
 }
@@ -139,7 +139,7 @@ async function moreCards(did: string, count: number) {
       await c.query(
         `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
          VALUES ($1, $2, $3, 'cid-s', '3l', $4, NULL, now())`,
-        [`at://${did}/sh.unset.section/${rkey}`, did, rkey, card.record],
+        [`at://${did}/sh.unset.card/${rkey}`, did, rkey, card.record],
       );
     }
   });
@@ -158,8 +158,8 @@ beforeAll(async () => {
   await indexed(UNVERIFIED, { handle: "mallory.unset.org", status: "invalid", name: "Mallory" });
   await indexed(MANY, { name: "Many" });
   await moreCards(MANY, CARDS_MAX);
-  await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signedIn" });
-  await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "ownerOnly" });
+  await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signed-in" });
+  await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "owner-only" });
   await indexed(FUTURE, { name: "Future", visibility: "friendsOfFriends" });
   secrets = mkdtempSync(join(tmpdir(), "public-profile-"));
   const file = (name: string, text: string): string => {

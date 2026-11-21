@@ -1,7 +1,16 @@
-// Profile cards (ADR 0051): one sh.unset.section record per card, read leniently from any client, written strictly,
+// Profile cards (ADR 0051): one sh.unset.card record per card, read leniently from any client, written strictly,
 // and shown in the order the profile's cards list sets.
 import { describe, expect, test } from "vitest";
-import { type Card, orderCards, pageCards, parseCardKey, parseCardVersion, readCard, shownCards } from "./cards.ts";
+import {
+  type Card,
+  orderCards,
+  pageCards,
+  parseCardKey,
+  parseCardVersion,
+  type RepoDid,
+  readCard,
+  shownCards,
+} from "./cards.ts";
 
 const T1 = "2026-11-01T00:00:00.000Z";
 const T2 = "2026-11-02T00:00:00.000Z";
@@ -12,12 +21,26 @@ const key = (raw: string) => {
   return parsed;
 };
 const stored = (content: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
-  $type: "sh.unset.section",
+  $type: "sh.unset.card",
   content,
   createdAt: T1,
   ...extra,
 });
-const ref = (kind: string) => `sh.unset.section#${kind}`;
+/** Each kind's block (ADR 0086), and the buttons block's two button defs. */
+const REFS: Record<string, string> = {
+  readme: "sh.unset.block.text",
+  links: "sh.unset.block.links",
+  collection: "sh.unset.block.showcase",
+  buttons: "sh.unset.block.buttons",
+  image: "sh.unset.block.images",
+  emailButton: "sh.unset.block.buttons#email",
+  linkButton: "sh.unset.block.buttons#link",
+};
+const ref = (kind: string) => REFS[kind] ?? `sh.unset.block.${kind}`;
+const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as RepoDid;
+/** A card list as the profile stores it: at:// addresses of the owner's cards. */
+const listOf = (keys: readonly unknown[]) =>
+  keys.map((k) => (typeof k === "string" ? { uri: `at://${OWNER}/sh.unset.card/${k}` } : k));
 
 describe("parseCardKey", () => {
   test("accepts record keys and refuses anything else", () => {
@@ -84,7 +107,7 @@ describe("readCard", () => {
       heading: "Work with me",
       buttons: [
         { $type: ref("emailButton"), address: "alice@example.com" },
-        { $type: ref("linkButton"), preset: "bookCall", uri: "https://cal.example/alice" },
+        { $type: ref("linkButton"), preset: "book-call", uri: "https://cal.example/alice" },
       ],
     });
     expect(readCard(key(KEY), buttons)?.content).toEqual({
@@ -122,7 +145,7 @@ describe("readCard", () => {
 
   test("a record that does not validate is hidden", () => {
     expect(readCard(key(KEY), stored({ $type: ref("readme"), text: 7 }))).toBeNull();
-    expect(readCard(key(KEY), { $type: "sh.unset.section", content: { $type: ref("readme"), text: "x" } })).toBeNull();
+    expect(readCard(key(KEY), { $type: "sh.unset.card", createdAt: T1 })).toBeNull();
     expect(readCard(key(KEY), "card")).toBeNull();
   });
 
@@ -174,33 +197,52 @@ describe("orderCards", () => {
   const d = card("d", T1);
 
   test("listed cards come first in list order, then unlisted ones oldest first", () => {
-    expect(orderCards(["c", "a"], [a, b, c, d]).map((x) => x.key)).toEqual(["c", "a", "b", "d"]);
+    expect(orderCards(OWNER, listOf(["c", "a"]), [a, b, c, d]).map((x) => x.key)).toEqual(["c", "a", "b", "d"]);
   });
 
   test("a listed key with no card is skipped and a repeated key shows once", () => {
-    expect(orderCards(["gone", "b", "b"], [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
+    expect(orderCards(OWNER, listOf(["gone", "b", "b"]), [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
   });
 
   test("unlisted cards are ordered by the instant they were made, whatever the offset or precision", () => {
     const early = card("early", "2026-11-17T10:00:00+02:00");
     const late = card("late", "2026-11-17T09:00:00Z");
     const between = card("between", "2026-11-17T08:30:00.123456Z");
-    expect(orderCards([], [late, early, between]).map((x) => x.key)).toEqual(["early", "between", "late"]);
+    expect(orderCards(OWNER, listOf([]), [late, early, between]).map((x) => x.key)).toEqual([
+      "early",
+      "between",
+      "late",
+    ]);
   });
 
   test("two cards made in the same millisecond are ordered by their finer digits", () => {
     const second = card("second", "2026-11-17T08:30:00.123456Z");
     const first = card("first", "2026-11-17T10:30:00.123123+02:00");
-    expect(orderCards([], [second, first]).map((x) => x.key)).toEqual(["first", "second"]);
+    expect(orderCards(OWNER, listOf([]), [second, first]).map((x) => x.key)).toEqual(["first", "second"]);
   });
 
   test("a card whose time does not parse goes last", () => {
-    expect(orderCards([], [card("bad", "soon"), a]).map((x) => x.key)).toEqual(["a", "bad"]);
+    expect(orderCards(OWNER, listOf([]), [card("bad", "soon"), a]).map((x) => x.key)).toEqual(["a", "bad"]);
+  });
+
+  test("only addresses of the owner's own cards, by DID, place a card", () => {
+    // ADR 0086: the address is compared as text, never resolved, so a handle or another account places nothing.
+    const others = [
+      { uri: "at://alice.example/sh.unset.card/a" },
+      { uri: "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/sh.unset.card/a" },
+      { uri: `at://${OWNER}/sh.unset.profile/a` },
+      { uri: `at://${OWNER}/sh.unset.card` },
+      "a",
+    ];
+    expect(orderCards(OWNER, [...others, { uri: `at://${OWNER}/sh.unset.card/c` }], [a, c]).map((x) => x.key)).toEqual([
+      "c",
+      "a",
+    ]);
   });
 
   test("a missing or broken list means creation order", () => {
-    expect(orderCards(undefined, [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
-    expect(orderCards([7, null], [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
+    expect(orderCards(OWNER, undefined, [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
+    expect(orderCards(OWNER, listOf([7, null]), [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
   });
 });
 
@@ -222,7 +264,7 @@ describe("shownCards and pageCards (the page's cards, own or public)", () => {
       { key: "bbb", value: readme("b", T1) },
       { key: "ccc", value: readme("c", T2) },
     ];
-    const cards = pageCards({ $type: "sh.unset.profile", cards: ["ccc", "missing", "ccc"] }, records);
+    const cards = pageCards(OWNER, { $type: "sh.unset.profile", cards: listOf(["ccc", "missing", "ccc"]) }, records);
     expect(cards.map((card) => card.key)).toEqual(["ccc", "bbb", "aaa"]);
   });
 
@@ -231,7 +273,7 @@ describe("shownCards and pageCards (the page's cards, own or public)", () => {
       { key: "aaa", value: readme("a", T2) },
       { key: "bbb", value: readme("b", T1) },
     ];
-    expect(pageCards(undefined, records).map((card) => card.key)).toEqual(["bbb", "aaa"]);
-    expect(pageCards("not a record", records).map((card) => card.key)).toEqual(["bbb", "aaa"]);
+    expect(pageCards(OWNER, undefined, records).map((card) => card.key)).toEqual(["bbb", "aaa"]);
+    expect(pageCards(OWNER, "not a record", records).map((card) => card.key)).toEqual(["bbb", "aaa"]);
   });
 });
