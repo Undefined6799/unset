@@ -103,6 +103,8 @@ describe("invite requests on the stacks", () => {
       const { env, secrets } = webEnv(file);
       expect(env.INVITE_REQUESTS).toBe("on");
       expect(env.INVITE_REQUEST_FROM).toBe("noreply@staging.unset.sh");
+      // P2.10s: the owner whose notifications say a request's mail failed, from the interpolation file.
+      expect(env.INVITE_REQUEST_OWNER_DID).toBe(example.get("INVITE_REQUEST_OWNER_DID"));
       expect(secrets).toEqual(expect.arrayContaining(INVITE_SECRETS));
       const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
       const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));

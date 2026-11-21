@@ -261,8 +261,10 @@ Preflight C9 fails and names the file while either is missing, so the stack neve
 - `web_invite_request_to`: one line, the owner's address that receives each request.
 - `INVITE_REQUEST_FROM` (plain env, not a secret): a sender on the verified Resend domain, for example the PDS's
   `noreply@` address.
-- `INVITE_REQUEST_OWNER_DID` (plain env, not a secret): the owner's DID, `did:plc:...`. When a request's mail fails,
-  that member's notifications say so, once a day (P2.10s); the entry names no visitor.
+- `INVITE_REQUEST_OWNER_DID` (plain env, not a secret): the owner's DID, `did:plc:...`, set by hand in
+  `unset-dev-env/dev-public.env` on the staging machine before the deploy that carries P2.10s; the staging compose files
+  read it from there. When a request's mail fails, that member's notifications say so, once a day; the entry names no
+  visitor.
 
 From the folder that holds the checkout, each value is typed at a hidden prompt, so it lands in no shell history:
 

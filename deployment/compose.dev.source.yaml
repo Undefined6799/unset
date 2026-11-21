@@ -266,6 +266,8 @@ services:
       INVITE_REQUEST_SMTP_URL_FILE: /run/secrets/web_invite_request_smtp
       INVITE_REQUEST_TO_FILE: /run/secrets/web_invite_request_to
       INVITE_REQUEST_FROM: noreply@staging.unset.sh
+      # The member told when a request's mail fails (P2.10s): set in dev-public.env, as web refuses a bad one.
+      INVITE_REQUEST_OWNER_DID: ${INVITE_REQUEST_OWNER_DID}
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
     secrets:
