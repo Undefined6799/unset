@@ -241,6 +241,7 @@ onDestroy(() => {
   bind:linkEdit
   bind:linkPreview
   onchoose={(item) => editor?.menus?.choose(item)}
+  onpoint={(item) => editor?.menus?.point(item)}
   onformat={(item) => editor?.menus?.format(item)}
   onlink={{
     confirm: (address) => editor?.menus?.confirmLink(address),

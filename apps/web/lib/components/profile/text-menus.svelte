@@ -6,6 +6,7 @@
   press on any of them keeps the editor's focus and selection. The handle shows only for a pointer that can hover.
 -->
 <script lang="ts">
+import { BLOCK_GROUPS, type BlockGroup, groupOf } from "../../editor/block-items.ts";
 import type { BarItem, BlockItem, MenusState } from "../../editor/menus.ts";
 import { TEXT_MENUS } from "../../profile/messages.ts";
 import { Icon, type IconName } from "../icon/index.ts";
@@ -20,6 +21,7 @@ let {
   linkEdit = $bindable(),
   linkPreview = $bindable(),
   onchoose,
+  onpoint,
   onformat,
   onlink,
 }: {
@@ -32,6 +34,8 @@ let {
   linkEdit?: HTMLElement;
   linkPreview?: HTMLElement;
   onchoose: (item: BlockItem) => void;
+  /** A tab was pressed: its group's first shown item becomes the active one. */
+  onpoint: (item: BlockItem) => void;
   onformat: (item: BarItem) => void;
   /** The link editor's and preview's actions (editor/menus.ts Menus). */
   onlink: {
@@ -55,23 +59,21 @@ const BLOCK_ICONS: Record<BlockItem, IconName> = {
   divider: "remove",
   bullets: "list",
   numbers: "numbered-list",
+  tasks: "task-list",
   codeBlock: "code-block",
+  table: "table",
 };
-/** Crepe's three groups, each headed by its name. */
-const GROUPS: Record<BlockItem, keyof typeof TEXT_MENUS.groups> = {
-  text: "text",
-  heading1: "text",
-  heading2: "text",
-  heading3: "text",
-  heading4: "text",
-  heading5: "text",
-  heading6: "text",
-  quote: "text",
-  divider: "text",
-  bullets: "list",
-  numbers: "list",
-  codeBlock: "advanced",
-};
+/** The tabs: each group with an item shown, and its first shown item, which a press on the tab makes active. */
+const tabs = $derived(
+  (Object.keys(BLOCK_GROUPS) as BlockGroup[]).flatMap((group) => {
+    const first = shown.items.find((item) => groupOf(item) === group);
+    return first === undefined ? [] : [{ group, first }];
+  }),
+);
+const activeGroup = $derived.by(() => {
+  const active = shown.items[shown.index];
+  return active === undefined ? undefined : groupOf(active);
+});
 const BAR_ICONS: Record<BarItem, IconName> = {
   strong: "bold",
   emphasis: "italic",
@@ -80,6 +82,18 @@ const BAR_ICONS: Record<BarItem, IconName> = {
   link: "link",
 };
 const refusedId = $props.id();
+
+let list: HTMLUListElement | undefined = $state();
+// The active item is scrolled to the top of the list, under its group's name when it is the group's first, as Crepe's
+// scrollToIndex does on every key and tab press.
+$effect(() => {
+  const active = shown.items[shown.index];
+  const row = active === undefined ? null : document.getElementById(optionId(active));
+  if (list === undefined || row === null) return;
+  const heading =
+    row.previousElementSibling?.getAttribute("role") === "presentation" ? row.previousElementSibling : row;
+  list.scrollTop = (heading as HTMLElement).offsetTop - list.offsetTop;
+});
 
 let address = $state("");
 // The field holds what the editor opened it with, each time it opens (an empty field, or the link being edited).
@@ -120,10 +134,23 @@ const control =
 </div>
 
 <div bind:this={menu} data-show="false" class="{floating} w-56 flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-  <ul role="listbox" aria-label={TEXT_MENUS.blocks} class="max-h-72 overflow-y-auto" onpointerdown={keep}>
+  <!-- Crepe's tab-group: the groups' names; the one holding the active item is current. A press keeps the editor's
+       focus, so the arrow keys still move through the menu. -->
+  <div role="group" aria-label={TEXT_MENUS.tabs} class="flex gap-1 border-b px-1 pb-1" onpointerdown={keep}>
+    {#each tabs as tab (tab.group)}
+      <button
+        type="button"
+        tabindex="-1"
+        class="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=true]:bg-muted aria-[current=true]:text-foreground"
+        aria-current={tab.group === activeGroup}
+        onclick={() => onpoint(tab.first)}>{TEXT_MENUS.groups[tab.group]}</button
+      >
+    {/each}
+  </div>
+  <ul bind:this={list} role="listbox" aria-label={TEXT_MENUS.blocks} class="max-h-72 overflow-y-auto" onpointerdown={keep}>
     {#each shown.items as item, at (item)}
-      {#if at === 0 || GROUPS[shown.items[at - 1] as BlockItem] !== GROUPS[item]}
-        <li role="presentation" class="px-2 pt-2 pb-1 text-xs text-muted-foreground">{TEXT_MENUS.groups[GROUPS[item]]}</li>
+      {#if at === 0 || groupOf(shown.items[at - 1] as BlockItem) !== groupOf(item)}
+        <li role="presentation" class="px-2 pt-2 pb-1 text-xs text-muted-foreground">{TEXT_MENUS.groups[groupOf(item)]}</li>
       {/if}
       <li
         id={optionId(item)}

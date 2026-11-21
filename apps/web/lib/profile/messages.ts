@@ -219,6 +219,8 @@ export const TEXT_MENUS = {
   add: "Add a block below",
   drag: "Drag to move this block",
   blocks: "Blocks",
+  /** The tabs above the block menu, one for each group. */
+  tabs: "Block groups",
   groups: { text: "Text", list: "List", advanced: "Advanced" },
   bar: "Format the selected words",
   items: {
@@ -233,7 +235,9 @@ export const TEXT_MENUS = {
     divider: "Divider",
     bullets: "Bullet list",
     numbers: "Ordered list",
+    tasks: "Task list",
     codeBlock: "Code",
+    table: "Table",
   },
   format: { strong: "Bold", emphasis: "Italic", strike: "Strikethrough", code: "Inline code", link: "Link" },
   /** What an empty line with the caret says. */
