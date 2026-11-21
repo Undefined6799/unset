@@ -6,9 +6,20 @@
 // The cards added are deleted again, so the member page is as the other specs expect it.
 import { expect, test } from "@playwright/test";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
-import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE, postedText, writeText } from "./cards.ts";
+import {
+  addCard,
+  chooseFromMenu,
+  deleteCard,
+  menuButton,
+  OWN_PAGE,
+  paceWrites,
+  postedText,
+  writeText,
+} from "./cards.ts";
 import { openPage } from "./observe.ts";
 import { phoneContext } from "./phone.ts";
+
+paceWrites(test);
 
 test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);

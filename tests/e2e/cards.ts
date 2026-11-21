@@ -1,7 +1,7 @@
 // What the card specs share: the member's own page, and adding and deleting cards. The cards a spec adds are deleted
 // again, so the member page is as the other specs expect it. Card writes count against the member's 30 a minute
 // (interfaces/web/src/lib/server/limits.ts), so specs keep their writes few.
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page, type test } from "@playwright/test";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
 
 export const OWN_PAGE: PageFixture = {
@@ -61,4 +61,34 @@ export async function writeText(editor: Locator, blocks: readonly string[]) {
     if (i > 0) await editor.press("Shift+Enter");
     await editor.pressSequentially(block);
   }
+}
+
+/**
+ * The member's write budget, as limits.ts `profile` keeps it per member: 30, one back every two seconds. Every spec that
+ * writes as this member shares it, one worker after another (playwright.config.ts `workers: 1`), so this module, loaded
+ * once for the worker, follows it across specs: each POST a page sends spends one (more than the limiter counts, never
+ * fewer), and a test starts only once the budget holds what a test can spend. A spec then never meets a 429 for what
+ * the tests before it wrote, whatever their speed. It starts empty, as nothing says what ran before.
+ */
+const BUDGET = { capacity: 30, perSecond: 30 / 60, perTest: 8 } as const;
+const budget = { tokens: 0, at: Date.now() };
+
+function refill(): number {
+  const now = Date.now();
+  budget.tokens = Math.min(BUDGET.capacity, budget.tokens + ((now - budget.at) / 1000) * BUDGET.perSecond);
+  budget.at = now;
+  return budget.tokens;
+}
+
+/** Paces the spec's tests by the member's write budget; called once, at the top of each spec that writes. */
+export function paceWrites(on: typeof test): void {
+  on.beforeEach(async ({ page }) => {
+    const short = BUDGET.perTest - refill();
+    if (short > 0) await page.waitForTimeout(Math.ceil((short / BUDGET.perSecond) * 1000));
+    page.context().on("request", (request) => {
+      if (request.method() !== "POST") return;
+      refill();
+      budget.tokens -= 1;
+    });
+  });
 }

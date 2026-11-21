@@ -3,9 +3,11 @@
 // policy under the app's real CSP with no violation; text the member opens and saves untouched is stored as it was;
 // on a phone the editor fills the screen with its formatting bar at the top. The cards added are deleted again.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, deleteCard, OWN_PAGE, postedText, writeText } from "./cards.ts";
+import { addCard, deleteCard, OWN_PAGE, paceWrites, postedText, writeText } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 import { phone } from "./phone.ts";
+
+paceWrites(test);
 
 async function openNewText(page: Page) {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
