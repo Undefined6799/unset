@@ -250,7 +250,8 @@ describe("readCardForm", () => {
       ["title", "t"],
       ["layout", "list"],
     ];
-    for (let n = 0; n < 100; n++)
+    // The most entries a showcase holds (LIMITS.card.entriesMax, ADR 0086), each with all four fields.
+    for (let n = 0; n < 50; n++)
       for (const f of ["title", "tag", "description", "uri"]) full.push([`items.${n}.${f}`, "x"]);
     expect(full.length).toBeLessThanOrEqual(CARD_FORM_MAX_FIELDS);
     expect(code(full)).toBe("read");

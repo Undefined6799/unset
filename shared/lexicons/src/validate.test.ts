@@ -5,12 +5,12 @@ import { validateRecord } from "./validate.ts";
 const CREATED = "2026-10-12T00:00:00.000Z";
 const DID = `did:plc:${"a".repeat(24)}`;
 const profile = { $type: "sh.unset.profile", displayName: "Ada", createdAt: CREATED };
-const follow = { $type: "sh.unset.follow", subject: DID, createdAt: CREATED };
-const S = "sh.unset.section";
+const S = "sh.unset.card";
+const B = "sh.unset.block";
 const ORIGIN = "https://a.example.com/";
-const card = (name: string, content: Record<string, unknown>) => ({
+const card = (block: string, content: Record<string, unknown>) => ({
   $type: S,
-  content: { $type: `${S}#${name}`, ...content },
+  content: { $type: `${B}.${block}`, ...content },
   createdAt: CREATED,
 });
 const links = (items: unknown[], extra: Record<string, unknown> = {}) => card("links", { items, ...extra });
@@ -20,7 +20,7 @@ describe("validateRecord", () => {
     const top = validateRecord("sh.unset.profile", { ...profile, published: true }, "write");
     expect(top).toEqual({ ok: false, errors: ["$.published: unknown field"] });
     // Unknown fields are found inside nested objects and array items too.
-    const nested = validateRecord("sh.unset.section", links([{ uri: ORIGIN, x: 1 }]), "write");
+    const nested = validateRecord(S, links([{ uri: ORIGIN, x: 1 }]), "write");
     expect(nested).toEqual({ ok: false, errors: ["$.content.items[0].x: unknown field"] });
     // A field named after an Object.prototype member is unknown like any other.
     for (const key of ["constructor", "toString", "__proto__"]) {
@@ -34,22 +34,22 @@ describe("validateRecord", () => {
   });
 
   test("validate_write_rejects_unknown_field_in_union_member", () => {
-    // Card contents and buttons sit in unions; the member named by `$type` is checked like any nested object.
-    const content = validateRecord(S, card("readme", { text: "hi", unexpected: true }), "write");
+    // A card's block and its buttons sit in unions; the member named by `$type` is checked like any nested object.
+    const content = validateRecord(S, card("text", { text: "hi", unexpected: true }), "write");
     expect(content).toEqual({ ok: false, errors: ["$.content.unexpected: unknown field"] });
-    const button = { $type: `${S}#emailButton`, address: "a@a.example.com", x: 1 };
+    const button = { $type: `${B}.buttons#email`, address: "a@a.example.com", x: 1 };
     const inButton = validateRecord(S, card("buttons", { heading: "Hi", buttons: [button] }), "write");
     expect(inButton).toEqual({ ok: false, errors: ["$.content.buttons[0].x: unknown field"] });
-    const clean = card("readme", { text: "hi" });
+    const clean = card("text", { text: "hi" });
     expect(validateRecord(S, clean, "write")).toEqual({ ok: true, value: clean });
-    expect(validateRecord(S, card("readme", { text: "hi", x: 1 }), "read").ok).toBe(true);
+    expect(validateRecord(S, card("text", { text: "hi", x: 1 }), "read").ok).toBe(true);
   });
 
   test("validate_write_accepts_nested_type_discriminator", () => {
     // An object behind a ref may name its def (atproto.com/specs/lexicon, "$type"); the generated validator accepts it.
-    const typed = links([{ $type: `${S}#link`, uri: ORIGIN }]);
+    const typed = links([{ $type: `${B}.links#link`, uri: ORIGIN }]);
     expect(validateRecord(S, typed, "write")).toEqual({ ok: true, value: typed });
-    const wrong = links([{ $type: `${S}#other`, uri: ORIGIN }]);
+    const wrong = links([{ $type: `${B}.links#other`, uri: ORIGIN }]);
     expect(validateRecord(S, wrong, "write").ok).toBe(false);
   });
 
@@ -75,17 +75,23 @@ describe("validateRecord", () => {
       mimeType: "image/webp",
       size: 1000,
     };
-    const full = { ...profile, avatar: blob, avatarShape: "roundedSquare", listed: true, cards: ["3jzfcijpj2z2a"] };
+    const full = {
+      ...profile,
+      avatar: blob,
+      avatarShape: "rounded-square",
+      listed: true,
+      cards: [{ uri: `at://${DID}/sh.unset.card/3jzfcijpj2z2a` }],
+    };
     expect(validateRecord("sh.unset.profile", full, "write")).toEqual({ ok: true, value: full });
     for (const value of [
-      { ...card("readme", { text: "# Hi" }), width: "half" },
+      { ...card("text", { text: "# Hi" }), width: "half" },
       links([{ uri: ORIGIN, label: "Site", description: "Mine" }], { title: "Elsewhere", layout: "grid" }),
-      card("collection", { items: [{ title: "x", tag: "Radio", description: "d", uri: ORIGIN }] }),
+      card("showcase", { items: [{ title: "x", tag: "Radio", description: "d", uri: ORIGIN }] }),
       card("buttons", {
         heading: "Hi",
         buttons: [
-          { $type: `${S}#emailButton`, address: "a@a.example.com" },
-          { $type: `${S}#linkButton`, preset: "bookCall", uri: ORIGIN },
+          { $type: `${B}.buttons#email`, address: "a@a.example.com" },
+          { $type: `${B}.buttons#link`, preset: "book-call", uri: ORIGIN },
         ],
       }),
     ]) {
@@ -95,17 +101,10 @@ describe("validateRecord", () => {
     expect(validateRecord("app.bsky.actor.profile", bsky, "write").ok).toBe(true);
   });
 
-  test("follow_record_shape", () => {
-    expect(validateRecord("sh.unset.follow", follow, "write").ok).toBe(true);
-    const { subject: _, ...missing } = follow;
-    expect(validateRecord("sh.unset.follow", missing, "write").ok).toBe(false);
-    expect(validateRecord("sh.unset.follow", { ...follow, subject: "alice.example" }, "write").ok).toBe(false);
-  });
-
   test("type_mismatch_fails", () => {
-    expect(validateRecord("sh.unset.section", profile, "read")).toEqual({
+    expect(validateRecord(S, profile, "read")).toEqual({
       ok: false,
-      errors: ['$.$type: expected "sh.unset.section"'],
+      errors: ['$.$type: expected "sh.unset.card"'],
     });
     expect(validateRecord("sh.unset.profile", "not an object", "read").ok).toBe(false);
     expect(validateRecord("sh.unset.profile", null, "read").ok).toBe(false);

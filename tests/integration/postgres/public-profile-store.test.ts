@@ -50,7 +50,7 @@ function account(did: string, handle: string, opts: { active?: boolean; status?:
        VALUES ('${did}', '${handle}', '${status}', ${active}, now());
      ${profile ? profileRow : ""}
      INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-       VALUES ('at://${did}/sh.unset.section/3k', '${did}', '3k', 'cid-s', '3l', '{"type":"x"}', 0, now());`,
+       VALUES ('at://${did}/sh.unset.card/3k', '${did}', '3k', 'cid-s', '3l', '{"type":"x"}', 0, now());`,
   );
 }
 
@@ -164,7 +164,7 @@ describe("public profile store", () => {
         "unset",
         `UPDATE idx.profile SET record = record || '{"visibility":${value}}' WHERE did = '${SHOWN}'`,
       );
-    for (const value of ['"signedIn"', '"ownerOnly"', '"friends"', "null"]) {
+    for (const value of ['"signed-in"', '"owner-only"', '"friends"', "null"]) {
       setVisibility(value);
       expect(await store().listed("searchEngines", 10, null), value).toEqual([{ did: UNVERIFIED, handle: null }]);
       expect(await store().listed("aiSearch", 10, null), value).toEqual([]);
@@ -198,7 +198,7 @@ describe("public profile store", () => {
   test("cards_come_in_page_order_and_stop_at_the_page_budget", async () => {
     const card = (rkey: string, position: number | null, bytes: number) =>
       `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, bytes, indexed_at)
-         VALUES ('at://${UNVERIFIED}/sh.unset.section/${rkey}', '${UNVERIFIED}', '${rkey}', 'cid-${rkey}', '3l',
+         VALUES ('at://${UNVERIFIED}/sh.unset.card/${rkey}', '${UNVERIFIED}', '${rkey}', 'cid-${rkey}', '3l',
                  '{"type":"${rkey}"}', ${position}, ${bytes}, now());`;
     postgres.sql(
       "unset",

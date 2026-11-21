@@ -12,7 +12,8 @@ import * as doc from "@atproto/lex-document";
 const PACKAGE = join(import.meta.dirname, "..");
 const REPO = join(PACKAGE, "..", "..");
 const GENERATED = join(PACKAGE, "generated");
-const FLAT_NSID = /^sh\.unset\.[a-zA-Z][a-zA-Z0-9]*$/;
+/** sh.unset.<name>, or a member of the one group sh.unset.block (ADR 0086); a record name never doubles as a group. */
+const FLAT_NSID = /^sh\.unset\.(block\.)?[a-zA-Z][a-zA-Z0-9]*$/;
 const SET_PREFIX = "sh.unset.";
 /** Consent text languages. English only until the i18n slice adds French (Alex, 2026-10-15, "English first"). */
 const LANGUAGES = ["en"];
@@ -64,7 +65,8 @@ function fileProblems({ file, doc: value, ours }: SchemaFile): string[] {
     const id = parsed.value.id;
     const problems = unknownKeys(value as Node, "").map((p) => `${file}: ${p}`);
     if (file !== `${file.split("/")[0]}/${id}.json`) problems.push(`${file}: id ${id} does not match the file name`);
-    else if (ours && !FLAT_NSID.test(id)) problems.push(`${file}: id ${id} is not a flat sh.unset.<name> NSID`);
+    else if (ours && (!FLAT_NSID.test(id) || id === "sh.unset.block"))
+      problems.push(`${file}: id ${id} is not sh.unset.<name> or sh.unset.block.<name>`);
     const main = parsed.value.defs.main;
     if (main?.type === "permission-set") problems.push(...permissionSetProblems(main).map((p) => `${file}: ${p}`));
     return problems;

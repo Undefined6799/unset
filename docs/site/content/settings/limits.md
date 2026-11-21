@@ -109,33 +109,33 @@ Configurable per stack in the compose files.
 | `LIMITS.profile.location` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.websiteBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.widthBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.surfaceBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.textBytes` | `100000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.title` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.layoutBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.linksMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.linkUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.linkLabel` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.linkDescription` | `200` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.entriesMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.entryTitle` | `120` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.entryTag` | `40` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.entryDescription` | `300` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.entryUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.buttonsHeading` | `120` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.buttonsText` | `400` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.buttonsMax` | `5` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.emailBytes` | `254` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.presetBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.buttonUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.buttonLabel` | `40` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.imageMaxSize` | `2000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.imageAlt` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.imageCaption` | `300` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.fitBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.galleryTitle` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.section.galleryMax` | `12` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.widthBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.surfaceBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.textBytes` | `20000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.title` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.layoutBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.linksMax` | `50` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.linkUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.linkLabel` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.linkDescription` | `200` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.entriesMax` | `50` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.entryTitle` | `120` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.entryTag` | `40` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.entryDescription` | `300` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.entryUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.buttonsHeading` | `120` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.buttonsText` | `400` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.buttonsMax` | `5` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.emailBytes` | `254` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.presetBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.buttonUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.buttonLabel` | `40` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.imageMaxSize` | `5000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.imageAlt` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.imageCaption` | `300` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.fitBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.galleryTitle` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.galleryMax` | `20` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `IMAGE_ACCEPT` | `image/png, image/jpeg, image/webp, image/avif` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `APP_LIMITS.displayName` | `64` | profile editor | `domains/profile/profile.ts` |
 | `APP_LIMITS.headline` | `120` | profile editor | `domains/profile/profile.ts` |
@@ -143,6 +143,7 @@ Configurable per stack in the compose files.
 | `CARD_EDIT_LIMITS.links` | `30` | card editor rows per list | `domains/profile/card-edit.ts` |
 | `CARD_EDIT_LIMITS.collection` | `30` | card editor rows per list | `domains/profile/card-edit.ts` |
 | `CARD_EDIT_LIMITS.buttons` | `5` | card editor rows per list | `domains/profile/card-edit.ts` |
+| `TEXT_EDIT_BYTES` | `10000` | card editor Markdown bytes | `domains/profile/card-edit.ts` |
 | `DISCOVERABILITY_LIMITS.title` | `70` | Search and AI text | `domains/profile/discoverability.ts` |
 | `DISCOVERABILITY_LIMITS.description` | `200` | Search and AI text | `domains/profile/discoverability.ts` |
 | `MAX_AI_SEARCH_PAGES` | `10000` | robots and sitemap | `domains/profile/crawlers.ts` |

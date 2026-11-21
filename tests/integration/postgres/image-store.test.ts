@@ -28,7 +28,7 @@ async function member(): Promise<Did> {
 }
 
 const picture = { kind: "image" as const, width: 2560, height: 1707, bytes: 2_400_000 };
-const record = (did: Did, rkey = "3kaaaaaaaaaaa") => `at://${did}/sh.unset.section/${rkey}`;
+const record = (did: Did, rkey = "3kaaaaaaaaaaa") => `at://${did}/sh.unset.card/${rkey}`;
 
 async function stored(did: Did, bytes = picture.bytes): Promise<string> {
   const result = await store.store(did, { ...picture, bytes }, null);

@@ -19,6 +19,7 @@ import {
   CARDS_MAX,
   pageCards,
   pageShownTo,
+  parseRepoDid,
   readAvatarShape,
   readProfileRecord,
   readProfileVisibility,
@@ -73,7 +74,8 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
   setHeaders(
     listed ? { "cache-control": PROFILE_CACHE } : { "cache-control": PROFILE_CACHE, "x-robots-tag": "noindex" },
   );
-  const cards = cardViews(pageCards(found.record, found.sections).slice(0, CARDS_MAX));
+  const owner = parseRepoDid(found.did);
+  const cards = owner === null ? [] : cardViews(pageCards(owner, found.record, found.sections).slice(0, CARDS_MAX));
   return {
     shell: listed ? LISTED_SHELL : SHELL,
     // What search results and link previews show: only what the page itself shows, or the member's own overrides. A

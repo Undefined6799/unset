@@ -49,13 +49,13 @@ const call = async (method, nsid, body, token) => {
   if (made.status !== 200) return console.log(JSON.stringify({ made }));
   const { did, accessJwt: token } = made.body;
   const head = await call("GET", "com.atproto.sync.getLatestCommit?did=" + encodeURIComponent(did), undefined, token);
-  const record = { $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text: "a" },
+  const record = { $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text: "a" },
     createdAt: new Date().toISOString() };
   const create = () => call("POST", "com.atproto.repo.createRecord",
-    { repo: did, collection: "sh.unset.section", record, swapCommit: head.body.cid }, token);
+    { repo: did, collection: "sh.unset.card", record, swapCommit: head.body.cid }, token);
   const first = await create();
   const stale = await create();
-  const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.section&repo=" +
+  const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.card&repo=" +
     encodeURIComponent(did), undefined, token);
   console.log(JSON.stringify({
     head: [head.status, typeof head.body.cid],

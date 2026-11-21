@@ -342,9 +342,40 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();
   expect((await lines.first().boundingBox())?.y).toBe(before.y);
-  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 10 });
-  await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
-  await page.mouse.up();
+  const point = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
+  if (page.context().browser()?.browserType().name() !== "webkit") {
+    await page.mouse.move(point.x, point.y, { steps: 10 });
+    await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
+    await page.mouse.up();
+  } else {
+    // Playwright's WebKit starts no HTML drag from a mouse press (see drag() above): the browser's own drag events,
+    // sent in two steps so the line can be seen between the drag over the last block and the drop.
+    const sent = (types: readonly string[]) =>
+      grip.evaluate(
+        (source, { at, types: names }) => {
+          type Target = { dispatchEvent: (event: unknown) => boolean };
+          const g = globalThis as unknown as {
+            DataTransfer: new () => unknown;
+            DragEvent: new (type: string, init: Record<string, unknown>) => unknown;
+            document: { elementFromPoint: (x: number, y: number) => Target | null };
+            dragData?: unknown;
+          };
+          g.dragData ??= new g.DataTransfer();
+          const init = { bubbles: true, cancelable: true, dataTransfer: g.dragData, clientX: at.x, clientY: at.y };
+          const handle = (source as unknown as { closest: (s: string) => Target }).closest("[data-block-handle]");
+          for (const name of names) {
+            const target =
+              name === "dragstart" || name === "dragend" ? handle : g.document.elementFromPoint(at.x, at.y);
+            target?.dispatchEvent(new g.DragEvent(name, init));
+          }
+        },
+        { at: point, types },
+      );
+    await sent(["dragstart", "dragover"]);
+    await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
+    await sent(["drop", "dragend"]);
+    await page.mouse.up();
+  }
   await expect(lines).toHaveText(["second line", "third line", `${word} one`]);
   await expect(page.locator(".prosemirror-dropcursor-block")).toHaveCount(0);
   await discardAndRemove(page, word);
@@ -406,11 +437,21 @@ test.describe("on a phone", () => {
     await last.click();
     await page.keyboard.press("End");
     await page.keyboard.press("Shift+Enter");
+    const line = await editor.locator("p").last().boundingBox();
     await page.keyboard.type("/");
+    // The first change brings the unsaved bar, which takes its room above the cards: the line typed on stays where it
+    // was (WebKit has no scroll anchoring, and there it jumped down by the bar's height, off the screen).
+    expect((await editor.locator("p").last().boundingBox())?.y).toBe(line?.y);
     const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
     await expect(menu).toBeVisible();
-    const placed = await menu.boundingBox();
-    expect(placed !== null && placed.y >= 0 && placed.y + placed.height <= 844).toBe(true);
+    // plugin-slash 7.23.0 shows the menu at once and moves it when floating-ui's computePosition settles (a promise), so
+    // the box is read once it has; WebKit on CI drew it a frame before it moved.
+    await expect
+      .poll(async () => {
+        const placed = await menu.boundingBox();
+        return placed !== null && placed.y >= 0 && placed.y + placed.height <= 844;
+      })
+      .toBe(true);
     await page.keyboard.press("Escape");
     await discardAndRemove(page, word);
     expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });

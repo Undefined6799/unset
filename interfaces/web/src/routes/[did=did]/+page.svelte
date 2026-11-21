@@ -336,6 +336,7 @@ function dropDrafts() {
       shape={data.avatarShape}
       here={`/${data.account.did}`}
       refusal={form?.code === undefined ? null : form}
+      newKey={data.newCardKey}
       {enhance}
     />
   {/if}
@@ -386,7 +387,7 @@ function dropDrafts() {
         {/if}
       {/snippet}
       {#snippet add()}
-        <AddCard limits={data.cardEditLimits} {enhance} />
+        <AddCard limits={data.cardEditLimits} newKey={data.newCardKey} {enhance} />
       {/snippet}
     </ProfileCards>
   {/if}

@@ -105,6 +105,8 @@ async function indexed(
     displayName: name,
     headline: "<b>Head</b>",
     createdAt: NOW,
+    // The profile lists its card, so it shows (ADR 0086 point 3).
+    cards: [{ uri: `at://${did}/sh.unset.card/3jzfcijpj2z2a` }],
     ...(opts.visibility === undefined ? {} : { visibility: opts.visibility }),
   };
   await withClient(indexer, null, async (c) => {
@@ -124,24 +126,32 @@ async function indexed(
     await c.query(
       `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
        VALUES ($1, $2, '3jzfcijpj2z2a', 'cid-s', '3l', $3, 0, now())`,
-      [`at://${did}/sh.unset.section/3jzfcijpj2z2a`, did, card.record],
+      [`at://${did}/sh.unset.card/3jzfcijpj2z2a`, did, card.record],
     );
   });
 }
 
-/** `count` more README cards for `did`, keys after the first card's, each saying "Extra card". */
+/**
+ * `count` more README cards for `did`, keys after the first card's, each saying "Extra card", listed after it by the
+ * profile as the indexer stores a list (each card's position is its place in the list).
+ */
 async function moreCards(did: string, count: number) {
   const card = toCardRecord({ kind: "readme", text: "Extra card" }, "full", null, NOW);
   if (!card.ok) throw new Error(`seed card did not build: ${card.code}`);
+  const rkeys = Array.from({ length: count }, (_, i) => `extra${String(i).padStart(3, "0")}`);
   await withClient(indexer, null, async (c) => {
-    for (let i = 0; i < count; i += 1) {
-      const rkey = `extra${String(i).padStart(3, "0")}`;
+    for (const [i, rkey] of rkeys.entries()) {
       await c.query(
         `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-         VALUES ($1, $2, $3, 'cid-s', '3l', $4, NULL, now())`,
-        [`at://${did}/sh.unset.section/${rkey}`, did, rkey, card.record],
+         VALUES ($1, $2, $3, 'cid-s', '3l', $4, $5, now())`,
+        [`at://${did}/sh.unset.card/${rkey}`, did, rkey, card.record, i + 1],
       );
     }
+    const extra = rkeys.map((rkey) => ({ uri: `at://${did}/sh.unset.card/${rkey}` }));
+    await c.query(
+      `UPDATE idx.profile SET record = jsonb_set(record, '{cards}', (record -> 'cards') || $2::jsonb) WHERE did = $1`,
+      [did, JSON.stringify(extra)],
+    );
   });
 }
 
@@ -158,8 +168,8 @@ beforeAll(async () => {
   await indexed(UNVERIFIED, { handle: "mallory.unset.org", status: "invalid", name: "Mallory" });
   await indexed(MANY, { name: "Many" });
   await moreCards(MANY, CARDS_MAX);
-  await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signedIn" });
-  await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "ownerOnly" });
+  await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signed-in" });
+  await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "owner-only" });
   await indexed(FUTURE, { name: "Future", visibility: "friendsOfFriends" });
   secrets = mkdtempSync(join(tmpdir(), "public-profile-"));
   const file = (name: string, text: string): string => {

@@ -105,7 +105,7 @@ describe("idx schema", () => {
     await withClient(indexer, null, (c) =>
       c.query(
         `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
-         SELECT 'at://' || $1 || '/sh.unset.section/' || r, $1, r, 'bafysection', r, '{}', now()
+         SELECT 'at://' || $1 || '/sh.unset.card/' || r, $1, r, 'bafysection', r, '{}', now()
            FROM unnest($2::text[]) WITH ORDINALITY AS u (t, n), LATERAL (SELECT t || n AS r) x`,
         [A, tids],
       ),
