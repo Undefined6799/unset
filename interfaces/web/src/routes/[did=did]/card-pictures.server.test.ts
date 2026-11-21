@@ -1,7 +1,7 @@
 // P2.19b: a picture card's publish step inside the card writes (ADR 0070 point 5), over stand-ins for the store, the
 // pictures and the PDS: the use is recorded only after the write's own checks and before anything is sent, the main
-// version goes to the PDS once per Save, a write that surely did not land releases a use it created, and one that
-// landed releases only the picture the record it replaced showed (so saves settle in any order). Types are read off
+// version goes to the PDS once per Save, a write that surely did not land gives up its hold on the use, and one that
+// landed settles the record's uses under its commit revision (so saves settle in any order). Types are read off
 // the module under test (a test beside a route imports no domain).
 import { describe, expect, test } from "vitest";
 import { type CardStore, type CardWrites, cardWrites, type PictureStore } from "./card-writes.server.ts";
@@ -95,7 +95,7 @@ function stack(over: Over = {}) {
   const pictures: PictureStore = {
     use: async (id, key) => {
       log.push(`use ${id} ${key}`);
-      return { width: 2560, height: 1707, created: true, lease: LEASE };
+      return { width: 2560, height: 1707, lease: LEASE };
     },
     release: async (id, key, lease) => {
       log.push(`release ${id} ${key} ${lease}`);
@@ -248,18 +248,14 @@ describe("an edited picture card", () => {
     expect(log.some((line) => /^(release|settle|drop)/.test(line))).toBe(false);
   });
 
-  test("picture.save_same_failed: re-sending the card's own picture keeps its use when the save fails", async () => {
-    const { writes, log } = stack({
-      pictures: {
-        use: async () => ({ width: 2560, height: 1707, created: false, lease: LEASE }),
-        upload: async () => down,
-      },
-    });
+  test("picture.save_same_failed: re-sending the card's own picture gives up only its own hold when the save fails", async () => {
+    // The stored card's use is settled, so the store keeps it (image.release_lease in image-store.test.ts).
+    const { writes, log } = stack({ pictures: { upload: async () => down } });
     expect(await writes.save("p" as CardKey, picture(), "full")).toEqual({
       kind: "failed",
       code: "card.pds_unavailable",
     });
-    expect(log.some((line) => line.startsWith("release"))).toBe(false);
+    expect(log.filter((line) => line.startsWith("release"))).toEqual([`release ${DRAFT} p ${LEASE}`]);
   });
 
   test("picture.save_two_tabs: each landed save settles under its own commit revision, in any order", async () => {

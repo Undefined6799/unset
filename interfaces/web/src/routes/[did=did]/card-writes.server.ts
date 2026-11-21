@@ -67,19 +67,17 @@ export type CardStore = {
  */
 export type PictureStore = {
   /**
-   * Records the card's use of the draft: its pixel size, whether this call made the use (false when the record
-   * already had it) and the lease this call holds on it; null when the draft is not theirs.
+   * Records the card's use of the draft: its pixel size and the lease (this request's hold on the use); null when the
+   * draft is not theirs.
    */
   readonly use: (
     id: DraftImageId,
     key: CardKey,
-  ) => Promise<{
-    readonly width: number;
-    readonly height: number;
-    readonly created: boolean;
-    readonly lease: string;
-  } | null>;
-  /** Takes back a use this request made, whose write surely did not land, unless anything touched it since. */
+  ) => Promise<{ readonly width: number; readonly height: number; readonly lease: string } | null>;
+  /**
+   * Gives up this request's hold, its write surely not landed; the use goes only if no other save holds it and no
+   * write settled it (so a use the stored card shows stays).
+   */
   readonly release: (id: DraftImageId, key: CardKey, lease: string) => Promise<void>;
   readonly main: (
     id: DraftImageId,
@@ -89,7 +87,7 @@ export type PictureStore = {
   readonly published: (id: DraftImageId, link: string) => Promise<void>;
   /**
    * A write of the card landed as commit `rev`, showing the picture with CID `link` (null: none). Settled in revision
-   * order: the newest write leaves the record that picture's use alone; an older one only takes back `mine`.
+   * order: the newest write leaves the record that picture's use alone; either way the holds in `mine` go.
    */
   readonly settle: (
     key: CardKey,
@@ -168,7 +166,6 @@ const draftOf = (content: CardContent): DraftImageId | null =>
 type Held = {
   readonly key: CardKey;
   readonly id: DraftImageId;
-  readonly created: boolean;
   readonly lease: string;
 };
 /**
@@ -193,20 +190,18 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
   /**
    * After the write. A card that landed settles its record's uses in revision order, so concurrent saves of one card
    * end with the uses of the picture the last write shows, whichever settles first (the PDS's commit order, not ours).
-   * A card that surely did not land takes back the uses this request made (one the record already had is the stored
-   * card's), unless another save touched them since. Where the PDS did not answer (`unsure`), the write may have
-   * landed, so nothing is taken back: a use left behind costs storage, while one taken from a shown picture would
-   * lose it.
+   * A card that surely did not land gives up this request's holds; a use goes only when no other save holds it and no
+   * write settled it (one the stored card shows stays). Where the PDS did not answer (`unsure`), the write may have
+   * landed, so the holds stay: a use left behind costs storage, while one taken from a shown picture would lose it.
    */
   const settle = async (held: readonly Held[], written: readonly Landed[], unsure: boolean): Promise<void> => {
     for (const card of written) {
-      const mine = held.filter((use) => use.created && use.key === card.key);
+      const mine = held.filter((use) => use.key === card.key);
       if (card.rev !== null) await pictures.settle(card.key, card.rev, card.shown, mine);
     }
     if (unsure) return;
     for (const use of held) {
-      if (use.created && !written.some((card) => card.key === use.key))
-        await pictures.release(use.id, use.key, use.lease);
+      if (!written.some((card) => card.key === use.key)) await pictures.release(use.id, use.key, use.lease);
     }
   };
 
@@ -224,7 +219,7 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
     if (id === null) return { ok: true, content, held: null };
     const use = await pictures.use(id, key);
     if (use === null) return { ok: false, failed: failed("card.image_missing", "image") };
-    const held: Held = { key, id, created: use.created, lease: use.lease };
+    const held: Held = { key, id, lease: use.lease };
     try {
       return await publishHeld(content, held, use);
     } catch (error) {

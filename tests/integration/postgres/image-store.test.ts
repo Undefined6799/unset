@@ -111,8 +111,9 @@ describe("image store", () => {
     const size = { width: 2560, height: 1707 };
     const a = await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null);
     expect(a).toEqual({ ...size, created: true, lease: expect.any(String) });
-    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toMatchObject({ ...size, created: true });
-    // Asked again for a record that already has it, the use is not made a second time (and not this call's to undo).
+    const first = await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null);
+    expect(first).toMatchObject({ ...size, created: true });
+    // Asked again for a record that already has it, the use is not made a second time; the second save holds it too.
     const b = await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null);
     expect(b).toMatchObject({ ...size, created: false });
     await store.removeUse(did, id, record(did, "3kaaaaaaaaaaa"), String(a?.lease), null);
@@ -123,6 +124,8 @@ describe("image store", () => {
     );
     expect(kept).toEqual({ state: "published", unused_since: null });
     await store.removeUse(did, id, record(did, "3kbbbbbbbbbbb"), String(b?.lease), null);
+    expect(await store.discard(did, id, null)).toBe(false);
+    await store.removeUse(did, id, record(did, "3kbbbbbbbbbbb"), String(first?.lease), null);
     const [dropped] = await sql<{ unused_since: Date | null }>("SELECT unused_since FROM app.image WHERE id = $1", [
       id,
     ]);
@@ -231,25 +234,38 @@ describe("image store", () => {
     }
   });
 
-  test("image.release_lease: a failed save takes back its use only if nothing touched it since", async () => {
+  test("image.release_lease: a failed save gives up its own hold; the use goes when no save holds it", async () => {
     const did = await member();
     const id = await stored(did);
     const CID = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe";
     const uses = async () => (await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [id])).length;
+    // Two saves, in either order of failing, ask for the same picture on the same card; the second did not make the
+    // use (Codex review of #1860: both failing must still take it back).
+    for (const order of ["first", "second"] as const) {
+      const one = await store.addUse(did, id, record(did), null);
+      const two = await store.addUse(did, id, record(did), null);
+      expect([one?.created, two?.created]).toEqual([true, false]);
+      expect(two?.lease).not.toBe(one?.lease);
+      const [early, late] = order === "first" ? [one, two] : [two, one];
+      await store.removeUse(did, id, record(did), String(early?.lease), null);
+      expect(await uses()).toBe(1);
+      await store.removeUse(did, id, record(did), String(late?.lease), null);
+      expect(await uses()).toBe(0);
+    }
+    // One save fails while the other's write lands: the landed one keeps the use whichever finishes first.
     const failed = await store.addUse(did, id, record(did), null);
-    // Another save, even one that began earlier, asks for the same picture on the same card: a new lease.
     const winner = await store.addUse(did, id, record(did), null);
-    expect(winner?.lease).not.toBe(failed?.lease);
+    await store.notePublished(did, id, CID, null);
+    await store.settleUse(did, record(did), "3kcommit2aaaa", CID, [{ id, lease: String(winner?.lease) }], null);
     await store.removeUse(did, id, record(did), String(failed?.lease), null);
     expect(await uses()).toBe(1);
-    // The last lease on a use no write settled takes it.
-    await store.removeUse(did, id, record(did), String(winner?.lease), null);
+    await store.dropUses(did, record(did), null);
     expect(await uses()).toBe(0);
+    const other = record(did, "3kbbbbbbbbbbb");
     // A use a landed write settled is never taken back by a release, even under the lease that made it.
-    const made = await store.addUse(did, id, record(did), null);
-    await store.notePublished(did, id, CID, null);
-    await store.settleUse(did, record(did), "3kcommit2aaaa", CID, [], null);
-    await store.removeUse(did, id, record(did), String(made?.lease), null);
+    const made = await store.addUse(did, id, other, null);
+    await store.settleUse(did, other, "3kcommit2aaaa", CID, [], null);
+    await store.removeUse(did, id, other, String(made?.lease), null);
     expect(await uses()).toBe(1);
   });
 

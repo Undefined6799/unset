@@ -8,15 +8,16 @@ ALTER TABLE app.image ADD COLUMN blob_cid text CHECK (blob_cid ~ '^b[a-z2-7]{20,
 
 GRANT SELECT (blob_cid), UPDATE (blob_cid) ON app.image TO web;
 
--- Settling a card's uses after a write (Codex review of #1860). `lease` changes whenever a save asks for the use or a
--- write settles it, so a save that made a use takes it back only if nothing touched it since. `settled_rev` is the
--- PDS commit revision (a TID; https://atproto.com/specs/tid) of the write that settled the use, NULL while the use
--- is only a save's. No personal data beyond the row it is on, erased with it.
+-- Settling a card's uses after a write (Codex review of #1860). `holds` has one random token per save that asked for
+-- the use and has not yet settled or taken it back, so a failed save removes only its own token, and the use goes
+-- only when no save holds it and no write settled it. `settled_rev` is the PDS commit revision (a TID;
+-- https://atproto.com/specs/tid) of the write that settled the use, NULL while the use is only saves'. No personal
+-- data beyond the row it is on, erased with it.
 ALTER TABLE app.image_use
-  ADD COLUMN lease uuid NOT NULL DEFAULT gen_random_uuid(),
+  ADD COLUMN holds uuid[] NOT NULL DEFAULT '{}',
   ADD COLUMN settled_rev text CHECK (settled_rev ~ '^[2-7a-z]{13}$');
 
-GRANT SELECT (lease, settled_rev), INSERT (lease, settled_rev), UPDATE (lease, settled_rev) ON app.image_use TO web;
+GRANT SELECT (holds, settled_rev), INSERT (holds, settled_rev), UPDATE (holds, settled_rev) ON app.image_use TO web;
 
 -- The last write settled on each of the member's card records (Codex review of #1860): its PDS commit revision, and
 -- whether the record was deleted. Settling reads it under the record's lock, so a write older than the last settled
