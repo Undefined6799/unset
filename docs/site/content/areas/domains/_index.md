@@ -12,6 +12,7 @@ Product rules. Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/
 
 | Domain | Path | Page |
 | --- | --- | --- |
+| content | `domains/content` | |
 | identity | `domains/identity` | [identity](identity/) |
 | notifications | `domains/notifications` | [notifications](notifications/) |
 | profile | `domains/profile` | [profile](profile/) |

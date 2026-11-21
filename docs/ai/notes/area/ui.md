@@ -41,7 +41,7 @@ only the font-metric types for [[ui-build]]. The link checker is `shared/safe-hr
   `safeHref` and the font-metrics types (`FallbackFace`, `FontMetrics`). Avatar and Card are P2.13c's account and
   settings pages; Footer, Header and SkipLink are the shell (P1.25). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
   after an earlier re-export pulled the kit into boot (P1.25h; architecture record 2026-10-07-p125h-boot-chunk.md).
-  Re-measure with `scripts/budgets/island.ts` before exporting more components.
+  The island budget that measured this went with the kit; app page JS is now `scripts/budgets/app-js.ts`.
 - `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,
   the props serialiser and the browser reader are [[islands]] (`@unset/shared-islands`); this index does not
   re-export them. The old copies here are gone: P1.25p deleted `islands/define.ts` and `islands/slot.ts`, and

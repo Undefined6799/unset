@@ -3,26 +3,28 @@ id: media
 type: area
 status: current
 areas: ["[[media]]"]
-summary: "Hub for interfaces/media: the media proxy on its own domain; folder not created yet."
-code: []
+summary: "Hub for interfaces/media: the media process on its own domain, serving signed draft links from the object store."
+code: [interfaces/media/main.ts, interfaces/media/compose.ts, interfaces/media/serve.ts]
 sources: []
 importance: normal
 related: ["[[http]]", "[[net-guard]]"]
 replaced_by: null
 tags: [area, media]
-checked: 2026-10-28
+checked: 2026-11-21
 ---
 # media
 
 **What it owns.** The media proxy. Browsers get media only through it, never through a raw `getBlob` URL (CLAUDE.md
 "Blobs"). It runs on the media domain, apart from the app origin.
 
-**Today.** No folder. The health-only stub was removed (P1.04 cleanup, 2026-10-28) until its first real step
-lands (decision 34: folders appear with their first code). When it lands it gets its own entry point (the Hono server
-kit in `shared/http` is gone): `main.ts` reads the config once and starts; `compose.ts` is the composition root and the only
-file that builds adapters (AB-2); `config.ts` holds its typed keys. Hono's `routes.manifest.json` went with interfaces/http (P1.20k), so
-this process needs its own check that every route names a rate-limit policy (SE-4 row, docs/human/architecture.md).
+**Today (P2.19, #1848).** `interfaces/media/` is its own package and process. `main.ts` reads the config once
+(exit 78 when invalid), starts a plain Node HTTP server and logs each answer by route template and status only (SE-7).
+`compose.ts` is the composition root: it builds the object store's read through [[net-guard]] with a 5 s timeout and
+nothing else. `serve.ts` is the door: `GET|HEAD /o/<purpose>/<key>` for a signed draft link (checked by
+`verifyDraftPath` from `domains/content`) and `GET /health`; anything else is 404, other methods 405. It reads and sets
+no cookie, and every answer carries the sandbox headers (`default-src 'none'; sandbox`, `nosniff`). No Compose stack
+runs it on main yet.
 
-**How data will flow.** Browser → media proxy → the owner's PDS through [[net-guard]] → checked bytes back.
+**How data flows.** Browser → signed link → media → the object store through [[net-guard]] → the stored version back.
 
 **Links.** [[http]], [[net-guard]].

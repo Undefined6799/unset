@@ -7,7 +7,7 @@ The browser session store. Package `@unset/infrastructure-session`. Decision 34'
 
 ## Owns
 
-`infrastructure/session/store.ts` is the package. `createSessionStore` returns `create`, `read`, `destroy`, `destroyAllForDid`, `setEmailConfirmed` and `sweep`.
+`infrastructure/session/store.ts` is the package. `createSessionStore` returns `create`, `read`, `destroy`, `destroyAllForDid`, `countLive`, `setEmailConfirmed` and `sweep`. `countLive` counts a DID's sessions still within both lifetimes, and sign-out uses it to tell whether this browser is the member's last one (`interfaces/web/src/lib/server/sign-out.ts`).
 
 `create` draws 32 bytes (`randomBytes`), returns them as unpadded base64url `cookieValue`, and inserts `sha256` of those bytes into `app.session.id_hash`. `read` hashes the cookie the same way. A missing cookie is `session: null` and `clearCookie: false`. Any other value that is not the canonical 43-character form of 32 bytes is `clearCookie`. A row whose DID has no `app.oauth_session` is destroyed and returned as `clearCookie`.
 
