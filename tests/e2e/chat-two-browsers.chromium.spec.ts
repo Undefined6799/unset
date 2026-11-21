@@ -3,8 +3,8 @@
 // browser unlocks with the recovery key and reads the history; Log out leaves nothing behind; suspension locks an open
 // page and lifting it brings the same browser back with no unlock (ADR 0084 decisions 1 and 2); deletion ends the
 // account and the other member keeps the conversation (decision 3). It also records the build plan's step-11
-// unverified items as annotations: how fast a lock stops an open page, what the homeserver keeps of an erased
-// account, and the name the other member sees afterwards.
+// unverified items as annotations: how fast a lock stops an open page and what the homeserver keeps of an erased
+// account.
 // Chromium only, by its name (playwright.config.ts). Skipped, saying why, when the run is not pointed at the servers.
 import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { type RealServers, type RealStack, realServers, startRealStack } from "./fixtures/chat-servers.ts";
@@ -111,16 +111,6 @@ async function admin(path: string): Promise<Record<string, unknown>> {
   const answer = await fetch(url, { headers: { authorization: `Bearer ${token}` } }); // guard-allow: egress test, local Synapse only
   return (await answer.json()) as Record<string, unknown>;
 }
-/** How many of the room's sessions the member's key backup holds, read as that member (client-server API). */
-async function backedUp(token: string, roomId: string): Promise<number> {
-  const base = (servers as RealServers).synapse;
-  const auth = { authorization: `Bearer ${token}` };
-  const version = await fetch(new URL("/_matrix/client/v3/room_keys/version", base), { headers: auth }); // guard-allow: egress test, local Synapse only
-  const { version: v } = (await version.json()) as { version: string };
-  const url = new URL(`/_matrix/client/v3/room_keys/keys/${encodeURIComponent(roomId)}?version=${v}`, base);
-  const keys = await fetch(url, { headers: auth }); // guard-allow: egress test, local Synapse only
-  return Object.keys(((await keys.json()) as { sessions?: object }).sessions ?? {}).length;
-}
 const note = (type: string, description: string) => test.info().annotations.push({ type, description });
 
 test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser reads history; Log out wipes", async ({
@@ -139,13 +129,9 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   );
   expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted"]);
   expect(JSON.stringify(chunk)).not.toContain("hello from");
-  // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup. The
-  // SDK asks the backup for a missing key once per decryption (matrix-js-sdk 43.0.0
-  // src/rust-crypto/PerSessionKeyBackupDownloader.ts:158-184) and the first browser uploads after up to 10 s
-  // (backup.ts:70), so the second browser is opened once the backup holds both of the room's sessions.
-  await expect
-    .poll(() => backedUp(a.redeems[0]?.accessToken ?? "", rooms[0] ?? ""), { timeout: 60_000 })
-    .toBeGreaterThanOrEqual(2);
+  // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup,
+  // opened at once: the first browser may not have uploaded the room's keys yet (it waits up to 10 s, matrix-js-sdk
+  // 43.0.0 src/rust-crypto/backup.ts:70), and the page asks the backup again once it has (matrix/recovery.ts).
   const a2 = await browserFor(browser, alice.handle);
   await a2.page.goto("https://unset.cc/");
   await expect.poll(() => state(a2.page), { timeout: 60_000 }).toBe("locked");
@@ -209,7 +195,8 @@ test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversatio
   // Bob keeps his copy, Alice's messages included, and sees that she left.
   await expect(messages(b.page)).toContainText("hello from alice");
   await expect(conversation(b.page)).not.toHaveAttribute("data-composer", "on", { timeout: 60_000 });
-  note("name_bob_sees_after_delete", (await conversation(b.page).locator("h2").first().textContent()) ?? "");
+  // Erasure deletes her profile, so Bob sees a neutral name, never her chat ID (core/conversations.ts nameOf).
+  await expect(conversation(b.page).locator("h2").first()).toHaveText("Former member", { timeout: 60_000 });
   // What the homeserver keeps of the erased account (build plan unverified, ADR 0084 Consequences).
   const user = await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}`);
   expect(user).toMatchObject({ deactivated: true, erased: true });

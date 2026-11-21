@@ -15,7 +15,13 @@
 //   TimelinePanel.tsx:312, 891-905). Text only (spec #mtext).
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { EventType, type MatrixEvent, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
-import type { Conversation, ConversationId, ConversationKind, Message } from "../core/conversations.ts";
+import {
+  type Conversation,
+  type ConversationId,
+  type ConversationKind,
+  type Message,
+  nameOf,
+} from "../core/conversations.ts";
 
 const MEGOLM = "m.megolm.v1.aes-sha2";
 
@@ -58,10 +64,9 @@ export function toConversation(room: Room, direct: ReadonlyMap<string, string>):
   if (mine !== KnownMembership.Join && mine !== KnownMembership.Invite) return null;
   const other = otherPerson(room, direct);
   if (other === undefined) return null;
-  const name = room.getMember(other)?.rawDisplayName;
   return {
     id: room.roomId as ConversationId,
-    with: { id: other, name: name === undefined || name === "" ? other : name },
+    with: { id: other, name: nameOf(room.getMember(other)?.rawDisplayName, other) },
     kind: kindOf(room),
     request: mine === KnownMembership.Invite,
     unread: room.getUnreadNotificationCount(NotificationCountType.Total),
