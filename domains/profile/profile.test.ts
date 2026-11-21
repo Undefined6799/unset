@@ -3,6 +3,7 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import type { CardKey } from "./cards.ts";
+import { MAX_RECORD_BYTES } from "./index-plan.ts";
 import {
   APP_LIMITS,
   EMPTY_PROFILE,
@@ -76,6 +77,11 @@ describe("parseProfileFields", () => {
 });
 
 describe("toProfileRecord", () => {
+  test("a save the index would leave out is refused, so the public page never goes missing", () => {
+    const existing = { $type: "sh.unset.profile", createdAt: NOW, ...goodStored, note: "x".repeat(MAX_RECORD_BYTES) };
+    expect(toProfileRecord({ headline: "Hi" }, existing, NOW)).toEqual({ ok: false, code: "profile.too_long" });
+  });
+
   const NOW = "2026-10-23T04:00:00.000Z";
 
   test("a first profile writes only filled fields and passes the strict validator", () => {

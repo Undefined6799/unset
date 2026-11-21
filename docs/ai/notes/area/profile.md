@@ -10,7 +10,7 @@ importance: normal
 related: ["[[identity]]", "[[lexicons]]", "[[http]]", "[[pds]]"]
 replaced_by: null
 tags: [area, profile]
-checked: 2026-11-20
+checked: 2026-11-21
 ---
 # profile
 
@@ -31,6 +31,10 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 - `card-edit.ts`: writing cards. `parseCardInput`, `toCardRecord`, `reorderCards` and `CARD_EDIT_LIMITS` (rows per
   list the editor may write; reads keep the lexicon's limits). A missing surface input preserves the stored choice
   for older editors; explicitly choosing filled clears the stored field.
+- **Save what the index keeps** (P3.12v). Every profile and card record the save writes must pass `fitsIndex`
+  (index-plan.ts, the indexer's own check), else it is refused (`profile.too_long`, `card.too_long`).
+  `MAX_RECORD_BYTES` equals the pinned PDS's write limit (1,000,000 bytes), so in practice only a record another
+  client wrote past that is refused. A record the index skips shows to its owner (read from the PDS) but not publicly.
 - `web-address.ts`: `withScheme` ("alice.dev" means https://alice.dev) and `isWebAddress`.
 
 **How data flows.** Form input arrives at [[http]], is parsed here into checked fields or a typed error

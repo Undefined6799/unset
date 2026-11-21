@@ -11,8 +11,15 @@ import { parseCardKey } from "./cards.ts";
 export const INDEXED_COLLECTIONS = [NSID.profile, NSID.section] as const;
 export type IndexedCollection = (typeof INDEXED_COLLECTIONS)[number];
 
-/** A record's stored JSON is capped, so one member cannot fill the index (coordinator review, 2026-11-18). */
-export const MAX_RECORD_BYTES = 64 * 1024;
+/**
+ * A record's stored JSON is capped, so one member cannot fill the index (coordinator review, 2026-11-18). The cap is
+ * the most one PDS write may carry (APPLY_WRITES_BODY_BYTES in infrastructure/pds/card-records.ts, the pinned PDS's
+ * applyWrites and putRecord `jsonLimit`), so every record a member can save through our PDS is kept, and the save
+ * refuses, with `fitsIndex`, the few the cap still leaves out (book P3.12v). It was 64 KiB, under the
+ * lexicon's 100,000-byte text and its 100-entry collections (about 620 KB at every field's limit), so such a card saved
+ * and never showed publicly (staging break test 2026-11-21).
+ */
+export const MAX_RECORD_BYTES = 1_000_000;
 /** Sections kept per account: the profile lists at most LIMITS.profile.cardsMax, and unlisted ones show after. */
 export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.profile.cardsMax;
 
@@ -97,7 +104,7 @@ function deleteOf(collection: IndexedCollection, rkey: string): IndexWrite | nul
 /** A put the lexicon accepts, under its record key type, within the size cap; anything else is skipped and counted. */
 function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null {
   const collection = change.collection as IndexedCollection;
-  if (!keyFits(collection, change.rkey) || !fitsCap(change.record)) return null;
+  if (!keyFits(collection, change.rkey) || !fitsIndex(change.record)) return null;
   const checked = validateRecord(collection, change.record, "read");
   if (!checked.ok) return null;
   const record = checked.value;
@@ -122,7 +129,11 @@ function keyFits(collection: IndexedCollection, rkey: string): boolean {
 /** atproto.com/specs/tid: 13 characters of base32-sortable, the first in 2-7 or a-j. */
 const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 
-function fitsCap(record: unknown): boolean {
+/**
+ * Whether the index keeps `record`: within MAX_RECORD_BYTES and storable. The save checks the record it writes with
+ * this same function, so a record the owner can save and see is never one the public page leaves out.
+ */
+export function fitsIndex(record: unknown): boolean {
   try {
     return new TextEncoder().encode(JSON.stringify(record)).byteLength <= MAX_RECORD_BYTES && storable(record);
   } catch {

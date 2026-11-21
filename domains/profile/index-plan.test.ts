@@ -25,6 +25,33 @@ const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.uns
   }) satisfies IndexChange;
 const active = { lastRev: "3jzfcijpj2z2b", active: true };
 
+// Staging break test 2026-11-21: a 95 KB Text card saved but never showed publicly, as the index then kept records of
+// at most 64 KiB. The index now keeps every record Alex's limits let a member save (book P3.12v).
+describe("the largest cards a member may save are indexed", () => {
+  // As tests/integration/web/app/member-page.test.ts builds the largest collection: one grapheme of nine bytes.
+  const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+  const entry = {
+    title: heavy(120),
+    tag: heavy(40),
+    description: heavy(300),
+    uri: `https://a.example/${"x".repeat(1982)}`,
+  };
+  const largest = {
+    "a Text card of 100,000 bytes, each one a character JSON escapes": {
+      $type: "sh.unset.section#readme",
+      text: '"'.repeat(100_000),
+    },
+    "a collection of 100 entries at every field's limit": {
+      $type: "sh.unset.section#collection",
+      title: heavy(100),
+      items: Array.from({ length: 100 }, () => ({ $type: "sh.unset.section#entry", ...entry })),
+    },
+  };
+  test.each(Object.entries(largest))("index.keeps_%s", (_name, content) => {
+    expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
+});
+
 describe("planCommit", () => {
   test("index.null_watermark_first_commit_applies", () => {
     const plan = planCommit({ lastRev: null, active: true }, "3jzfcijpj2z2a", [profile()]);

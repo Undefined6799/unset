@@ -1968,6 +1968,20 @@ Reuse: prototype `appview/src/db.ts:468-500` → LESSON, provisional: keyset and
 Not in this step: a live-search island; Follow buttons (P4.18).
 Diagram: none.
 
+### P3.12v — Keep every card a member can save on the public page
+Tags: [SEC] [ALEX] (typed line: it raises a resource cap)            Depends on: P3.12
+`domains/profile/` (index-plan.ts, card-edit.ts, profile.ts); staging break test 2026-11-21, bug 2.
+
+**What:** a 95 KB Text card saved and showed to its owner, but the index kept records of at most 64 KiB
+(`MAX_RECORD_BYTES`), so the public page never had it. Alex's limits allow more: the lexicon's 100,000-byte text and
+100-entry collections, about 620 KB at every field's limit. The cap becomes 1,000,000 bytes, the most one write to the
+pinned PDS may carry (`APPLY_WRITES_BODY_BYTES`; a test holds the two equal), so every record saved through our PDS is
+kept. The save checks each profile and card record it writes with the indexer's own `fitsIndex`, so the two never
+drift again. Per account the index then holds at most 200 sections (`MAX_SECTIONS_PER_ACCOUNT`) of 1 MB each, about
+191 MiB at worst, up from about 12.5 MiB; a backfill also stops at the 32 MiB repo cap (`INDEXER_REPO_MAX_BYTES`).
+**Tests:** the largest Text card and collection the limits allow are indexed; an edit whose kept fields pass the cap
+is refused at save; the cap equals the PDS write limit.
+
 ### P3.14s — Web search through SearXNG behind the search bar
 Tags: [SEC] [ALEX] (ADR 0035, typed line)            Depends on: P3.14, P1.18a
 Plan: §2 rule 13 (every caller-influenced request leaves through net-guard), §5.2 (limits); ADR 0035 (proposed);

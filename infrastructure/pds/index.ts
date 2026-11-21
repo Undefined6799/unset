@@ -4,6 +4,7 @@
 export { createInviteIssuer, type InviteIssuerSettings, type IssueInviteResult } from "./admin-invite.ts";
 export { type UploadedBlob, uploadImageBlob } from "./blob-upload.ts";
 export {
+  APPLY_WRITES_BODY_BYTES,
   CARD_COLLECTION,
   type CardList,
   type CreateOutcome,
