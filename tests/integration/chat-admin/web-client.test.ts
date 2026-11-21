@@ -44,6 +44,14 @@ describe("web's chat-admin client", () => {
     expect(mas.users.has(USER)).toBe(false);
   });
 
+  test("chat.client_deactivate_erases: chat-admin deactivates the account web names, and a retry is harmless", async () => {
+    await clientFor().createAccount(USER, NAME);
+    expect(await clientFor().changeAccount(USER, "account.deactivate")).toEqual({ kind: "done" });
+    expect(mas.erased).toEqual([{ username: USER, body: "" }]);
+    expect(await clientFor().changeAccount(USER, "account.deactivate")).toEqual({ kind: "done" });
+    expect(await clientFor(service.door).changeAccount(USER, "account.lock")).toEqual({ kind: "unavailable" });
+  });
+
   test("chat.ticket_redeemed_once: the door's post of web's ticket mints one session, and a replay is refused", async () => {
     await clientFor().createAccount(USER, NAME);
     const state = parseDoorState("S".repeat(43));
