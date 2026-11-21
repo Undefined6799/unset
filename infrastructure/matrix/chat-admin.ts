@@ -67,7 +67,11 @@ export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettin
   const deactivateAccount = (user: ChatUser, deadline?: AbortSignal) =>
     changeAccount(user, "account.deactivate", deadline);
 
-  return { createAccount, changeAccount, deactivateAccount, signTicket };
+  /** A member suspended or active again: lock or unlock the chat account (ADR 0084 decisions 1 and 2). */
+  const setLocked = (user: ChatUser, lock: boolean, deadline?: AbortSignal) =>
+    changeAccount(user, lock ? "account.lock" : "account.unlock", deadline);
+
+  return { createAccount, changeAccount, deactivateAccount, setLocked, signTicket };
 }
 
 export type ChatAdminClient = ReturnType<typeof createChatAdminClient>;

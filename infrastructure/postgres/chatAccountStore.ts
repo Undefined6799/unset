@@ -12,7 +12,7 @@ export type ChatAccountStore = {
   request(tx: PoolClient, did: Did): Promise<void>;
   claim(limit: number): Promise<ChatAccountJob[]>;
   settle(job: ChatAccountJob, settlement: JobSettlement): Promise<boolean>;
-  /** The member's chat user once chat-admin has created it, else null. */
+  /** The member's chat user once chat-admin has created it and while it is not locked, else null. */
   readyUser(did: Did, deadline: AbortSignal): Promise<ChatUser | null>;
 };
 
@@ -38,7 +38,8 @@ const SETTLE = `UPDATE app.chat_account SET state = $3, attempts = attempts + $4
     due_at = now() + make_interval(secs => $5), lease_token = NULL, updated_at = now()
  WHERE did = $1 AND lease_token = $2::uuid AND state = 'pending'`;
 
-const READY = "SELECT chat_user FROM app.chat_account WHERE did = $1 AND state = 'ready'";
+// A locked account gets no new ticket (ADR 0084 decision 1); chat-admin refuses its mint as well.
+const READY = "SELECT chat_user FROM app.chat_account WHERE did = $1 AND state = 'ready' AND NOT locked";
 
 function jobOf(row: Record<string, unknown>): ChatAccountJob {
   const user = parseChatUser(row.chat_user);
