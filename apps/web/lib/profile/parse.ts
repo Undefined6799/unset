@@ -22,12 +22,14 @@ import {
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
+  | { readonly kind: "break" }
   | { readonly kind: "strong" | "em"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: SafeHref; readonly children: readonly Inline[] };
 
 export type Block =
   | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
-  | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
+  | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
+  | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "rule" };
@@ -216,11 +218,12 @@ const startsBlock = (line: string) =>
   QUOTE.test(line);
 
 /** Consecutive lines matching `pattern`, each reduced to its first group; returns the lines and the next index. */
-function run(lines: readonly string[], at: number, pattern: RegExp): { items: string[]; next: number } {
+function run(lines: readonly string[], at: number, pattern: RegExp, trim = true): { items: string[]; next: number } {
   const items: string[] = [];
   let i = at;
   for (let match = pattern.exec(lines[i] ?? ""); match !== null; match = pattern.exec(lines[i] ?? "")) {
-    items.push((match[1] ?? "").trim());
+    // A quote keeps each line's end as written: two trailing spaces break the line there.
+    items.push(trim ? (match[1] ?? "").trim() : (match[1] ?? "").trimStart());
     i += 1;
   }
   return { items, next: i };
@@ -335,17 +338,65 @@ function takeBlock(lines: readonly string[], i: number): { block: Block | null; 
   }
   if (RULE.test(line)) return { block: { kind: "rule" }, next: i + 1 };
   if (BULLET.test(line) || ORDERED.test(line)) return takeList(lines, i);
-  if (QUOTE.test(line)) {
-    const { items, next } = run(lines, i, QUOTE);
-    return { block: { kind: "quote", children: parseInline(items.join(" ")) }, next };
-  }
+  if (QUOTE.test(line)) return takeQuote(lines, i);
+  return takeParagraph(lines, i);
+}
+
+function takeQuote(lines: readonly string[], i: number): { block: Block | null; next: number } {
+  const { items, next } = run(lines, i, QUOTE, false);
+  const paragraphs = quoteParagraphs(items);
+  return { block: paragraphs.length === 0 ? null : { kind: "quote", paragraphs }, next };
+}
+
+function takeParagraph(lines: readonly string[], i: number): { block: Block | null; next: number } {
   let next = i + 1;
   while (next < lines.length && !startsBlock(lines[next] ?? "")) next += 1;
-  const text = lines
-    .slice(i, next)
-    .map((l) => l.trim())
-    .join(" ");
-  return { block: { kind: "paragraph", children: parseInline(text) }, next };
+  const text = lines.slice(i, next);
+  if (isEmptyLineMark(text)) return { block: null, next };
+  return { block: { kind: "paragraph", children: paragraphInline(text) }, next };
+}
+
+/**
+ * A paragraph's lines: a line that ends in a backslash or two spaces is a hard line break (CommonMark 0.31.2 §6.7),
+ * which the in-place editor writes for Shift+Enter; any other line end is a space (§6.8).
+ */
+function paragraphInline(lines: readonly string[]): Inline[] {
+  const out: Inline[] = [];
+  let words: string[] = [];
+  lines.forEach((raw, at) => {
+    const last = at === lines.length - 1;
+    const hard = !last && (/\\$/.test(raw) || / {2,}$/.test(raw));
+    words.push(hard ? raw.trim().replace(/\\$/, "").trimEnd() : raw.trim());
+    if (!hard) return;
+    out.push(...parseInline(words.join(" ")), { kind: "break" });
+    words = [];
+  });
+  out.push(...parseInline(words.join(" ")));
+  return out;
+}
+
+/** A quote's lines without their markers: paragraphs split at its blank lines, empty-line marks dropped. */
+function quoteParagraphs(items: readonly string[]): Inline[][] {
+  const paragraphs: Inline[][] = [];
+  let lines: string[] = [];
+  const close = () => {
+    if (lines.length > 0 && !isEmptyLineMark(lines)) paragraphs.push(paragraphInline(lines));
+    lines = [];
+  };
+  for (const item of items) {
+    if (item.trim() === "") close();
+    else lines.push(item);
+  }
+  close();
+  return paragraphs;
+}
+
+/**
+ * The paragraph Milkdown's preset-commonmark 7.23.0 wrote for an empty line before P1.21s (paragraph.ts
+ * EMPTY_LINE_PLACEHOLDER, "<br />"): stored cards may hold it, and it shows nothing.
+ */
+function isEmptyLineMark(lines: readonly string[]): boolean {
+  return lines.length === 1 && /^\s*<br\s*\/?>\s*$/i.test(lines[0] ?? "");
 }
 
 export function parseReadme(src: string): Block[] {
