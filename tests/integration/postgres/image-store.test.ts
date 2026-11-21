@@ -373,6 +373,24 @@ describe("image store", () => {
       expect((await store.list(did, null)).length).toBe(1000);
     });
 
+    test("image.named: the orphan sweep's read names only ids with a row, with their member, and counts every row", async () => {
+      const did = await member();
+      const other = await member();
+      const mine = await stored(did);
+      const theirs = await stored(other);
+      const gone = "0b6a52d4-6c1f-4bde-9b8e-2a1f6d7c3e01";
+      const named = await store.named([mine, gone, theirs], null);
+      expect(named.live).toBe(2);
+      expect(named.images).toEqual(
+        expect.arrayContaining([
+          { did, id: mine },
+          { did: other, id: theirs },
+        ]),
+      );
+      expect(named.images).toHaveLength(2);
+      expect(await store.named([gone], null)).toEqual({ live: 2, images: [] });
+    });
+
     test("image.ledger_pruned: upload times older than a day go with the sweep", async () => {
       const did = await member();
       await sql(

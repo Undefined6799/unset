@@ -1,6 +1,9 @@
 # 0079 — Notifications are a core inbox with one way to send into it
 
-Status: Proposed (awaiting Alex), 2026-11-20 (P2.27). Supersedes the "generic notification inbox" item of
+Status: Accepted by Alex, 2026-11-21 00:38Z, against e8dcaa5 (his line "Merge 1855 at e8dcaa5", given after that head
+was reviewed; merged as d4e3599). This status paragraph, the index row and the ADR 0001 acceptance line were added
+afterwards in the P2.27b pull request. Point 3 is amended by [0081](0081-notifications-stay-until-dismissed.md).
+Supersedes the "generic notification inbox" item of
 decision 25 (ADR 0001; PLAN.md §4 "Deferred until the first plugin needs them" and §5.5) and nothing else in it: the
 plugin manifest, registry, nav slots, mail transport, cron hooks and tenancy tables stay deferred. Point 4 amends the
 "no user sign-in records" rule of PLAN.md §6 and ADR 0001 for one record kind, by Alex's decision of 2026-11-20. Alex asked for the

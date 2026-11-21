@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   COUNT_CAP,
+  DISMISS_MAX,
   type Entry,
   type Inbox,
   inboxList,
@@ -8,6 +9,7 @@ import {
   type NotificationId,
   notify,
   parseNotificationId,
+  parseNotificationIds,
 } from "./notifications.ts";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}` as NotificationId;
@@ -21,12 +23,19 @@ function inboxOf(count: number): Inbox & { asked: number[] } {
       asked.push(limit);
       return Array.from({ length: Math.min(count, limit) }, (_, i) => entry(count - i));
     },
-    open: async () => null,
-    openUpTo: async () => [],
+    dismiss: async () => [],
+    dismissUpTo: async () => [],
   };
 }
 
 describe("notifications", () => {
+  test("ids.a_dismiss_form_keeps_valid_ids_once_and_at_most_the_page", () => {
+    expect(parseNotificationIds([id(1), "x", id(2), id(1), "", `${id(3)} `])).toEqual([id(1), id(2)]);
+    const many = Array.from({ length: DISMISS_MAX + 5 }, (_, n) => id(n + 1));
+    expect(parseNotificationIds(many)).toEqual(many.slice(0, DISMISS_MAX));
+    expect(parseNotificationIds([])).toEqual([]);
+  });
+
   test("ids.only_a_lowercase_uuid_parses", () => {
     expect(parseNotificationId(id(1))).toBe(id(1));
     for (const bad of [
@@ -73,13 +82,13 @@ describe("notifications", () => {
     const list = await inboxList(inbox, 5);
     expect(inbox.asked).toEqual([COUNT_CAP + 1]);
     expect(list.entries.map((e) => e.id)).toEqual([id(30), id(29), id(28), id(27), id(26)]);
-    expect(list.unread).toBe(COUNT_CAP);
+    expect(list.count).toBe(COUNT_CAP);
     expect(list.more).toBe(true);
   });
 
   test("list.counts_exactly_below_the_cap", async () => {
     const list = await inboxList(inboxOf(3), 5);
-    expect(list).toMatchObject({ unread: 3, more: false });
+    expect(list).toMatchObject({ count: 3, more: false });
     expect(list.entries).toHaveLength(3);
   });
 
@@ -87,6 +96,6 @@ describe("notifications", () => {
     const inbox = inboxOf(60);
     const list = await inboxList(inbox, 50);
     expect(inbox.asked).toEqual([51]);
-    expect(list).toMatchObject({ unread: COUNT_CAP, more: true });
+    expect(list).toMatchObject({ count: COUNT_CAP, more: true });
   });
 });
