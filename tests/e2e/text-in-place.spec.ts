@@ -386,12 +386,9 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   // Held until the click is made, then all let go: held by a fixed time instead, three waves of it (the page, its
   // parts, the editor) brought the editor 4.6 to 5.2 s after the click in Firefox, past the wait (CI, #1951).
   const cold = await page.context().newPage();
-  let letGo = () => {};
-  const clicked = new Promise<void>((done) => {
-    letGo = done;
-  });
+  const clicked = Promise.withResolvers<void>();
   await cold.route("**/_app/immutable/**/*.js", async (route) => {
-    await clicked;
+    await clicked.promise;
     return route.continue();
   });
   await cold.goto(page.url(), { waitUntil: "commit" });
@@ -403,7 +400,7 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   if (box === null) throw new Error("no line");
   // At the end of the line, as the tester clicked at the end of a sentence.
   await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
-  letGo();
+  clicked.resolve();
   const { editor } = await editorHolding(cold, word);
   await expect(editor).toBeFocused();
   // The editor draws the words where they were (the list's items and the space between blocks as the page draws
