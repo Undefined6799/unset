@@ -16789,8 +16789,10 @@ several lines (0072, superseded by 0077) cannot be marked superseded: replacing 
 counts as body. The check now also accepts exactly one shape: a new paragraph `Status: Superseded by NNNN.` above the
 old status paragraph, which is kept byte for byte except that its first word `Status:` becomes `Earlier status:`;
 NNNN must be an existing ADR. A changed word, a dropped, added or rewrapped line, a second new paragraph, extra words
-on the new line, an unrelabelled old paragraph and any body edit stay refused, each with a test. Marking 0072 itself
-is a later docs PR.
+on the new line, an unrelabelled old paragraph and any body edit stay refused, each with a test. It also closes a gap
+the reviewer found on main: a status starting "Superseded" counted as not accepted, so later PRs could edit a
+superseded ADR freely. A superseded ADR, in either form, now never changes again: no edit, no second mark, no
+deletion. Marking 0072 itself is a later docs PR.
 
 ---
 

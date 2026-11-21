@@ -108,6 +108,7 @@ export function adrProblems(root: string): string[] {
 
 const statusLine = (text: string): string => /^Status\b.*$/im.exec(text)?.[0].replace(/[*_]/g, "") ?? "";
 const isAccepted = (text: string): boolean => /^Status\W+accepted\b/i.test(statusLine(text));
+const isSuperseded = (text: string): boolean => /^Status\W+superseded\b/i.test(statusLine(text));
 const withoutStatus = (text: string): string => text.replace(/^Status\b.*$/im, "");
 
 /**
@@ -128,9 +129,9 @@ function supersededAbove(before: string, after: string): string | undefined {
 }
 
 /**
- * One changed ADR against its base text: 0001 only grows at its end; an accepted one changes only its status, either
- * its status line to exactly "Status: Superseded by NNNN." or as `supersededAbove` allows, naming an ADR in
- * `adrNumbers`.
+ * One changed ADR against its base text: 0001 only grows at its end; a superseded one never changes again; an accepted
+ * one changes only its status, either its status line to exactly "Status: Superseded by NNNN." or as `supersededAbove`
+ * allows, naming an ADR in `adrNumbers`.
  */
 export function adrChangeProblem(
   file: string,
@@ -142,6 +143,7 @@ export function adrChangeProblem(
     const whole = before.endsWith("\n") ? before : `${before}\n`;
     return after?.startsWith(whole) ? null : `${file}: ADR 0001 may only gain lines at its end`;
   }
+  if (isSuperseded(before)) return after === before ? null : `${file}: a superseded ADR may not change`;
   if (!isAccepted(before)) return null;
   if (after === null) return `${file}: an accepted ADR was deleted or renamed`;
   const by = /^Status: Superseded by (\d{4})\.?$/i.exec(statusLine(after))?.[1];

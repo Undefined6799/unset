@@ -119,6 +119,27 @@ describe("ADRs", () => {
     expect(change(marked("0077").replace("# 0072 — X", "# 0072 — Y"))).toMatch(refused); // title edited
     expect(change(accepted.replace(old, kept))).toMatch(refused); // relabelled without a new status
   });
+
+  test("adr_superseded_stays_immutable", () => {
+    // Once marked superseded, in either form, an ADR changes no further: no second mark, no edit, no deletion.
+    const adrs = new Set(["0009", "0012", "0013"]);
+    const change = (before: string, after: string | null) => adrChangeProblem("0009-x.md", before, after, adrs);
+    const line = "# 0009 — X\n\nStatus: Superseded by 0012.\n\n## Context\nWhy.\n";
+    const paragraph =
+      "# 0009 — X\n\nStatus: Superseded by 0012.\n\nEarlier status: Accepted\n(by Alex).\n\n## Context\nWhy.\n";
+    for (const before of [line, paragraph]) {
+      expect(change(before, before)).toBe(null);
+      expect(change(before, before.replace("Why.", "Why not."))).toMatch(/superseded ADR/);
+      expect(change(before, before.replace("0012.", "0013."))).toMatch(/superseded ADR/);
+      expect(change(before, before.replace("Status: Superseded by 0012.", "Status: Accepted."))).toMatch(/superseded/);
+      expect(change(before, null)).toMatch(/superseded ADR/);
+    }
+    const twice = paragraph.replace(
+      "Status: Superseded by 0012.",
+      "Status: Superseded by 0013.\n\nEarlier status: Superseded by 0012.",
+    );
+    expect(change(paragraph, twice)).toMatch(/superseded ADR/);
+  });
 });
 
 describe("other documents", () => {
