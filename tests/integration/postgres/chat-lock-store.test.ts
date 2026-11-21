@@ -118,6 +118,27 @@ describe("chat lock store", () => {
     expect(await dueFor(user)).toBeUndefined();
   });
 
+  test.each([
+    ["no status", null],
+    ["a status we do not know", "throttled"],
+  ])("chat.lock_kept_%s: a locked account whose member is still inactive is not due for an unlock", async (_why, status) => {
+    const { did, user } = member({ active: false, status: "suspended" });
+    const lock = await dueFor(user);
+    await locks.settle(lock as NonNullable<typeof lock>);
+    // An inactive update the indexer stored as it came (hideAccount), or a confirmed deletion that cleared the status
+    // and kept the account hidden (confirmDeletion): no evidence the member is active again.
+    setState(did, false, status);
+    expect(await dueFor(user)).toBeUndefined();
+  });
+
+  test("chat.lock_kept_no_record: a locked account with no recorded state is not due for an unlock", async () => {
+    const { did, user } = member({ active: false, status: "deactivated" });
+    const lock = await dueFor(user);
+    await locks.settle(lock as NonNullable<typeof lock>);
+    postgres.sql("unset", `DELETE FROM idx.account WHERE did = '${did}'`);
+    expect(await dueFor(user)).toBeUndefined();
+  });
+
   test("chat.lock_retry_fenced: a retry waits and counts; a spent lease settles nothing", async () => {
     const { user } = member({ active: false, status: "takendown" });
     const job = await dueFor(user);
