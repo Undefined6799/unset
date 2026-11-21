@@ -18,6 +18,7 @@ import {
   type IdentityNetwork,
   type OnboardingVersions,
   PRIVACY_VERSION,
+  type SignInHistory,
   TERMS_VERSION,
 } from "@unset/domains-identity";
 import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
@@ -47,6 +48,7 @@ import {
   createInviteStore,
   createLockPool,
   createNotificationStore,
+  createSignInStore,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
@@ -146,6 +148,14 @@ export type Services = {
     readonly send: (did: Did, notification: Notification, deadline: AbortSignal) => Promise<NotifyResult>;
     readonly sendIn: (db: Db, did: Did, notification: Notification) => Promise<NotifyResult>;
     readonly withdraw: (did: Did, dedupeKey: string, deadline: AbortSignal) => Promise<void>;
+  };
+  /**
+   * P2.27c (ADR 0082): the member's sign-in history as this browser may see and delete it, and the write the OAuth
+   * callback makes on its own transaction.
+   */
+  readonly signIns: {
+    readonly history: (did: Did, deadline: AbortSignal) => SignInHistory;
+    readonly recordIn: (db: Db, did: Did) => Promise<void>;
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
@@ -335,6 +345,16 @@ async function build(): Promise<Services> {
     withdraw: (did, dedupeKey, deadline) => withClient(pool, deadline, (db) => inboxRows.withdraw(db, did, dedupeKey)),
   };
 
+  const signInRows = createSignInStore();
+  const signIns: Services["signIns"] = {
+    history: (did, deadline) => ({
+      list: (limit) => withClient(pool, deadline, (db) => signInRows.list(db, did, limit)),
+      remove: (ids) => withClient(pool, deadline, (db) => signInRows.remove(db, did, ids)),
+      removeAll: () => withClient(pool, deadline, (db) => signInRows.removeAll(db, did)),
+    }),
+    recordIn: (db, did) => signInRows.record(db, did),
+  };
+
   // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
   const drafts = createObjectStore({
     origin: config.OBJECT_STORE_URL,
@@ -360,6 +380,7 @@ async function build(): Promise<Services> {
       // ADR 0070 point 6: pictures no save used after a day, and copies a week after their last use.
       { job: "sweep.image", run: () => sweepImages(images.store, drafts) },
       { job: "sweep.notification", run: () => withClient(pool, null, (db) => inboxRows.sweep(db)) },
+      { job: "sweep.sign_in", run: () => withClient(pool, null, (db) => signInRows.sweep(db)) },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -404,6 +425,7 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     invites,
     notifications,
+    signIns,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,

@@ -145,7 +145,8 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
   const origin = issuerOrigin(completed.issuer);
   let created: { cookieValue: string; idHash: Buffer };
   try {
-    // The sign-in's notification is sent in the same transaction, so its time is the session's own (P2.27).
+    // The sign-in's notification and its history entry are written in the same transaction, so their time is the
+    // session's own (P2.27, P2.27c).
     created = await withTransaction(pool, deadline, async (tx) => {
       const session = await sessions.create(
         tx,
@@ -153,6 +154,7 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
         replacing === null ? { issuerOrigin: origin } : { replacingCookie: replacing, issuerOrigin: origin },
       );
       await sendSignIn(tx, completed.did);
+      await services().signIns.recordIn(tx, completed.did);
       return session;
     });
   } catch (error) {
