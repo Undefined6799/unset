@@ -14,6 +14,7 @@ import type { ServiceKey } from "../../../interfaces/chat-admin/envelope.ts";
 import { createMas } from "../../../interfaces/chat-admin/mas.ts";
 import { createQuotas } from "../../../interfaces/chat-admin/quota.ts";
 import { createHandler, type HandlerDeps } from "../../../interfaces/chat-admin/server.ts";
+import { openSweepCursor } from "../../../interfaces/chat-admin/sweep.ts";
 import { createSynapse } from "../../../interfaces/chat-admin/synapse.ts";
 
 export const CLIENT_ID = "01JCHATADM1N0000000000000A";
@@ -248,6 +249,7 @@ export async function startService(mas: FakeMas, overrides: Partial<HandlerDeps>
     synapse: createSynapse({ adminUrl: new URL("http://127.0.0.1:9") }),
     sessionTtl: 3600,
     jti: openJtiStore(join(tempDir(), "jti.log"), nowSeconds()),
+    sweepCursor: openSweepCursor(join(tempDir(), "sweep.cursor")),
     quotas: createQuotas(),
     log: (line) => logs.push(line),
     commit: "c".repeat(40),

@@ -2,10 +2,13 @@
 // state and ADR 0085's retention event, with no event for 30 days), what is never touched, the per-run session
 // (constant scope, short expiry, revoked at the end), the fixed delete body, the command's fixed shape, and a log of
 // counts only.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { openSweepCursor } from "../../../interfaces/chat-admin/sweep.ts";
 import { createSynapse } from "../../../interfaces/chat-admin/synapse.ts";
 import { DAY_MS, ENCRYPTED_STATE, type FakeSynapse, fakeSynapse, PLAIN_STATE } from "./fake-synapse.ts";
-import { type FakeMas, fakeMas, nowSeconds, payloadFor, signed, startService } from "./harness.ts";
+import { type FakeMas, fakeMas, nowSeconds, payloadFor, signed, startService, tempDir } from "./harness.ts";
 
 let mas: FakeMas;
 let synapse: FakeSynapse;
@@ -154,6 +157,71 @@ describe("rooms.sweep", () => {
     const counts = (await (await sweep()).json()) as { deleted: number };
     expect(counts.deleted).toBeGreaterThan(0);
     expect(counts.deleted).toBeLessThanOrEqual(10);
+  });
+
+  test("sweep.resumes: a run that stops early hands on where it stopped, so later rooms are reached", async () => {
+    // 12 active plain rooms, then one idle room; the clock moves a second per reading, so one run checks only a few.
+    synapse.pageSize = 4;
+    for (let n = 0; n < 12; n++)
+      synapse.rooms.set(`!active${String(n).padStart(2, "0")}`, {
+        encryption: null,
+        state: PLAIN_STATE,
+        newest: recent(),
+      });
+    synapse.rooms.set("!zidle", { encryption: null, state: PLAIN_STATE, newest: old() });
+    await service.close();
+    let clock = Date.now();
+    const options = {
+      synapse: createSynapse({ adminUrl: synapse.url }),
+      now: () => {
+        clock += 1000;
+        return clock;
+      },
+    };
+    service = await startService(mas, options);
+    const first = (await (await sweep()).json()) as { deleted: number };
+    expect(first.deleted).toBe(0);
+    let runs = 1;
+    while (synapse.rooms.has("!zidle") && runs < 6) {
+      // Each run starts on the real time again, so its envelope is still alive.
+      clock = Date.now();
+      expect((await sweep()).status).toBe(200);
+      runs++;
+    }
+    expect(synapse.rooms.has("!zidle")).toBe(false);
+  });
+
+  test("sweep.resume_survives_restart: the resume point is kept in chat-admin's state folder", async () => {
+    synapse.pageSize = 2;
+    for (let n = 0; n < 12; n++)
+      synapse.rooms.set(`!active${String(n).padStart(2, "0")}`, {
+        encryption: null,
+        state: PLAIN_STATE,
+        newest: recent(),
+      });
+    synapse.rooms.set("!zidle", { encryption: null, state: PLAIN_STATE, newest: old() });
+    const file = join(tempDir(), "sweep.cursor");
+    let clock = Date.now();
+    const options = () => ({
+      synapse: createSynapse({ adminUrl: synapse.url }),
+      sweepCursor: openSweepCursor(file),
+      now: () => {
+        clock += 1000;
+        return clock;
+      },
+    });
+    await service.close();
+    service = await startService(mas, options());
+    await sweep();
+    const after = readFileSync(file, "utf8").trim();
+    expect(Number(after)).toBeGreaterThan(0);
+    // A new process reads the same point and starts there.
+    await service.close();
+    service = await startService(mas, options());
+    clock = Date.now();
+    expect((await sweep()).status).toBe(200);
+    const fromList = synapse.seen.filter((s) => s.path.startsWith("/_synapse/admin/v1/rooms?"));
+    expect(fromList.at(-1)?.path ?? "").not.toContain("from=0&");
   });
 
   test("sweep.logs_counts_only: the log carries counts and fixed words, never a room, user or token", async () => {
