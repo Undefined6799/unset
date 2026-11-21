@@ -338,3 +338,87 @@ test("words_typed_in_the_frame_of_the_save_are_saved", async ({ page }) => {
   await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two three`);
   await removeCard(page, word);
 });
+
+/** Holds the editor's own script (the chunk that carries ProseMirror) for `ms`, or fails it, as a slow or broken load. */
+async function holdEditorScript(page: Page, how: { readonly ms: number } | "fail") {
+  await page.route("**/_app/immutable/**/*.js", async (route) => {
+    const answer = await route.fetch();
+    const body = await answer.text();
+    if (!body.includes("ProseMirror-")) return route.fulfill({ response: answer, body });
+    if (how === "fail") return route.abort();
+    await new Promise((done) => setTimeout(done, how.ms));
+    return route.fulfill({ response: answer, body });
+  });
+}
+
+test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }) => {
+  const word = `early${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await holdEditorScript(page, { ms: 1500 });
+  // Not openOwnPage: its wait for a quiet network would wait out the held script.
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  // A press before the page's own script runs is the browser's alone; from the moment it runs, the card listens.
+  await expect(page.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+  await expect(page.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await card.getByText(`${word} start`).click();
+  await page.keyboard.type("Q");
+  const { editor } = await editorHolding(page, word);
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText("Q");
+  await page.keyboard.type("R");
+  await expect(editor).toContainText("QR");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+test("a_click_on_the_card_around_the_words_puts_the_caret_in_them", async ({ page }) => {
+  const word = `around${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { card, editor } = await editorHolding(page, word);
+  const box = await card.boundingBox();
+  if (box === null) throw new Error("the card has no box");
+  await page.mouse.click(box.x + 6, box.y + box.height - 6);
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("Z");
+  await expect(editor).toHaveText(`${word} startZ`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+test("an_editor_that_cannot_load_says_so", async ({ page }) => {
+  const word = `broken${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await holdEditorScript(page, "fail");
+  await openOwnPage(page);
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await expect(card.getByRole("alert")).toHaveText("The editor could not load. Reload the page to edit here.");
+  await expect(card).toContainText(`${word} start`);
+  await page.unroute("**/_app/immutable/**/*.js");
+  await openOwnPage(page);
+  await removeCard(page, word);
+});
+
+test("after_a_save_typing_goes_on_where_it_was", async ({ page }) => {
+  const word = `onward${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(" one");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await expect(editor).toBeFocused();
+  await page.keyboard.type(" two");
+  await expect(editor).toHaveText(`${word} start one two`);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});

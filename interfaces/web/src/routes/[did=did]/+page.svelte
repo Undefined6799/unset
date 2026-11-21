@@ -35,7 +35,7 @@ import {
   onPage,
   type UnsavedCards,
 } from "@unset/apps-web/lib/profile/unsaved.ts";
-import { onMount, untrack } from "svelte";
+import { onMount, tick, untrack } from "svelte";
 import { deserialize } from "$app/forms";
 import { goto, refreshAll } from "$app/navigation";
 import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
@@ -182,6 +182,20 @@ async function save() {
   else if (answer.kind === "refused") said = { text: answer.message, refused: true };
   else said = { text: UNSAVED_BAR.failed, refused: true };
   saving = false;
+  await returnToWords();
+}
+
+/** The way back into the Text card the member last typed in (card-text.svelte `onfocus`). */
+let lastWords: (() => void) | undefined;
+/**
+ * After a Save the caret goes back where the member was typing, unless they have moved on: a press on Save leaves
+ * focus on the bar, or on nothing once the bar goes, and the next keys would otherwise go nowhere.
+ */
+async function returnToWords() {
+  await tick();
+  const active = document.activeElement;
+  const onBar = active === null || active === document.body || active.closest("[data-unsaved-bar]") !== null;
+  if (onBar) lastWords?.();
 }
 
 /** Each written card's draft goes, or moves to the new version when the card holds newer words. */
@@ -348,6 +362,7 @@ function dropDrafts() {
                 value={textOf(card)}
                 onedit={(markdown) => change(card.key, { fields: { text: markdown } })}
                 {flushes}
+                onfocus={(focus) => (lastWords = focus)}
               />
             {/key}
           {/if}

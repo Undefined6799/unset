@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
 import LimitedProfile from "@unset/apps-web/lib/components/profile/limited-profile.svelte";
+import OwnPublicView from "@unset/apps-web/lib/components/profile/own-public-view.svelte";
 import PageAudience from "@unset/apps-web/lib/components/profile/page-audience.svelte";
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
 import ProfileHeader from "@unset/apps-web/lib/components/profile/profile-header.svelte";
@@ -45,6 +46,7 @@ let { data } = $props();
 
 <ProfileLayout>
   {#snippet notices()}
+    {#if data.editHref !== null}<OwnPublicView href={data.editHref} />{/if}
     {#if data.audience !== null}<PageAudience audience={data.audience} />{/if}
   {/snippet}
   {#snippet header()}
