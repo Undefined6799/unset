@@ -7,7 +7,7 @@ import {
   PROFILE_FIELDS,
   type ProfileEdit,
   type ProfileError,
-  type ProfileInputField,
+  type ProfileField,
   parseProfileFields,
 } from "@unset/domains-profile";
 import type { ErrorCode } from "@unset/shared-errors";
@@ -26,9 +26,7 @@ export type SaveProfile = (did: Did, fields: ProfileEdit) => Promise<ProfileSave
  * Where the browser goes next (a 303), or the code of the failure the page shows, with the field to blame when one
  * is (the form marks it, as the card editors do: staging walkthrough 2026-11-18 round two, finding 5).
  */
-export type SaveResult =
-  | { readonly location: string }
-  | { readonly code: ErrorCode; readonly field?: ProfileInputField };
+export type SaveResult = { readonly location: string } | { readonly code: ErrorCode; readonly field?: ProfileField };
 
 /** The form's `next` when it came from Settings › Profile. */
 const SETTINGS_PROFILE = "/settings/profile";
@@ -38,16 +36,13 @@ const SETTINGS_PROFILE = "/settings/profile";
  */
 export const SETTINGS_PROFILE_SAVED = "/settings/profile?saved";
 
-/** The form fields a save reads: the text fields and the page layout (ADR 0072). */
-const FORM_FIELDS = [...PROFILE_FIELDS, "layout"] as const;
-
 /**
  * Each field's one value; a field left out is not sent, so it keeps what the record holds. A repeated field is
  * refused like a malformed one.
  */
 function formFields(form: FormData): Record<string, unknown> | null {
   const input: Record<string, unknown> = {};
-  for (const field of FORM_FIELDS) {
+  for (const field of PROFILE_FIELDS) {
     const values = form.getAll(field);
     if (values.length > 1) return null;
     const [value] = values;

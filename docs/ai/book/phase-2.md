@@ -2526,6 +2526,30 @@ As built (2026-11-19, Alex: the notice was "permanent on the profile page"): mig
   banner drawn before a newer notice was deployed cannot hide it. When notifications land, this becomes one entry
   there and the seen column its read state.
 
+### P2.27 — Notifications: the inbox, the send call, the bell and the page
+Tags: [SEC]            Depends on: P2.12b, P2.13c            Plan: §4 (decision 25's inbox item superseded by ADR 0079); §6 (sign-in records, ADR 0079 point 4)
+Alex 2026-11-20 20:02Z, 20:22Z, 20:58Z and 21:00Z (plan /mnt/project-files/plans/notifications/plan.md). ADR 0079, Proposed.
+
+**What:** the notification inbox. Migration 0036 adds `app.notification` (reason from a closed list, optional topic
+and dedupe key, `older_sessions_only`, sent time; no text a person typed), web's column grants, the 30-day sweep and
+its line in `core.erase_did`. `domains/notifications` has the one send call, `notify`, and the list the bell (newest 5
+and the count) and `/notifications` (50) read. `apps/web/lib/notifications/reasons.ts` is the one table of each
+reason's words, icon and link; the build holds it to the domain's reasons. Opening deletes; Mark all as read deletes
+up to the newest listed. Two sources send through `notify`: a new sign-in, in the callback's transaction and seen only
+by older browsers, and a changed privacy notice, once per version at sign-in and withdrawn when the banner is dismissed.
+**Tests:** tests/integration/postgres/notification-store.test.ts, tests/integration/web/app/notifications.test.ts
+(denial, the new browser cannot clear it, viewing changes nothing, double and stale posts, one sent after the list, bad
+forms, cross-site, the notice), the sign-in callback test, erase-did, the limits budget, `/notifications` in the e2e
+and axe pages.
+**Not in this step:** the Settings › Privacy keep-30-days choice (P2.27a), export (with the privacy export), module
+senders (ADR 0079 point 6, with the first module), a device-only reminder for an unsaved profile (point 7, with
+in-place editing), email, push, live updates.
+
+### P2.27a — Keep read notifications for 30 days
+Tags: [SEC]            Depends on: P2.27
+**What:** ADR 0079 point 5: the Settings › Privacy choice to keep opened notifications for 30 days instead of deleting
+them on open (a read time on the row, shown as read), inside the same 30-day ceiling.
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit

@@ -264,6 +264,32 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.inbox": {
+      "web": {
+        "columns": {
+          "viewer": ["SELECT"],
+          "id": ["SELECT"],
+          "did": ["SELECT"],
+          "reason": ["SELECT"],
+          "topic": ["SELECT"],
+          "created_at": ["SELECT"]
+        }
+      }
+    },
+    "app.notification": {
+      "web": {
+        "columns": {
+          "id": ["SELECT"],
+          "did": ["SELECT", "INSERT"],
+          "reason": ["SELECT", "INSERT"],
+          "topic": ["SELECT", "INSERT"],
+          "dedupe_key": ["SELECT", "INSERT"],
+          "older_sessions_only": ["SELECT", "INSERT"],
+          "created_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {

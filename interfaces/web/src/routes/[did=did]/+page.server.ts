@@ -121,7 +121,6 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
         ? null
         : { headline: profile.headline, location: profile.location, website: websiteLink(profile.website) },
     avatarShape: own.kind === "ok" ? own.avatarShape : "round",
-    layout: own.kind === "ok" ? own.layout : "sidebar",
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),

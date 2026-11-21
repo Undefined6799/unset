@@ -104,14 +104,14 @@ export const cardViews = (
     shown: shownOf(content),
   }));
 
-/** The side column's website as a link, or null when unset or not http(s). */
+/** The profile's website as a link, or null when unset or not http(s). */
 export function websiteLink(website: string): { readonly href: string; readonly text: string } | null {
   const href = web(website);
   return href === null ? null : { href, text: website.replace(/^https?:\/\//, "") };
 }
 
 /**
- * The page's published contact action for the compact header's details panel (P1.21o): the first button of the first
+ * The page's published contact action for the header's About panel (P1.21o): the first button of the first
  * Contact card, as that card shows it, or null. The profile record holds no contact field (ADR 0051), and an account's
  * own email is never read here.
  */

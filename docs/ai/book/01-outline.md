@@ -266,6 +266,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21j | Limits sized for thousands of members; web marks its PDS calls, ADR 0071 (added 2026-11-20) | trusted | P1.21h | `phase-1.md` |
 | P1.21u | Write the Text card in a Milkdown editor; CSP adds ProseMirrorClipboard, ADR 0073 (added 2026-11-20) | trusted | P1.21f | `phase-1.md` |
 | P1.21w | Serve the docs site at docs.unset.sh from the staging edge, ADR 0075 (added 2026-11-20) | [SEC], trusted | — | `phase-1.md` |
+| P1.21x | Keep one profile layout, sticky site header, View as public, ADR 0077 (added 2026-11-20) | trusted | P1.21o | `phase-1.md` |
 | P1.21v | Edit Text cards in place, one Save for all through applyWrites, ADR 0074 (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
 | P1.21y | Settings › Privacy with Search and AI and a search result preview (added 2026-11-20) | trusted | P1.21b | `phase-1.md` |
 | P1.21z | Make the Text editor's buttons toggle and show state; heading sizes in a menu (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
@@ -578,6 +579,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
 | P2.12b | Show the privacy notice once | [SEC] | P2.12 | `phase-2.md` |
 | P2.12c | Close the welcome axe gaps | — | P2.12a | `phase-2.md` |
+| P2.27 | Notifications: the inbox, the send call, the bell and the page | [SEC] | P2.12b, P2.13c | `phase-2.md` |
+| P2.27a | Keep read notifications for 30 days | [SEC] | P2.27 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13d | Keep next and handle after a sign-in theme change | [SEC] | P1.25f | `phase-2.md` |
