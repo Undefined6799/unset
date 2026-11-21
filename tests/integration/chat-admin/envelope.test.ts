@@ -4,7 +4,14 @@ import { describe, expect, test } from "vitest";
 import { checkEnvelope, checkShape, isRefusal } from "../../../interfaces/chat-admin/envelope.ts";
 import { ALICE, callerKey, nowSeconds, payloadFor, signed, TICKET } from "./harness.ts";
 
-const web = callerKey("web-1", "web", ["account.create", "session.mint", "session.end"]);
+const web = callerKey("web-1", "web", [
+  "account.create",
+  "session.mint",
+  "session.end",
+  "account.lock",
+  "account.unlock",
+  "account.deactivate",
+]);
 const door = callerKey("door-1", "door", ["session.end"]);
 const keys = [web.service, door.service];
 
@@ -23,6 +30,15 @@ describe("envelope", () => {
     expect(check(door, { verb: "session.end", device: "ABCDEFGHJK" })).toMatchObject({ verb: "session.end" });
     expect(check(door, { verb: "session.mint" })).toEqual({ status: 403, reason: "verb" });
     expect(check(door, { verb: "account.create", name: "alice.unset.sh" })).toEqual({ status: 403, reason: "verb" });
+    for (const verb of ["account.lock", "account.unlock", "account.deactivate"]) {
+      expect(check(door, { verb })).toEqual({ status: 403, reason: "verb" });
+    }
+  });
+
+  test("envelope.account_verbs_from_web: lock, unlock and deactivate name only the user", () => {
+    for (const verb of ["account.lock", "account.unlock", "account.deactivate"]) {
+      expect(check(web, { verb })).toMatchObject({ verb, user: ALICE });
+    }
   });
 
   test("envelope.door_key_widened: a door key configured with mint still cannot mint", () => {
@@ -73,6 +89,10 @@ describe("envelope", () => {
     ["mint without state", { state: "" }],
     ["mint with a bad state", { state: `${"t".repeat(42)}!` }],
     ["create with did", { verb: "account.create", name: "alice.unset.sh", did: TICKET.did }],
+    // ADR 0084: the account verbs name the user and nothing else.
+    ["lock with device", { verb: "account.lock", device: "ABCDEFGHJK" }],
+    ["unlock with name", { verb: "account.unlock", name: "alice.unset.sh" }],
+    ["deactivate with did", { verb: "account.deactivate", did: TICKET.did }],
     ["create with state", { verb: "account.create", name: "alice.unset.sh", state: TICKET.state }],
     ["end with sid", { verb: "session.end", device: "ABCDEFGHJK", sid: TICKET.sid }],
   ])("envelope.fields_%s", (_name, overrides) => {

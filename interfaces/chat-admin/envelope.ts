@@ -13,7 +13,7 @@ export type ServiceKey = {
   readonly verbs: ChatAdminVerb[];
 };
 export const ISSUER_VERBS: Readonly<Record<Issuer, readonly ChatAdminVerb[]>> = {
-  web: ["account.create", "session.mint", "session.end"],
+  web: ["account.create", "session.mint", "session.end", "account.lock", "account.unlock", "account.deactivate"],
   door: ["session.end"],
 };
 export type Refusal = { readonly status: 400 | 403; readonly reason: string };
@@ -30,7 +30,11 @@ export type Command = Claims &
     | { readonly verb: "account.create"; readonly name: DisplayName }
     | { readonly verb: "session.mint" }
     | { readonly verb: "session.end"; readonly device: DeviceId }
+    | { readonly verb: AccountVerb }
   );
+/** The account calls of ADR 0084: they name the user and nothing else. */
+export type AccountVerb = "account.lock" | "account.unlock" | "account.deactivate";
+const ACCOUNT_VERBS: readonly ChatAdminVerb[] = ["account.lock", "account.unlock", "account.deactivate"];
 
 const MAX_LIFETIME = 60;
 const CLOCK_SKEW = 5;
@@ -106,6 +110,9 @@ function fieldsFor(verb: ChatAdminVerb, claims: Claims, p: Record<string, string
     return DEVICE.test(device) && empty(p, ["name", ...TICKET_KEYS])
       ? { ...claims, verb, device: device as DeviceId }
       : bad;
+  }
+  if (ACCOUNT_VERBS.includes(verb)) {
+    return empty(p, ["name", "device", ...TICKET_KEYS]) ? { ...claims, verb: verb as AccountVerb } : bad;
   }
   const ticket = DID.test(String(p.did)) && TOKEN43.test(String(p.sid)) && TOKEN43.test(String(p.state));
   return ticket && empty(p, ["name", "device"]) ? { ...claims, verb } : bad;

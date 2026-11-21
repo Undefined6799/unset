@@ -155,6 +155,75 @@ describe("session.end", () => {
   });
 });
 
+// ADR 0084 decisions 1 to 5: lock keeps sessions, unlock restores them, deactivate erases and ends them; each repeats
+// harmlessly, and no route brings a deactivated account back.
+const account = (verb: "account.lock" | "account.unlock" | "account.deactivate", user = ALICE, key = service.web) =>
+  service.post(`/v1/${verb}`, signed(key, payloadFor({ verb, user })));
+
+describe("account lifecycle", () => {
+  beforeEach(async () => {
+    await create();
+  });
+
+  test("lock.keeps_sessions: a locked account mints nothing new, its sessions stay, and a repeat is harmless", async () => {
+    await mint();
+    const res = await account("account.lock");
+    expect([res.status, await res.json()]).toEqual([200, { locked: true }]);
+    expect(mas.users.get(ALICE)?.locked).toBe(true);
+    expect(mas.sessions.filter((s) => !s.revoked)).toHaveLength(1);
+    expect((await mint()).status).toBe(403);
+    expect((await account("account.lock")).status).toBe(200);
+  });
+
+  test("unlock.restores: the same device renews again after an unlock", async () => {
+    const { device } = (await (await mint()).json()) as { device: string };
+    await account("account.lock");
+    const res = await account("account.unlock");
+    expect([res.status, await res.json()]).toEqual([200, { locked: false }]);
+    const renewed = await mint(device);
+    expect(renewed.status).toBe(200);
+    expect(((await renewed.json()) as { device: string }).device).toBe(device);
+  });
+
+  test("deactivate.erases: no body, so MAS asks the homeserver to erase; sessions end; a repeat is harmless", async () => {
+    await mint();
+    await account("account.lock");
+    const res = await account("account.deactivate");
+    expect([res.status, await res.json()]).toEqual([200, { deactivated: true }]);
+    expect(mas.erased).toEqual([{ username: ALICE, body: "" }]);
+    expect(mas.sessions.every((s) => s.revoked)).toBe(true);
+    expect((await account("account.deactivate")).status).toBe(200);
+    expect((await mint()).status).toBe(403);
+  });
+
+  test("deactivate.no_account: an account MAS never made is already gone", async () => {
+    const res = await account("account.deactivate", "bob00000000000000000000");
+    expect([res.status, await res.json()]).toEqual([200, { deactivated: false }]);
+    expect(mas.erased).toEqual([]);
+  });
+
+  test("lock.no_account: an account MAS does not hold is 409 no_account", async () => {
+    const res = await account("account.lock", "bob00000000000000000000");
+    expect([res.status, await res.json()]).toEqual([409, { error: "no_account" }]);
+  });
+
+  test("lifecycle.web_only: the door's key may not lock, unlock or deactivate", async () => {
+    for (const verb of ["account.lock", "account.unlock", "account.deactivate"] as const) {
+      expect((await account(verb, ALICE, service.door)).status).toBe(403);
+    }
+    expect(mas.users.get(ALICE)).toMatchObject({ locked: false, deactivated: false });
+  });
+
+  test("lifecycle.no_reactivate: no route brings a deactivated account back", async () => {
+    for (const path of ["/v1/account.reactivate", "/v1/user.reactivate"]) {
+      expect((await service.post(path, signed(service.web, payloadFor({ verb: "account.deactivate" })))).status).toBe(
+        404,
+      );
+    }
+    expect(mas.seen.some((s) => s.path.endsWith("/reactivate"))).toBe(false);
+  });
+});
+
 describe("refusals", () => {
   test("replay: the same envelope twice is 403 the second time, and MAS sees one mint", async () => {
     await create();

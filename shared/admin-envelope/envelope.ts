@@ -20,7 +20,13 @@ export type AdminPayload = {
 };
 
 /** What chat-admin may be asked (ADR 0081 decision 5): fixed, and none of them takes a scope. */
-export type ChatAdminVerb = "account.create" | "session.mint" | "session.end";
+export type ChatAdminVerb =
+  | "account.create"
+  | "session.mint"
+  | "session.end"
+  | "account.lock"
+  | "account.unlock"
+  | "account.deactivate";
 
 /**
  * One chat-admin request. `user` is the chat account's username (the MAS localpart web's mapping holds, never a DID).
