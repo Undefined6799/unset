@@ -7,14 +7,22 @@
 // Before any of it the page takes the one-tab lock (core/tab-lock.ts): a tab that finds chat open in another signs
 // nothing in, hops nowhere and opens no key store until the member chooses to use chat there, which takes the lock over
 // and starts a fresh hop; the tab that lost it stops its client at once.
+// The page has no Log out (Alex 2026-11-21): unset.sh's Log out sends the tab to /sign-out/return, which logs this
+// browser out of chat (core/sign-out.ts signOutHere) and goes back to unset.sh.
 import type { ChatState } from "./core/chat.ts";
 import { dmTarget, startPathFor } from "./core/contact.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
 import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
-import { signOutDevice } from "./core/sign-out.ts";
+import {
+  redeemForSignOut,
+  SIGN_OUT_RETURN_PATH,
+  SIGNED_OUT_PATH,
+  signOutDevice,
+  signOutHere,
+} from "./core/sign-out.ts";
 import { holdTabLock } from "./core/tab-lock.ts";
-import { openChat } from "./matrix/client.ts";
+import { openChat, openToLogOut } from "./matrix/client.ts";
 
 const DOOR_DEADLINE_MS = 10_000;
 const TOO_SOON_MS = 60_000;
@@ -26,6 +34,7 @@ const hop = () => window.location.assign(hopPath(here()));
 
 export async function boot(onState: (state: ChatState) => void): Promise<void> {
   // The ticket leaves the address bar first, whatever comes next (core/sign-in.ts).
+  if (window.location.pathname === SIGN_OUT_RETURN_PATH) return signOut(takeTicket(window), onState);
   const returning = window.location.pathname === RETURN_PATH;
   const ticket = returning ? takeTicket(window) : null;
   // Set once another tab has taken chat over: this page then stops and says only that (core/tab-lock.ts).
@@ -71,9 +80,8 @@ async function signIn(ticket: string | null, gone: AbortSignal, onState: (state:
     );
     window.history.replaceState(null, "", next);
   }
-  // Renewal, unless the member has logged out by then or chat has moved to another tab.
-  let leaving = false;
-  const renew = () => leaving || gone.aborted || hop();
+  // Renewal, unless chat has moved to another tab by then.
+  const renew = () => gone.aborted || hop();
   window.setTimeout(renew, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
   const door = window.fetch.bind(window);
   const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);
@@ -86,15 +94,42 @@ async function signIn(ticket: string | null, gone: AbortSignal, onState: (state:
     },
     pushKey: () => askPushKey(door, session.deviceId, deadline()),
     signOut: () => signOutDevice(door, session.deviceId, deadline()),
-    onState: (state) => {
-      if (state.kind === "logging_out") leaving = true;
-      onState(state);
-    },
+    onState,
     onSignedOut: () => {
-      if (leaving || gone.aborted) return;
+      if (gone.aborted) return;
       if (Date.now() - signedInAt < TOO_SOON_MS) return onState({ kind: "error", code: "chat.session_refused" });
       onState({ kind: "signed_out" });
       hop();
     },
   });
+}
+
+/**
+ * /sign-out/return: unset.sh's Log out for this browser (core/sign-out.ts signOutHere). The tab lock is taken over only
+ * once the ticket is spent, so a link that carries no good ticket stops no other tab; the tab that loses the lock stops
+ * its client at once (boot's `lost`).
+ */
+async function signOut(ticket: string | null, onState: (state: ChatState) => void): Promise<void> {
+  onState({ kind: "signing_out" });
+  const door = window.fetch.bind(window);
+  const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);
+  const takenOver = new AbortController();
+  await signOutHere(
+    {
+      redeem: (t) => redeemForSignOut(door, t, deadline()),
+      takeOver: async () => (await holdTabLock(navigator.locks, "take_over", () => takenOver.abort())) === "held",
+      logOut: async (session) => {
+        const endDevice = () => signOutDevice(door, session.deviceId, deadline());
+        const chat = await openToLogOut(session, {
+          baseUrl: window.location.origin,
+          takenOver: takenOver.signal,
+          signOut: endDevice,
+        });
+        return chat.logOut();
+      },
+      endDevice: (session) => signOutDevice(door, session.deviceId, deadline()),
+      leave: () => window.location.replace(SIGNED_OUT_PATH),
+    },
+    ticket,
+  );
 }

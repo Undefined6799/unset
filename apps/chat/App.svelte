@@ -3,7 +3,8 @@
   servers or the protocol behind it. A new account saves its recovery key here before anything else (ADR 0083
   decision 2, ADR 0089), and a new browser unlocks with it (decision 3); then the conversations (build step 9, Conversations.svelte). An error
   shows only its fixed code. A second tab says the messages are open in the other one and offers to use them here
-  (core/tab-lock.ts, as Element's ConfirmSessionLockTheftView does).
+  (core/tab-lock.ts, as Element's ConfirmSessionLockTheftView does). There is no Log out here: unset.sh's Log out
+  signs this browser out of messages too (Alex 2026-11-21), and this card only says so while it runs.
   The key fields follow Chromium's documented form shape, a username field (hidden) and a password field marked
   new-password to save and current-password to fill
   (https://www.chromium.org/developers/design-documents/form-styles-that-chromium-understands/, read 2026-11-21;
@@ -48,13 +49,9 @@ const WORDS = {
     text: "Enter your recovery key to read your messages in this browser.",
   },
   ready: { title: "Your messages", text: "" },
-  logging_out: {
-    title: "Logging out",
-    text: "Saving your keys so you can read your messages in another browser. This can take a few seconds.",
-  },
-  logged_out: {
-    title: "You are logged out",
-    text: "Nothing of your messages is left in this browser. Your recovery key opens them again in any browser.",
+  signing_out: {
+    title: "Signing you out",
+    text: "Saving your keys so you can read your messages in another browser, then removing them from this one. This can take a few seconds.",
   },
   signed_out: { title: "Signing you in again", text: "One moment." },
   open_elsewhere: {
@@ -182,10 +179,6 @@ onMount(() => {
       <Card.Content>
         <Conversations conversations={view.conversations} me={view.me} />
       </Card.Content>
-    {:else if view.kind === "logged_out"}
-      <Card.Content>
-        <Button href={hopPath("/")}>Open messages</Button>
-      </Card.Content>
     {:else if view.kind === "open_elsewhere"}
       <Card.Content>
         <Button onclick={() => view.kind === "open_elsewhere" && view.useHere()}>Use here</Button>
@@ -197,13 +190,6 @@ onMount(() => {
         {/if}
         <Button href={hopPath("/")}>Try again</Button>
       </Card.Content>
-    {/if}
-    {#if view.kind === "ready" || view.kind === "locked"}
-      <Card.Footer>
-        <Button variant="outline" onclick={() => (view.kind === "ready" || view.kind === "locked") && view.logOut()}>
-          Log out
-        </Button>
-      </Card.Footer>
     {/if}
   </Card.Root>
 </main>

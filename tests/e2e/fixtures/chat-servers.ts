@@ -141,6 +141,24 @@ export async function startRealStack(
     });
     res.writeHead(303, { location: `https://unset.cc/sign-in/return#${new URLSearchParams({ ticket })}` }).end();
   };
+  // web's POST /logout for that session, through GET /logout/chat (interfaces/web chat-sign-out.ts): a ticket for the
+  // ended session with a random one-time value, then the door's sign-out page. One GET stands for both.
+  const logOut = async (req: IncomingMessage, res: ServerResponse) => {
+    const named = /(?:^|;\s*)member=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
+    const who = named === undefined ? undefined : members.get(decodeURIComponent(named));
+    const state = parseDoorState(randomBytes(32).toString("base64url"));
+    if (state === null || who === undefined) return res.writeHead(400).end();
+    const sid = sessionRef(Buffer.alloc(32, 1));
+    const ticket = await chatAdmin.signTicket({ user: who.user, did: who.did, sid, state });
+    res.writeHead(303, { location: `https://unset.cc/sign-out/return#${new URLSearchParams({ ticket })}` }).end();
+  };
+  const unsetSh = (req: IncomingMessage, res: ServerResponse) => {
+    const path = new URL(req.url ?? "/", "https://unset.sh").pathname;
+    if (path === "/logout") return void logOut(req, res);
+    if (path === "/signed-out")
+      return void res.writeHead(200, { "content-type": "text/html" }).end("<title>Out</title>");
+    return void signIn(req, res);
+  };
   // The edge's route for the homeserver (ADR 0081 decision 6): the request as it came, to Synapse's client listener.
   const toSynapse = (req: IncomingMessage, res: ServerResponse) => {
     const upstream = request(
@@ -155,7 +173,7 @@ export async function startRealStack(
     req.pipe(upstream);
   };
   const edge = createTlsServer(certificate(dir), (req, res) => {
-    if (req.headers.host === "unset.sh") return void signIn(req, res);
+    if (req.headers.host === "unset.sh") return unsetSh(req, res);
     if (req.url?.startsWith("/_matrix/client/")) return toSynapse(req, res);
     door.listener(req, res);
   });

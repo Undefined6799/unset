@@ -4,7 +4,8 @@
 // (chat-admin's harness) and the homeserver, which answers the client-server API calls the page makes as Synapse would,
 // keys included, for one account (https://spec.matrix.org/v1.18/client-server-api/). One TLS listener plays the
 // edge: unset.cc's /_matrix/client/* to the homeserver, the rest of unset.cc to the door, and unset.sh's /chat/sign-in
-// to web's half of the hop. The browser reaches it through a CONNECT proxy of its own, as the rest of the harness
+// to web's half of the hop, /logout to web's Log out ticket for that session and /signed-out to a blank page. The
+// browser reaches it through a CONNECT proxy of its own, as the rest of the harness
 // reaches unset.test (fixtures/servers.ts): the browser may run in Playwright's image (e2e.yml, P0.07n), where no
 // launch flag of ours applies, so the names are mapped by the proxy, not by --host-resolver-rules.
 import { execFileSync } from "node:child_process";
@@ -366,8 +367,23 @@ export async function startChatStack(db: ChatDatabase, pageDir: string, dir: str
     const ticket = await web.signTicket({ user, did: ALICE, sid: sessionRef(Buffer.alloc(32, 1)), state });
     res.writeHead(303, { location: `https://unset.cc/sign-in/return#${new URLSearchParams({ ticket })}` }).end();
   };
+  // web's POST /logout for that session, through GET /logout/chat (interfaces/web chat-sign-out.ts): a ticket for the
+  // ended session with a random one-time value, then the door's sign-out page. One GET stands for both.
+  const logOut = async (res: ServerResponse) => {
+    const state = parseDoorState(randomBytes(32).toString("base64url"));
+    if (state === null) return res.writeHead(500).end();
+    const ticket = await web.signTicket({ user, did: ALICE, sid: sessionRef(Buffer.alloc(32, 1)), state });
+    res.writeHead(303, { location: `https://unset.cc/sign-out/return#${new URLSearchParams({ ticket })}` }).end();
+  };
+  const unsetSh = (req: IncomingMessage, res: ServerResponse) => {
+    const path = new URL(req.url ?? "/", "https://unset.sh").pathname;
+    if (path === "/logout") return void logOut(res);
+    if (path === "/signed-out")
+      return void res.writeHead(200, { "content-type": "text/html" }).end("<title>Signed out</title>");
+    return void signIn(req, res);
+  };
   const edge = createTlsServer(certificate(dir), (req, res) => {
-    if (req.headers.host === "unset.sh") return void signIn(req, res);
+    if (req.headers.host === "unset.sh") return unsetSh(req, res);
     if (req.url?.startsWith("/_matrix/client/")) return homeserver.handle(req, res);
     door.listener(req, res);
   });

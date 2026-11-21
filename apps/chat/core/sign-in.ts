@@ -99,8 +99,9 @@ export function sessionOf(body: unknown): Omit<ChatSession, "newDevice"> | null 
   return { accessToken, userId, deviceId, expiresAtMs, storageKey: key };
 }
 
+/** The bytes of unpadded base64url `text`, or null; a length no encoding has (atob's InvalidCharacterError) is null. */
 function base64url(text: string): Uint8Array | null {
-  if (!/^[A-Za-z0-9_-]*$/.test(text)) return null;
+  if (!/^[A-Za-z0-9_-]*$/.test(text) || text.length % 4 === 1) return null;
   const binary = atob(text.replaceAll("-", "+").replaceAll("_", "/"));
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
