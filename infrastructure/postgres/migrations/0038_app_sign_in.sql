@@ -20,7 +20,7 @@ GRANT SELECT (id, did, signed_in_at) ON app.sign_in TO web;
 GRANT INSERT (did) ON app.sign_in TO web;
 GRANT DELETE ON app.sign_in TO web;
 
--- core.erase_did, as in migration 0036, with app.sign_in.did added to step 2's list and its statement to step 4,
+-- core.erase_did, as in migration 0037, with app.sign_in.did added to step 2's list and its statement to step 4,
 -- before app.account (the rows would also go by cascade; the statement counts them). The signature, owner and grants
 -- are unchanged, so CREATE OR REPLACE keeps them.
 CREATE OR REPLACE FUNCTION core.erase_did(p_did types.did, p_why text) RETURNS jsonb
@@ -45,6 +45,7 @@ DECLARE
   v_image_use bigint;
   v_image_upload bigint;
   v_notification bigint;
+  v_image_record bigint;
   v_sign_in bigint;
 BEGIN
   -- 1. A DID and a reason from the closed list.
@@ -71,7 +72,8 @@ BEGIN
          'idx.account.did', 'idx.account_job.did', 'idx.profile.did', 'idx.section.did', 'idx.record_blob.did',
          'idx.dead_letter.did', 'mod.account_state.did', 'idx.profile.uri', 'idx.section.uri', 'idx.record_blob.uri',
          'idx.track_request.did', 'app.discoverability.did', 'app.image.did', 'app.image_use.record_uri',
-         'app.image_upload.did', 'app.notification.did', 'app.sign_in.did')
+         'app.image_upload.did', 'app.notification.did', 'app.image_record.did',
+         'app.image_record.record_uri', 'app.sign_in.did')
   ) THEN
     RAISE EXCEPTION 'erase_uncovered_did_column' USING ERRCODE = '55000';
   END IF;
@@ -93,6 +95,8 @@ BEGIN
   GET DIAGNOSTICS v_discoverability = ROW_COUNT;
   DELETE FROM app.image_use u USING app.image i WHERE u.image_id = i.id AND i.did = p_did;
   GET DIAGNOSTICS v_image_use = ROW_COUNT;
+  DELETE FROM app.image_record WHERE did = p_did;
+  GET DIAGNOSTICS v_image_record = ROW_COUNT;
   DELETE FROM app.image WHERE did = p_did;
   GET DIAGNOSTICS v_image = ROW_COUNT;
   DELETE FROM app.image_upload WHERE did = p_did;
@@ -134,6 +138,6 @@ BEGIN
       'idx.dead_letter', v_idx_dead_letter, 'mod.account_state', v_mod_account_state,
       'idx.track_request', v_track_request, 'app.discoverability', v_discoverability,
       'app.image', v_image, 'app.image_use', v_image_use, 'app.image_upload', v_image_upload,
-      'app.notification', v_notification, 'app.sign_in', v_sign_in));
+      'app.notification', v_notification, 'app.image_record', v_image_record, 'app.sign_in', v_sign_in));
 END
 $$;
