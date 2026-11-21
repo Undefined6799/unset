@@ -104,7 +104,7 @@ export type SignOutReply = {
 /**
  * The 303 to the signed-out page, carrying `issuer` (an origin) for its account link, or clearing a stale one. The
  * browser is told to clear this origin's storage, so unsaved card text kept on the device (ADR 0074 item 4,
- * apps/web/lib/editor/drafts.ts) goes with the session (Clear-Site-Data "storage",
+ * apps/web/lib/profile/drafts.ts) goes with the session (Clear-Site-Data "storage",
  * https://w3c.github.io/webappsec-clear-site-data/#grammardef-storage). Only here, once the session is gone: a
  * sign-out that fails keeps both the cookie and the drafts.
  */

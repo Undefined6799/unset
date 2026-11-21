@@ -211,3 +211,24 @@ export const TEXT_EDITOR = {
 export const TEXT_IN_PLACE = {
   label: (name: string) => `Text of the ${name} card`,
 } as const;
+
+/** The bar that holds the owner's unsaved changes (ADR 0074 item 4), and the drafts offered back when the page opens. */
+export const UNSAVED_BAR = {
+  label: "Unsaved changes",
+  count: (cards: number) => (cards === 1 ? "1 card has unsaved changes." : `${cards} cards have unsaved changes.`),
+  save: "Save",
+  saving: "Saving…",
+  discard: "Discard",
+  saved: "Saved.",
+  /** The Save did not reach the server, or its answer could not be read. */
+  failed: "Your changes could not be saved just now. Check your connection and save again.",
+  /** Bigger than the page's form can send at once. */
+  tooLarge: "These changes are too large to save at once. Save fewer cards at a time.",
+  drafts: (cards: number) =>
+    cards === 1
+      ? "This device kept unsaved words for 1 card from an earlier visit."
+      : `This device kept unsaved words for ${cards} cards from an earlier visit.`,
+  draftsLabel: "Unsaved words from an earlier visit",
+  restore: "Bring them back",
+  dropDrafts: "Throw them away",
+} as const;

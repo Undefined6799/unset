@@ -376,6 +376,14 @@
       "text-editor.svelte": {
         "origin": "ours",
         "purpose": "The Text card's field: the stock Label and Textarea the form posts, with the Milkdown editor and a formatting bar of stock Buttons drawn over it once script has loaded it (P1.21u)."
+      },
+      "unsaved-bar.svelte": {
+        "origin": "ours",
+        "purpose": "The owner's unsaved changes: one sticky bar above the name and avatar with the count, Save and Discard (ADR 0074 item 4)."
+      },
+      "drafts-offer.svelte": {
+        "origin": "ours",
+        "purpose": "Unsaved words this device kept from an earlier visit, offered back on the owner's page or thrown away (ADR 0074 item 4)."
       }
     },
     "settings": {
