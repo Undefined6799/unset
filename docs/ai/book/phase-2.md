@@ -4004,9 +4004,9 @@ P2.19b, picture cards on the server, built 2026-11-20: the card forms take kind 
 keep the picture, `alt`, `caption`, `fit`), and every card write publishes a new picture after its own checks and
 before the write: the use first (`addUse`, under a key web picks with `newCardKey` for a new card), then the main
 version from `drafts/<did>/i/<id>/main.jpeg`, then `com.atproto.repo.uploadBlob`; a Save publishes once across its one
-retry. After the write (Codex review): a write that surely did not land releases a use the request made (never one
-the record already had), only while its lease on it (`app.image_use.lease`, renewed by every `addUse`) is unchanged;
-one the PDS did not answer keeps it, since it may have landed. One that landed settles the record's uses under its
+retry. After the write (Codex review): every `addUse` adds the save's own token to `app.image_use.holds`; a write
+that surely did not land removes its token, and the use goes only when no save holds it and no write settled it; one
+the PDS did not answer keeps its token, since it may have landed. One that landed settles the record's uses under its
 commit revision (migration 0037; a TID sorts by time). `app.image_record` keeps each record's last settled revision
 and whether it was deleted: a revision not newer than that, or any after a delete, only takes back its own uses; a
 newer one becomes the last and leaves exactly the use of the picture the record shows (found by the CID web notes on
