@@ -1,6 +1,8 @@
 // The index's rules for one commit (index-plan.ts, book P3.05s). Pure: the store's tests cover the transaction.
+
+import { LIMITS } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { type IndexChange, MAX_RECORD_BYTES, planCommit } from "./index-plan.ts";
+import { fitsPage, type IndexChange, MAX_PAGE_BYTES, MAX_RECORD_BYTES, planCommit, recordBytes } from "./index-plan.ts";
 
 const T = "2026-11-18T00:00:00.000Z";
 const TID = "3jzfcijpj2z2a";
@@ -24,6 +26,110 @@ const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.uns
     record: { $type: "sh.unset.card", content, createdAt: T },
   }) satisfies IndexChange;
 const active = { lastRev: "3jzfcijpj2z2b", active: true };
+
+// Staging break test 2026-11-21: a 95 KB Text card saved but never showed publicly, as the index then kept records of
+// at most 64 KiB. The index now keeps every record Alex's limits let a member save (book P3.12v).
+describe("the largest cards a member may save are indexed", () => {
+  // As tests/integration/web/app/member-page.test.ts builds the largest collection: one grapheme of nine bytes.
+  const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+  const entry = {
+    title: heavy(120),
+    tag: heavy(40),
+    description: heavy(300),
+    uri: `https://a.example/${"x".repeat(1982)}`,
+  };
+  const largest = {
+    [`a Text card of ${LIMITS.card.textBytes} bytes, each one a character JSON escapes`]: {
+      $type: "sh.unset.block.text",
+      text: '"'.repeat(LIMITS.card.textBytes),
+    },
+    [`a showcase of ${LIMITS.card.entriesMax} entries at every field's limit`]: {
+      $type: "sh.unset.block.showcase",
+      title: heavy(100),
+      items: Array.from({ length: LIMITS.card.entriesMax }, () => ({
+        $type: "sh.unset.block.showcase#item",
+        ...entry,
+      })),
+    },
+  };
+  test.each(Object.entries(largest))("index.keeps_%s", (_name, content) => {
+    expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
+
+  test("index.keeps_the_largest_profile_card_list", () => {
+    // ADR 0086: the list holds full at:// addresses, the lexicon's 100 of them with a 512-character record key each
+    // (atproto.com/specs/record-key), about 56 KB.
+    const cards = Array.from({ length: LIMITS.profile.cardsMax }, (_, n) => ({
+      uri: `at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/${String(n).padStart(512, "a")}`,
+    }));
+    const change = profile({ cards });
+    expect(recordBytes(change.kind === "put" ? change.record : null)).toBeGreaterThan(50_000);
+    expect(planCommit(active, "3jzfcijpj2z2c", [change])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
+});
+
+// Review of #1911: all of a member's cards together are held to MAX_PAGE_BYTES (4 MiB, Alex's number to set), by the
+// save and the index alike. Under ADR 0086's limits fifty Text cards are about 1 MB, so the budget binds on the
+// heavy kinds: a showcase of 50 entries at every field's limit is about 0.3 MB, and about thirteen of them fill it.
+describe("a member's cards together fit one page", () => {
+  const card = (text: string) => ({
+    $type: "sh.unset.card",
+    content: { $type: "sh.unset.block.text", text },
+    width: "full",
+    surface: "filled",
+    createdAt: "2026-11-21T05:00:00.000Z",
+  });
+  const full = card("a".repeat(LIMITS.card.textBytes));
+  const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+  const item = {
+    title: heavy(120),
+    tag: heavy(40),
+    description: heavy(300),
+    uri: `https://a.example/${"x".repeat(1982)}`,
+  };
+  const showcase = {
+    ...full,
+    content: { $type: "sh.unset.block.showcase", items: Array(LIMITS.card.entriesMax).fill(item) },
+  };
+  /** How many of the heaviest showcases fill the budget with one more to come. */
+  const room = Math.floor(MAX_PAGE_BYTES / recordBytes(showcase)) - 1;
+  const many = (n: number, record: unknown) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: record }));
+
+  test("page.a_hundred_everyday_cards_fit", () => {
+    // A long paragraph each: 2,000 characters.
+    expect(fitsPage(many(LIMITS.profile.cardsMax - 1, card("a".repeat(2_000))), [{ key: null, record: full }])).toBe(
+      true,
+    );
+  });
+
+  test("page.the_most_cards_the_app_keeps_at_the_text_limit_fit", () => {
+    expect(fitsPage(many(49, full), [{ key: null, record: full }])).toBe(true);
+  });
+
+  test("page.heavy_showcases_fill_the_budget_and_one_more_does_not_fit", () => {
+    expect(room).toBeGreaterThan(10);
+    expect(fitsPage(many(room, showcase), [{ key: null, record: showcase }])).toBe(true);
+    expect(fitsPage(many(room + 1, showcase), [{ key: null, record: showcase }])).toBe(false);
+  });
+
+  test("page.a_card_being_replaced_counts_once", () => {
+    const stored = many(room + 1, showcase);
+    expect(fitsPage(stored, [{ key: "k0", record: showcase }])).toBe(true);
+    expect(fitsPage(stored, [{ key: "k0", record: card("a".repeat(MAX_PAGE_BYTES)) }])).toBe(false);
+  });
+
+  test("page.a_value_json_cannot_encode_never_fits", () => {
+    expect(recordBytes(10n)).toBe(Number.POSITIVE_INFINITY);
+    expect(fitsPage([], [{ key: null, record: { n: 10n } }])).toBe(false);
+  });
+
+  test("index.a_section_write_carries_its_size", () => {
+    const plan = planCommit(active, "3jzfcijpj2z2c", [section()]);
+    const write = plan.kind === "apply" ? plan.writes[0] : undefined;
+    expect(write?.kind === "section" ? write.bytes : 0).toBe(recordBytes(write?.kind === "section" ? write.record : 0));
+    expect(write?.kind === "section" && write.bytes > 0).toBe(true);
+  });
+});
 
 describe("planCommit", () => {
   test("index.null_watermark_first_commit_applies", () => {

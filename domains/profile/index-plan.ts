@@ -11,8 +11,23 @@ import { parseCardKey } from "./cards.ts";
 export const INDEXED_COLLECTIONS = [NSID.profile, NSID.card] as const;
 export type IndexedCollection = (typeof INDEXED_COLLECTIONS)[number];
 
-/** A record's stored JSON is capped, so one member cannot fill the index (coordinator review, 2026-11-18). */
-export const MAX_RECORD_BYTES = 64 * 1024;
+/**
+ * A record's stored JSON is capped, so one member cannot fill the index (coordinator review, 2026-11-18). The cap is
+ * the most one PDS write may carry (APPLY_WRITES_BODY_BYTES in infrastructure/pds/card-records.ts, the pinned PDS's
+ * applyWrites and putRecord `jsonLimit`), so every record a member can save through our PDS is kept, and the save
+ * refuses, with `fitsIndex`, the few the cap still leaves out (book P3.12v). It was 64 KiB, under the
+ * lexicon's 100,000-byte text and its 100-entry collections (about 620 KB at every field's limit), so such a card saved
+ * and never showed publicly (staging break test 2026-11-21).
+ */
+export const MAX_RECORD_BYTES = 1_000_000;
+/**
+ * All of a member's cards together, as `recordBytes` counts them: the most the index keeps for one account, the most
+ * the public page reads, and the most the owner's own card list reads (CARD_LIST_BYTES in infrastructure/pds,
+ * card-records.ts, held equal by a test). Without it, 200 cards of up to MAX_RECORD_BYTES each would make one page of
+ * about 191 MiB, which web would read and render for any visitor (review of #1911). 4 MiB is the number the owner's
+ * list already stopped at (book P3.12v; the number is Alex's to set).
+ */
+export const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 /** Sections kept per account: the profile lists at most LIMITS.profile.cardsMax, and unlisted ones show after. */
 export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.profile.cardsMax;
 
@@ -48,6 +63,8 @@ export type IndexWrite =
       readonly cid: string;
       readonly record: Readonly<Record<string, unknown>>;
       readonly blobs: readonly BlobRef[];
+      /** The record's size as `recordBytes` counts it, which the store keeps to hold the account to MAX_PAGE_BYTES. */
+      readonly bytes: number;
     }
   | { readonly kind: "delete"; readonly collection: IndexedCollection; readonly rkey: string };
 
@@ -97,12 +114,14 @@ function deleteOf(collection: IndexedCollection, rkey: string): IndexWrite | nul
 /** A put the lexicon accepts, under its record key type, within the size cap; anything else is skipped and counted. */
 function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null {
   const collection = change.collection as IndexedCollection;
-  if (!keyFits(collection, change.rkey) || !fitsCap(change.record)) return null;
+  if (!keyFits(collection, change.rkey) || !fitsIndex(change.record)) return null;
   const checked = validateRecord(collection, change.record, "read");
   if (!checked.ok) return null;
   const record = checked.value;
   const blobs = blobRefs(record);
-  if (collection === NSID.card) return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs };
+  if (collection === NSID.card) {
+    return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs, bytes: recordBytes(record) };
+  }
   return {
     kind: "profile",
     cid: change.cid,
@@ -122,12 +141,58 @@ function keyFits(collection: IndexedCollection, rkey: string): boolean {
 /** atproto.com/specs/tid: 13 characters of base32-sortable, the first in 2-7 or a-j. */
 const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 
-function fitsCap(record: unknown): boolean {
+/**
+ * Whether the index keeps `record`: within MAX_RECORD_BYTES and storable. The save checks the record it writes with
+ * this same function, so a record the owner can save and see is never one the public page leaves out.
+ */
+export function fitsIndex(record: unknown): boolean {
+  return recordBytes(record) <= MAX_RECORD_BYTES && storable(record);
+}
+
+/**
+ * A record's size: the bytes of its JSON in UTF-8, as the save, the index and the owner's card list all count it.
+ * A value JSON cannot encode is not a record, and counts as too large for anything.
+ */
+export function recordBytes(record: unknown): number {
   try {
-    return new TextEncoder().encode(JSON.stringify(record)).byteLength <= MAX_RECORD_BYTES && storable(record);
+    const json = JSON.stringify(record);
+    return typeof json === "string" ? new TextEncoder().encode(json).byteLength : Number.POSITIVE_INFINITY;
   } catch {
-    return false; // a value JSON cannot encode is not a record
+    return Number.POSITIVE_INFINITY;
   }
+}
+
+/**
+ * Whether a member's cards fit MAX_PAGE_BYTES once `writes` are made (a new card's key is one `stored` does not hold).
+ * `stored` is every card they hold now, as their repo lists them; a card a write names is replaced, not added to. The
+ * save refuses writes that would not fit, and the index skips a card that does not (indexStore.ts), so what the owner
+ * saves is what the page shows.
+ */
+export function fitsPage(
+  stored: readonly { readonly key: string; readonly value: unknown }[],
+  writes: readonly { readonly key: string | null; readonly record: unknown }[],
+): boolean {
+  const written = new Set(writes.map((write) => write.key));
+  let bytes = 0;
+  for (const write of writes) bytes += recordBytes(write.record);
+  for (const card of stored) if (!written.has(card.key)) bytes += recordBytes(card.value);
+  return bytes <= MAX_PAGE_BYTES;
+}
+
+/**
+ * `writes` in the order to send them: the ones that shrink the page against `stored` first, then the rest, each group
+ * in the order given. The size then only falls and then rises to the Save's own total, so a Save the PDS takes in
+ * several commits never passes MAX_PAGE_BYTES between them, and the index, which judges each commit in turn, keeps
+ * every card of a Save that fits (Codex review of #1911). The indexer orders the cards within one commit by the same
+ * rule (indexStore.ts `inApplyOrder`).
+ */
+export function inSizeOrder<W extends { readonly key: string | null; readonly record: unknown }>(
+  stored: readonly { readonly key: string; readonly value: unknown }[],
+  writes: readonly W[],
+): W[] {
+  const before = new Map(stored.map((card) => [card.key, recordBytes(card.value)]));
+  const change = (write: W) => recordBytes(write.record) - (write.key === null ? 0 : (before.get(write.key) ?? 0));
+  return [...writes.filter((write) => change(write) < 0), ...writes.filter((write) => change(write) >= 0)];
 }
 
 /**

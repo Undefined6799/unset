@@ -41,7 +41,7 @@ async function signedRepoCar(key: Secp256k1Keypair): Promise<Uint8Array> {
       action: WriteOpAction.Create,
       collection: SECTION,
       rkey: "3jzfcijpj2z2a",
-      record: { $type: SECTION, content: { $type: `${SECTION}#readme`, text: "hi" }, createdAt: "t" },
+      record: { $type: SECTION, content: { $type: "sh.unset.block.text", text: "hi" }, createdAt: "t" },
     },
     { action: WriteOpAction.Create, collection: "app.bsky.feed.post", rkey: "3jzfcijpj2z2b", record: { text: "x" } },
   ]);

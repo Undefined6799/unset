@@ -9,7 +9,7 @@
 // advisory lock, migration 0028 step 3) before any of that DID's rows, as erasure itself does; core.erase_did never
 // touches idx.relay_cursor, so the stream's cursor row, taken first on the ingest path, cannot deadlock with it.
 import { type IndexChange, planCommit } from "@unset/domains-profile";
-import { applyWrite, count, isErased, lockAccount, queueJob, replaceBlobs } from "./indexStore.ts";
+import { applyWrite, count, inApplyOrder, isErased, lockAccount, queueJob, replaceBlobs } from "./indexStore.ts";
 import { claimJobs, endJob } from "./jobs.ts";
 import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
@@ -155,7 +155,7 @@ async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, reco
       await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
     }
   }
-  for (const write of plan.writes) await applyWrite(tx, did, rev, write);
+  for (const write of await inApplyOrder(tx, did, plan.writes)) await applyWrite(tx, did, rev, write);
   if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
   await tx.query(
     `UPDATE idx.account SET last_rev = GREATEST(last_rev, $2 COLLATE "C"), backfilled_at = now(), updated_at = now()

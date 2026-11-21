@@ -1713,6 +1713,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.13 | Handle hosts | — | P3.12 | `phase-3.md` |
 | P3.12u | Fix small rough edges from the staging test | — | P3.12 | `phase-3.md` |
 | P3.14 | Directory and search | — | P3.05 | `phase-3.md` |
+| P3.12v | Keep every card a member can save on the public page | [SEC] [ALEX] (typed line) | P3.12 | `phase-3.md` |
 | P3.14s | Web search through SearXNG behind the search bar (ADR 0035) | [SEC] [ALEX] (typed line) | P3.14, P1.18a | `phase-3.md` |
 | P3.15 | Report intake and the public notice form | [MOD] [SEC] | P3.12, P3.06, P1.15, P1.14, P1.14d | `phase-3.md` |
 | P3.16 | `pds-admin` v1: envelope pipeline, key model and migration from P2.09 | [SEC] | P3.00, P2.09, P1.15 | `phase-3.md` |
