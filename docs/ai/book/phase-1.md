@@ -4919,6 +4919,18 @@ version the refresh reads, not the one applyWrites answered. If the member's oth
 a later Save from this page could overwrite those words without a conflict. Return each written card's new CID in the
 `?/saveAll` answer and settle on it.
 
+### P1.21r — Fix the in-place editor's first press and the way back (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21v · **Plan:** staging test of #1857, 2026-11-21
+
+Found on staging in Brave and WebKit after #1857 deployed. The owner's public page (/@handle) now shows the owner a
+plain link back to the page they edit (/did); it runs no script, and the owner's copy is private and never stored, so
+no visitor's copy carries the link. The editor's script loads as soon as the page is up, and a press on a Text card
+before the editor is drawn opens it at once, with the caret where the press was and the keys typed meanwhile. A press
+before the page's own script runs stays the browser's. A press on the card around the words puts the caret at the
+nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
+member was typing.
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2

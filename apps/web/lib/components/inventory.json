@@ -365,6 +365,10 @@
         "origin": "ours",
         "purpose": "The limited page (ADR 0078): one card centered on the page with only avatar, name, handle and DID and one sentence, for someone the member's page visibility leaves out; a sign-in button when signing in would show the page."
       },
+      "own-public-view.svelte": {
+        "origin": "ours",
+        "purpose": "The notice above the member's own public page when the member looks at it: how others see it, and a plain link back to the page they edit."
+      },
       "page-audience.svelte": {
         "origin": "ours",
         "purpose": "The notice above a member page that is not public (ADR 0078): who else sees it."

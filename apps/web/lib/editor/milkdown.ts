@@ -23,7 +23,8 @@ import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands
 import { isHistoryTransaction, redo, redoDepth, undo, undoDepth } from "@milkdown/prose/history";
 import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model";
 import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
-import { type Command, type EditorState, Plugin } from "@milkdown/prose/state";
+import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
+import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
 
@@ -175,6 +176,13 @@ export type MarkdownEditor = {
   /** Reports a change still waiting for its frame to `onChange` at once, so a save pressed in that frame sends it. */
   readonly flush: () => void;
   readonly focus: () => void;
+  /**
+   * Puts the caret at the words under the page point (x, y), or at the nearest end when the point is beside them (the
+   * card's padding, or below the last line), then focuses the editor.
+   */
+  readonly focusAt: (x: number, y: number) => void;
+  /** Types `text` at the caret, as the member's own keys would. */
+  readonly type: (text: string) => void;
   readonly destroy: () => Promise<void>;
 };
 
@@ -247,6 +255,22 @@ const pageShapes = $prose(
 
 /** remark-stringify ends the document with a line feed; the plain field never did, so neither does the editor. */
 const withoutFinalNewline = (markdown: string) => markdown.replace(/\n$/, "");
+
+/**
+ * Where a press at the page point (x, y) leaves the caret: at the words under it (prosemirror-view 1.42.9
+ * EditorView.posAtCoords), else, beside the words, at the start when the point is above them and at the end otherwise.
+ */
+function caretAt(view: EditorView, x: number, y: number): Selection {
+  const { doc } = view.state;
+  const box = view.dom.getBoundingClientRect();
+  const inside = {
+    left: Math.min(Math.max(x, box.left + 1), box.right - 1),
+    top: Math.min(Math.max(y, box.top + 1), box.bottom - 1),
+  };
+  const found = y < box.top || y > box.bottom ? null : view.posAtCoords(inside);
+  if (found !== null) return TextSelection.near(doc.resolve(found.pos));
+  return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
+}
 
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {
   let frame = 0;
@@ -359,6 +383,21 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     // The view's own focus puts its selection back (prosemirror-view 1.42.9 EditorView.focus calls selectionToDOM),
     // so a second toolbar press acts on the words the first one did; a plain DOM focus drops it.
     focus: () => editor.action((ctx) => ctx.get(editorViewCtx).focus()),
+    focusAt: (x, y) =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        view.dispatch(view.state.tr.setSelection(caretAt(view, x, y)));
+        view.focus();
+      }),
+    type: (text) =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        // Through the view's own text input handling, so input rules ("# ", "- ") apply as they would to keys.
+        const { from, to } = view.state.selection;
+        const insert = () => view.state.tr.insertText(text, from, to);
+        const handled = view.someProp("handleTextInput", (handle) => handle(view, from, to, text, insert));
+        if (handled !== true) view.dispatch(insert());
+      }),
     destroy: async () => {
       await editor.destroy();
     },
