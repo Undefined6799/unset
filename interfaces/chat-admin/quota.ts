@@ -9,6 +9,10 @@ export const DEFAULT_LIMITS: Limits = {
   "account.create": { perUser: 3, global: 300 },
   "session.mint": { perUser: 30, global: 3_000 },
   "session.end": { perUser: 60, global: 6_000 },
+  // ADR 0084: web's queued jobs, each safe to repeat; a retry spends a slot like any call.
+  "account.lock": { perUser: 10, global: 1_000 },
+  "account.unlock": { perUser: 10, global: 1_000 },
+  "account.deactivate": { perUser: 5, global: 500 },
 };
 const WINDOW_MS = 3_600_000;
 
