@@ -28,13 +28,21 @@ const DISMISS_UP_TO = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id 
    RETURNING n.id, n.reason, n.topic, n.created_at, false AS seen`;
 
 /**
- * This browser's seen mark (ADR 0085, migration 0039) moved up to `upTo` ($3), an entry it may see, and never back:
- * greatest() ignores the null of a session with no mark yet
- * (https://www.postgresql.org/docs/18/functions-conditional.html#FUNCTIONS-GREATEST-LEAST). One statement, so the row
- * lock orders two browsers' tabs marking at once (rule DA-4); an id this browser may not see matches no row.
+ * The seen marks moved up to `upTo` ($3), an entry this browser may see, and never back: this browser's own (ADR
+ * 0085, migration 0039) and the account's (ADR 0090, migration 0042), which counts on every browser of the member for
+ * every entry not sent `older_sessions_only` (app.inbox says which mark covers which row). greatest() ignores the
+ * null of a mark not set yet (https://www.postgresql.org/docs/18/functions-conditional.html#FUNCTIONS-GREATEST-LEAST).
+ * One statement: each row's lock orders two browsers marking at once (rule DA-4), and an id this browser may not see
+ * matches no row, so neither mark moves.
  */
-const MARK_SEEN = `UPDATE app.session s SET notifications_seen_at = greatest(s.notifications_seen_at, i.created_at)
-    FROM app.inbox i WHERE s.id_hash = $2 AND s.did = $1 AND i.viewer = $2 AND i.did = $1 AND i.id = $3`;
+const MARK_SEEN = `WITH shown AS (
+      SELECT i.created_at FROM app.inbox i WHERE i.viewer = $2 AND i.did = $1 AND i.id = $3
+    ), this_browser AS (
+      UPDATE app.session s SET notifications_seen_at = greatest(s.notifications_seen_at, shown.created_at)
+        FROM shown WHERE s.id_hash = $2 AND s.did = $1
+    )
+    UPDATE app.account a SET notifications_seen_at = greatest(a.notifications_seen_at, shown.created_at)
+      FROM shown WHERE a.did = $1`;
 
 /**
  * A member with no account row yet (their first sign-in, before the terms step) has nothing to be told, so the row is
