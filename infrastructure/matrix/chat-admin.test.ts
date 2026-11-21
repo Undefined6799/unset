@@ -81,3 +81,30 @@ describe("createAccount", () => {
     expect(await createChatAdminClient(guard, settings).createAccount(USER, NAME)).toEqual({ kind });
   });
 });
+
+describe("signTicket", () => {
+  test("chat.ticket_envelope: a session.mint envelope naming member, session and state, encoded for a URL fragment", () => {
+    const { guard, seen } = network({ status: 500, body: {} });
+    const client = createChatAdminClient(guard, settings, () => 1_800_000_000_000);
+    const ticket = { user: USER, did: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", sid: "s".repeat(43), state: "t".repeat(43) };
+    const encoded = client.signTicket(ticket as Parameters<typeof client.signTicket>[0]);
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+    const envelope = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    expect(envelope.payload).toEqual({
+      v: 1,
+      env: "dev",
+      aud: "chat-admin",
+      verb: "session.mint",
+      name: "",
+      device: "",
+      ...ticket,
+      jti: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
+      iat: 1_800_000_000,
+      exp: 1_800_000_060,
+    });
+    const bytes = Buffer.from(canonicalize(envelope.payload));
+    expect(verify(null, bytes, publicKey, Buffer.from(envelope.sig, "base64url"))).toBe(true);
+    // Signing is local: web sends a ticket nowhere; the browser carries it to the door.
+    expect(seen).toEqual([]);
+  });
+});

@@ -21,7 +21,13 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { type ChatAccountPorts, createDueAccounts, newChatUser } from "@unset/domains-messaging";
+import {
+  type ChatAccountPorts,
+  type ChatUser,
+  createDueAccounts,
+  newChatUser,
+  type SignInPorts,
+} from "@unset/domains-messaging";
 import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import { type ChatAdminClient, createChatAdminClient } from "@unset/infrastructure-matrix";
@@ -156,6 +162,11 @@ export type Services = {
     readonly send: (did: Did, notification: Notification, deadline: AbortSignal) => Promise<NotifyResult>;
     readonly sendIn: (db: Db, did: Did, notification: Notification) => Promise<NotifyResult>;
     readonly withdraw: (did: Did, dedupeKey: string, deadline: AbortSignal) => Promise<void>;
+  };
+  /** Build step 5 (ADR 0081 decision 3): what the unset.cc sign-in hop needs to sign a member's ticket. */
+  readonly chat: {
+    readonly readyUser: (did: Did, deadline: AbortSignal) => Promise<ChatUser | null>;
+    readonly signTicket: SignInPorts["sign"];
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
@@ -468,6 +479,7 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     invites,
     notifications,
+    chat: { readyUser: (did, deadline) => chatAccounts.readyUser(did, deadline), signTicket: chatAdmin.signTicket },
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,

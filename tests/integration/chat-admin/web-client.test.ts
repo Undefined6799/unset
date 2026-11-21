@@ -2,7 +2,7 @@
 // every check chat-admin makes, through a real net-guard on loopback. MAS is the fake from harness.ts (an unmanaged
 // dependency, TE-1).
 import type { Handle } from "@unset/domains-identity";
-import type { ChatUser } from "@unset/domains-messaging";
+import { type ChatUser, parseDoorState, sessionRef } from "@unset/domains-messaging";
 import { createChatAdminClient } from "@unset/infrastructure-matrix";
 import { createNetGuard } from "@unset/infrastructure-net-guard";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -42,5 +42,28 @@ describe("web's chat-admin client", () => {
   test("chat.client_door_key_refused: a key chat-admin lets only end sessions cannot create", async () => {
     expect(await clientFor(service.door).createAccount(USER, NAME)).toEqual({ kind: "unavailable" });
     expect(mas.users.has(USER)).toBe(false);
+  });
+
+  test("chat.ticket_redeemed_once: the door's post of web's ticket mints one session, and a replay is refused", async () => {
+    await clientFor().createAccount(USER, NAME);
+    const state = parseDoorState("S".repeat(43));
+    if (state === null) throw new Error("state");
+    const encoded = clientFor().signTicket({
+      user: USER,
+      did: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Parameters<ReturnType<typeof clientFor>["signTicket"]>[0]["did"],
+      sid: sessionRef(Buffer.alloc(32, 1)),
+      state,
+    });
+    // What the door does with the fragment: decode it and post the envelope to chat-admin with the browser's device.
+    const ticket = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    const first = await service.post("/v1/session.mint", { ticket, device: null });
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({
+      token: expect.any(String),
+      device: expect.stringMatching(/^[A-Z0-9]{10}$/),
+    });
+    const again = await service.post("/v1/session.mint", { ticket, device: null });
+    expect(again.status).toBe(403);
+    expect(service.logs.at(-1)).toMatchObject({ outcome: "denied", reason: "replay" });
   });
 });
