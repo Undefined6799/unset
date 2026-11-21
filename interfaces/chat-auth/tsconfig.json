@@ -5,5 +5,30 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "references": [{ "path": "../../shared/config" }, { "path": "../../shared/http" }, { "path": "../../shared/log" }]
+  "references": [
+    {
+      "path": "../../domains/messaging"
+    },
+    {
+      "path": "../../infrastructure/matrix"
+    },
+    {
+      "path": "../../infrastructure/net-guard"
+    },
+    {
+      "path": "../../infrastructure/postgres"
+    },
+    {
+      "path": "../../infrastructure/seal"
+    },
+    {
+      "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/http"
+    },
+    {
+      "path": "../../shared/log"
+    }
+  ]
 }

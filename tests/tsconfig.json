@@ -7,6 +7,7 @@
     { "path": "../interfaces/web" },
     { "path": "../interfaces/pds-admin" },
     { "path": "../interfaces/chat-admin" },
+    { "path": "../interfaces/chat-auth" },
     { "path": "../interfaces/indexer" },
     { "path": "../infrastructure/audit" },
     { "path": "../infrastructure/matrix" },
