@@ -214,7 +214,8 @@
           "privacy_version": ["SELECT", "INSERT", "UPDATE"],
           "privacy_notice_seen_version": ["SELECT", "UPDATE"],
           "age_confirmed_at": ["SELECT", "INSERT", "UPDATE"],
-          "storage_quota_bytes": ["SELECT"]
+          "storage_quota_bytes": ["SELECT"],
+          "notifications_seen_at": ["SELECT", "UPDATE"]
         }
       }
     },

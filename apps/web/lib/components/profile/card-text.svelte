@@ -19,7 +19,7 @@ let holder: (() => void) | undefined;
 </script>
 
 <script lang="ts">
-import { onDestroy, onMount, tick } from "svelte";
+import { flushSync, onDestroy, onMount, tick } from "svelte";
 import type { BlockItem, MenusState } from "../../editor/menus.ts";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
 import { TEXT_IN_PLACE, TEXT_MENUS } from "../../profile/messages.ts";
@@ -120,7 +120,13 @@ async function mount() {
         hint: TEXT_MENUS.hint,
         labels: TEXT_MENUS.items,
         optionId,
-        onState: (state) => (menus = state),
+        // Drawn at once: plugin-slash and plugin-tooltip measure their element right after it is shown (floating-ui
+        // computePosition reads its size after a microtask), so a menu still holding its last items would be placed by
+        // the wrong height and not flip above a line near the bottom of the screen.
+        onState: (state) => {
+          menus = state;
+          flushSync();
+        },
       },
     });
     if (closed) {
@@ -248,6 +254,6 @@ onDestroy(() => {
   data-text-in-place
   data-listening={listening ? "" : undefined}
   onfocusin={() => editor !== undefined && onfocus?.(editor.focus)}
-  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:ring-[3px] [&_.markdown-editor:focus-visible]:ring-ring/50 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
+  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:outline-solid [&_.markdown-editor:focus-visible]:outline-2 [&_.markdown-editor:focus-visible]:outline-offset-8 [&_.markdown-editor:focus-visible]:outline-ring/40 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_.markdown-editor>:is(p,ul,ol,dl)]:my-3 [&_.markdown-editor>:first-child]:mt-0 [&_.markdown-editor>:last-child]:mb-0 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
 ></div>
 </div>

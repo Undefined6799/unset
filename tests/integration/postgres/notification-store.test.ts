@@ -174,8 +174,8 @@ describe("notification store", () => {
     expect(await reasons(did, me)).toEqual(["privacy_notice"]);
   });
 
-  test("notifications.marking_seen_is_this_browsers_own_and_never_moves_back", async () => {
-    // ADR 0085: opening the bell or the page marks what it showed seen in that browser only; the entries stay.
+  test("notifications.marking_seen_counts_on_every_browser_and_never_moves_back", async () => {
+    // ADR 0085: opening the bell or the page marks what it showed seen; the entries stay. ADR 0090: on the account.
     const did = await member();
     const [laptop, phone] = [await browser(did), await browser(did)];
     await send(did, { reason: "privacy_notice", topic: "v1", dedupeKey: "a" });
@@ -185,12 +185,35 @@ describe("notification store", () => {
     if (newest === undefined || older === undefined) throw new Error("no entries");
     await db((c) => store.markSeen(c, did, laptop, newest.id));
     expect((await list(did, laptop)).map((e) => e.seen)).toEqual([true, true]);
-    expect((await list(did, phone)).map((e) => e.seen)).toEqual([false, false]);
+    expect((await list(did, phone)).map((e) => e.seen)).toEqual([true, true]);
     await new Promise((done) => setTimeout(done, 2));
     await send(did, { reason: "privacy_notice", topic: "v3", dedupeKey: "c" });
-    // An older id never takes the mark back, and a new entry counts again.
+    // An older id never takes the mark back, from either browser, and a new entry counts again.
     await db((c) => store.markSeen(c, did, laptop, older.id));
+    await db((c) => store.markSeen(c, did, phone, older.id));
     expect((await list(did, laptop)).map((e) => e.seen)).toEqual([false, true, true]);
+    expect((await list(did, phone)).map((e) => e.seen)).toEqual([false, true, true]);
+  });
+
+  test("notifications.a_sign_in_entry_is_seen_only_by_the_browser_that_showed_it", async () => {
+    // ADR 0090 point 2: an entry only older browsers may see is the one each browser marks for itself.
+    const did = await member();
+    const [laptop, phone] = [await browser(did), await browser(did)];
+    const thief = await browser(did, true);
+    await send(did, { reason: "privacy_notice", topic: "v1", dedupeKey: "after" });
+    const [notice] = await list(did, thief);
+    if (notice === undefined) throw new Error("no entry");
+    // The new browser's look at a newer entry covers that entry everywhere, never the alert about itself.
+    await db((c) => store.markSeen(c, did, thief, notice.id));
+    expect((await list(did, laptop)).map((e) => [e.reason, e.seen])).toEqual([
+      ["privacy_notice", true],
+      ["sign_in", false],
+    ]);
+    const [, alert] = await list(did, laptop);
+    if (alert === undefined) throw new Error("no alert");
+    await db((c) => store.markSeen(c, did, laptop, alert.id));
+    expect((await list(did, laptop)).map((e) => e.seen)).toEqual([true, true]);
+    expect((await list(did, phone)).map((e) => e.seen)).toEqual([true, false]);
   });
 
   test("notifications.a_later_browser_or_another_member_marks_nothing_seen", async () => {
@@ -208,7 +231,8 @@ describe("notification store", () => {
     expect((await list(did, laptop)).map((e) => e.seen)).toEqual([false]);
     const marks = await db((c) =>
       c.query<{ marked: number }>(
-        "SELECT count(*)::int AS marked FROM app.session WHERE did = ANY($1) AND notifications_seen_at IS NOT NULL",
+        `SELECT ((SELECT count(*) FROM app.session WHERE did = ANY($1) AND notifications_seen_at IS NOT NULL)
+              + (SELECT count(*) FROM app.account WHERE did = ANY($1) AND notifications_seen_at IS NOT NULL))::int AS marked`,
         [[did, other]],
       ),
     );
@@ -272,13 +296,13 @@ describe("notification store", () => {
       (await reader.read({ key: {}, cookieValue, deadline: null })).session?.inbox ?? [];
     const laptopBell = await bell(laptop.cookieValue);
     expect(laptopBell.map((e) => e.id)).toEqual((await list(did, laptop.idHash, BELL_READ)).map((e) => e.id));
-    // What this browser has seen comes with it too (ADR 0085), by the same view.
+    // What has been seen comes with it too (ADR 0085), by the same view, on every browser of the member (ADR 0090).
     const [top] = laptopBell;
     if (top === undefined) throw new Error("no bell");
     await db((c) => store.markSeen(c, did, laptop.idHash, top.id));
     const seenBell = await bell(laptop.cookieValue);
     expect(seenBell.every((e) => e.seen)).toBe(true);
-    expect((await bell(thief.cookieValue)).some((e) => e.seen)).toBe(false);
+    expect((await bell(thief.cookieValue)).every((e) => e.seen)).toBe(true);
     expect(laptopBell).toHaveLength(BELL_READ);
     expect((await bell(thief.cookieValue)).map((e) => e.reason)).not.toContain("sign_in");
     expect((await bell(thief.cookieValue)).map((e) => e.sentAt)).toEqual(

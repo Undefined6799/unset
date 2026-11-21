@@ -179,23 +179,42 @@ describe("the bell and the notifications page", () => {
     expect(await html("/notifications", laptop)).toContain(SIGN_IN);
   });
 
-  test("notifications.opening_the_page_clears_this_browsers_count_until_a_newer_entry", async () => {
+  test("notifications.opening_the_page_clears_the_count_on_every_browser_until_a_newer_entry", async () => {
     // ADR 0085 (Alex 2026-11-21 05:16Z): seeing the list is acknowledging it; the entries stay until dismissed.
+    // ADR 0090 (Alex 2026-11-21 19:36Z): seen once is seen on the whole account.
     const { did, cookie: laptop } = await member();
     const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did));
     const phone = `__Host-sid=${created.cookieValue}`;
     await notice(did, "seen-1");
     expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
+    expect(await html("/legal/terms", phone)).toContain("Notifications, 1 waiting");
     const page = await visit("/notifications", laptop);
     expect(page).not.toMatch(WAITING); // the bell on the page itself reads nothing waiting
     expect(page).toContain("Read the privacy notice");
     expect(await html("/legal/terms", laptop)).not.toMatch(WAITING);
-    // Another browser of the member's still counts it.
-    expect(await html("/legal/terms", phone)).toContain("Notifications, 1 waiting");
+    expect(await html("/legal/terms", phone)).not.toMatch(WAITING);
     await new Promise((done) => setTimeout(done, 3));
     await notice(did, "seen-2");
     expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
-    expect(await html("/legal/terms", phone)).toContain("Notifications, 2 waiting");
+    expect(await html("/legal/terms", phone)).toContain("Notifications, 1 waiting");
+  });
+
+  test("notifications.a_sign_in_alert_seen_on_one_browser_still_counts_on_the_others", async () => {
+    // ADR 0090 point 2: the browser a sign-in is about must not clear its alert anywhere, so the alert is the one
+    // entry each browser sees for itself, and a look elsewhere, even at a newer entry, does not cover it.
+    const { did, cookie: laptop } = await member();
+    const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did));
+    const phone = `__Host-sid=${created.cookieValue}`;
+    const thief = await signInElsewhere(did);
+    await new Promise((done) => setTimeout(done, 3));
+    await notice(did, "after-sign-in");
+    await visit("/notifications", thief); // sees the notice, not the alert
+    expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
+    expect(await html("/legal/terms", phone)).toContain("Notifications, 1 waiting");
+    await visit("/notifications", laptop);
+    expect(await html("/legal/terms", laptop)).not.toMatch(WAITING);
+    expect(await html("/legal/terms", phone)).toContain("Notifications, 1 waiting");
+    expect(await html("/notifications", phone)).toContain(SIGN_IN);
   });
 
   test("notifications.only_a_visit_from_our_pages_or_a_typed_address_marks_seen", async () => {
@@ -220,7 +239,7 @@ describe("the bell and the notifications page", () => {
     expect(await html("/legal/terms", cookie)).not.toMatch(WAITING);
   });
 
-  test("notifications.opening_the_bell_marks_seen_in_this_browser_only", async () => {
+  test("notifications.opening_the_bell_marks_seen_only_what_this_browser_may_see", async () => {
     const { did, cookie: laptop } = await member();
     const thief = await signInElsewhere(did);
     const [id] = listed(await html("/legal/terms", laptop));
