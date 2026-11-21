@@ -285,6 +285,8 @@ async function startOn(
       CHAT_ADMIN_WEB_KEY_FILE: secret("web_chat_admin_key", chatAdminKey),
       CHAT_ADMIN_WEB_KID: "web-test",
       CHAT_DOOR_ORIGIN: "https://staging.unset.cc",
+      // Build step 10: the door's count port; nothing answers, so a member's chat icon shows no number.
+      CHAT_COUNT_URL: "http://chat-count.test:8081",
       PDS_DID: `did:web:${PDS_HOST}`,
       // P2.21a: the draft image store; no store answers here, and none is asked at boot.
       OBJECT_STORE_URL: "http://objects.test:8333",

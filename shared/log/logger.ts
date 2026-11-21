@@ -93,6 +93,7 @@ const EVENTS = [
   // P1.20k, the root layout: an error page could not read the member's account to decide whether to offer the app's
   // menus, so it offers none. `kind` is the class name. No DID.
   "shell.account_read_failed",
+  "shell.chat_count_failed",
   // P2.10, invites: a stored code whose seal did not open (listed as unavailable; no field), and a code pds-admin
   // issued that could not be stored (`kind` the error class), which the member's quota absorbs. No DID or code.
   "invite.unseal_failed",

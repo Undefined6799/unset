@@ -6,6 +6,7 @@
 // the member's own profile link are on app pages and on pages rendered for a member, which the gate sends private and
 // uncached; a visitor's public page follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
+import type { Did } from "@unset/domains-identity";
 import { safeReturnPath } from "@unset/shared-http";
 import { shellAccount } from "../lib/server/account.ts";
 import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
@@ -14,7 +15,7 @@ import { bellView } from "../lib/server/notifications.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { config } from "../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
-import type { ShellData } from "../lib/shell.ts";
+import type { ChatIcon, ShellData } from "../lib/shell.ts";
 
 /** The sign-in pages keep their checked `next` and `handle` in the return path (themeReturnTo rebuilds them). */
 const SIGN_IN_PATHS = new Set(["/login", "/login/continue"]);
@@ -33,6 +34,21 @@ function signInHref(path: string): string {
 function appOpenDeps(): AppOpenDeps {
   const { accounts, versions, log } = services();
   return { readAccount: (did, deadline) => accounts.get(did, deadline), versions, log };
+}
+
+/**
+ * The chat icon (build step 10; ADR 0082 decision 5): a plain link to the chat page, with the number of the member's
+ * chats with new messages from the door's count port. The read has its own short timeout inside the page's deadline,
+ * and anything but a number shows the icon with none; a fault is logged by class only, never failing the page.
+ */
+async function chatIcon(did: Did, deadline: AbortSignal): Promise<ChatIcon> {
+  const href = `${config.CHAT_DOOR_ORIGIN}/`;
+  try {
+    return { href, unread: (await services().chat.count(did, deadline)) ?? 0 };
+  } catch (cause) {
+    services().log.warn("shell.chat_count_failed", { kind: cause instanceof Error ? cause.name : "Error" });
+    return { href, unread: 0 };
+  }
 }
 
 export const load: ServerLoad = async (event) => {
@@ -61,7 +77,11 @@ export const load: ServerLoad = async (event) => {
   const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
   // The bell (P2.27): the newest few and the unread count, brought by the session read on every page a member opens,
   // so it is current with no script, no polling and no statement of its own. Undefined for a visitor.
-  const notifications = locals.did === undefined ? undefined : await bellView(event);
+  // The chat icon's number is read alongside it, only for a member the app's menus are open to.
+  const [notifications, chat] = await Promise.all([
+    locals.did === undefined ? undefined : bellView(event),
+    locals.did === undefined || !open ? undefined : chatIcon(locals.did, locals.deadline),
+  ]);
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
   const siteNoindex = config.SEARCH_LISTING !== "on";
   return {
@@ -71,6 +91,7 @@ export const load: ServerLoad = async (event) => {
     prefs,
     privacyNotice,
     notifications,
+    chat,
     signInHref: signInHref(url.pathname),
     siteNoindex,
   };

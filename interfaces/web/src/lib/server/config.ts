@@ -103,6 +103,8 @@ const chatConfig = {
   CHAT_ADMIN_WEB_KID: str({ pattern: /[A-Za-z0-9._-]{1,64}/ }),
   /** The door on unset.cc (ADR 0025: unset.cc, staging.unset.cc for staging), where the sign-in hop sends the ticket. */
   CHAT_DOOR_ORIGIN: origin({ protocols: ["https:"] }),
+  /** The door's internal count port (build step 10; ADR 0090 decision 2), where web reads a member's chat count. */
+  CHAT_COUNT_URL: origin({ protocols: ["http:"] }),
 };
 
 /**

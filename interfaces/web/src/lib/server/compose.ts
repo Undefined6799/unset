@@ -30,7 +30,12 @@ import {
 } from "@unset/domains-messaging";
 import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
-import { type ChatAdminClient, createChatAdminClient } from "@unset/infrastructure-matrix";
+import {
+  type ChatAdminClient,
+  type ChatCountClient,
+  createChatAdminClient,
+  createChatCountClient,
+} from "@unset/infrastructure-matrix";
 import {
   createNetGuard,
   guardedFetch,
@@ -167,6 +172,8 @@ export type Services = {
   readonly chat: {
     readonly readyUser: (did: Did, deadline: AbortSignal) => Promise<ChatUser | null>;
     readonly signTicket: SignInPorts["sign"];
+    /** Build step 10 (ADR 0090 decision 2): the member's chat count from the door's count port, or null. */
+    readonly count: ChatCountClient["count"];
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
@@ -479,7 +486,11 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     invites,
     notifications,
-    chat: { readyUser: (did, deadline) => chatAccounts.readyUser(did, deadline), signTicket: chatAdmin.signTicket },
+    chat: {
+      readyUser: (did, deadline) => chatAccounts.readyUser(did, deadline),
+      signTicket: chatAdmin.signTicket,
+      count: createChatCountClient(guard, config.CHAT_COUNT_URL).count,
+    },
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,

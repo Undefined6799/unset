@@ -339,6 +339,7 @@ describe("image workflows", () => {
       "CHAT_ADMIN_URL",
       "CHAT_ADMIN_WEB_KID",
       "CHAT_DOOR_ORIGIN",
+      "CHAT_COUNT_URL",
     ])
       expect(testEnv).toMatch(new RegExp(`^${key}=.+$`, "m"));
     // The app and a throwaway Postgres share one job network; the app waits for nothing else.
