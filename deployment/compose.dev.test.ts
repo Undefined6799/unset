@@ -951,6 +951,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     dev_tls_key: 65532,
     objects_s3: 1000,
     objects_web: 65532,
+    web_invite_request_smtp: 65532,
+    web_invite_request_to: 65532,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -1110,9 +1112,26 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 15 mounted secrets" },
+      { pass: true, reason: "3 files, 17 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
+  });
+
+  test("c9_fails_while_an_invite_request_file_is_missing", async () => {
+    // P2.10u (ADR 0080): staging mounts the two files Alex makes by hand, so a deploy before he has made them stops at
+    // the preflight, naming the file, rather than starting web without them.
+    for (const name of ["web_invite_request_smtp", "web_invite_request_to"]) {
+      const path = join(SECRETS, name);
+      const kept = virtual.get(path);
+      virtual.delete(path);
+      try {
+        const [c9Outcome] = await outcomes();
+        expect(c9Outcome?.pass).toBe(false);
+        expect(c9Outcome && "reason" in c9Outcome ? c9Outcome.reason : "").toContain(name);
+      } finally {
+        if (kept !== undefined) virtual.set(path, kept);
+      }
+    }
   });
 
   test("c9_and_c26_refuse_the_dev_stacks_folders_in_reach", async () => {

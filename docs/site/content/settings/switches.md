@@ -16,7 +16,7 @@ Settings that turn something on or off or pick a mode. All are configurable per 
 | `web` | `NETGUARD_ALLOW_LOOPBACK` | bool | true or false | `false` | not set | not set | `shared/config/netGuard.ts` |
 | `web` | `OAUTH_ALLOW_HTTP` | bool | true or false | `false` | not set | not set | `infrastructure/pds/oauth/oauth-client.ts` |
 | `web` | `INVITE_COUNTRY_RULE` | oneOf | on, off | `on` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `web` | `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | `on` | `interfaces/web/src/lib/server/config.ts` |
 | `web` | `SEARCH_LISTING` | oneOf | on, off | `off` | `off` | `off` | `interfaces/web/src/lib/server/config.ts` |
 | `web` | `TEST_ROUTES` | bool | true or false | `false` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `indexer` | `UNSET_ENV` | oneOf | dev, test, prod | required | `dev` | `dev` | `shared/config/schema.ts` |
