@@ -56,9 +56,6 @@ describe("C36 the chat servers' settings", () => {
       ["retention.allowed_lifetime_min", "1d"],
       ["retention.purge_jobs", undefined],
       ["retention.purge_jobs", [{ interval: "12h", shortest_max_lifetime: "3d" }]],
-      ["enable_set_displayname", true],
-      ["enable_set_avatar_url", true],
-      ["allow_per_room_profiles", true],
       ["require_auth_for_profile_requests", false],
       ["limit_profile_requests_to_users_who_share_rooms", false],
       ["allow_profile_lookup_over_federation", true],
@@ -82,22 +79,39 @@ describe("C36 the chat servers' settings", () => {
     }
   });
 
-  test("synapse_listener_is_one_client_listener_without_forwarded_trust", () => {
-    const [listener] = synapse().listeners as Doc[];
+  test("synapse_listeners_are_two_client_listeners_without_forwarded_trust", () => {
+    const [main, forAdmin] = synapse().listeners as [Doc, Doc];
+    const reason = "homeserver.yaml: listeners is not its reviewed value";
     for (const change of [
       { x_forwarded: true },
       { resources: [{ names: ["client", "federation"], compress: false }] },
       { resources: [{ names: ["client", "openid"], compress: false }] },
       { type: "metrics" },
     ]) {
-      expect(synapseProblem(edited(synapse(), "listeners", [{ ...listener, ...change }]), SERVER)).toBe(
-        "homeserver.yaml: listeners is not its reviewed value",
-      );
+      expect(synapseProblem(edited(synapse(), "listeners", [{ ...main, ...change }, forAdmin]), SERVER)).toBe(reason);
+      expect(synapseProblem(edited(synapse(), "listeners", [main, { ...forAdmin, ...change }]), SERVER)).toBe(reason);
     }
-    const second = { ...listener, port: 8448, resources: [{ names: ["federation"] }] };
-    expect(synapseProblem(edited(synapse(), "listeners", [listener, second]), SERVER)).toBe(
-      "homeserver.yaml: listeners is not its reviewed value",
-    );
+    const federation = { ...main, port: 8448, resources: [{ names: ["federation"] }] };
+    expect(synapseProblem(edited(synapse(), "listeners", [main, forAdmin, federation]), SERVER)).toBe(reason);
+  });
+
+  test("each_synapse_listener_binds_only_its_own_addresses", () => {
+    // ADR 0091 decision 8: chat-admin's listener on chat_admin_synapse alone; the edge and MAS reach the other one.
+    const [main, forAdmin] = synapse().listeners as [Doc, Doc];
+    expect(main.bind_addresses).toEqual(["10.250.38.51", "10.250.38.2"]);
+    expect(forAdmin.bind_addresses).toEqual(["10.250.38.35"]);
+    const reason = "homeserver.yaml: listeners is not its reviewed value";
+    for (const binds of [["0.0.0.0"], ["::"], ["10.250.38.51", "10.250.38.2", "10.250.38.35"], ["10.250.38.51"]]) {
+      expect(
+        synapseProblem(edited(synapse(), "listeners", [{ ...main, bind_addresses: binds }, forAdmin]), SERVER),
+      ).toBe(reason);
+    }
+    for (const binds of [["0.0.0.0"], ["10.250.38.35", "10.250.38.51"], ["10.250.38.2"]]) {
+      expect(
+        synapseProblem(edited(synapse(), "listeners", [main, { ...forAdmin, bind_addresses: binds }]), SERVER),
+      ).toBe(reason);
+    }
+    expect(synapseProblem(edited(synapse(), "listeners", [main]), SERVER)).toBe(reason);
   });
 
   test("synapse_loads_exactly_the_server_rule", () => {
@@ -125,14 +139,10 @@ describe("C36 the chat servers' settings", () => {
       expect(synapseProblem(edited(synapse(), "ip_range_whitelist", value), SERVER), JSON.stringify(value)).toBe(
         ranges,
       );
-    const push = "homeserver.yaml: push is not its reviewed value";
-    for (const [path, value] of [
-      ["push", undefined],
-      ["push.include_content", true],
-      ["push.group_unread_count_by_room", false],
-      ["push.enabled", false],
-    ] as const)
-      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBe(push);
+    expect(synapseProblem(edited(synapse(), "push", undefined), SERVER)).toBe("homeserver.yaml: push is not a mapping");
+    expect(synapseProblem(edited(synapse(), "push.include_content", true), SERVER)).toBe(
+      "homeserver.yaml: push.include_content is not its reviewed value",
+    );
     expect(synapse().ip_range_whitelist).toEqual(["10.250.38.19"]);
   });
 
@@ -188,8 +198,10 @@ describe("C36 the chat servers' settings", () => {
   test("each_wrong_mas_value_is_refused", () => {
     const cases: [string, unknown][] = [
       ["passwords", { enabled: true }],
-      ["account", { displayname_change_allowed: true, account_deactivation_allowed: false }],
-      ["account", { displayname_change_allowed: false, account_deactivation_allowed: true }],
+      ["account.account_deactivation_allowed", true],
+      ["account.password_registration_enabled", true],
+      ["account.email_change_allowed", true],
+      ["account.password_registration_enabled", undefined],
       ["matrix.homeserver", "unset.cc"],
       ["matrix.endpoint", "http://elsewhere:8008/"],
       ["matrix.secret", "inline"],
@@ -198,9 +210,63 @@ describe("C36 the chat servers' settings", () => {
       ["http.public_base", "https://mas.unset.cc/"],
     ];
     for (const [path, value] of cases) {
-      const top = path.split(".")[0];
-      expect(masProblem(edited(mas(), path, value), SERVER), path).toBe(`mas.yaml: ${top} is not its reviewed value`);
+      // A nested tuned mapping (account) names the setting itself; the others name their top-level key.
+      const named = path.startsWith("account.") ? path : path.split(".")[0];
+      expect(masProblem(edited(mas(), path, value), SERVER), path).toBe(`mas.yaml: ${named} is not its reviewed value`);
     }
+  });
+
+  // Alex, 2026-11-21 19:37Z (ADR 0086 decision 2): while settings are tuned, only security settings are held exact; a
+  // tuning setting takes any value, and a setting in neither list is still refused.
+  test("a_changed_tuning_value_passes", () => {
+    for (const [path, value] of [
+      ["push.enabled", false],
+      ["push.group_unread_count_by_room", false],
+      ["rc_message", { per_second: 1, burst_count: 20 }],
+      ["rc_room_creation", { per_second: 0.1, burst_count: 3 }],
+    ] as const) {
+      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBeNull();
+    }
+  });
+
+  // Review finding N4: the display name is the member's verified handle (domains/messaging/chat-account.ts), so a
+  // member who could set their own name, picture or per-room name could show someone else's handle as their own.
+  test("a_member_set_name_or_picture_fails", () => {
+    for (const key of ["enable_set_displayname", "enable_set_avatar_url", "allow_per_room_profiles"]) {
+      for (const value of [true, undefined])
+        expect(synapseProblem(edited(synapse(), key, value), SERVER), `${key}=${value}`).toBe(
+          `homeserver.yaml: ${key} is not its reviewed value`,
+        );
+    }
+    for (const value of [true, undefined])
+      expect(masProblem(edited(mas(), "account.displayname_change_allowed", value), SERVER)).toBe(
+        "mas.yaml: account.displayname_change_allowed is not its reviewed value",
+      );
+  });
+
+  test("a_changed_security_value_fails_even_inside_a_tuned_setting", () => {
+    expect(synapseProblem(edited(synapse(), "push.include_content", true), SERVER)).toBe(
+      "homeserver.yaml: push.include_content is not its reviewed value",
+    );
+    expect(synapseProblem(edited(synapse(), "push.include_content", undefined), SERVER)).toBe(
+      "homeserver.yaml: push.include_content is not its reviewed value",
+    );
+    expect(synapseProblem(edited(synapse(), "push", true), SERVER)).toBe("homeserver.yaml: push is not a mapping");
+    expect(masProblem(edited(mas(), "account", "yes"), SERVER)).toBe("mas.yaml: account is not a mapping");
+  });
+
+  test("an_unknown_setting_fails_at_the_top_and_inside_a_tuned_setting", () => {
+    for (const key of ["rc_login", "rc_federation", "auto_join_rooms", "presence"]) {
+      expect(synapseProblem(edited(synapse(), key, {}), SERVER), key).toBe(
+        "homeserver.yaml: a setting the preflight does not allow",
+      );
+    }
+    expect(synapseProblem(edited(synapse(), "push.jitter_delay", "10s"), SERVER)).toBe(
+      "homeserver.yaml: a setting the preflight does not allow in push",
+    );
+    expect(masProblem(edited(mas(), "account.login_with_email_allowed", true), SERVER)).toBe(
+      "mas.yaml: a setting the preflight does not allow in account",
+    );
   });
 
   test("mas_has_internal_listeners_only", () => {
@@ -267,6 +333,15 @@ const SYNAPSE_SERVICE = [
   "    image: s",
   "    volumes:",
   "      - ./chat/dev/homeserver.yaml:/config/homeserver.yaml:ro",
+  "    networks:",
+  "      chat_synapse_db:",
+  "      chat_count:",
+  "      chat_mas:",
+  "        ipv4_address: 10.250.38.2",
+  "      chat_edge_synapse:",
+  "        ipv4_address: 10.250.38.51",
+  "      chat_admin_synapse:",
+  "        ipv4_address: 10.250.38.35",
   "",
 ].join("\n");
 const MAS_SERVICE = [
@@ -299,6 +374,20 @@ const CHAT_NETWORKS = [
   "    ipam:",
   "      config:",
   "        - subnet: 10.250.38.8/29",
+  "  chat_synapse_db:",
+  "    internal: true",
+  "  chat_count:",
+  "    internal: true",
+  "  chat_admin_synapse:",
+  "    internal: true",
+  "    ipam:",
+  "      config:",
+  "        - subnet: 10.250.38.32/29",
+  "  chat_edge_synapse:",
+  "    internal: true",
+  "    ipam:",
+  "      config:",
+  "        - subnet: 10.250.38.48/29",
   "",
 ].join("\n");
 const OTHER = "  web:\n    image: w\n";
@@ -402,6 +491,50 @@ describe("C36 MAS's networks", () => {
     expect(await run(MAS_SERVICE + third)).toEqual({
       pass: false,
       reason: "web is on chat_mas, which only mas and synapse share",
+    });
+  });
+});
+
+describe("C36 Synapse's networks", () => {
+  // ADR 0091 decision 8 and ADR 0086 Decision 4: each client listener binds Synapse's fixed address on its networks.
+  const EDGE = "  edge:\n    image: e\n    networks: [chat_edge_synapse]\n";
+  const ADMIN = "  chat-admin:\n    image: a\n    networks: [chat_admin_synapse, chat_admin_mas]\n";
+
+  test("synapse_holds_each_listener_address_on_its_internal_network", async () => {
+    expect(await run(SYNAPSE_SERVICE + MAS_SERVICE + EDGE + ADMIN + OTHER)).toEqual({ pass: true, reason: "ok" });
+    for (const [from, to, network] of [
+      ["10.250.38.35", "10.250.38.36", "chat_admin_synapse"],
+      ["10.250.38.51", "10.250.38.50", "chat_edge_synapse"],
+      ["10.250.38.2", "10.250.38.4", "chat_mas"],
+    ] as const) {
+      expect(await run(SYNAPSE_SERVICE.replace(`ipv4_address: ${from}`, `ipv4_address: ${to}`))).toEqual({
+        pass: false,
+        reason: `synapse's address on ${network} is not its listener's bind`,
+      });
+    }
+    const outside = SYNAPSE_SERVICE.replace("      chat_count:\n", "      chat_count:\n      app:\n");
+    expect(await run(outside, "dev", `${CHAT_NETWORKS}  app: {}\n`)).toEqual({
+      pass: false,
+      reason:
+        "synapse joins a network other than chat_synapse_db, chat_count, chat_mas, chat_edge_synapse and chat_admin_synapse",
+    });
+  });
+
+  test("only_chat_admin_shares_its_listener_network_and_only_the_edge_the_other", async () => {
+    const wide = CHAT_NETWORKS.replace("10.250.38.32/29", "10.250.38.32/24");
+    expect(await run(SYNAPSE_SERVICE, "dev", wide)).toEqual({
+      pass: false,
+      reason: "chat_admin_synapse is not on its reviewed subnet",
+    });
+    const web = "  web:\n    image: w\n    networks: [chat_admin_synapse]\n";
+    expect(await run(SYNAPSE_SERVICE + web)).toEqual({
+      pass: false,
+      reason: "web is on chat_admin_synapse, which only synapse and chat-admin share",
+    });
+    const door = "  chat-auth:\n    image: d\n    networks: [chat_edge_synapse]\n";
+    expect(await run(SYNAPSE_SERVICE + door)).toEqual({
+      pass: false,
+      reason: "chat-auth is on chat_edge_synapse, which only synapse and edge share",
     });
   });
 });

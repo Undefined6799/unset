@@ -1,6 +1,8 @@
 # 0086 — The chat servers: our own Synapse image, upstream MAS, reviewed config files, internal-only MAS listeners
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P6.02); Decision 1 revised the same day on Alex's call below. Builds on ADR 0025 (the chat server name) and the chat build
+Status: Accepted by Alex 2026-11-21 19:30Z in substance, with decision 2's change, which he chose on the decision
+card at 19:37Z ("Guard only the security settings"); proposed 2026-11-21 (P6.02); Decision 1 revised the same day on
+Alex's call below. Builds on ADR 0025 (the chat server name) and the chat build
 plan's step 1 (2026-11-21), and alongside ADRs 0081 to 0085 (chat sessions, the service split, the server rule).
 
 ## Context
@@ -48,9 +50,23 @@ read in the pinned sources decide how they run:
 2. **Config files.** Each server reads one reviewed file from the checkout, `deployment/chat/<env>/`, mounted
    read-only, with secrets only as paths under `/run/secrets`. Preflight C36 refuses a stack whose synapse service
    sets any variable (its config path is the image's entrypoint) or whose mas service sets one beside `MAS_CONFIG`,
-   reads an env file, or mounts a file that differs from the reviewed values or holds a key the
+   reads an env file, or mounts a file that differs from the reviewed security values or holds a key the
    check does not list. The server name follows ADR 0025: `staging.unset.cc` under dev, `unset.cc` under prod; local
    has no chat server until it is ruled.
+
+   While settings are tuned (Alex, 2026-11-21 19:37Z, "Guard only the security settings"), C36 splits each file's
+   keys in two (`deployment/preflight/checks/chat.ts`, `Settings`):
+   - Security settings are held to their exact value, always: the listeners and binds, the server name and base URL,
+     federation and key servers, registration and guest access, encryption, search, previews, media, push content,
+     the pusher range, MAS, the module, retention, profile lookups, the user directory, how long addresses are kept,
+     logging and stats; for MAS its http, matrix, passwords and account security settings. The database, secret,
+     client and policy shape checks stay as they were.
+   - Tuning settings are named in an allowlist and may take any value: push on and its unread count, and Synapse's
+     message, room, join, invite, profile, redaction and key-request rate limits. Display name and avatar changes,
+     per-room profiles and MAS's display name changes are security settings, held at false: the display name is the
+     member's verified handle, so a member who could change it could show someone else's handle as their own.
+   - A key in neither list is refused, so a new tuning setting is one name added to the list.
+   The full exact-match check is held while settings are tuned and turned back on when Alex says they are final.
 3. **Databases.** Each server has its own database and role in our existing Postgres, with its password in a file
    (libpq `passfile` for Synapse, `password_file` for MAS). No trust authentication.
 4. **Networks.** No chat network reaches the outside. MAS has no route from the edge and two listeners, each bound to

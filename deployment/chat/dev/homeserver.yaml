@@ -8,11 +8,24 @@
 server_name: staging.unset.cc
 public_baseurl: https://staging.unset.cc/
 
-# One client listener and nothing else: no federation, openid, metrics or replication resource (:498). The socket's
-# address is the client's, never a forwarded header (x_forwarded false), so Synapse records only our own hop.
+# Two client listeners and nothing else: no federation, openid, metrics or replication resource (:498). A listener
+# binds addresses, not networks, so each binds only Synapse's fixed address on the networks it serves (ADR 0086
+# Decision 4; preflight C36 checks Synapse holds exactly these): the first on chat_edge_synapse (.51, the edge's
+# /_matrix/client/) and chat_mas (.2, MAS's calls to /_synapse/mas, which the client resource serves: synapse/rest/
+# synapse/client/__init__.py:71); the second on chat_admin_synapse (.35), chat-admin's alone (ADR 0091 decision 8).
+# Nothing answers on chat_count, where Synapse only pushes out. The socket's address is the client's, never a
+# forwarded header (x_forwarded false), so Synapse records only our own hop.
 listeners:
   - port: 8008
-    bind_addresses: ["0.0.0.0"]
+    bind_addresses: ["10.250.38.51", "10.250.38.2"]
+    type: http
+    tls: false
+    x_forwarded: false
+    resources:
+      - names: [client]
+        compress: false
+  - port: 8008
+    bind_addresses: ["10.250.38.35"]
     type: http
     tls: false
     x_forwarded: false
