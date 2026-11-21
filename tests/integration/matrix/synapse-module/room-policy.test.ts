@@ -2,7 +2,8 @@
 // A room is encrypted (the default: only Megolm ciphertext) or plain (asked for with the 30-day retention policy:
 // only m.text), fixed at creation; createRoom can ask for nothing else, and invites, joins and receipts still work.
 // Paths and bodies are the client-server API of spec.matrix.org v1.18 (createRoom, rooms/{roomId}/send, /state,
-// /redact, /receipt, /invite, /join, /leave). A room holds two people for good. Retention purging itself is retention.test.ts.
+// /redact, /receipt, /invite, /join, /leave). A room holds two people for good. Retention purging itself is
+// retention.test.ts; reactions, replies and redacting one's own reaction are relations.test.ts.
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   type Answer,

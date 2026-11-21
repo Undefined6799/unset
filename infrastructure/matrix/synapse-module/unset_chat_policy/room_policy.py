@@ -27,11 +27,36 @@ and spam_checker_callbacks.md):
   /send, /state for any type but m.room.member, /redact, delayed events
   (handlers/message.py:1195, `_create_and_send_nonmember_event_locked`). It refuses
   every state event after creation (so neither kind can change, nor its
-  retention), every redaction (redacting m.room.encryption strips its content,
-  spec v1.18 room v11 redaction rules), and in each kind every event but its one
+  retention), every redaction but of one's own reaction (below; redacting
+  m.room.encryption strips its content, spec v1.18 room v11 redaction rules),
+  and in each kind every event but its one
   allowed shape: exactly Megolm's keys (spec v1.18 m.room.encrypted; m.relates_to
   is cleartext), or exactly {msgtype: m.text, body}. A room of neither kind
   accepts nothing.
+
+Reactions, replies and taking a reaction back (ADR 0092, amending ADR 0085
+decision 1; Alex, 2026-11-21 18:59Z: "it's just data that we're gonna be
+trusted to own"). The server sees which emoji is on which message, which
+message answers which, and read times; nothing else is opened up.
+
+- An m.reaction (sent in the clear, as matrix-js-sdk 43.0.0 does, client.ts:
+  3056) is exactly {m.relates_to: {rel_type: m.annotation, event_id, key}}
+  (spec v1.18 #event-annotations-and-reactions), its key one of Element's
+  quick reactions (QUICK_REACTIONS below), its target a message in this room.
+  A free key would carry text in the clear, so only that set is taken.
+- A Megolm event may carry m.relates_to exactly {m.in_reply_to: {event_id}},
+  as Element's makeReplyMixIn writes it (element-web v1.12.35 apps/web/src/
+  utils/Reply.ts:52-66; spec v1.18 #rich-replies), pointing at a message in
+  this room. Edits, threads and every other relation stay refused.
+- A redaction is allowed only of the sender's own m.reaction in this room,
+  with no reason (Element's ReactionPicker redacts with none, apps/web/src/
+  components/views/emojipicker/ReactionPicker.tsx:95). Every other redaction
+  stays refused, messages included.
+- Targets are read with run_db_interaction (module API, "Added in Synapse
+  v0.25.0", module_api/__init__.py:1052-1076), the only module API that can
+  read an event that is not state: a non-state, non-rejected row of Synapse's
+  `events` table in the same room. Synapse checks an annotation's target too
+  (handlers/message.py:1470-1520), but not a reply's or a redaction's.
 
 A room is for two people, for good. `on_create_room` takes exactly one invitee
 and only the private presets (private_chat, trusted_private_chat: join rule
@@ -53,8 +78,8 @@ later one expires; the docs say it is hidden from clients after 30 days.
 An exception in a callback rejects the request, so a bug fails closed.
 """
 
-from collections.abc import Mapping
-from typing import Any, Literal
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, Protocol
 
 from synapse.module_api import NOT_SPAM, EventBase, JsonDict, ModuleApi, Requester
 from synapse.module_api.errors import Codes, SynapseError
@@ -69,18 +94,78 @@ ROOM_SIZE = 2
 PLAIN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
 RETENTION = "m.room.retention"
 ENCRYPTION = "m.room.encryption"
+REACTION = "m.reaction"
+REDACTION = "m.room.redaction"
+MESSAGE_TYPES = frozenset({"m.room.encrypted", "m.room.message"})
+# element-web v1.12.35 packages/shared-components/src/core/EmojiPicker/
+# QuickReactions.tsx:22, as code points.
+QUICK_REACTIONS = frozenset(
+    {
+        "\U0001f44d",  # thumbs up
+        "\U0001f44e",  # thumbs down
+        "\U0001f604",  # smiling face with open mouth and smiling eyes
+        "\U0001f389",  # party popper
+        "\U0001f615",  # confused face
+        "\u2764\ufe0f",  # red heart, emoji presentation
+        "\U0001f680",  # rocket
+        "\U0001f440",  # eyes
+    }
+)
+EVENT_ROW = (
+    "SELECT type, sender FROM events WHERE event_id = ? AND room_id = ?"
+    " AND state_key IS NULL AND rejection_reason IS NULL"
+)
 
 Verdict = Literal["NOT_SPAM"] | Codes
 
 
+class Cursor(Protocol):
+    """What select_event uses of the transaction run_db_interaction passes."""
+
+    def execute(self, sql: str, parameters: tuple[str, str]) -> None: ...
+
+    def fetchall(self) -> list[tuple[Any, ...]]: ...
+
+
 def is_megolm_content(content: Mapping[str, Any]) -> bool:
-    """Exactly the Megolm keys, each a non-empty string, and the Megolm algorithm."""
-    keys = frozenset(content)
+    """Exactly the Megolm keys, non-empty strings, the Megolm algorithm; a reply's pointer aside."""
+    keys = frozenset(content) - {"m.relates_to"}
     if not MEGOLM_REQUIRED <= keys <= MEGOLM_REQUIRED | MEGOLM_OPTIONAL:
         return False
-    if not all(isinstance(value, str) and value != "" for value in content.values()):
+    if not all(isinstance(content[key], str) and content[key] != "" for key in keys):
         return False
     return bool(content["algorithm"] == MEGOLM)
+
+
+def reply_target(content: Mapping[str, Any]) -> str | None:
+    """The event a reply answers, if m.relates_to is exactly {m.in_reply_to: {event_id}}."""
+    relates_to = content.get("m.relates_to")
+    if not isinstance(relates_to, dict) or frozenset(relates_to) != {"m.in_reply_to"}:
+        return None
+    in_reply_to = relates_to["m.in_reply_to"]
+    if not isinstance(in_reply_to, dict) or frozenset(in_reply_to) != {"event_id"}:
+        return None
+    event_id = in_reply_to["event_id"]
+    return event_id if isinstance(event_id, str) and event_id != "" else None
+
+
+def reaction_target(content: Mapping[str, Any]) -> str | None:
+    """The message a reaction annotates, if it is exactly a quick-reaction annotation."""
+    relates_to = content.get("m.relates_to")
+    if frozenset(content) != {"m.relates_to"} or not isinstance(relates_to, dict):
+        return None
+    if frozenset(relates_to) != {"rel_type", "event_id", "key"}:
+        return None
+    if relates_to["rel_type"] != "m.annotation" or relates_to["key"] not in QUICK_REACTIONS:
+        return None
+    event_id = relates_to["event_id"]
+    return event_id if isinstance(event_id, str) and event_id != "" else None
+
+
+def select_event(txn: Cursor, event_id: str, room_id: str) -> Sequence[tuple[str, str]]:
+    """(type, sender) rows of a non-state, non-rejected event in `room_id`."""
+    txn.execute(EVENT_ROW, (event_id, room_id))
+    return list(txn.fetchall())
 
 
 def is_plain_text_content(content: Mapping[str, Any]) -> bool:
@@ -165,17 +250,45 @@ class RoomPolicy:
         return NOT_SPAM if len(people) <= ROOM_SIZE else Codes.FORBIDDEN
 
     async def check_event_for_spam(self, event: EventBase) -> Verdict:
-        if event.is_state() or event.type == "m.room.redaction":
+        if event.is_state():
             return Codes.FORBIDDEN
+        if event.type == REDACTION:
+            return await self.check_redaction(event)
+        if event.type == REACTION:
+            target = reaction_target(event.content)
+            return await self.message_here(target, event.room_id)
         state = await self.api.get_room_state(event.room_id, [(ENCRYPTION, ""), (RETENTION, "")])
         encryption = state.get((ENCRYPTION, ""))
         retention = state.get((RETENTION, ""))
         if encryption is not None:
             encrypted = encryption.content.get("algorithm") == MEGOLM
             if encrypted and event.type == "m.room.encrypted" and is_megolm_content(event.content):
-                return NOT_SPAM
+                return await self.check_reply(event)
             return Codes.FORBIDDEN
         if retention is not None and is_plain_policy(retention.content):
             if event.type == "m.room.message" and is_plain_text_content(event.content):
                 return NOT_SPAM
         return Codes.FORBIDDEN
+
+    async def check_reply(self, event: EventBase) -> Verdict:
+        """A Megolm event without m.relates_to passes; with it, only a reply to a message here."""
+        if "m.relates_to" not in event.content:
+            return NOT_SPAM
+        return await self.message_here(reply_target(event.content), event.room_id)
+
+    async def check_redaction(self, event: EventBase) -> Verdict:
+        """Only the sender's own reaction in this room, its content nothing but `redacts`."""
+        if not frozenset(event.content) <= {"redacts"} or not isinstance(event.redacts, str):
+            return Codes.FORBIDDEN
+        found = await self.event_here(event.redacts, event.room_id)
+        return NOT_SPAM if found == (REACTION, event.sender) else Codes.FORBIDDEN
+
+    async def message_here(self, event_id: str | None, room_id: str) -> Verdict:
+        found = None if event_id is None else await self.event_here(event_id, room_id)
+        return NOT_SPAM if found is not None and found[0] in MESSAGE_TYPES else Codes.FORBIDDEN
+
+    async def event_here(self, event_id: str, room_id: str) -> tuple[str, str] | None:
+        rows = await self.api.run_db_interaction(
+            "unset_chat_policy_event", select_event, event_id, room_id
+        )
+        return rows[0] if len(rows) == 1 else None
