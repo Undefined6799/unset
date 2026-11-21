@@ -227,6 +227,14 @@ jobs:
           persist-credentials: false
       - name: Build the docs site
         run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e HUGO_CACHEDIR=/tmp/hugo_cache --entrypoint hugo -v "$PWD:/project" -w /project/docs/site "$HUGO_IMAGE" build --gc --minify --panicOnWarning
+      # ADR 0083: the site's adr-index shortcode and adrIndex read the same files; fail if their rows differ.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Compare the site's ADR index with adrIndex
+        run: npm run -s adr:index -- --compare docs/site/public/adr-index.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docs-site

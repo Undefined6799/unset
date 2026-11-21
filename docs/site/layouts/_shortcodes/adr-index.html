@@ -2,6 +2,7 @@
   The ADR index (ADR 0083), built from the ADR files the same way `npm run adr:index` builds it
   (scripts/docs/adrs.ts, adrIndex): a file with front matter gives its title and status; any other file takes its
   frozen row from legacy-index.yaml; an accepted ADR's supersedes and amends are written onto the rows they name.
+  It also publishes the rows as /adr-index.json, which CI compares with adrIndex so the two cannot drift.
   hugo.yaml mounts docs/human/decisions at assets/adrs and its legacy-index.yaml under data/adrs.
 */ -}}
 {{- $rows := dict -}}
@@ -45,7 +46,9 @@
       {{- $rows = merge $rows (dict .adr (merge $target (dict "status" $status))) -}}
     {{- end -}}
   {{- end -}}
-{{- end }}
+{{- end -}}
+{{- /* The same rows as JSON, for CI's docs-site job to compare with `npm run adr:index -- --compare` (ADR 0083). */ -}}
+{{- (resources.FromString "adr-index.json" (jsonify $rows)).Publish }}
 | # | Decision | Status |
 | --- | --- | --- |
 {{ range $adr, $row := $rows -}}

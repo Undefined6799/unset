@@ -4,7 +4,16 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { adrFiles, adrIndex, DECISIONS, LEGACY_INDEX, legacyRows, parseFrontMatter, renderIndex } from "./adrs.ts";
+import {
+  adrFiles,
+  adrIndex,
+  DECISIONS,
+  LEGACY_INDEX,
+  legacyRows,
+  parseFrontMatter,
+  renderIndex,
+  siteIndexProblems,
+} from "./adrs.ts";
 import { adrChangeProblem, adrProblems, legacyIndexProblem } from "./docs.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -140,6 +149,21 @@ describe("ADR index", () => {
       "| # | Decision | Status |\n| --- | --- | --- |\n| [0001](0001-log.md) | Defaults; log | Proposed |\n" +
         "| [0002](0002-old.md) | Old rule | Accepted 2026-10-04 |\n| [0003](0003-new.md) | New rule | Proposed (awaiting Alex) |\n",
     );
+  });
+
+  test("site_index_compared_row_for_row", () => {
+    const rows = adrIndex(base({ "0003-new.md": adr("0003", "New rule", PROPOSED) }));
+    // Hugo's jsonify writes keys in sorted order: decision, file, status.
+    const site = Object.fromEntries(rows.map((r) => [r.adr, { decision: r.decision, file: r.file, status: r.status }]));
+    expect(siteIndexProblems(rows, JSON.stringify(site))).toEqual([]);
+    const drifted = { ...site, "0002": { ...site["0002"], status: "Superseded by 0003" } };
+    expect(siteIndexProblems(rows, JSON.stringify(drifted))).toEqual([
+      expect.stringMatching(/^ADR 0002: the docs site has/),
+    ]);
+    const { "0003": _missing, ...short } = site;
+    expect(siteIndexProblems(rows, JSON.stringify(short))).toEqual([
+      expect.stringMatching(/^ADR 0003: the docs site has undefined/),
+    ]);
   });
 
   test("adr_index_covers_the_repository", () => {

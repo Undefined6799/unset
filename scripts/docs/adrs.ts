@@ -4,6 +4,7 @@
 // `npm run adr:index` prints it.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { parse } from "yaml";
 
 export const DECISIONS = "docs/human/decisions";
@@ -177,4 +178,27 @@ export function renderIndex(rows: IndexRow[]): string {
   return ["| # | Decision | Status |", "| --- | --- | --- |", ...lines].join("\n") + "\n";
 }
 
-if (import.meta.main) process.stdout.write(renderIndex(adrIndex(join(import.meta.dirname, "..", ".."))));
+/**
+ * The rows the docs site built (its adr-index shortcode publishes them as adr-index.json, keyed by number) against
+ * adrIndex, one problem per ADR that differs. CI's docs-site job runs this after the Hugo build (ADR 0083).
+ */
+export function siteIndexProblems(rows: IndexRow[], siteJson: string): string[] {
+  const site = JSON.parse(siteJson) as Record<string, unknown>;
+  const ours = new Map(rows.map((r) => [r.adr, { decision: r.decision, file: r.file, status: r.status }]));
+  const numbers = [...new Set([...ours.keys(), ...Object.keys(site)])].sort();
+  return numbers
+    .filter((n) => !isDeepStrictEqual(site[n], ours.get(n)))
+    .map((n) => `ADR ${n}: the docs site has ${JSON.stringify(site[n])}, adrIndex has ${JSON.stringify(ours.get(n))}`);
+}
+
+if (import.meta.main) {
+  const rows = adrIndex(join(import.meta.dirname, "..", ".."));
+  const compare = process.argv.indexOf("--compare");
+  if (compare < 0) process.stdout.write(renderIndex(rows));
+  else {
+    const problems = siteIndexProblems(rows, readFileSync(process.argv[compare + 1] ?? "", "utf8"));
+    for (const p of problems) console.error(p);
+    process.exitCode = problems.length > 0 ? 1 : 0;
+    if (problems.length === 0) console.log(`The docs site's ADR index matches adrIndex (${rows.length} rows).`);
+  }
+}
