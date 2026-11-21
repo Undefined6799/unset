@@ -16851,6 +16851,21 @@ tolerance for CSAM and the vault note `research/atproto-blob-serving-security` f
 property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
 ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
 
+### P1.38w — Fix three local test failures at their cause (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Three failures earlier threads saw locally, each reproduced first and fixed at its cause, never re-run (Alex: flaky
+tests are fixed). `generate_builds_outside_the_repo` watched the shared system temp folder, so another build there
+at the same time failed it; the build now gets a temp folder of its own. `pds-key.test.ts` got a SeaweedFS 500, not
+from a cold bucket: the image sizes its volume count from the free space on /data and each bucket claims 7, so below
+about 21 GB free on Docker's disk the third bucket had none; the test store runs on a 40 GB tmpfs. Test containers
+outlived a run stopped by Ctrl-C or a kill, since vitest then runs no teardown; the helpers remove what they started
+when their process exits, and the integration setup removes containers whose owner has ended. Ownership: tests/support,
+tests/integration/setup, shared/lexicons/scripts.
+
+---
+
 ### P1.38x — Mark a multi-line ADR status superseded
 Tags: [SEC] trusted            Depends on: —
 Trusted base (`scripts/docs/docs.ts` and its test, a `# checks:` path, so the PR carries `security-review`). It adds

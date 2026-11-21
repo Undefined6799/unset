@@ -5,14 +5,13 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { docker } from "./docker.ts";
+import { cleanUpAtExit, docker, OWNER_LABEL } from "./docker.ts";
 
 /** chrislusf/seaweedfs 4.53 by index digest (Docker Hub, published 2026-11-08; Apache-2.0). */
 export const OBJECTS_IMAGE =
   "docker.io/chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0";
 
 const CALL_MS = 60_000;
-const OWNER_LABEL = "sh.unset.test-owner";
 
 export type ObjectsKey = { readonly keyId: string; readonly secret: string };
 export type ObjectsContainer = { readonly name: string; readonly origin: string; readonly admin: ObjectsKey };
@@ -60,9 +59,14 @@ export async function startObjects(
   chmodSync(join(dir, "s3.json"), 0o644);
   const name = `unset-objects-${process.pid}-${randomBytes(4).toString("hex")}`;
   STARTED.add(name);
+  // The image's `server` entrypoint passes -volume.max=0 and a 1 GB volume size, so the store makes one volume per GB
+  // free on /data, and each bucket's first write grows 7 (deployment/images/objects.Dockerfile). On Docker's own disk
+  // that made the tests depend on its free space: below about 21 GB a third bucket got a 500 (P1.38w). A 40 GB tmpfs,
+  // the size objects.image.test.ts gives the stack's image, holds 39 volumes on any machine; it takes memory only for
+  // what is written.
   run(
     ["run", "-d", "--rm", "--name", name, "--label", `${OWNER_LABEL}=${process.pid}`, "-p", "127.0.0.1::8333"]
-      .concat(["-v", `${dir}:/etc/seaweedfs-test:ro`, OBJECTS_IMAGE])
+      .concat(["--tmpfs", "/data:size=40g", "-v", `${dir}:/etc/seaweedfs-test:ro`, OBJECTS_IMAGE])
       .concat(["server", "-s3", "-s3.config=/etc/seaweedfs-test/s3.json", "-dir=/data"]),
   );
   const port = run(["port", name, "8333/tcp"]).split("\n")[0]?.split(":").at(-1) ?? "";
@@ -101,3 +105,6 @@ export function stopAllObjects(): void {
 }
 
 export const STOP_OBJECTS_MS = 2 * CALL_MS;
+
+// A run that vitest ends on Ctrl-C or SIGTERM skips every afterAll; the stores still go (P1.38w).
+cleanUpAtExit(stopAllObjects);

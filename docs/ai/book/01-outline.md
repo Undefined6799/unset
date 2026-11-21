@@ -1520,6 +1520,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.38v | Name only files on the tree in the lint rules | — | — | `phase-1.md` |
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
+| P1.38w | Fix three local test failures at their cause: lexicon build temp folder, object store disk, leaked containers (added 2026-11-21) | — | — | `phase-1.md` |
 | P1.38x | Mark a multi-line ADR status superseded | [SEC] trusted | — | `phase-1.md` |
 | P1.38y | Generate the ADR index from each ADR | [SEC] trusted [ALEX] (typed line) | — | `phase-1.md` |
 | P1.39a | Save the reviewed `caddy adapt` output for each env | [SEC] trusted | — | `phase-1.md` |
@@ -1713,6 +1714,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.13 | Handle hosts | — | P3.12 | `phase-3.md` |
 | P3.12u | Fix small rough edges from the staging test | — | P3.12 | `phase-3.md` |
 | P3.14 | Directory and search | — | P3.05 | `phase-3.md` |
+| P3.12v | Keep every card a member can save on the public page | [SEC] [ALEX] (typed line) | P3.12 | `phase-3.md` |
 | P3.14s | Web search through SearXNG behind the search bar (ADR 0035) | [SEC] [ALEX] (typed line) | P3.14, P1.18a | `phase-3.md` |
 | P3.15 | Report intake and the public notice form | [MOD] [SEC] | P3.12, P3.06, P1.15, P1.14, P1.14d | `phase-3.md` |
 | P3.16 | `pds-admin` v1: envelope pipeline, key model and migration from P2.09 | [SEC] | P3.00, P2.09, P1.15 | `phase-3.md` |
