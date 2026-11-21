@@ -374,6 +374,41 @@ test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }
   await removeCard(page, word);
 });
 
+// Staging, 2026-11-21 (cold load): a click on the words before the page's own script has run reached no listener,
+// so the editor opened with no caret and the letters typed then were lost (WebKit once put them in the first list
+// item). The browser keeps that click as a caret in the words; the card carries it into the editor.
+test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_opens", async ({ page }) => {
+  const word = `cold${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `- first item\n\n${word} start` });
+  const url = page.url();
+  // Every script of the page held, as a cold load on a slow line: the words are drawn and nothing listens yet.
+  await page.route("**/_app/immutable/**/*.js", async (route) => {
+    await new Promise((done) => setTimeout(done, 1500));
+    return route.continue();
+  });
+  await page.goto(url, { waitUntil: "commit" });
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  const line = card.getByText(`${word} start`);
+  await expect(line).toBeVisible();
+  await expect(page.locator("[data-text-in-place][data-listening]")).toHaveCount(0);
+  const box = await line.boundingBox();
+  if (box === null) throw new Error("no line");
+  // At the end of the line, as the tester clicked at the end of a sentence.
+  await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  const { editor } = await editorHolding(page, word);
+  await expect(editor).toBeFocused();
+  // The editor draws the words where they were (the list's items and the space between blocks as the page draws
+  // them), so nothing moves when it takes their place and the click's point is the same words in both.
+  expect((await editor.locator(":scope > p").boundingBox())?.y).toBe(box.y);
+  await page.keyboard.type("Q");
+  await expect(editor.locator(":scope > p")).toHaveText(`${word} startQ`);
+  await expect(editor.locator("li")).toHaveText("first item");
+  await page.unroute("**/_app/immutable/**/*.js");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
 /**
  * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
  * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
@@ -488,6 +523,31 @@ test("after_a_save_typing_goes_on_where_it_was", async ({ page }) => {
   await page.keyboard.type(" two");
   await expect(editor).toHaveText(`${word} start one two`);
   await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Staging, 2026-11-21: letters typed in the instant after pressing Save went to the button and were lost; focus came
+// back only once the Save had answered. The press hands the keys straight back to the words.
+test("letters_typed_straight_after_pressing_save_stay_in_the_words", async ({ page }) => {
+  const word = `quick${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(" one");
+  // A Save that takes a moment to answer, as on a phone line.
+  await page.route(/\?\/saveAll$/, async (route) => {
+    await new Promise((done) => setTimeout(done, 1000));
+    return route.continue();
+  });
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await page.keyboard.type(" two");
+  await expect(editor).toHaveText(`${word} start one two`);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await page.unroute(/\?\/saveAll$/);
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
 });
