@@ -90,7 +90,7 @@ test.describe("no script", () => {
     const panel = page.locator("#card-editor");
     await page.getByRole("link", { name: "Add card" }).click();
     await panel.getByRole("link", { name: /^Text/ }).click();
-    await expect(panel.getByRole("textbox", { name: "Text" })).toHaveAttribute("maxlength", "100000");
+    await expect(panel.getByRole("textbox", { name: "Text" })).toHaveAttribute("maxlength", "20000");
   });
 });
 

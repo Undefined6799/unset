@@ -18,7 +18,7 @@ checked: 2026-11-20
 screens, `render.tsx`, the island runtime and Hono are deleted; nothing in the repository imports React any more
 (the PDS sign-in screens stay upstream React by design, ADR 0027, built in `deployment/pds`).
 
-- `apps/web/lib/components/`: stock shadcn-svelte in `ui/` (themed only by `apps/web/theme.css`), our `icon/`,
+- `apps/web/lib/components/`: stock shadcn-svelte in `ui/` (themed only by `shared/ui/theme.css`), our `icon/`,
   `profile/` and `settings/` components beside it; `inventory.json` lists them all. `app.css` is the Tailwind entry.
 - `apps/web/lib/profile/`: the card views and the README parser. They run on the server only (the member page's
   load); the components render what they return, every link already through `safeHref`.

@@ -1018,6 +1018,44 @@
         "strokeLinecap": "round",
         "strokeLinejoin": "round"
       }
+    ],
+    "grip": [
+      {
+        "d": "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M8 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M8 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M14 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M14 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M14 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
     ]
   },
   "extensionProvenance": {
@@ -1031,5 +1069,14 @@
     },
     "registeredOn": "2026-10-21",
     "iconoirCommit": "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e"
+  },
+  "lucide": {
+    "version": "1.72.0",
+    "icons": {
+      "grip": {
+        "lucideName": "grip-vertical",
+        "sha256": "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5"
+      }
+    }
   }
 }
