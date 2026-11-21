@@ -17,6 +17,7 @@ import { request as httpRequest } from "node:http"; // guard-allow: egress loopb
 import { createServer } from "node:net"; // guard-allow: egress binds a loopback port to find a free one
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { startStandInObjects } from "./stand-in-objects.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const WEB = join(REPO, "interfaces", "web");
@@ -240,6 +241,7 @@ async function startOn(
   const adminKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string;
   // This child's own commit, so the readiness probe knows its answer from another process's on the same port.
   const commit = env.UNSET_COMMIT ?? randomBytes(20).toString("hex");
+  const objects = await startStandInObjects();
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
   const fixture =
     standIns === undefined
@@ -280,8 +282,8 @@ async function startOn(
       PDS_WEB_KEY_FILE: secret("pds_web_key", randomBytes(32).toString("hex")),
       PDS_ADMIN_WEB_KID: "web-test",
       PDS_DID: `did:web:${PDS_HOST}`,
-      // P2.21a: the draft image store; no store answers here, and none is asked at boot.
-      OBJECT_STORE_URL: "http://objects.test:8333",
+      // P2.21a: the draft image store, an empty stand-in bucket (P2.19b: the orphan sweep lists it at boot).
+      OBJECT_STORE_URL: objects.url,
       REVIEW_URL: "http://review.test:8082",
       OBJECT_STORE_BUCKET: "unset-private",
       OBJECT_STORE_ACCESS_ID: "unset-web",
@@ -307,6 +309,7 @@ async function startOn(
   } catch (error) {
     child.kill("SIGKILL");
     await exited;
+    await objects.close();
     rmSync(secrets, { recursive: true, force: true });
     throw error;
   }
@@ -328,6 +331,7 @@ async function startOn(
     stop: async () => {
       child.kill("SIGTERM");
       const code = await exited;
+      await objects.close();
       rmSync(secrets, { recursive: true, force: true });
       return code;
     },

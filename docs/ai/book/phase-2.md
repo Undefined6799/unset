@@ -4014,6 +4014,14 @@ newer one becomes the last and leaves exactly the use of the picture the record 
 A delete marks the record and drops every use of it. Taking a use back runs under its own 5 s deadline
 (`SETTLE_MS`), not the request's. Left: a use whose write went unanswered and did not land, or whose request died
 mid-save, keeps its image from the sweep. Pages still hide picture cards until P2.19c.
+P2.19b, orphan-object sweep, built 2026-11-20: web's sweeps also run `sweep.image_orphan`
+(`interfaces/web/src/lib/server/image-orphans.ts`). It lists `drafts/`, then reads which of the listed ids still have
+a row (`ImageStore.named`), and deletes each `drafts/<did>/i/<id>/` folder no row of that member names, all or nothing
+under the image sweep's governor. No age check: rows are written before objects and deleted before them, and ids are
+never reused, so a folder with no row at that read can never gain one. Keys of any other shape are left alone.
+P2.19b, booked follow-up (reviewer, #1860): a card write the PDS answers without a commit revision, or never
+answers, keeps its saves' holds on `app.image_use` for good, so that image is never swept and stays in the quota. Fix
+in a later step: a reconciliation that reads the record from the member's PDS and settles or releases those holds.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
