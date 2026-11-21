@@ -34,6 +34,8 @@ const SHAPES: Readonly<Record<string, Shape>> = {
     preset: ["kind", "preset"],
     byKind: { email: ["address"], link: ["uri", "label"] },
   },
+  // P2.19b: `image` is a draft id from POST /images, or empty to keep the card's picture.
+  image: { fields: ["image", "alt", "caption", "fit"] },
 };
 
 /** The most fields any card form holds: kind, width, surface, two more, and the largest list full (a collection's 100x4). */

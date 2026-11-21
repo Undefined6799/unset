@@ -22,9 +22,11 @@ import {
   latestCommit,
   listCardRecords,
   loadProfileRecord,
+  newCardKey,
   saveCardRecord,
   saveCardRecords,
   saveProfileRecord,
+  uploadImageBlob,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { LIMITS } from "@unset/shared-lexicons";
@@ -35,6 +37,7 @@ import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
 import { type CardEdit, type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
+import { picturesFor } from "./picture-store.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
 import { partialMessage } from "./save-message.server.ts";
 
@@ -141,13 +144,20 @@ function writesFor(did: Did, locals: App.Locals) {
   const store: CardStore = {
     list: () => listCardRecords(pdsCall, ctx, did),
     head: () => latestCommit(pdsCall, ctx, did),
-    create: (record, swapCommit) => createCardRecord(pdsCall, ctx, did, record, swapCommit),
+    newKey: () => newCardKey() as CardKey,
+    create: (record, swapCommit, key) => createCardRecord(pdsCall, ctx, did, record, swapCommit, key),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
     remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
     saveMany: (updates, swapCommit) => saveCardRecords(pdsCall, ctx, did, updates, swapCommit),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };
-  return cardWrites(store, () => new Date().toISOString());
+  const { images, drafts, pds } = services();
+  const upload = (bytes: Uint8Array) => uploadImageBlob(pds.pdsCall, ctx, did, bytes);
+  return cardWrites(
+    store,
+    () => new Date().toISOString(),
+    picturesFor(did, { images, drafts, upload }, locals.deadline),
+  );
 }
 
 /** The body as URL-encoded form text within the card cap, or card.form_too_large. */
