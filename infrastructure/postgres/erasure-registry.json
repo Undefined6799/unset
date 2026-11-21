@@ -89,6 +89,14 @@
     "strategy": "delete_row",
     "reason": "the member's upload times for the hourly and daily limits, kept a day; they go when the member is erased"
   },
+  "app.image_record.did": {
+    "strategy": "delete_row",
+    "reason": "the last settled write on each of the member's card records (P2.19b), which orders picture settling; the rows go when the member is erased"
+  },
+  "app.image_record.record_uri": {
+    "strategy": "delete_row",
+    "reason": "the card record each of those rows is about; it goes with its row"
+  },
   "app.notification.did": {
     "strategy": "delete_row",
     "reason": "the person's unopened notifications (P2.27, ADR 0079); they go when the person is erased"

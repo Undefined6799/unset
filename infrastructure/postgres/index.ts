@@ -25,8 +25,10 @@ export {
 } from "./handleStore.ts";
 export {
   createImageStore,
+  type HeldUse,
   type ImageKind,
   type ImageStore,
+  type ImageUse,
   type LibraryImage,
   type StoredImage,
   type SweepResult,
