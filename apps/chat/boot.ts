@@ -3,8 +3,9 @@
 // started from back in the address bar without loading anything, and opens the chat on the session it now holds in
 // memory. Renewal is the hop again (a fresh mint for the same device; the door hands back the same lock key): a minute
 // before the token ends, or when the server stops taking it, unless that happens within a minute of signing in, which
-// would only loop.
+// would only loop. A Message link's path is turned into the start route once signed in (core/contact.ts).
 import type { ChatState } from "./core/chat.ts";
+import { dmTarget, startPathFor } from "./core/contact.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
 import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
@@ -30,6 +31,17 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
   window.history.replaceState(null, "", outcome.returnTo);
   const signedInAt = Date.now();
   const { session } = outcome;
+  // A profile's Message link (ADR 0090 decision 3): its member's chat ID, then the start route, before the list mounts.
+  const member = dmTarget(outcome.returnTo);
+  if (member !== null) {
+    const next = await startPathFor(
+      window.fetch.bind(window),
+      session.deviceId,
+      member,
+      AbortSignal.timeout(DOOR_DEADLINE_MS),
+    );
+    window.history.replaceState(null, "", next);
+  }
   window.setTimeout(hop, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
   const door = window.fetch.bind(window);
   const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);

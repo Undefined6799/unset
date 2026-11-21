@@ -464,3 +464,29 @@ test("chat_page.pusher_refused: a homeserver that refuses the pusher leaves chat
   expect(await state(page)).toBe("ready");
   expect(problems).toEqual([]);
 });
+
+test("chat_page.message_link: /dm/<did> hops, asks the door for the chat ID and starts the conversation", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const did = `did:plc:${"m".repeat(24)}`;
+  db.addContact(did, `u${"b".repeat(20)}`);
+  const { page, problems } = await open(browser);
+  await page.goto(`https://unset.cc/dm/${did}`);
+  await saveKey(page);
+  await expect(conversation(page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 30_000 });
+  expect(page.url()).toBe("https://unset.cc/");
+  expect(stack.homeserver.rooms.created).toEqual([{ preset: "trusted_private_chat", is_direct: true, invite: [THEM] }]);
+  expect(problems).toEqual([]);
+});
+
+test("chat_page.message_link_missing: a member the door does not find starts nothing and says only that", async ({
+  browser,
+}) => {
+  const { page } = await open(browser);
+  await page.goto(`https://unset.cc/dm/did:plc:${"n".repeat(24)}`);
+  await saveKey(page);
+  await expect(page.getByRole("alert")).toContainText("That chat ID is not one we know.");
+  expect(page.url()).toBe("https://unset.cc/");
+  expect(stack.homeserver.rooms.created).toEqual([]);
+});
