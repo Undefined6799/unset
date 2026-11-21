@@ -753,3 +753,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   nothing else, kept 30 days in a tab beside Notifications; the member may delete any entry, and deleting will need
   the second check of book P2.28 once it exists. Amends the "no sign-in records" rule for this record. Proposed,
   awaiting Alex.
+- **ADR 0082 accepted (Alex, 2026-11-21 04:09Z, against 4202269; own record:
+  [0082](0082-sign-in-history.md)):** the time of each sign-in, nothing else, kept 30 days in a tab beside
+  Notifications; the member may delete any entry, and deleting will need the second check of book P2.28 once it exists.

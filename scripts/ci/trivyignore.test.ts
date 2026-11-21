@@ -53,12 +53,24 @@ const SHARED_FILE = join(ROOT, ".github", "trivyignore.yaml");
  * re-stated from the 0.4.5037 list for 0.4.5049's packages, four new; each scoped to one path and one PURL. P1.38l: the
  * 0.4.5037 (3a8feb34) entries ended with the re-pin, so these and KEPT_ENTRIES are the whole file. */
 /** P1.38l: the five 0.4.5037 nodemailer 6.10.1 entries that 0.4.5049 still needs, kept unchanged by Alex's line of
- * 2026-10-28T22:38:42Z, and to 2026-11-27 by P1.38n (no upstream fix on 2026-11-14). */
+ * 2026-10-28T22:38:42Z, to 2026-11-27 by P1.38n (no upstream fix on 2026-11-14), and with REPIN_ENTRIES to
+ * 2026-12-11 by P1.38u (no PDS image newer than 0.4.5051 on 2026-11-21). */
 const KEPT_STATEMENT = [
   "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
-  "newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z,",
+  "newest upstream release, staging and local stacks; every address it sees is an account email the PDS validated",
+  "(254 characters at most); accepted by Alex 2026-10-14T20:34:16Z,",
   "removed on re-pin or before P1.34",
 ].join(" ");
+/** P1.38u: the two nodemailer ids outside the address parser (the message `raw` option and the OAuth2 token fetch).
+ * @atproto/pds 0.5.51 dist/mailer/index.js sendTemplate and moderation.js send pass only to, subject, from and html;
+ * dist/context.js builds the transport from the SMTP URL, which carries a password. */
+const KEPT_TEMPLATE_STATEMENT = [
+  "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
+  "newest upstream release, staging and local stacks; the PDS sends only its own templates (to, subject, html;",
+  "never raw) over SMTP with a password, never OAuth2; accepted by Alex 2026-10-14T20:34:16Z,",
+  "removed on re-pin or before P1.34",
+].join(" ");
+const TEMPLATE_ONLY_IDS = new Set(["CVE-2026-82659", "CVE-2026-82662"]);
 const KEPT_ENTRIES = [
   "CVE-2025-14874",
   "CVE-2026-82659",
@@ -69,14 +81,18 @@ const KEPT_ENTRIES = [
   id,
   paths: ["app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"],
   purls: ["pkg:npm/nodemailer@6.10.1"],
-  statement: KEPT_STATEMENT,
-  expired_at: "2026-11-27",
+  statement: TEMPLATE_ONLY_IDS.has(id) ? KEPT_TEMPLATE_STATEMENT : KEPT_STATEMENT,
+  expired_at: "2026-12-11",
 }));
-const REPIN_STATEMENT = [
-  "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
-  "0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z,",
-  "removed on the next re-pin or before P1.34",
-].join(" ");
+/** P1.38u: each statement names why the finding is not a live risk on staging and local stacks. */
+const repinStatement = (why: string) =>
+  [
+    "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
+    `0.4.5049 re-pin, staging and local stacks; ${why}; accepted by Alex 2026-10-28T03:36:24Z,`,
+    "removed on the next re-pin or before P1.34",
+  ].join(" ");
+/** The npm CLI's bundled undici and brace-expansion: the image starts node, never npm. */
+const NPM_NEVER_RUNS = "npm never runs";
 const NPM = "usr/local/lib/node_modules/npm/node_modules";
 const REPIN_ENTRIES = [
   {
@@ -85,6 +101,7 @@ const REPIN_ENTRIES = [
       "app/node_modules/.pnpm/@opentelemetry+propagator-jaeger@2.8.0_@opentelemetry+api@1.10.0/node_modules/@opentelemetry/propagator-jaeger/package.json",
     ],
     purls: ["pkg:npm/%40opentelemetry/propagator-jaeger@2.8.0"],
+    why: "OTel is not loaded",
   },
   { id: "CVE-2026-102276", paths: [`${NPM}/brace-expansion/package.json`], purls: ["pkg:npm/brace-expansion@5.0.9"] },
   { id: "CVE-2026-102278", paths: [`${NPM}/brace-expansion/package.json`], purls: ["pkg:npm/brace-expansion@5.0.9"] },
@@ -96,8 +113,13 @@ const REPIN_ENTRIES = [
     id: "CVE-2023-54404",
     paths: ["app/node_modules/.pnpm/zod@3.25.76/node_modules/zod/package.json"],
     purls: ["pkg:npm/zod@3.25.76"],
+    why: "bounded by the PDS's body limits",
   },
-].map((entry) => ({ ...entry, statement: REPIN_STATEMENT, expired_at: "2026-11-27" }));
+].map(({ why = NPM_NEVER_RUNS, ...entry }: { why?: string; id: string; paths: string[]; purls: string[] }) => ({
+  ...entry,
+  statement: repinStatement(why),
+  expired_at: "2026-12-11",
+}));
 /** P1.38q: goat v0.2.7 in 0.4.5051 (8e58b797) is built with Go 1.27.3; Trivy reported CVE-2026-97054 on 2026-11-19.
  * Alex's line 2026-11-19T02:00:23Z: "Waive CVE-2026-97054 for goat in the PDS image until 2026-12-19". */
 const GOAT_ENTRIES = [

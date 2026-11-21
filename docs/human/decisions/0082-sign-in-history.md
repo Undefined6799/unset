@@ -1,7 +1,9 @@
 # 0082 — Sign-in history: the time of each sign-in, kept 30 days
 
-Status: Proposed (awaiting Alex), 2026-11-21 (P2.27c). Amends the plan's "no user sign-in records" (PLAN.md §6,
-Logging and retention) for this one record, as [0079](0079-notifications-in-core.md) did for the sign-in notification.
+Status: Accepted by Alex, 2026-11-21 04:09Z, against 4202269 (his line naming that head, given after it was reviewed;
+merged as 240e608). This status paragraph, the index row and the ADR 0001 acceptance line were added afterwards
+(P1.38v). Book step P2.27c. Amends the plan's "no user sign-in records" (PLAN.md §6, Logging and retention) for this
+one record, as [0079](0079-notifications-in-core.md) did for the sign-in notification.
 Alex chose it on the notifications mock-up thread on 2026-11-21: a Sign-in history tab that keeps "the time ... 30
 days, but the user can delete it"; at 00:57Z, that any signed-in browser may delete any entry for now, "because ...
 we're gonna add like that extra security 2FA things later, and we can like require the 2FA to delete ... any history

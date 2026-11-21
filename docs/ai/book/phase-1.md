@@ -16790,6 +16790,33 @@ tolerance for CSAM and the vault note `research/atproto-blob-serving-security` f
 property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
 ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
 
+### P1.38x — Mark a multi-line ADR status superseded
+Tags: [SEC] trusted            Depends on: —
+Trusted base (`scripts/docs/docs.ts` and its test, a `# checks:` path, so the PR carries `security-review`). It adds
+one change the ADR check could not express and allows nothing else, so nothing is needed from Alex.
+
+**What:** `adr_immutable` reads an ADR's status as its first `Status` line, so an accepted ADR whose status runs over
+several lines (0072, superseded by 0077) cannot be marked superseded: replacing the paragraph edits lines the check
+counts as body. The check now also accepts exactly one shape: a new paragraph `Status: Superseded by NNNN.` above the
+old status paragraph, which is kept byte for byte except that its first word `Status:` becomes `Earlier status:`;
+NNNN must be an existing ADR. A changed word, a dropped, added or rewrapped line, a second new paragraph, extra words
+on the new line, an unrelabelled old paragraph and any body edit stay refused, each with a test. It also closes a gap
+the reviewer found on main: a status starting "Superseded" counted as not accepted, so later PRs could edit a
+superseded ADR freely. A superseded ADR, in either form, now never changes again: no edit, no second mark, no
+deletion. Marking 0072 itself is a later docs PR.
+
+---
+
+### P1.38v — Name only files on the tree in the lint rules
+Tags: —            Depends on: —
+`scripts/lint/` and the docs that describe its rules; issues #1775 and #1781 (docs checker, 2026-11-19).
+
+**What:** `app-build-config-imports` still allowed `scripts/ui/css-scope.ts`, and `WEB_SERVER_FILES` still listed
+`interfaces/web/check.ts`; neither file is on the tree (css-scope left with the React screens in a25d62a, #1684).
+Both names come out, which only tightens the rules. `depcruise-paths.test.ts` fails on any exact file a rule names
+that is not on the tree, so the next removal breaks CI instead of leaving a dead allowance. A path named ahead of
+its folder (today only `RENDER_ENTRIES.admin`) is listed there with its reason.
+
 ---
 
 ### P1.38 — Phase 1 exit
