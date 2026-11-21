@@ -1,4 +1,4 @@
-# Synapse's Python packages for deployment/images/synapse.Dockerfile (P6.02; ADR 0086 Decision 1). Generated, never
+# Synapse's Python packages for deployment/images/synapse.Dockerfile (P6.02; ADR 0098 Decision 1). Generated, never
 # edited by hand: the two lines in synapse-requirements.in, resolved for CPython 3.13 on Linux, wheels only, with every
 # published wheel's sha256, by
 #   uv pip compile deployment/images/synapse-requirements.in --generate-hashes --python-version 3.13
