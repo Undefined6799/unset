@@ -30,8 +30,9 @@ foundation of ADR 0070: product rules only, no I/O. `index.ts` is the only impor
   [[review]]; web reaches review through net-guard.
 - `images/draft-url.ts`: short-lived signed links to a member's draft versions (ADR 0070 point 5). Web mints one
   for the owner's own preview (`mintDraftPath`); [[media]] checks it (`verifyDraftPath`) before it reads the object
-  from [[storage]]. A link is a bearer capability for at most ten minutes (`DRAFT_URL_TTL_S`), so no process logs one,
-  and every refusal looks the same.
+  from [[storage]]. A link is a bearer capability that lives five minutes (`DRAFT_URL_TTL_S`), and a check refuses
+  an expiry more than ten minutes ahead (`DRAFT_URL_MAX_AHEAD_S`), so no process logs one, and every refusal looks
+  the same.
 
 **How data flows.** Upload at [[web]] → `admitUpload` and `fitsQuota` → review decodes and makes the versions →
 the versions go to the object store and the row to [[postgres]] → the owner previews them through a signed link
