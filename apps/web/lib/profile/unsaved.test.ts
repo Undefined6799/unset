@@ -12,6 +12,12 @@ const text = (key: string, words: string, version: string | null = `v-${key}`): 
   ...(version === null ? {} : { version }),
 });
 const page = [text("a", "Hi"), text("b", "There"), text("c", "Again")];
+const whole = (cards: readonly CardView[]) => ({
+  cards,
+  profileUnavailable: false,
+  cardsIncomplete: false,
+  cardsOverflow: false,
+});
 
 describe("unsaved cards", () => {
   test("an_edit_is_kept_with_the_version_its_card_was_opened_at", () => {
@@ -125,7 +131,15 @@ describe("unsaved cards", () => {
     const edits = edit(edit(NO_EDITS, page, "a", { fields: { text: "Hello" } }), page, "b", {
       fields: { text: "World" },
     });
-    expect([...onPage(edits, [text("a", "Hi"), text("c", "Again")]).keys()]).toEqual(["a"]);
-    expect(onPage(edits, page)).toBe(edits);
+    expect([...onPage(edits, whole([text("a", "Hi"), text("c", "Again")])).keys()]).toEqual(["a"]);
+    expect(onPage(edits, whole(page))).toBe(edits);
+  });
+
+  // Review of 700ae94: a read that failed (no cards) or stopped early is not a delete, so every edit stays.
+  test("a_read_that_was_not_whole_drops_no_edit", () => {
+    const edits = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
+    expect(onPage(edits, { ...whole([]), profileUnavailable: true })).toBe(edits);
+    expect(onPage(edits, { ...whole([text("b", "There")]), cardsIncomplete: true })).toBe(edits);
+    expect(onPage(edits, { ...whole([text("b", "There")]), cardsOverflow: true })).toBe(edits);
   });
 });

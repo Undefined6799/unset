@@ -182,3 +182,31 @@ test("a_card_deleted_with_unsaved_words_leaves_nothing_unsaved", async ({ page }
   await openOwnPage(page);
   await expect(page.getByText(/This device kept unsaved words/)).toHaveCount(0);
 });
+
+// Codex on 4fca548: typing into a card while an earlier visit's draft is offered keeps the new words on the device,
+// so leaving afterwards loses nothing.
+test("words_typed_while_a_draft_is_offered_are_kept", async ({ page }) => {
+  const word = `offer${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  let { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" old");
+  await openOwnPage(page);
+  const offer = page.getByText(/This device kept unsaved words/);
+  await expect(offer).toBeVisible();
+  ({ editor } = await editorHolding(page, word));
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" new");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  const drop = page.getByRole("button", { name: "Throw them away" });
+  if (await drop.isVisible()) await drop.click();
+  await openOwnPage(page);
+  await page.getByRole("button", { name: "Bring them back" }).click();
+  await expect((await editorHolding(page, word)).editor).toContainText(`${word} start new`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});

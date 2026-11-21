@@ -56,8 +56,21 @@ export function editsToSave(edits: UnsavedCards, cards: readonly CardView[]): Ca
   });
 }
 
-/** The edits without those of cards no longer on the page (deleted from their menu); the same map when none went. */
-export function onPage(edits: UnsavedCards, cards: readonly CardView[]): UnsavedCards {
+/** The owner's cards as the page read them, with what says the read was not whole. */
+export type CardsRead = {
+  readonly cards: readonly CardView[];
+  readonly profileUnavailable: boolean;
+  readonly cardsIncomplete: boolean;
+  readonly cardsOverflow: boolean;
+};
+
+/**
+ * The edits without those of cards no longer on the page (deleted from their menu); the same map when none went. Only
+ * a whole read says a card is gone: one that failed (no cards at all) or stopped early drops nothing.
+ */
+export function onPage(edits: UnsavedCards, read: CardsRead): UnsavedCards {
+  if (read.profileUnavailable || read.cardsIncomplete || read.cardsOverflow) return edits;
+  const cards = read.cards;
   const gone = [...edits.keys()].filter((key) => !cards.some((card) => card.key === key));
   if (gone.length === 0) return edits;
   const next = new Map(edits);

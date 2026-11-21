@@ -73,11 +73,12 @@ $effect(() => {
     });
   }
 });
-// A card deleted from its menu (or gone after a refresh) leaves no unsaved edit or draft behind it.
+// A card deleted from its menu leaves no unsaved edit or draft behind it. Only a whole read says a card is gone: a
+// failed or partial one (the PDS unreachable on a refresh) keeps every edit and draft.
 $effect(() => {
   const kept = onPage(
     untrack(() => edits),
-    data.cards,
+    data,
   );
   if (kept === untrack(() => edits)) return;
   forget([...untrack(() => edits).keys()].filter((key) => !kept.has(key)));
@@ -105,6 +106,8 @@ const textOf = (card: CardView) => {
 
 function change(key: string, made: CardChange) {
   if (made.fields?.text !== undefined) held.set(key, made.fields.text);
+  // Typing into a card supersedes the draft an earlier visit kept for it: its own draft now holds these words.
+  if (offered.has(key)) offered = new Map([...offered].filter(([other]) => other !== key));
   edits = edit(edits, data.cards, key, made);
   said = undefined;
   const text = made.fields?.text;
@@ -216,7 +219,7 @@ function restore() {
 }
 
 function dropDrafts() {
-  forget(offered.keys());
+  forget([...offered.keys()].filter((key) => !edits.has(key)));
   offered = new Map();
 }
 </script>
