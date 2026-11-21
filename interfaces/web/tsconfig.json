@@ -19,6 +19,9 @@
       "path": "../../domains/identity"
     },
     {
+      "path": "../../domains/notifications"
+    },
+    {
       "path": "../../domains/profile"
     },
     {

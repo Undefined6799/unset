@@ -4,6 +4,7 @@
 import { type Actions, error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { safeReturnPath } from "@unset/shared-http";
 import { services } from "../../../lib/server/compose.ts";
+import { withdrawPrivacyNotice } from "../../../lib/server/notification-sources.ts";
 import { single } from "../../../lib/server/theme.ts";
 
 // Not a page: a GET answers 405, as /prefs/theme does.
@@ -18,6 +19,7 @@ export const actions: Actions = {
     // one, and dismissing it must not hide the newer change, so that post writes nothing and the banner shows again.
     if (single(form, "version") === versions.privacy) {
       await accounts.markPrivacyNoticeSeen(locals.did, versions.privacy, locals.deadline);
+      await withdrawPrivacyNotice(locals.did, versions.privacy, locals.deadline); // its inbox entry goes too (P2.27)
     }
     redirect(303, safeReturnPath(single(form, "return")) ?? "/me");
   },

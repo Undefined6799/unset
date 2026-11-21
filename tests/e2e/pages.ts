@@ -98,6 +98,7 @@ export const MEMBER_PAGES: readonly PageFixture[] = [
   signedIn("/settings/privacy", "account"),
   signedIn("/settings/account", "account"),
   signedIn("/invite", "account"),
+  signedIn("/notifications", "account"),
 ];
 
 /** Every page under test, each once. */

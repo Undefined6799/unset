@@ -67,6 +67,18 @@ describe("one member", () => {
     expect(refused("socket", paced(11, 0, ask))).toBe(1);
   });
 
+  test("an_impatient_member_pressing_mark_all_as_read_ten_times_in_two_seconds_and_opening_fifty_passes", () => {
+    // P2.27: each press and each opened row is one POST under `notifications`; repeats change nothing more.
+    const press = (at: number): Request => ({ at, policy: "notifications", address: EDGE, did: member(1) });
+    expect(refused("socket", [...paced(10, 200, press), ...paced(50, 1000, press, 2000)])).toBe(0);
+    expect(refused("header", [...paced(10, 200, press), ...paced(50, 1000, press, 2000)])).toBe(0);
+  });
+
+  test("a_hundred_and_twenty_one_notification_posts_at_once_are_refused_once", () => {
+    const press = (at: number): Request => ({ at, policy: "notifications", address: EDGE, did: member(1) });
+    expect(refused("socket", paced(121, 0, press))).toBe(1);
+  });
+
   test("clicking_four_times_a_second_for_a_minute_passes_with_addresses_seen", () => {
     // Local and test stacks run in header mode, where the per-address bucket holds (60 at once, 5 a second).
     const click = (at: number): Request => ({ at, policy: "default", address: address(1) });

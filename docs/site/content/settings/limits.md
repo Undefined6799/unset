@@ -52,6 +52,9 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | header | `inviteRequest` | ip | 3 | 3 an hour |
 | header | `inviteRequest` | global | 30000 | 30000 a minute |
 | header | `inviteRequest` | global | 20 | 0.83 an hour |
+| header | `notifications` | ip | 60 | 300 a minute |
+| header | `notifications` | global | 30000 | 30000 a minute |
+| header | `notifications` | did | 120 | 120 a minute |
 | socket | `default` | global | 30000 | 30000 a minute |
 | socket | `profile` | global | 30000 | 30000 a minute |
 | socket | `profile` | did | 30 | 30 a minute |
@@ -60,6 +63,8 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | socket | `invite` | did | 10 | 10 an hour |
 | socket | `inviteRequest` | global | 30000 | 30000 a minute |
 | socket | `inviteRequest` | global | 20 | 0.83 an hour |
+| socket | `notifications` | global | 30000 | 30000 a minute |
+| socket | `notifications` | did | 120 | 120 a minute |
 
 ## Invite quotas (pds-admin)
 

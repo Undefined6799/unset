@@ -33,6 +33,13 @@ export const policies = definePolicies({
     SITE_CEILING,
     { capacity: 20, refillPerSec: 20 / 86_400, scope: "global" },
   ],
+  // Opening a notification or marking all as read (P2.27): the page limits, and 120 a minute for one member, so a
+  // member clicking through every row or pressing the button again and again stays well inside it.
+  notifications: [
+    { capacity: 60, refillPerSec: 300 / 60, scope: "ip" },
+    SITE_CEILING,
+    { capacity: 120, refillPerSec: 120 / 60, scope: "did" },
+  ],
 });
 
 export type PolicyName = keyof typeof policies & string;

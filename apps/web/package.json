@@ -11,8 +11,10 @@
     "./lib/components/ui/*": "./lib/components/ui/*/index.ts",
     "./lib/components/profile/*": "./lib/components/profile/*",
     "./lib/components/settings/*": "./lib/components/settings/*",
+    "./lib/components/notifications/*": "./lib/components/notifications/*",
     "./lib/profile/*": "./lib/profile/*",
     "./lib/settings/*": "./lib/settings/*",
+    "./lib/notifications/*": "./lib/notifications/*",
     "./lib/icons/*.png": "./lib/icons/*.png"
   },
   "dependencies": {
