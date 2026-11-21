@@ -3,7 +3,9 @@
   everything else is a stock component). Requests (someone asked to talk; the invite is the request) come first with
   Accept; each conversation shows the other person's name, its unread count, and a lock when it is encrypted or a
   "Not encrypted" mark when it is not (ADR 0085). The start route `/?with=<chat ID>` opens the conversation with that
-  person, starting one if there is none (core/conversations.ts startTarget). Names are the other person's own text:
+  person, starting one if there is none (core/conversations.ts startTarget). A conversation that is not one-to-one and
+  private (core/conversations.ts availableOf) is listed as unavailable, with no name, no Accept and nothing to open.
+  Names are the other person's own text:
   Svelte escapes it, and nothing here renders markup.
 -->
 <script lang="ts">
@@ -25,8 +27,9 @@ let list: readonly Item[] = $state([]);
 let open: ConversationId | null = $state(null);
 let starting = $state(false);
 let problem: string | null = $state(null);
-const requests = $derived(list.filter((c) => c.request));
-const talks = $derived(list.filter((c) => !c.request));
+const requests = $derived(list.filter((c) => c.available && c.request));
+const talks = $derived(list.filter((c) => c.available && !c.request));
+const unavailable = $derived(list.filter((c) => !c.available));
 
 $effect(() => conversations.watchList((next) => (list = next)));
 
@@ -79,7 +82,7 @@ onMount(async () => {
         </ul>
       </section>
     {/if}
-    {#if talks.length === 0 && requests.length === 0 && !starting}
+    {#if talks.length === 0 && requests.length === 0 && unavailable.length === 0 && !starting}
       <p class="text-muted-foreground text-sm">No conversations yet.</p>
     {:else if talks.length > 0}
       <ul class="flex flex-col gap-1" aria-label="Conversations">
@@ -101,6 +104,15 @@ onMount(async () => {
                 </span>
               {/if}
             </Button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    {#if unavailable.length > 0}
+      <ul class="flex flex-col gap-1" aria-label="Unavailable conversations">
+        {#each unavailable as item (item.id)}
+          <li class="text-muted-foreground flex items-center gap-2 px-4 py-2 text-sm" data-unavailable>
+            <Icon name="warning" size={16} />This conversation is not available.
           </li>
         {/each}
       </ul>

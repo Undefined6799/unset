@@ -13,6 +13,8 @@
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
 // - send: sendTextMessage (client.ts:3272-3294), only once the composer is on, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
+// A conversation that is not available (core/conversations.ts availableOf) has no view, cannot be accepted and is never
+// sent in, so the page never joins or encrypts to a room with a third person or one anyone may join.
 // Spec v1.18: https://spec.matrix.org/v1.18/client-server-api/#client-behaviour-21 (direct messages),
 // #receiving-notifications, #receipts, #get_matrixclientv3roomsroomidmessages.
 import type { CryptoApi } from "matrix-js-sdk/lib/crypto-api/index.js";
@@ -39,6 +41,7 @@ import {
 import {
   directRooms,
   findDirect,
+  isAvailable,
   kindOf,
   otherJoined,
   otherPerson,
@@ -93,7 +96,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
   const viewOf = async (id: ConversationId): Promise<ConversationView | null> => {
     const room = client.getRoom(id);
     const conversation = room === null ? null : toConversation(room, direct());
-    if (room === null || conversation === null) return null;
+    if (room === null || conversation === null || !conversation.available) return null;
     return {
       conversation,
       messages: toMessages(room.getLiveTimeline().getEvents(), me),
@@ -153,8 +156,9 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
       }
     },
     async accept(id) {
-      const inviter = client.getRoom(id)?.getDMInviter();
-      if (inviter === undefined) return false;
+      const room = client.getRoom(id);
+      const inviter = room?.getDMInviter();
+      if (room === null || inviter === undefined || !isAvailable(room)) return false;
       try {
         await client.joinRoom(id);
         await recordDirect(id, inviter);
@@ -170,7 +174,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     async send(id, text) {
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());
-      if (room === null || other === undefined || text.trim() === "") return false;
+      if (room === null || other === undefined || text.trim() === "" || !isAvailable(room)) return false;
       if ((await composerFor(room, other)) !== "on") return false;
       try {
         await client.sendTextMessage(id, text);

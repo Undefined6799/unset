@@ -26,9 +26,12 @@ function room(id: string, state: MatrixEvent[], mine: string = KnownMembership.J
   r.updateMyMembership(mine);
   return r;
 }
+/** m.room.join_rules (spec v1.18 #mroomjoin_rules); both private presets set `invite`. */
+const joinRule = (rule: string) => event({ type: "m.room.join_rules", state_key: "", content: { join_rule: rule } });
 const dm = (id: string, them: string, theirs = "join") =>
   room(id, [
     event({ type: "m.room.encryption", state_key: "", content: MEGOLM }),
+    joinRule("invite"),
     member(ME, "join", { displayname: "Me" }),
     member(them, theirs, { displayname: "Bea" }),
   ]);
@@ -53,6 +56,7 @@ describe("toConversation", () => {
       id: "!a:unset.cc",
       with: { id: THEM, name: "Bea" },
       kind: "encrypted",
+      available: true,
       request: false,
       unread: 3,
       lastActiveAt: Number.MIN_SAFE_INTEGER,
@@ -64,6 +68,7 @@ describe("toConversation", () => {
       "!i:unset.cc",
       [
         event({ type: "m.room.encryption", state_key: "", sender: THEM, content: MEGOLM }),
+        joinRule("invite"),
         member(THEM, "join", { displayname: "Bea" }),
         event({
           type: "m.room.member",
@@ -77,8 +82,35 @@ describe("toConversation", () => {
     expect(toConversation(r, new Map())).toMatchObject({
       with: { id: THEM, name: "Bea" },
       kind: "encrypted",
+      available: true,
       request: true,
     });
+  });
+
+  test("chat.conversation_unavailable_crowded: a room with a third person joined or invited is unavailable", () => {
+    const direct = directRooms({ [THEM]: ["!c:unset.cc"] });
+    for (const theirs of ["join", "invite"]) {
+      const crowded = dm("!c:unset.cc", THEM);
+      const third = member(OTHER, theirs);
+      third.event.room_id = "!c:unset.cc";
+      crowded.currentState.setStateEvents([third]);
+      expect(toConversation(crowded, direct)).toMatchObject({ with: { id: THEM }, available: false });
+    }
+    expect(toConversation(dm("!c:unset.cc", THEM), direct)?.available).toBe(true);
+    // Sync's room summary counts everyone, even members lazy loading has not sent (spec v1.18 #_matrixclientv3sync).
+    const summarised = dm("!c:unset.cc", THEM);
+    summarised.setSummary({ "m.heroes": [THEM], "m.joined_member_count": 2, "m.invited_member_count": 1 });
+    expect(toConversation(summarised, direct)?.available).toBe(false);
+  });
+
+  test("chat.conversation_unavailable_not_private: a room anyone may join, or without its join rule, is unavailable", () => {
+    const direct = directRooms({ [THEM]: ["!o:unset.cc"] });
+    for (const rule of ["public", "knock", "restricted", "knock_restricted", "private"]) {
+      const open = room("!o:unset.cc", [joinRule(rule), member(ME, "join"), member(THEM, "join")]);
+      expect(toConversation(open, direct)?.available).toBe(false);
+    }
+    const unruled = room("!o:unset.cc", [member(ME, "join"), member(THEM, "join")]);
+    expect(toConversation(unruled, direct)?.available).toBe(false);
   });
 
   test("chat.conversation_not_encrypted: no Megolm encryption event is marked not encrypted", () => {
@@ -134,8 +166,14 @@ describe("findDirect", () => {
     );
     const gone = dm("!gone:unset.cc", THEM, "leave");
     const crowded = room("!crowd:unset.cc", [member(ME, "join"), member(THEM, "join"), member(OTHER, "join")]);
-    const direct = directRooms({ [THEM]: ["!old:unset.cc", "!new:unset.cc", "!gone:unset.cc", "!crowd:unset.cc"] });
-    const rooms = new Map([old, fresh, gone, crowded].map((r) => [r.roomId, r]));
+    const open = room("!open:unset.cc", [joinRule("public"), member(ME, "join"), member(THEM, "join")]);
+    open.addLiveEvents(
+      [event({ type: "m.room.message", room_id: "!open:unset.cc", content: { msgtype: "m.text", body: "c" } })],
+      { addToState: false },
+    );
+    const ids = ["!old:unset.cc", "!new:unset.cc", "!gone:unset.cc", "!crowd:unset.cc", "!open:unset.cc"];
+    const direct = directRooms({ [THEM]: ids });
+    const rooms = new Map([old, fresh, gone, crowded, open].map((r) => [r.roomId, r]));
     expect(findDirect((id) => rooms.get(id) ?? null, direct, THEM)?.roomId).toBe("!new:unset.cc");
     expect(findDirect((id) => rooms.get(id) ?? null, direct, OTHER)).toBeUndefined();
     expect(

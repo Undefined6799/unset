@@ -2,6 +2,9 @@
 // SDK's rooms and events into them (architecture instructions §4-5), so no SDK type reaches a screen.
 // Room kinds (ADR 0085): a room is encrypted or plain, fixed when it is made; this page makes encrypted ones only and
 // sends only in them, and marks any other room "not encrypted" so the screens are ready when plain chats are offered.
+// Chat is one-to-one and private (Alex, 2026-11-21; group chat later): a room with a third person, or one that
+// anyone but an invited person may join, is listed as unavailable and never opened, accepted or sent in. The server's
+// RoomPolicy refuses to make one; this page does not trust that alone, since it encrypts to everyone in a room.
 
 /** A member's chat ID, `@u<20 base32 letters>:<our server>` (ADR 0010: opaque), checked by parseChatId. */
 export type ChatId = string & { readonly __brand: "ChatId" };
@@ -15,6 +18,8 @@ export type Conversation = {
   /** The other person: their chat ID, which is never shown, and the name they are shown by (nameOf). */
   readonly with: { readonly id: string; readonly name: string };
   readonly kind: ConversationKind;
+  /** One-to-one and private (availableOf); false: shown as unavailable, never as a chat. */
+  readonly available: boolean;
   /** Someone asked to talk and this member has not accepted yet (the invite is the request). */
   readonly request: boolean;
   readonly unread: number;
@@ -55,6 +60,18 @@ export function composerOf(facts: ComposerFacts): Composer {
   return facts.encryptionOn ? "on" : "waiting_for_encryption";
 }
 
+/** How many people a conversation may hold, joined or invited: this member and one other. */
+const ROOM_SIZE = 2;
+
+/**
+ * A room is a conversation here only when an invite is the one way in (m.room.join_rules `invite`, which both private
+ * createRoom presets set, spec v1.18 #post_matrixclientv3createroom) and at most two people are joined or invited.
+ * No join rule seen is not private: the page never assumes the spec's default.
+ */
+export function availableOf(facts: { readonly joinRule: string | undefined; readonly people: number }): boolean {
+  return facts.joinRule === "invite" && facts.people <= ROOM_SIZE;
+}
+
 export type ConversationView = {
   readonly conversation: Conversation;
   readonly messages: readonly Message[];
@@ -69,7 +86,7 @@ export type Conversations = {
   readonly watchList: (onList: (list: readonly Conversation[]) => void) => () => void;
   /** Calls `onView` now and on every change of the conversation, marking it read as it is shown. */
   readonly watch: (id: ConversationId, onView: (view: ConversationView | null) => void) => () => void;
-  /** The existing conversation with this person, or a new encrypted one with them asked to join. */
+  /** The existing available conversation with this person, or a new encrypted one with them asked to join. */
   readonly start: (with_: ChatId) => Promise<ConversationId | null>;
   readonly accept: (id: ConversationId) => Promise<boolean>;
   readonly older: (id: ConversationId) => Promise<void>;
