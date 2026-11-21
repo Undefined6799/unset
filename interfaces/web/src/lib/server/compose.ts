@@ -110,6 +110,8 @@ const EXPIRY_SWEEP_MS = 3_600_000;
 /** How often due chat accounts are created, and at most how many per run (build step 5). */
 const CHAT_JOBS_MS = 10_000;
 const CHAT_JOBS_PER_RUN = 20;
+/** How often web asks chat-admin to delete idle plain rooms (ADR 0091 decision 6). */
+const ROOM_SWEEP_MS = 3_600_000;
 /** A claim's lease: above one job's handle check (identity timeouts, at most 10 s each) and its 8 s chat-admin call. */
 const CHAT_LEASE_S = 120;
 /** Under the health check's 1 s bound (shared/http/health.ts), so the probe is ended, not left behind. */
@@ -483,6 +485,22 @@ async function build(): Promise<Services> {
     everyMs: CHAT_JOBS_MS,
     log,
   });
+  // Every replica asks; chat-admin runs one sweep at a time and allows six an hour (ADR 0091 decision 1). Counts only.
+  const stopRoomSweep = startSweeps({
+    sweeps: [
+      {
+        job: "chat-room-sweep",
+        run: async () => {
+          const swept = await chatAdmin.sweepRooms();
+          if (swept.kind === "unavailable") return log.error("chat.rooms_sweep_failed", { reason: "unavailable" });
+          log.info("chat.rooms_swept", { count: swept.deleted });
+          if (swept.failed > 0) log.error("chat.rooms_sweep_failed", { count: swept.failed });
+        },
+      },
+    ],
+    everyMs: ROOM_SWEEP_MS,
+    log,
+  });
 
   const health = createHealth({
     service: config.UNSET_SERVICE,
@@ -496,6 +514,7 @@ async function build(): Promise<Services> {
     async () => clearInterval(sweeper),
     async () => stopSweeps(),
     async () => stopChatJobs(),
+    async () => stopRoomSweep(),
     () => pool.end(),
     () => lockPool.pool.end(),
   );

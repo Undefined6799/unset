@@ -148,3 +148,26 @@ describe("signTicket", () => {
     expect(seen).toEqual([]);
   });
 });
+
+describe("sweepRooms", () => {
+  test("chat.client_sweep_envelope: one rooms.sweep envelope naming nothing, waited for 30 s", async () => {
+    const counts = { listed: 3, plain: 2, deleted: 1, kept: 2, failed: 0 };
+    const { guard, seen } = network({ status: 200, body: counts });
+    const client = createChatAdminClient(guard, settings, () => 1_800_000_000_000);
+    expect(await client.sweepRooms()).toEqual({ kind: "swept", deleted: 1, kept: 2, failed: 0 });
+    const [{ request }] = seen as [(typeof seen)[number]];
+    expect(request).toMatchObject({ url: "http://chat-admin:8080/v1/rooms.sweep", method: "POST", timeoutMs: 30_000 });
+    const { payload } = JSON.parse(new TextDecoder().decode(request.body as Uint8Array));
+    expect(payload).toMatchObject({ verb: "rooms.sweep", user: "", name: "", device: "", did: "", sid: "", state: "" });
+  });
+
+  test.each([
+    ["a refusal", { status: 503, body: { error: "unavailable" } }],
+    ["a count that is not a number", { status: 200, body: { deleted: "1", kept: 0, failed: 0 } }],
+    ["a negative count", { status: 200, body: { deleted: -1, kept: 0, failed: 0 } }],
+    ["a network failure", new NetGuardError("egress.timeout")],
+  ])("chat.client_sweep_unavailable: %s is unavailable", async (_name, answer) => {
+    const { guard } = network(answer as never);
+    expect(await createChatAdminClient(guard, settings).sweepRooms()).toEqual({ kind: "unavailable" });
+  });
+});
