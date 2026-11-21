@@ -1,8 +1,8 @@
-// The three commands (ADR 0081 decision 1; build plan step 2), after the envelope has passed. MAS is the record of
+// The commands (ADR 0081 decision 1, ADR 0084; build plan steps 2 and 4), after the envelope has passed. MAS is the record of
 // which device IDs exist: a new browser gets an ID no session of the account ever held, and a renewal only names a
 // device that still has a live session, so an ended device is never revived. Expected failures are results.
 import { randomInt } from "node:crypto";
-import type { ChatUser, DeviceId, DisplayName } from "./envelope.ts";
+import type { AccountVerb, ChatUser, DeviceId, DisplayName } from "./envelope.ts";
 import { type Mas, MasUnavailable } from "./mas.ts";
 
 /** The one scope a chat session gets; never taken from a caller (an admin client can mint any scope, urn:mas:admin
@@ -91,4 +91,23 @@ export const endSessions = (mas: Mas, user: ChatUser, device: DeviceId): Promise
     const live = await mas.sessions(account.id, device, "active");
     for (const id of live) await mas.revoke(id);
     return { kind: "ok", ended: live.length };
+  });
+
+const CALLS = { "account.lock": "lock", "account.unlock": "unlock", "account.deactivate": "deactivate" } as const;
+type AccountAnswer = { locked: boolean } | { deactivated: boolean };
+
+/**
+ * Lock, unlock or deactivate the account (ADR 0084 decisions 1 to 3); each is safe to repeat. Lock keeps every session,
+ * so no key is lost; deactivate ends them and asks the homeserver to erase. An account MAS never made is already gone
+ * for a deactivate and 409 for the others. There is no reactivate (decision 5).
+ */
+export const changeAccount = (mas: Mas, user: ChatUser, verb: AccountVerb): Promise<Result<AccountAnswer>> =>
+  guarded<AccountAnswer>(async () => {
+    const account = await mas.findUser(user);
+    if (account === null)
+      return verb === "account.deactivate" ? { kind: "ok", deactivated: false } : refused(409, "no_account");
+    await mas.setState(account.id, CALLS[verb]);
+    return verb === "account.deactivate"
+      ? { kind: "ok", deactivated: true }
+      : { kind: "ok", locked: verb === "account.lock" };
   });

@@ -1,7 +1,8 @@
 // Test harness for chat-admin: a fake MAS admin API on a local port (MAS is an unmanaged dependency, rule TE-1), the
 // callers' signing keys, and a handler over a real jti file. The fake answers as MAS 1.26.0 does (docs/api/spec.json;
 // the live checks of 2026-11-21 in the P6.04 PR): 201/409 on create, 404 for an unknown username, a scope filter
-// that matches one whole scope token, 409 on revoking a revoked session.
+// that matches one whole scope token, 409 on revoking a revoked session; lock, unlock and deactivate answer 200 every
+// time and 404 for an unknown ID (checked on the live 1.26.0, its own /api/spec.json, 2026-11-21).
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"; // guard-allow: egress test fake, loopback listeners only
@@ -20,7 +21,7 @@ export const ALICE = "alice0000000000000000000";
 export const SCOPE_PREFIX = "urn:matrix:client:api:* urn:matrix:client:device:";
 
 type Session = { id: string; actor: string; scope: string; revoked: boolean; expiresIn: unknown; humanName: unknown };
-type User = { id: string; username: string; locked: boolean; displayname: unknown };
+type User = { id: string; username: string; locked: boolean; deactivated: boolean; displayname: unknown };
 
 export type FakeMas = {
   url: URL;
@@ -29,6 +30,8 @@ export type FakeMas = {
   /** Usernames the homeserver reserved: create answers 409 and by-username 404 (MAS users/add.rs, UsernameReserved). */
   reserved: Set<string>;
   sessions: Session[];
+  /** Each deactivate call, with the body it carried ("" asks MAS to erase: skip_erase defaults to false). */
+  erased: { username: string; body: string }[];
   /** When true every call answers 503, as a MAS that is starting or failing does. */
   down: boolean;
   /** Called before each personal-session list answers; a test can add a session to play a device-ID collision. */
@@ -47,7 +50,11 @@ const userResource = (u: User) => ({
   data: {
     type: "user",
     id: u.id,
-    attributes: { username: u.username, locked_at: u.locked ? "2026-11-21T00:00:00Z" : null, deactivated_at: null },
+    attributes: {
+      username: u.username,
+      locked_at: u.locked ? "2026-11-21T00:00:00Z" : null,
+      deactivated_at: u.deactivated ? "2026-11-21T00:00:00Z" : null,
+    },
   },
 });
 const sessionResource = (s: Session, token?: string) => ({
@@ -78,7 +85,7 @@ function route(fake: FakeMas, req: IncomingMessage, body: string, res: ServerRes
     const username = String(parsed.username);
     if (fake.users.has(username) || fake.reserved.has(username))
       return json(res, 409, { errors: [{ title: "exists" }] });
-    const user = { id: ulid(), username, locked: false, displayname: parsed.displayname };
+    const user = { id: ulid(), username, locked: false, deactivated: false, displayname: parsed.displayname };
     fake.users.set(username, user);
     return json(res, 201, userResource(user));
   }
@@ -88,6 +95,18 @@ function route(fake: FakeMas, req: IncomingMessage, body: string, res: ServerRes
     return user === undefined
       ? json(res, 404, { errors: [{ title: "not found" }] })
       : json(res, 200, userResource(user));
+  }
+  const state = /^\/api\/admin\/v1\/users\/([0-9A-Z]{26})\/(lock|unlock|deactivate)$/.exec(path);
+  if (req.method === "POST" && state) {
+    const user = [...fake.users.values()].find((u) => u.id === state[1]);
+    if (user === undefined) return json(res, 404, { errors: [{ title: "not found" }] });
+    if (state[2] === "deactivate") {
+      // MAS ends every session of a deactivated user (spec.json, deactivate).
+      user.deactivated = true;
+      fake.erased.push({ username: user.username, body });
+      for (const s of fake.sessions) if (s.actor === user.id) s.revoked = true;
+    } else user.locked = state[2] === "lock";
+    return json(res, 200, userResource(user));
   }
   if (req.method === "POST" && path === "/api/admin/v1/personal-sessions") {
     const s = {
@@ -133,6 +152,7 @@ export async function fakeMas(): Promise<FakeMas> {
     users: new Map(),
     reserved: new Set(),
     sessions: [],
+    erased: [],
     down: false,
     onList: () => {
       // Nothing by default.
@@ -199,7 +219,14 @@ export const tempDir = () => mkdtempSync(join(tmpdir(), "chat-admin-"));
 
 /** A running chat-admin handler on a local port, with web's and the door's keys, over a fresh state folder. */
 export async function startService(mas: FakeMas, overrides: Partial<HandlerDeps> = {}) {
-  const web = callerKey("web-1", "web", ["account.create", "session.mint", "session.end"]);
+  const web = callerKey("web-1", "web", [
+    "account.create",
+    "session.mint",
+    "session.end",
+    "account.lock",
+    "account.unlock",
+    "account.deactivate",
+  ]);
   const door = callerKey("door-1", "door", ["session.end"]);
   const logs: Record<string, unknown>[] = [];
   const deps: HandlerDeps = {

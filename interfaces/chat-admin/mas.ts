@@ -4,7 +4,9 @@
 // caller's queued job or the door retries). Read from MAS 1.26.0 docs/api/spec.json and docs/topics/admin-api.md
 // (https://github.com/element-hq/matrix-authentication-service/tree/v1.26.0/docs), checked on a live 1.26.0:
 // token by client_credentials with client_secret_basic and scope urn:mas:admin; users 201/409, by-username 200/404;
-// personal-sessions 201; revoke 200, 409 when already revoked.
+// personal-sessions 201; revoke 200, 409 when already revoked; users/{id}/lock, /unlock and /deactivate 200 every
+// time and 404 for an unknown ID (the live 1.26.0, its own /api/spec.json, 2026-11-21). Deactivate is sent with no
+// body, so `skip_erase` keeps its default false and MAS asks the homeserver to erase the user (DeactivateUserRequest).
 import { request } from "node:http";
 import { type Resolve, systemResolve, vettedLookup } from "@unset/shared-admin-envelope";
 
@@ -18,6 +20,8 @@ export type Mas = {
   readonly sessions: (userId: string, device: string, which: "active" | "ever") => Promise<string[]>;
   readonly mint: (userId: string, scope: string, expiresIn: number) => Promise<string>;
   readonly revoke: (sessionId: string) => Promise<void>;
+  /** lock, unlock or deactivate the user with this MAS ID (ADR 0084). */
+  readonly setState: (userId: string, call: "lock" | "unlock" | "deactivate") => Promise<void>;
 };
 export type MasOptions = {
   readonly adminUrl: URL;
@@ -141,6 +145,11 @@ export function createMas(options: MasOptions): Mas {
       const answer = await admin("POST", "/api/admin/v1/personal-sessions", body);
       const token = field(answer.body, "data", "attributes", "access_token");
       return answer.status === 201 && typeof token === "string" ? token : refuse("mint", answer);
+    },
+    setState: async (userId, call) => {
+      if (!ULID.test(userId)) throw new MasUnavailable("user_id");
+      const answer = await admin("POST", `/api/admin/v1/users/${userId}/${call}`);
+      if (answer.status !== 200) refuse(call, answer);
     },
     revoke: async (sessionId) => {
       const answer = await admin("POST", `/api/admin/v1/personal-sessions/${sessionId}/revoke`);

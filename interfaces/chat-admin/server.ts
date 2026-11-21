@@ -4,7 +4,7 @@
 // read-mint-revoke never interleaves with another command for that account (rule DA-4).
 import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
 import { type ChatAdminVerb, DurabilityLost, type JtiStore } from "@unset/shared-admin-envelope";
-import { type Abandoned, createAccount, endSessions, mintSession, type Result } from "./commands.ts";
+import { type Abandoned, changeAccount, createAccount, endSessions, mintSession, type Result } from "./commands.ts";
 import {
   type Command,
   checkEnvelope,
@@ -44,6 +44,9 @@ const ROUTES: Readonly<Record<string, ChatAdminVerb>> = {
   "/v1/account.create": "account.create",
   "/v1/session.mint": "session.mint",
   "/v1/session.end": "session.end",
+  "/v1/account.lock": "account.lock",
+  "/v1/account.unlock": "account.unlock",
+  "/v1/account.deactivate": "account.deactivate",
 };
 const BODY_CAP = 4096;
 
@@ -139,6 +142,7 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     if (gone !== null) return Promise.resolve({ kind: "refused", status: 403, reason: gone });
     if (command.verb === "account.create") return createAccount(deps.mas, command.user, command.name);
     if (command.verb === "session.end") return endSessions(deps.mas, command.user, command.device);
+    if (command.verb !== "session.mint") return changeAccount(deps.mas, command.user, command.verb);
     return mintSession(deps.mas, deps.sessionTtl, command.user, device, abandoned);
   }
 
