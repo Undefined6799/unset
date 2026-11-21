@@ -101,7 +101,12 @@ type Signed = Json & { signatures?: Record<string, Record<string, string>> };
  */
 function fakeHomeserver() {
   const seen: { method: string; url: string; auth: string; body: string }[] = [];
-  const state = { refuse: false };
+  /**
+   * `cachedInitialAt`: answer an initial /sync (no `since`) as it stood at that tick, as Synapse does for a device
+   * that asks again within sync_response_cache_duration (2 minutes by default: synapse v1.165.0
+   * config/cache.py:211-212, the cache key in rest/client/sync.py:210 includes the device). Later syncs bring the rest.
+   */
+  const state: { refuse: boolean; cachedInitialAt: number | null } = { refuse: false, cachedInitialAt: null };
   const devices: Record<string, Signed> = {};
   const signing: { master?: Signed; self?: Signed; user?: Signed } = {};
   const accountData = new Map<string, { content: Json; at: number }>();
@@ -120,12 +125,15 @@ function fakeHomeserver() {
       target.signatures = { ...target.signatures, [user]: { ...target.signatures?.[user], ...sigs } };
     }
   };
-  const sync = (since: number) => {
+  const sync = (since: number, upTo = clock) => {
     const user = userOf();
-    const events = [...accountData].filter(([, v]) => v.at > since).map(([type, v]) => ({ type, content: v.content }));
-    const lists = user !== undefined && changedAt > since ? { changed: [user], left: [] } : { changed: [], left: [] };
+    const events = [...accountData]
+      .filter(([, v]) => v.at > since && v.at <= upTo)
+      .map(([type, v]) => ({ type, content: v.content }));
+    const changed = user !== undefined && changedAt > since && changedAt <= upTo;
+    const lists = changed ? { changed: [user], left: [] } : { changed: [], left: [] };
     return {
-      next_batch: `s${clock}`,
+      next_batch: `s${upTo}`,
       rooms: {},
       account_data: { events },
       to_device: { events: [] },
@@ -199,8 +207,10 @@ function fakeHomeserver() {
     if (state.refuse) return reply(res, 401, { errcode: "M_UNKNOWN_TOKEN", error: "Token is not active" });
     if (path === "/sync") {
       const since = Number(url.searchParams.get("since")?.slice(1) ?? "0");
-      const wait = url.searchParams.has("since") && clock <= since ? 300 : 0;
-      setTimeout(() => reply(res, 200, sync(since)), wait);
+      const initial = !url.searchParams.has("since");
+      const wait = !initial && clock <= since ? 300 : 0;
+      const upTo = initial && state.cachedInitialAt !== null ? state.cachedInitialAt : clock;
+      setTimeout(() => reply(res, 200, sync(since, upTo)), wait);
       return;
     }
     if (path === "/capabilities") return reply(res, 200, { capabilities: {} });
@@ -221,7 +231,7 @@ function fakeHomeserver() {
     if (keys(path, method, body, res) !== null) return;
     return reply(res, 404, { errcode: "M_NOT_FOUND", error: "Not found" });
   };
-  return { seen, state, handle };
+  return { seen, state, handle, now: () => clock };
 }
 
 const listen = (server: { listen(port: number, host: string, done: () => void): unknown }) =>
