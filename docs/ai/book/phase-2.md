@@ -2610,6 +2610,18 @@ own email 2FA) rather than a second-factor store of our own; the choice is Alex'
 **What:** one check the interface runs before each listed action, the same everywhere, so adding an action is one
 line. Until it exists, the listed actions run on the signed-in session alone (nothing is live, Alex 00:58Z).
 
+### P2.27e — Clear the bell's count once the list is seen
+Tags: [SEC]            Depends on: P2.27c
+Alex 2026-11-21 05:16Z: the number should disappear when he opens the bell and come back only for newer
+notifications, with no need to dismiss. ADR 0085, Proposed; migration 0039.
+
+**What:** a seen mark per browser session (`app.session.notifications_seen_at`), moved forward by opening the bell
+(a background POST with script) or loading `/notifications`, never past an entry this browser may see. The badge
+counts entries newer than the mark; seen ones stay listed until dismissed.
+**Tests:** the mark against real Postgres as `web` (this browser's own, never back, nothing for a later browser's or
+another member's id), the page clearing its own browser's count only, a newer entry counting again, the `seen` form
+refused cross-site and harmless from the alert's new browser.
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit

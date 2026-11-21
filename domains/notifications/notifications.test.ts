@@ -5,6 +5,7 @@ import {
   type Entry,
   type Inbox,
   inboxList,
+  listOf,
   type Notification,
   type NotificationId,
   notify,
@@ -13,7 +14,13 @@ import {
 } from "./notifications.ts";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}` as NotificationId;
-const entry = (n: number): Entry => ({ id: id(n), reason: "sign_in", topic: null, sentAt: new Date(n * 1000) });
+const entry = (n: number, seen = false): Entry => ({
+  id: id(n),
+  reason: "sign_in",
+  topic: null,
+  sentAt: new Date(n * 1000),
+  seen,
+});
 
 function inboxOf(count: number): Inbox & { asked: number[] } {
   const asked: number[] = [];
@@ -25,6 +32,7 @@ function inboxOf(count: number): Inbox & { asked: number[] } {
     },
     dismiss: async () => [],
     dismissUpTo: async () => [],
+    markSeen: async () => undefined,
   };
 }
 
@@ -90,6 +98,15 @@ describe("notifications", () => {
     const list = await inboxList(inboxOf(3), 5);
     expect(list).toMatchObject({ count: 3, more: false });
     expect(list.entries).toHaveLength(3);
+  });
+
+  test("list.counts_only_what_this_browser_has_not_seen", () => {
+    // Opening the bell or the page marks what it showed as seen in this browser (ADR 0085): the badge counts the
+    // newer ones only, and the seen ones stay listed until they are dismissed.
+    const read = [entry(9), entry(8), entry(7, true), entry(6, true)];
+    expect(listOf(read, 5)).toMatchObject({ count: 2, more: false });
+    expect(listOf(read, 5).entries).toHaveLength(4);
+    expect(listOf([entry(2, true), entry(1, true)], 5).count).toBe(0);
   });
 
   test("list.the_page_reads_past_its_own_limit", async () => {

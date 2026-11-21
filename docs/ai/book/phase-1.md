@@ -4925,6 +4925,20 @@ raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP err
 the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
 click before the editor mounts on idle is lost; both are fixed in slice 3.
 
+### P1.21r — Fix the in-place editor's first press and the way back (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21v · **Plan:** staging test of #1857, 2026-11-21
+
+Found on staging in Brave and WebKit after #1857 deployed. The owner's public page (/@handle) now shows the owner a
+plain link back to the page they edit (/did); it runs no script, and the owner's copy is private and never stored, so
+no visitor's copy carries the link. The editor's script loads as soon as the page is up, and a press on a Text card
+before the editor is drawn opens it at once, with the caret where the press was and the keys typed meanwhile. A press
+before the page's own script runs stays the browser's. Only the card pressed last keeps those keys, a press or focus
+anywhere else lets go of them, and the first key it cannot replay (Backspace, Enter, an arrow) ends them (Codex on
+#1909). A press on the card around the words puts the caret at the
+nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
+member was typing. Tabbing into the words shows the same focus ring as every other field.
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
