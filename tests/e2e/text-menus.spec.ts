@@ -154,6 +154,8 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await editor.locator("p").nth(3).hover();
   const grip = handle.getByRole("img", { name: "Drag to move this block" });
   await expect(grip).toBeVisible();
+  // Crepe's handle is six dots; ours draws Lucide's grip-vertical (ADR 0087), one path per dot.
+  await expect(grip.locator("svg path")).toHaveCount(6);
   await drag(page, grip, first);
   await expect(editor.locator("p")).toHaveText(["third line", `${word} one`, "new line", "second line"]);
   await discardAndRemove(page, word);
