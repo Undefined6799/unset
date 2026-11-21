@@ -1,0 +1,22 @@
+# The one Python folder (PLAN §5.6; ADR 0001 log, Phase 6 review): a Synapse module, standard library plus
+# Synapse's module API only, no dependencies. tests/integration/matrix/synapse-module checks it with mypy --strict
+# and ruff inside the pinned Synapse image, and tests its behaviour black-box from Vitest.
+[project]
+name = "unset-chat-policy"
+version = "0.0.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "S", "BLE", "RUF", "ANN", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
