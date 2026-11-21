@@ -4,7 +4,7 @@ The indexer copies our members' published profiles into Postgres. The public pag
 
 ## Route
 
-[`interfaces/web/src/routes/@[actor]/+page.server.ts`](../../../interfaces/web/src/routes/@[actor]/+page.server.ts) serves `GET /@<handle>` and `GET /@<DID>`. It asks [`publicProfileStore.ts`](../../../infrastructure/postgres/publicProfileStore.ts). The profile and its cards come from the views `idx.public_profile` and `idx.public_section` (migration 0030). The same statement also left-joins `app.discoverability` (migration 0034) for the member's search and AI choices. No row means both switches are off.
+[`interfaces/web/src/routes/@[actor]/+page.server.ts`](../../../interfaces/web/src/routes/@[actor]/+page.server.ts) serves `GET /@<handle>` and `GET /@<DID>`. It asks [`publicProfileStore.ts`](../../../infrastructure/postgres/publicProfileStore.ts). The profile and its cards come from the views `idx.public_profile` and `idx.public_section` (migration 0030), and the main page's card list from `idx.public_page` (migration 0042). The same statement also left-joins `app.discoverability` (migration 0034) for the member's search and AI choices. No row means both switches are off.
 
 An unknown actor, a path that is not an actor, and a hidden, deactivated, deleted, erased, delisted or suspended account all answer 404. The views show only `idx.visible_account`. A found account under any other path is redirected to its canonical one: the verified handle, or else the DID.
 
@@ -21,7 +21,7 @@ The process is [`interfaces/indexer/`](../../../interfaces/indexer) ([ADR 0052](
 
 ## Domain rules
 
-[`domains/profile/index-plan.ts`](../../../domains/profile/index-plan.ts) decides what the index keeps from one verified commit. It keeps `sh.unset.profile` and `sh.unset.card`, checks each record against its lexicon, and ignores every other collection in the commit.
+[`domains/profile/index-plan.ts`](../../../domains/profile/index-plan.ts) decides what the index keeps from one verified commit. It keeps `sh.unset.profile`, the main page `sh.unset.page/self` (a page under another key is skipped, [ADR 0091](../decisions/0091-a-page-record-holds-the-card-list.md)) and `sh.unset.card`, checks each record against its lexicon, and ignores every other collection in the commit.
 
 [`discoverability.ts`](../../../domains/profile/discoverability.ts) checks the search and AI choices. Both switches start off. The title is at most 70 characters and the description at most 200. [`crawlers.ts`](../../../domains/profile/crawlers.ts) builds `robots.txt` and the sitemap from those choices.
 
@@ -36,6 +36,7 @@ The process is [`interfaces/indexer/`](../../../interfaces/indexer) ([ADR 0052](
 `idx` is derived. It can be dropped and rebuilt (rule DA-1). Moderator decisions live in `mod`, so a rebuild does not clear them. Migrations are in [`infrastructure/postgres/migrations/`](../../../infrastructure/postgres/migrations).
 
 - `idx.account`, `idx.profile`, `idx.section`, `idx.record_blob`, `idx.relay_cursor`, `idx.ingest_stat`, `idx.dead_letter`, `idx.account_job`, `mod.account_state`, and the view `idx.visible_account` (0025). `indexer` holds the table grants. No role has a grant on `mod.account_state`.
+- `idx.page` (0042) holds the main page; each card's `position` in `idx.section` is its place in that page's list. `indexer` holds the table grants, and `web` reads the view `idx.public_page`.
 - `idx.track_request` (0026) is the queue. `web` may insert a row and cannot read or delete it. `indexer` may select and delete, and cannot insert. `finishChat` inserts the row in the transaction that marks onboarding done.
 - The indexer may end sessions by executing `app.end_sessions_for_did` (0027). It gains no grant on an `app` table.
 - `core.erased_did` and `core.tombstone_key` are the erasure tombstone. `idx.is_erased` answers from them (0028). No role is granted the tables.
