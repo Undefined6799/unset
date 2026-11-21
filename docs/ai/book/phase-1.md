@@ -4914,6 +4914,11 @@ sticky unsaved-changes bar under the header, Width and Style in the card's menu,
 (3) Milkdown's block handle, slash menu and floating bar for a fine pointer. No script keeps per-card saves.
 Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; apps/web (page).
 
+Follow-up booked (review of #1857, 2026-11-21): after a Save, the page settles unsaved edits and offered drafts on the
+version the refresh reads, not the one applyWrites answered. If the member's other device writes the card in that gap,
+a later Save from this page could overwrite those words without a conflict. Return each written card's new CID in the
+`?/saveAll` answer and settle on it.
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
@@ -16793,6 +16798,18 @@ on the new line, an unrelabelled old paragraph and any body edit stay refused, e
 the reviewer found on main: a status starting "Superseded" counted as not accepted, so later PRs could edit a
 superseded ADR freely. A superseded ADR, in either form, now never changes again: no edit, no second mark, no
 deletion. Marking 0072 itself is a later docs PR.
+
+---
+
+### P1.38v — Name only files on the tree in the lint rules
+Tags: —            Depends on: —
+`scripts/lint/` and the docs that describe its rules; issues #1775 and #1781 (docs checker, 2026-11-19).
+
+**What:** `app-build-config-imports` still allowed `scripts/ui/css-scope.ts`, and `WEB_SERVER_FILES` still listed
+`interfaces/web/check.ts`; neither file is on the tree (css-scope left with the React screens in a25d62a, #1684).
+Both names come out, which only tightens the rules. `depcruise-paths.test.ts` fails on any exact file a rule names
+that is not on the tree, so the next removal breaks CI instead of leaving a dead allowance. A path named ahead of
+its folder (today only `RENDER_ENTRIES.admin`) is listed there with its reason.
 
 ---
 

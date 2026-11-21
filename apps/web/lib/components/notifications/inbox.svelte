@@ -22,6 +22,7 @@ import { type NotificationsView, type NotificationView, shortTime, timeText } fr
 import { Icon, type IconName } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import DismissAll from "./dismiss-all.svelte";
+import Tabs from "./tabs.svelte";
 
 let { view, chosen }: { view: NotificationsView | undefined; chosen: string | null } = $props();
 
@@ -237,6 +238,7 @@ const checkbox = "relative z-10 size-6 accent-primary";
   <h1 id="notifications-title" class="text-3xl leading-tight font-semibold {detailScreen ? 'max-md:sr-only' : ''}">
     {T.title}
   </h1>
+  <div class={detailScreen ? "max-md:hidden" : ""}><Tabs current="notifications" /></div>
 
   {#if view === undefined || view.state === "failed"}
     <p role="alert" class="text-muted-foreground">{T.failed}</p>

@@ -44,8 +44,17 @@ The list, the detail, the badge and dismissing do not change. Removing a source 
   zone with it.
 - Posts count against the `notifications` limit: the page limits and 120 a minute per member.
 
+## Sign-in history (P2.27c, ADR 0082)
+
+- A tab beside Notifications, `/notifications/sign-ins`: the member's sign-ins in the last 30 days, newest first, at
+  most 50, with the date and time and how long ago. Only the time is kept: no address, device or place.
+- The OAuth callback writes one row per sign-in in the sign-in's own transaction. Web's sweep deletes rows after 30
+  days; erasure removes them.
+- The member deletes one, the ticked ones or all ("all" stops at the newest listed), from any of their browsers. A
+  second check before deleting comes with book P2.28.
+
 ## Later
 
-A Sign-in history tab (P2.27c). Modules sending notifications follow the contract in ADR 0079
+Modules sending notifications follow the contract in ADR 0079
 point 6 when the first one exists. A reminder for an unsaved profile can only be drawn on the device that holds it
 (point 7).
