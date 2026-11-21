@@ -1258,8 +1258,18 @@ const CHAT = DEV_CHAT.CHAT_HOST;
 const chatRoute = (c: Json, at: number): Obj => o(inner(c, CHAT)[at]);
 const chatPattern = (c: Json, at: number): Obj =>
   o(o(o(a(chatRoute(c, at).match)[0]).vars_regexp)["{http.request.uri.path}"]);
-const chatProxy = (c: Json, at: number): Obj => o(a(o(a(o(a(chatRoute(c, at).handle)[0]).routes)[0]).handle)[0]);
+/** The handlers of a chat upstream route's inner route: any request-header handler, then the upstream last. */
+const chatInner = (c: Json, at: number): Json[] => a(o(a(o(a(chatRoute(c, at).handle)[0]).routes)[0]).handle);
+const chatProxy = (c: Json, at: number): Obj => o(chatInner(c, at).at(-1));
+/** The handlers the Matrix route runs before its upstream, in order. */
+const matrixBefore = (c: Json): Obj[] => chatInner(c, 1).map(o).slice(0, -1);
 const CHAT_REDS: readonly Red[] = [
+  [
+    "a chat Matrix route that forwards the browser's cookies",
+    "dev-chat",
+    (c) => void chatInner(c, 1).splice(0, chatInner(c, 1).length - 1),
+    "{$CHAT_HOST}: the Matrix route is not the ruled one",
+  ],
   [
     "a chat site that routes all of /_matrix/",
     "dev-chat",
@@ -1531,6 +1541,16 @@ describe("edge rules on the adapted config (P1.39b)", () => {
         "{$DOCS_HOST}: the site's headers are not the ruled ones",
       );
     }
+  });
+
+  test("chat_matrix_route_strips_cookies_before_synapse", () => {
+    // Review finding N3 (#1943): the page sends its Matrix calls with same-origin credentials so they carry Pangolin's
+    // login (ADR 0094 decision 6), which also sends the door's Path=/ cookies (interfaces/chat-auth/cookies.ts:21).
+    // Pangolin checks its own cookie before the edge, so the Matrix route removes Cookie before Synapse; the door's
+    // route keeps it.
+    const config = adapted("dev-chat");
+    expect(matrixBefore(config)).toEqual([{ handler: "headers", request: { delete: ["Cookie"] } }]);
+    expect(JSON.stringify(chatRoute(config, 2))).not.toContain('"Cookie"');
   });
 
   test("chat_paths_reach_only_the_ruled_upstream", () => {

@@ -338,6 +338,12 @@
                                     {
                                       "handle": [
                                         {
+                                          "handler": "headers",
+                                          "request": {
+                                            "delete": ["Cookie"]
+                                          }
+                                        },
+                                        {
                                           "handler": "reverse_proxy",
                                           "headers": {
                                             "request": {

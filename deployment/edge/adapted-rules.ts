@@ -80,7 +80,7 @@ const same = (a: Json | undefined, b: Json | undefined): boolean => canonical(a)
 /** The modules, matchers and keys our config adapts to; anything else fails (the reader's DIRECTIVES, as Caddy names them). */
 const HANDLER_KEYS: Readonly<Record<string, readonly string[]>> = {
   subroute: ["routes"],
-  headers: ["response"],
+  headers: ["response", "request"],
   rate_limit: ["rate_limits", "disable_metrics"],
   static_response: ["status_code", "close"],
   reverse_proxy: ["headers", "transport", "upstreams"],
@@ -803,17 +803,22 @@ const STRICT_CSP_DEFAULT: Json = {
     },
   },
 };
-/** One of the chat site's two upstream routes: its path pattern, by `name`, then (upstream) to `upstream` alone. */
-const chatUpstreamRoute = (name: string, pattern: string, upstream: string): Json => ({
+/**
+ * One of the chat site's two upstream routes: its path pattern, by `name`, the handlers `before` its upstream, then
+ * (upstream) to `upstream` alone.
+ */
+const chatUpstreamRoute = (name: string, pattern: string, upstream: string, before: Json[] = []): Json => ({
   match: [{ vars_regexp: { "{http.request.uri.path}": { name, pattern } } }],
-  handle: [{ handler: "subroute", routes: [{ handle: [ruledProxy(upstream)] }] }],
+  handle: [{ handler: "subroute", routes: [{ handle: [...before, ruledProxy(upstream)] }] }],
 });
+/** The Matrix route sends Synapse no cookie (review finding N3): the door's and Pangolin's stay at the edge. */
+const NO_COOKIE: Json = { handler: "headers", request: { delete: ["Cookie"] } };
 
 /**
  * The chat site (P6.02; ADR 0081 decision 6, ADR 0088): one plain route, as every site; before it exactly the security
  * headers, the default policy and noindex; inside it, in order and each whole, the zones, the Matrix client API to
- * Synapse, the door's routes to the door, and the edge's own 404 for anything else. So no other path, no other
- * upstream and no client address reaches either, and the door's and Synapse's own policies stand.
+ * Synapse with no cookie, the door's routes to the door, and the edge's own 404 for anything else. So no other path,
+ * no other upstream and no client address reaches either, and the door's and Synapse's own policies stand.
  */
 function chatSiteProblems(route: Obj, env: AdaptedEnv): string[] {
   const name = "{$CHAT_HOST}";
@@ -837,7 +842,7 @@ function chatSiteProblems(route: Obj, env: AdaptedEnv): string[] {
   }
   const [zones, matrix, door, last, ...more] = arr(inner.routes);
   if (!same(zones, { handle: [limiter(CHAT_ZONES)] })) found.push(`${name}: the zones are not the ruled ones`);
-  if (!same(matrix, chatUpstreamRoute("matrix", CHAT_MATRIX_PATH, env.MATRIX_UPSTREAM as string))) {
+  if (!same(matrix, chatUpstreamRoute("matrix", CHAT_MATRIX_PATH, env.MATRIX_UPSTREAM as string, [NO_COOKIE]))) {
     found.push(`${name}: the Matrix route is not the ruled one`);
   }
   if (!same(door, chatUpstreamRoute("door", CHAT_DOOR_PATH, env.CHAT_UPSTREAM as string))) {

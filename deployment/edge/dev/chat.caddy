@@ -27,6 +27,12 @@
 		import chat-ratelimit
 		@matrix vars_regexp {http.request.uri.path} ^/_matrix/client(?:/[^/]*[^/.][^/]*)+/?$
 		route @matrix {
+			# No cookie reaches Synapse (review finding N3; ADR 0094 decision 6): the page sends its Matrix calls with
+			# same-origin credentials for Pangolin's login, which Pangolin checks before the edge, and that also sends the
+			# door's Path=/ cookies (interfaces/chat-auth/cookies.ts:21). Synapse reads only the bearer token. Caddy
+			# v2.11.9 request_header removes the field from the request before the proxy copies it
+			# (caddyfile/directives/request_header.md).
+			request_header -Cookie
 			import upstream {$MATRIX_UPSTREAM}
 		}
 		@door vars_regexp {http.request.uri.path} ^/(?:sign-in(?:/return|/redeem)?|sign-out|setup/(?:claim|release)|push/key|chat-id|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$

@@ -35,10 +35,12 @@ client listener, `10.250.38.51:8008`).
    so on its own the browser would not send Pangolin's session cookie on `/_matrix/client/`, and Pangolin would refuse
    those calls while the page and the door's routes (`credentials: "same-origin"`, `apps/chat/core/*.ts`) pass. The
    page therefore hands `createClient` a `fetchFn` (a documented option, `src/client.ts:313`, passed on at `:1358`)
-   that sends same-origin credentials, so every call the chat page makes goes through the login. Synapse reads only
-   the bearer token, so the cookie gives it no authority. This is Alex's card answer, the option "Yes, behind
-   Pangolin", whose consequence was that the chat page's own calls ride that login (as the coordinator relayed it on
-   2026-11-21; the card's exact consequence line is not quoted here). Pangolin gets no bypass rule for the site.
+   that sends same-origin credentials, so every call the chat page makes goes through the login. Synapse never
+   receives cookies: the edge's Matrix route removes the `Cookie` header before the upstream, so neither Pangolin's
+   session nor the door's cookies reach it, and it reads only the bearer token. This is Alex's card answer, the
+   option "Yes, behind Pangolin", whose consequence was that the chat page's own calls ride that login (as the
+   coordinator relayed it on 2026-11-21; the card's exact consequence line is not quoted here). Pangolin gets no
+   bypass rule for the site.
 
 ## Alternatives
 - **A Pangolin bypass for `/_matrix/client/*`.** Rejected: it would make Synapse's client API public on staging, its
