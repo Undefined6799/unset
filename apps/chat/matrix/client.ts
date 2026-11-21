@@ -11,8 +11,12 @@
 // Screens get our ChatState only, never an SDK object.
 import { CryptoEvent, OnlySignedDevicesIsolationMode } from "matrix-js-sdk/lib/crypto-api/index.js";
 import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
-import type { ChatSession, ChatState } from "../core/chat.ts";
+import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
+import type { ClaimOutcome } from "../core/setup-claim.ts";
+import { createKeyHolder, type Keys, makeKey, phaseOf, readFacts, storeKey, unlock } from "./recovery.ts";
 
+const UNAVAILABLE = "chat.unavailable";
+const SETUP_FAILED = "chat.setup_failed";
 /** How long the first sync may take before the page says so (book P6.06 step 6: 30 s). */
 const FIRST_SYNC_MS = 30_000;
 
@@ -23,18 +27,6 @@ const FIRST_SYNC_MS = 30_000;
  */
 export const storePrefix = (userId: string): string => `unset-chat:${userId}`;
 
-/** What the SDK says about this browser's keys, read in lockFacts. */
-export type CryptoFacts = { readonly crossSigningReady: boolean; readonly deviceCrossSigned: boolean };
-
-/**
- * Ready only when the account's signing identity is trusted here with its private keys at hand
- * (isCrossSigningReady, src/rust-crypto/rust-crypto.ts:802-814; Element's own "verified" check,
- * MatrixChat.tsx:2203) and this device is cross-signed by it (DeviceVerificationStatus.crossSigningVerified,
- * src/crypto-api/index.ts:961). Before the recovery key unlocks this browser (ADR 0083 decision 3) neither holds.
- */
-export const lockOf = (facts: CryptoFacts): "locked" | "ready" =>
-  facts.crossSigningReady && facts.deviceCrossSigned ? "ready" : "locked";
-
 export type Chat = { readonly stop: () => void };
 export type ChatOptions = {
   /** The page's own origin: the edge sends /_matrix/client/* to the homeserver (ADR 0081 decision 6). */
@@ -42,17 +34,20 @@ export type ChatOptions = {
   readonly onState: (state: ChatState) => void;
   /** The server stopped taking the token (HttpApiEvent.SessionLoggedOut, src/http-api/fetch.ts:183-196). */
   readonly onSignedOut: () => void;
+  /** The door's setup claim for this browser's device (ADR 0089). */
+  readonly setup: { readonly claim: () => Promise<ClaimOutcome>; readonly release: () => Promise<void> };
 };
 
 /** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
 export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
+  const holder = createKeyHolder();
   const client = createClient({
     baseUrl: options.baseUrl,
     accessToken: session.accessToken,
     userId: session.userId,
     deviceId: session.deviceId,
-    // The recovery-key callback (getSecretStorageKey) comes with the unlock, build step 8.
-    cryptoCallbacks: {},
+    // The recovery key, answered only while a setup or an unlock runs (recovery.ts createKeyHolder).
+    cryptoCallbacks: holder.callbacks,
   });
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
@@ -82,17 +77,48 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode());
   await client.startClient({ lazyLoadMembers: true });
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
+  const keys: Keys = { client, crypto, holder };
+  // While a setup or an unlock runs its own steps, the trust events it causes do not repaint the page.
+  let busy = false;
   const report = async () => {
-    const status = await crypto.getDeviceVerificationStatus(session.userId, session.deviceId);
-    const facts = {
-      crossSigningReady: await crypto.isCrossSigningReady(),
-      deviceCrossSigned: status?.crossSigningVerified === true,
-    };
-    tell({ kind: lockOf(facts) });
+    if (busy) return;
+    const facts = await readFacts(client, crypto, session.userId);
+    const phase = phaseOf(facts);
+    if (phase === "setup") return setUp(facts.hasIdentity);
+    tell(phase === "ready" ? { kind: "ready" } : { kind: "locked", unlock: tryKey });
   };
-  // The unlock (build step 8) changes trust; each change is read again (src/crypto-api/CryptoEventHandlerMap.ts:28-30).
+  const tryKey = async (typed: string): Promise<UnlockOutcome> => {
+    busy = true;
+    const outcome = await unlock(keys, session.userId, typed).finally(() => (busy = false));
+    if (outcome === "unlocked") await report();
+    return outcome;
+  };
+  /** ADR 0089 decision 3: claim, make the key (and the signing keys), show it; `save` stores it once checked. */
+  const setUp = async (hasIdentity: boolean) => {
+    busy = true;
+    tell({ kind: "setting_up" });
+    const claimed = await options.setup.claim();
+    if (claimed !== "claimed") return claimed === "elsewhere" ? tell({ kind: "setup_elsewhere" }) : fail(UNAVAILABLE);
+    const key = await makeKey(keys, hasIdentity).catch(() => null);
+    if (key?.encodedPrivateKey === undefined) return fail(SETUP_FAILED);
+    tell({ kind: "save_key", key: key.encodedPrivateKey, save: () => void store(key) });
+  };
+  const store = async (key: Parameters<typeof storeKey>[1]) => {
+    tell({ kind: "setting_up" });
+    // The claim may have run out while the key was being saved; it is taken again before the vault is written.
+    const claimed = await options.setup.claim();
+    if (claimed !== "claimed") return claimed === "elsewhere" ? tell({ kind: "setup_elsewhere" }) : fail(UNAVAILABLE);
+    if (!(await storeKey(keys, key).catch(() => false))) return fail(SETUP_FAILED);
+    await options.setup.release();
+    busy = false;
+    await report();
+  };
+  // Trust changes are read again (src/crypto-api/CryptoEventHandlerMap.ts:28-32). This device's own signature, made
+  // by an unlock, arrives with the next /keys/query for us, which DevicesUpdated reports (rust-crypto.ts:2071-2082);
+  // the live run of 2026-11-21 stayed locked without it.
   client.on(CryptoEvent.UserTrustStatusChanged, (userId) => userId === session.userId && void report());
   client.on(CryptoEvent.KeysChanged, () => void report());
+  client.on(CryptoEvent.DevicesUpdated, (users) => users.includes(session.userId) && void report());
   await report();
   return chat;
 }
