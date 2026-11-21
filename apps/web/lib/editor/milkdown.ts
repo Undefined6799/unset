@@ -172,6 +172,8 @@ export type MarkdownEditor = {
   readonly run: (command: EditorCommand) => void;
   /** The markdown the editor holds now. */
   readonly markdown: () => string;
+  /** Reports a change still waiting for its frame to `onChange` at once, so a save pressed in that frame sends it. */
+  readonly flush: () => void;
   readonly focus: () => void;
   readonly destroy: () => Promise<void>;
 };
@@ -248,6 +250,7 @@ const withoutFinalNewline = (markdown: string) => markdown.replace(/\n$/, "");
 
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {
   let frame = 0;
+  let flush: () => void = () => undefined;
   const changes = $prose(
     (ctx) =>
       new Plugin({
@@ -261,7 +264,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           };
           // The last change is reported at once when the page goes away before the next frame (a reload right after
           // typing; WebKit may draw none first), so the words reach the page's drafts.
-          const flush = () => {
+          flush = () => {
             if (frame === 0) return;
             cancelAnimationFrame(frame);
             report();
@@ -352,6 +355,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         commandFor(command, view.state)(view.state, view.dispatch, view);
       }),
     markdown: () => withoutFinalNewline(editor.action(getMarkdown())),
+    flush: () => flush(),
     // The view's own focus puts its selection back (prosemirror-view 1.42.9 EditorView.focus calls selectionToDOM),
     // so a second toolbar press acts on the words the first one did; a plain DOM focus drops it.
     focus: () => editor.action((ctx) => ctx.get(editorViewCtx).focus()),

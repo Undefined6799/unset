@@ -135,7 +135,12 @@ function discard() {
   generation += 1;
 }
 
+// Each mounted Text editor's way to hand over words still waiting for their frame (card-text.svelte).
+const flushes = new Set<() => void>();
+
 async function save() {
+  // A press in the same frame as the last keystroke: those words reach `edits` first.
+  for (const flush of flushes) flush();
   const toSend = editsToSave(edits, data.cards);
   const previous = data.cards;
   const sent = toSend.map((card) => card.key);
@@ -342,6 +347,7 @@ function dropDrafts() {
                 name={cardName(card.content)}
                 value={textOf(card)}
                 onedit={(markdown) => change(card.key, { fields: { text: markdown } })}
+                {flushes}
               />
             {/key}
           {/if}

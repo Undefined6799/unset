@@ -307,3 +307,34 @@ test("words_put_back_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) 
   await expect(page.locator('[data-slot="card"]', { hasText: word })).not.toContainText("two");
   await removeCard(page, word);
 });
+
+// Codex on d91bf83: the editor reports its words once a frame, so a Save pressed in the same frame as the last
+// keystroke must still send them. The words and the press are one task here, so no frame comes between them.
+test("words_typed_in_the_frame_of_the_save_are_saved", async ({ page }) => {
+  const word = `frame${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // ProseMirror reads the typed words from its MutationObserver, a microtask; the press comes in the next one, so the
+  // editor holds the words and no frame has run.
+  type Button = { textContent: string | null; click: () => void };
+  type Doc = {
+    execCommand: (command: string, ui: boolean, value: string) => boolean;
+    querySelectorAll: (s: string) => Iterable<Button>;
+  };
+  await editor.evaluate(async (node: { ownerDocument: Doc }) => {
+    const doc = node.ownerDocument;
+    doc.execCommand("insertText", false, " three");
+    await Promise.resolve();
+    [...doc.querySelectorAll("[data-unsaved-bar] button")].find((button) => button.textContent === "Save")?.click();
+  });
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two three`);
+  await removeCard(page, word);
+});

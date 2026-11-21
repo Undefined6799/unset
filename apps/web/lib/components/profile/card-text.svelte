@@ -3,8 +3,9 @@
   Preview tabs. The server renders the card's blocks as every visitor sees them (readme.svelte), and with no script
   they stay so; the card's own form (card-editor.svelte) still edits it. With script, once the browser is idle, the
   Milkdown editor (P1.21u, editor/milkdown.ts) is drawn in their place and opened on `value` (the unsaved words, else
-  the stored ones), and every change is handed to `onedit` as markdown, once a frame. If the editor cannot load the
-  blocks stay. The parent remounts this component to throw the member's changes away (Discard).
+  the stored ones), and every change is handed to `onedit` as markdown, once a frame; `flushes` holds this card's way
+  to hand over a change still waiting for its frame, which the page runs before it builds a Save. If the editor
+  cannot load the blocks stay. The parent remounts this component to throw the member's changes away (Discard).
 -->
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
@@ -18,7 +19,14 @@ let {
   name,
   value,
   onedit,
-}: { blocks: readonly Block[]; name: string; value: string; onedit: (markdown: string) => void } = $props();
+  flushes,
+}: {
+  blocks: readonly Block[];
+  name: string;
+  value: string;
+  onedit: (markdown: string) => void;
+  flushes: Set<() => void>;
+} = $props();
 
 const id = $props.id();
 const labelId = `${id}-label`;
@@ -53,6 +61,7 @@ async function open() {
       return;
     }
     editor = mounted;
+    flushes.add(mounted.flush);
   } catch {
     // The editor could not load: the blocks stay, and the card's own form still edits it.
   }
@@ -65,6 +74,7 @@ onMount(() => {
 onDestroy(() => {
   closed = true;
   cancel?.();
+  if (editor !== undefined) flushes.delete(editor.flush);
   void editor?.destroy();
 });
 </script>
