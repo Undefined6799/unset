@@ -26,8 +26,8 @@ const SANDBOX: Readonly<Record<string, string>> = {
 };
 /** The fixed type of each version's extension; the key pattern admits no other. */
 const TYPES: Readonly<Record<string, string>> = { avif: "image/avif", webp: "image/webp", jpeg: "image/jpeg" };
-/** Defence in depth: the pipeline never stores a larger version (ADR 0070 point 3). */
-const MAX_BYTES = 2 * 1024 * 1024;
+/** Defence in depth: the pipeline never stores a larger version (ADR 0070 point 3; 5,000,000 bytes since ADR 0088). */
+const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_AGE_S = 300;
 const LINK_ROUTE = "/o/:purpose/*";
 
