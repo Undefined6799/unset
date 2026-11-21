@@ -5,9 +5,12 @@
 // `{ deviceId }` and need the browser cookie. Each refusal is
 // a catalog code; none carries a ticket, token, key, DID or chat user (SE-3, SE-7).
 import { createHash, randomBytes } from "node:crypto";
+import { parseDid } from "@unset/domains-identity";
 import {
   type BrowserKey,
   type BrowserList,
+  type ChatContacts,
+  chatContact,
   claimSetup,
   type DoorPorts,
   issuePushKey,
@@ -54,8 +57,8 @@ const answer = (status: number, body: unknown, headers?: Headers): DoorAnswer =>
   return typeof error === "string" ? { response, reason: error.slice(error.indexOf(".") + 1) } : { response };
 };
 
-/** The body as an object with exactly `key`, a string, or null. */
-async function onlyField(request: Request, key: string, max: number): Promise<string | null> {
+/** The body as an object with exactly `names`, each a string of at most `max`, or null. */
+async function onlyFields(request: Request, names: readonly string[], max: number): Promise<string[] | null> {
   let body: unknown;
   try {
     body = await request.json();
@@ -64,8 +67,14 @@ async function onlyField(request: Request, key: string, max: number): Promise<st
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
   const keys = Object.keys(body);
-  const value = (body as Record<string, unknown>)[key];
-  return keys.length === 1 && keys[0] === key && typeof value === "string" && value.length <= max ? value : null;
+  const values = names.map((name) => (body as Record<string, unknown>)[name]);
+  if (keys.length !== names.length || !names.every((name) => keys.includes(name))) return null;
+  return values.every((v) => typeof v === "string" && v.length <= max) ? (values as string[]) : null;
+}
+
+/** The body as an object with exactly `key`, a string, or null. */
+async function onlyField(request: Request, key: string, max: number): Promise<string | null> {
+  return (await onlyFields(request, [key], max))?.[0] ?? null;
 }
 
 /** The list's name for a browser: sha256 of its cookie's bytes, so a stored row is never a cookie. */
@@ -207,6 +216,32 @@ export function pushKeyRoute({ list, keys, notifyUrl }: PushKeyPorts, random = r
       const outcome = await issuePushKey({ list, keys, random }, { ...asked, deadline });
       if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
       return answer(200, { pushkey: outcome.key, url: notifyUrl });
+    },
+  };
+}
+
+type ChatIdPorts = { readonly list: BrowserList; readonly contacts: ChatContacts; readonly serverName: string };
+/** A DID is at most 2 KB (atproto.com/specs/did, "DID Syntax"). */
+const MAX_DID = 2048;
+
+/**
+ * POST /chat-id: the chat ID behind a profile's Message link, read exactly `{ deviceId, did }` (ADR 0090 decision 3).
+ * Only a browser holding that device asks; a member whose chat is not ready or whose page does not show is 404.
+ */
+export function chatIdRoute({ list, contacts, serverName }: ChatIdPorts): PostRoute {
+  return {
+    limit: "default",
+    async handle(request, deadline) {
+      const browser = browserOf(request);
+      if (browser === null) return answer(401, { error: "chat.no_session" });
+      const [rawDevice, rawDid] = (await onlyFields(request, ["deviceId", "did"], MAX_DID)) ?? [];
+      const device = parseDeviceId(rawDevice);
+      const did = parseDid(rawDid ?? "");
+      if (device === null || did === null) return answer(400, { error: "chat.bad_request" });
+      const outcome = await chatContact({ list, contacts }, { browser: browser.key, device, did, deadline });
+      if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
+      if (outcome.kind === "missing") return answer(404, { error: "chat.not_found" });
+      return answer(200, { chatId: `@${outcome.user}:${serverName}` });
     },
   };
 }

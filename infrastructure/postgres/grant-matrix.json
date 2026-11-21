@@ -494,6 +494,14 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "door.chat_contact": {
+      "chat_auth": {
+        "columns": {
+          "did": ["SELECT"],
+          "chat_user": ["SELECT"]
+        }
+      }
+    },
     "door.push": {
       "chat_auth": {
         "columns": {
