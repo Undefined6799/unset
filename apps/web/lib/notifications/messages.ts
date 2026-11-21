@@ -6,7 +6,11 @@ export const NOTIFICATIONS = {
   bell: (n: number): string => (n === 0 ? "Notifications" : `Notifications, ${n >= 10 ? "9+" : n} waiting`),
   badge: (n: number): string => (n >= 10 ? "9+" : String(n)),
   none: "No notifications.",
-  noneHint: "New sign-ins and privacy notice changes show up here.",
+  /**
+   * A sign-in's entry is shown only in the browsers signed in before it (migration 0036 `older_sessions_only`), so
+   * whoever signed in cannot clear it; the browser that just signed in never sees its own (staging test 2026-11-21).
+   */
+  noneHint: "Privacy notice changes show up here, and so does a new sign-in from another browser or device.",
   failed: "Your notifications could not be loaded. Try again in a moment.",
   visitor: "Sign in to see your notifications.",
   viewAll: "View all notifications",
