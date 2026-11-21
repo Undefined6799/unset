@@ -133,17 +133,19 @@ function logsOf(name: string): string {
 
 /**
  * Registers a user through Synapse's shared-secret admin API: a nonce, then an HMAC-SHA1 over
- * nonce NUL user NUL password NUL "notadmin" (element-hq/synapse v1.165.0 docs/admin_api/register_api.md).
+ * nonce NUL user NUL password NUL "admin" or "notadmin" (element-hq/synapse v1.165.0 docs/admin_api/register_api.md).
+ * `admin` makes a server admin, whom Synapse lets skip some module callbacks; only tests that prove a rule holds for
+ * the other person in the room use it.
  */
-export async function registerUser(synapse: Synapse, username: string): Promise<MatrixUser> {
+export async function registerUser(synapse: Synapse, username: string, admin = false): Promise<MatrixUser> {
   const url = `${synapse.origin}/_synapse/admin/v1/register`;
   const nonced = await fetch(url); // guard-allow: egress the loopback Synapse this file started
   const { nonce } = (await nonced.json()) as { nonce: string };
   const password = randomBytes(18).toString("base64url");
   const mac = createHmac("sha1", synapse.secret)
-    .update([nonce, username, password, "notadmin"].join("\0"))
+    .update([nonce, username, password, admin ? "admin" : "notadmin"].join("\0"))
     .digest("hex");
-  const body = JSON.stringify({ nonce, username, password, admin: false, mac });
+  const body = JSON.stringify({ nonce, username, password, admin, mac });
   const post = { method: "POST", headers: { "content-type": "application/json" }, body };
   const res = await fetch(url, post); // guard-allow: egress the loopback Synapse this file started
   if (res.status !== 200) throw new Error(`register ${username}: ${res.status} ${await res.text()}`);

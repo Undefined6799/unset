@@ -2,7 +2,7 @@
 // A room is encrypted (the default: only Megolm ciphertext) or plain (asked for with the 30-day retention policy:
 // only m.text), fixed at creation; createRoom can ask for nothing else, and invites, joins and receipts still work.
 // Paths and bodies are the client-server API of spec.matrix.org v1.18 (createRoom, rooms/{roomId}/send, /state,
-// /redact, /receipt). Retention purging itself is retention.test.ts.
+// /redact, /receipt, /invite, /join, /leave). A room holds two people for good. Retention purging itself is retention.test.ts.
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   type Answer,
@@ -18,6 +18,9 @@ import {
 let synapse: Synapse;
 let alice: MatrixUser;
 let bob: MatrixUser;
+let carol: MatrixUser;
+/** A server admin, whom Synapse lets skip the invite check, so a test can reach the join check with a third person. */
+let admin: MatrixUser;
 let encrypted: string;
 let plain: string;
 /** A real event in the encrypted room, so a relation to it passes Synapse's own checks and reaches the module. */
@@ -82,6 +85,8 @@ beforeAll(async () => {
   synapse = await startSynapse();
   alice = await registerUser(synapse, "alice");
   bob = await registerUser(synapse, "bob");
+  carol = await registerUser(synapse, "carol");
+  admin = await registerUser(synapse, "admin", true);
   // The request the chat page sends to start a conversation (build plan step 3, client.createRoom).
   encrypted = await startConversation({});
   plain = await startConversation({ initial_state: PLAIN_STATE });
@@ -244,7 +249,52 @@ describe("createRoom makes one of the two kinds and nothing else", () => {
         invite_3pid: [{ id_server: "id.example", id_access_token: "t", medium: "email", address: "a@example.com" }],
       },
       { ...base, visibility: "public" },
+      { ...base, preset: "public_chat" },
+      { ...base, preset: "unknown" },
+      { is_direct: true, invite: [bob.userId] },
+      { ...base, invite: [bob.userId, carol.userId] },
+      { ...base, invite: [] },
+      { ...base, invite: "@bob:unset.test" },
+      { preset: "trusted_private_chat", is_direct: true },
     ];
     expect(await outcomes(attempts, createRoom)).toEqual(allRefused(attempts));
+  });
+});
+
+describe("a room holds two people", () => {
+  const invite = (user: MatrixUser, id: string, who: MatrixUser): Promise<Answer> =>
+    call(user, "POST", `${room(id)}/invite`, { user_id: who.userId });
+  const join = (user: MatrixUser, id: string): Promise<Answer> =>
+    call(user, "POST", `/join/${encodeURIComponent(id)}`, {});
+
+  test("third_person_invite_refused_from_either_member", async () => {
+    expect(outcome(await invite(alice, encrypted, carol))).toEqual(refused);
+    expect(outcome(await invite(bob, plain, carol))).toEqual(refused);
+  });
+
+  test("third_person_invite_refused_while_the_first_invite_is_pending", async () => {
+    const created = await createRoom({ preset: "trusted_private_chat", is_direct: true, invite: [bob.userId] });
+    expect(created.status).toBe(200);
+    expect(outcome(await invite(alice, created.body.room_id as string, carol))).toEqual(refused);
+  });
+
+  test("one_who_left_may_be_invited_back_but_nobody_new", async () => {
+    const id = await startConversation({});
+    expect((await call(bob, "POST", `${room(id)}/leave`, {})).status).toBe(200);
+    expect(outcome(await invite(alice, id, carol))).toEqual(refused);
+    expect((await invite(alice, id, bob)).status).toBe(200);
+  });
+
+  test("third_person_join_refused_even_after_an_admin_invite", async () => {
+    const created = await call(admin, "POST", "/createRoom", {
+      preset: "trusted_private_chat",
+      is_direct: true,
+      invite: [alice.userId],
+    });
+    expect(created.status).toBe(200);
+    const id = created.body.room_id as string;
+    expect((await join(alice, id)).status).toBe(200);
+    expect((await invite(admin, id, carol)).status).toBe(200);
+    expect(outcome(await join(carol, id))).toEqual(refused);
   });
 });
