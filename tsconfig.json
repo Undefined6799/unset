@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "apps/chat" },
     { "path": "apps/web" },
     { "path": "scripts" },
     { "path": "scripts/ui" },
