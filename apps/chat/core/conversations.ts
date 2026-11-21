@@ -87,6 +87,8 @@ export type ConversationView = {
   readonly composer: Composer;
   /** Older messages may still be loaded. */
   readonly hasOlder: boolean;
+  /** The last message of this member's the other person has read, and when they read it (ADR 0092 decision 4). */
+  readonly seen: { readonly id: string; readonly at: number } | null;
 };
 
 /** What the screens can do with conversations; every call reports its outcome, nothing is thrown. */

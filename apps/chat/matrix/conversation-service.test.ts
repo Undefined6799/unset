@@ -53,7 +53,7 @@ beforeAll(async () => {
 afterAll(() => client.stopClient());
 
 describe("watch", () => {
-  test("chat.read_receipt_private: the newest message from them is marked read privately, never publicly", async () => {
+  test("chat.read_receipt_public: the newest message from them is marked read with a public m.read, which they see", async () => {
     const crypto = client.getCrypto();
     if (crypto === undefined) throw new Error("no crypto");
     const conversations = createConversations(client, crypto, ME);
@@ -67,6 +67,6 @@ describe("watch", () => {
     await expect.poll(() => requests.filter((r) => r.path.includes("/receipt/")).length).toBe(1);
     const receipts = requests.filter((r) => r.path.includes("/receipt/"));
     expect(receipts[0]?.method).toBe("POST");
-    expect(receipts[0]?.path).toMatch(/\/rooms\/!a%3Aunset\.cc\/receipt\/m\.read\.private\/%24e\d+$/);
+    expect(receipts[0]?.path).toMatch(/\/rooms\/!a%3Aunset\.cc\/receipt\/m\.read\/%24e\d+$/);
   });
 });

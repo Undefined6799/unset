@@ -2,7 +2,8 @@
   One conversation, part of the chat page's shell (ADR 0088; ADR 0055 point 2). The live timeline as the adapter maps
   it (matrix/conversations.ts toMessages): text, and a plain line for a message this browser cannot decrypt; a message
   from a device its owner has not confirmed carries a warning, where Element shows its red padlock (ADR 0093). Older
-  messages load on request; the newest is marked read as it is shown. The composer is text only and stays off until
+  messages load on request; the newest is marked read as it is shown, and "Seen" with the time goes under the last
+  message the other person has read (ADR 0092 decision 4). The composer is text only and stays off until
   encryption is on for the conversation in this browser (core/conversations.ts composerOf); while the other person has
   not accepted it is pending and still sends, for them to read once they do. A conversation that is not encrypted is
   never sent in from this page (ADR 0085 decision 4). `unsent` is a first message that did not go: it stays in the
@@ -106,6 +107,9 @@ const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digi
             </p>
           {/if}
           <time class="text-muted-foreground text-xs" datetime={new Date(message.at).toISOString()}>{time(message.at)}</time>
+          {#if view.seen?.id === message.id}
+            <p class="text-muted-foreground text-xs" data-seen>Seen {time(view.seen.at)}</p>
+          {/if}
         </li>
       {/each}
     </ol>

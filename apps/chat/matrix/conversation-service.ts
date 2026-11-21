@@ -17,10 +17,10 @@
 //   (apps/web/src/components/structures/RoomView.tsx:1707-1716).
 // - watch: re-read on the client's re-emitted room and event changes, as TimelinePanel listens on the client
 //   (TimelinePanel.tsx:299-314), and mark the newest message from the other person read with sendReadReceipt,
-//   allowing a retry after a failure (TimelinePanel.tsx:1060-1140). The receipt is m.read.private, which the other
-//   person never sees (spec v1.18 #private-read-receipts): the type Element sends with its "send read receipts"
-//   setting off (TimelinePanel.tsx:963-983, 1125-1130), passed as sendReadReceipt's own receiptType argument, whose
-//   default is the public m.read (src/client.ts:3911-3924).
+//   allowing a retry after a failure (TimelinePanel.tsx:1060-1140). The receipt is sendReadReceipt's default, the
+//   public m.read (src/client.ts:3911-3924), as Element sends with its "send read receipts" setting on, its default
+//   (TimelinePanel.tsx:963-983): the other person sees "Seen" (ADR 0092 decision 4; spec v1.18 #receipts). The view's
+//   seen is the other person's own m.read (Room.getEventReadUpTo, getReadReceiptForUserId, read-receipt.ts:91-127).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
 // - send: sendTextMessage (client.ts:3272-3294), only while the composer sends, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
@@ -36,7 +36,6 @@ import {
   type MatrixEvent,
   MatrixEventEvent,
   Preset,
-  ReceiptType,
   type Room,
   RoomEvent,
   RoomMemberEvent,
@@ -59,6 +58,7 @@ import {
   kindOf,
   otherMembership,
   otherPerson,
+  seenOf,
   toConversation,
   toMessages,
   unconfirmedDevice,
@@ -132,11 +132,15 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     const conversation = room === null ? null : toConversation(room, direct());
     if (room === null || conversation === null || !conversation.available) return null;
     const events = room.getLiveTimeline().getEvents();
+    const messages = toMessages(events, me, await unconfirmedOf(events));
+    const other = conversation.with.id;
+    const receipt = room.getReadReceiptForUserId(other);
     return {
       conversation,
-      messages: toMessages(events, me, await unconfirmedOf(events)),
-      composer: await composerFor(room, conversation.with.id),
+      messages,
+      composer: await composerFor(room, other),
       hasOlder: room.oldState.paginationToken !== null,
+      seen: seenOf(events, messages, room.getEventReadUpTo(other), receipt?.data.ts),
     };
   };
 
@@ -151,7 +155,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     if (last === undefined || id === undefined || readSent.get(room.roomId) === id) return;
     if (room.hasUserReadEvent(me, id)) return;
     readSent.set(room.roomId, id);
-    client.sendReadReceipt(last, ReceiptType.ReadPrivate).catch(() => readSent.delete(room.roomId));
+    client.sendReadReceipt(last).catch(() => readSent.delete(room.roomId));
   };
 
   /** Whether the composer sends in `roomId` now, looking again until `deadline` (Element's isRoomReady polling). */

@@ -9,6 +9,7 @@ import {
   directRooms,
   findDirect,
   otherMembership,
+  seenOf,
   toConversation,
   toMessages,
   unconfirmedDevice,
@@ -278,5 +279,31 @@ describe("withDirect", () => {
     });
     expect(withDirect(undefined, "!a:unset.cc", THEM)).toEqual({ [THEM]: ["!a:unset.cc"] });
     expect(withDirect({ [THEM]: ["!a:unset.cc"] }, "!a:unset.cc", THEM)).toEqual({ [THEM]: ["!a:unset.cc"] });
+  });
+});
+
+// Element shows each person's receipt under the last event they have read (element-web v1.12.35
+// apps/web/src/components/views/rooms/ReadReceiptGroup.tsx); here it is "Seen" under this member's last message there.
+describe("seenOf", () => {
+  const mine = (body: string) => event({ type: "m.room.message", content: { msgtype: "m.text", body } });
+  const theirs = event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body: "x" } });
+  const [first, second, third] = [mine("1"), mine("2"), mine("3")];
+  const reaction = event({ type: "m.reaction", sender: THEM, content: {} });
+  const events = [first, theirs, second, reaction, third];
+  const messages = toMessages(events, ME);
+  const id = (e: MatrixEvent) => e.getId() as string;
+
+  test("chat.seen_under_last_read: Seen goes under this member's last message at or before their receipt", () => {
+    expect(seenOf(events, messages, id(second), 7)).toEqual({ id: id(second), at: 7 });
+    expect(seenOf(events, messages, id(reaction), 7)).toEqual({ id: id(second), at: 7 });
+    expect(seenOf(events, messages, id(theirs), 7)).toEqual({ id: id(first), at: 7 });
+    expect(seenOf(events, messages, id(third), 9)).toEqual({ id: id(third), at: 9 });
+  });
+
+  test("chat.seen_none: no receipt, one outside the shown timeline, or none past a message of this member's", () => {
+    expect(seenOf(events, messages, null, 7)).toBeNull();
+    expect(seenOf(events, messages, id(second), undefined)).toBeNull();
+    expect(seenOf(events, messages, "$elsewhere", 7)).toBeNull();
+    expect(seenOf([theirs, first], toMessages([theirs, first], ME), id(theirs), 7)).toBeNull();
   });
 });

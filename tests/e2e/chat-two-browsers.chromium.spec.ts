@@ -113,6 +113,9 @@ async function talking(browser: Browser) {
   await expect(unconfirmed(b.page)).toHaveCount(0, { timeout: 30_000 });
   await send(a.page, "hello from alice");
   await expect(messages(b.page)).toContainText("hello from alice", { timeout: 60_000 });
+  // Bob's page marks it read with a public receipt, so Alice sees "Seen" and the time under it (ADR 0092 decision 4).
+  const read = messages(a.page).locator("li", { hasText: "hello from alice" }).locator("[data-seen]");
+  await expect(read).toHaveText(/^Seen \d/, { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
   for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });

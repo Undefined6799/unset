@@ -153,3 +153,25 @@ export function toMessages(
   }
   return messages;
 }
+
+/**
+ * Where "Seen" goes: under this member's last message at or before the other person's read receipt (`readUpTo`, the
+ * event Room.getEventReadUpTo gives, src/models/read-receipt.ts:127), with the receipt's time. Null with no receipt,
+ * one outside the loaded timeline, or no message of this member's at or before it. Element shows a receipt under the
+ * last event its reader has read (element-web v1.12.35 apps/web/src/components/views/rooms/ReadReceiptGroup.tsx).
+ */
+export function seenOf(
+  events: readonly MatrixEvent[],
+  messages: readonly Message[],
+  readUpTo: string | null,
+  at: number | undefined,
+): { readonly id: string; readonly at: number } | null {
+  if (readUpTo === null || at === undefined) return null;
+  const upTo = events.findIndex((e) => e.getId() === readUpTo);
+  const mine = new Set(messages.filter((m) => m.mine).map((m) => m.id));
+  for (let i = upTo; i >= 0; i--) {
+    const id = events[i]?.getId();
+    if (id !== undefined && mine.has(id)) return { id, at };
+  }
+  return null;
+}
