@@ -7,6 +7,7 @@ import {
   pageCards,
   parseCardKey,
   parseCardVersion,
+  parseNewCardKey,
   type RepoDid,
   readCard,
   shownCards,
@@ -46,6 +47,13 @@ describe("parseCardKey", () => {
   test("accepts record keys and refuses anything else", () => {
     expect(parseCardKey(KEY)).toBe(KEY);
     for (const bad of ["", ".", "..", "a/b", "a b", "x".repeat(513), 7, null]) expect(parseCardKey(bad)).toBeNull();
+  });
+
+  test("a key for a card the lexicon accepts is a TID", () => {
+    expect(parseNewCardKey(KEY)).toBe(KEY);
+    for (const bad of ["3k2abc", "kjzfcijpj2z2a", "3jzfcijpj2z2A", "3jzfcijpj2z21", `${KEY}a`, 7, null]) {
+      expect(parseNewCardKey(bad)).toBeNull();
+    }
   });
 });
 
