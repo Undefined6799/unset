@@ -124,7 +124,14 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     },
     logOut: () => {
       busy = true;
-      return logOutOf({ client, backup, prefix: cryptoDatabasePrefix, me: session.userId, stop: chat.stop, ...options });
+      return logOutOf({
+        client,
+        backup,
+        prefix: cryptoDatabasePrefix,
+        me: session.userId,
+        stop: chat.stop,
+        ...options,
+      });
     },
   };
   options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
