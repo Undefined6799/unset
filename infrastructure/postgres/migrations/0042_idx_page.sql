@@ -13,6 +13,10 @@ CREATE TABLE idx.page (
   indexed_at timestamptz NOT NULL
 );
 
+-- Places came from the profile's old list; from now on only a main page gives one, and the indexer sets them again
+-- as pages arrive.
+UPDATE idx.section SET position = NULL WHERE position IS NOT NULL;
+
 GRANT SELECT (did, uri, cid, rev, record, indexed_at) ON idx.page TO indexer;
 GRANT INSERT (did, uri, cid, rev, record, indexed_at) ON idx.page TO indexer;
 GRANT UPDATE (uri, cid, rev, record, indexed_at) ON idx.page TO indexer;

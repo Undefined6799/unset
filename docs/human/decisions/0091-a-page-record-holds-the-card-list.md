@@ -47,7 +47,9 @@ and what an account shows lives in other records (`app.bsky.feed.post`, `app.bsk
    nothing else in the account.
 6. **Room for later, built not at all now.** Several pages: a later ADR names where a page under another key shows
    (an address, a switcher) and adds it to the index. Per-page visibility: a later optional field on the page,
-   whose absence means the profile's `visibility` applies, so today's records stay valid. Community pages: a
+   whose absence means the profile's `visibility` applies, so today's records stay valid. A reader that does not
+   know such a field ignores it, so the main page always follows the profile's `visibility`, and only a page under
+   another key, which today's readers never show, may rely on its own. Community pages: a
    community that is its own account uses its own `self` page unchanged; a community run from a member's account
    would be a page under another key, defined by that later ADR. An atproto repository has one writer, so who may
    edit a community's page (delegated editing through our server, or a page naming cards from several members'
