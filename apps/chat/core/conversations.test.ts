@@ -142,4 +142,10 @@ describe("actionsOf", () => {
       expect(actionsOf(text(false), composer), composer).not.toContain("react");
     expect(actionsOf({ ...base, mine: false, kind: "unreadable" }, "on")).toContain("react");
   });
+
+  test("chat.reply_while_sending: a message may be replied to only while the composer sends", () => {
+    expect(actionsOf(text(false), "on")).toEqual(["react", "reply"]);
+    expect(actionsOf(text(true), "pending")).toEqual(["react", "reply"]);
+    expect(actionsOf(text(false), "they_left")).toEqual([]);
+  });
 });

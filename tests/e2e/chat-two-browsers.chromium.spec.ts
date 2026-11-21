@@ -127,6 +127,13 @@ async function talking(browser: Browser) {
   await expect(bobs.locator('[data-reaction="👍"]')).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });
   await bobs.locator('[data-reaction="👍"]').click();
   await expect(thumbs).toHaveCount(0, { timeout: 60_000 });
+  // Bob replies to it; Alice sees the reply with her message quoted above it (ADR 0092 decision 3).
+  await bobs.hover();
+  await bobs.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect(b.page.locator("[data-replying]")).toContainText("hello from alice");
+  await send(b.page, "a reply from bob");
+  const answer = message(a.page, "a reply from bob");
+  await expect(answer.locator("[data-reply-to]")).toContainText("You hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
   for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
@@ -154,7 +161,10 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
     .chunk as { type: string; content: unknown }[];
   const sent = chunk.filter((e) => e.type === "m.room.encrypted" || e.type === "m.room.message");
-  expect(sent.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted", "m.room.encrypted"]);
+  expect(sent.map((e) => e.type)).toEqual(Array(4).fill("m.room.encrypted"));
+  // The reply's pointer is the one thing beside its ciphertext (ADR 0092 decision 3).
+  const relations = sent.map((e) => (e.content as Record<string, unknown>)["m.relates_to"]).filter(Boolean);
+  expect(relations).toEqual([{ "m.in_reply_to": { event_id: expect.stringMatching(/^\$/) } }]);
   // Beside them only Bob's reaction, which is in the clear by design and was taken back (ADR 0092 decisions 1, 2).
   expect(chunk.filter((e) => !e.type.startsWith("m.room.")).map((e) => e.type)).toEqual(["m.reaction"]);
   expect(JSON.stringify(chunk)).not.toContain("hello");

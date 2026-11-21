@@ -37,6 +37,13 @@ export const isQuickReaction = (key: unknown): key is QuickReaction => QUICK_REA
 /** One reaction on a message: how many put it there, and whether this member is one of them. */
 export type Reaction = { readonly key: QuickReaction; readonly count: number; readonly mine: boolean };
 
+/** What a reply shows of the message it answers: its text, that it was deleted, or that it cannot be shown here. */
+export type Quote = { readonly id: string; readonly mine: boolean } & (
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "deleted" }
+  | { readonly kind: "unavailable" }
+);
+
 /** A line of the conversation: text, or a message this browser cannot read. User text is never markup. */
 export type Message = {
   readonly id: string;
@@ -46,14 +53,16 @@ export type Message = {
   readonly unconfirmed: boolean;
   /** Its quick reactions, most first. */
   readonly reactions: readonly Reaction[];
+  /** The message this one answers (ADR 0092 decision 3), or null. */
+  readonly replyTo: Quote | null;
 } & ({ readonly kind: "text"; readonly text: string } | { readonly kind: "unreadable" });
 
 /** What a member can do with a message from its menu. */
-export type MessageAction = "react";
+export type MessageAction = "react" | "reply";
 
-/** React while the composer sends. */
+/** React and reply while the composer sends. */
 export function actionsOf(_message: Message, composer: Composer): readonly MessageAction[] {
-  return canSend(composer) ? ["react"] : [];
+  return canSend(composer) ? ["react", "reply"] : [];
 }
 
 /**
@@ -127,8 +136,8 @@ export type Conversations = {
   readonly start: (with_: ChatId, text: string) => Promise<{ id: ConversationId; sent: boolean } | null>;
   readonly accept: (id: ConversationId) => Promise<boolean>;
   readonly older: (id: ConversationId) => Promise<void>;
-  /** Sends only while the composer is on; false when it was not sent. */
-  readonly send: (id: ConversationId, text: string) => Promise<boolean>;
+  /** Sends only while the composer sends, as a reply to the message `replyTo` when given; false when not sent. */
+  readonly send: (id: ConversationId, text: string, replyTo?: string) => Promise<boolean>;
   /** Puts `key` on the message, or takes this member's own `key` back off it; false when nothing changed. */
   readonly react: (id: ConversationId, messageId: string, key: QuickReaction) => Promise<boolean>;
 };

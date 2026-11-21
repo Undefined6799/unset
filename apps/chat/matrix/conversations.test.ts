@@ -10,6 +10,7 @@ import {
   findDirect,
   otherMembership,
   reactionsOf,
+  replyContent,
   seenOf,
   toConversation,
   toMessages,
@@ -333,5 +334,32 @@ describe("reactionsOf", () => {
       { key: "🎉", count: 1, mine: false },
     ]);
     expect(reactionsOf(null, ME)).toEqual([]);
+  });
+});
+
+// A reply is m.relates_to.m.in_reply_to beside the message, with no fallback body, as Element's makeReplyMixIn writes
+// it (element-web v1.12.35 apps/web/src/utils/Reply.ts:52-66; spec v1.18 #rich-replies); the Rust crypto copies
+// m.relates_to into the encrypted event's clear part (matrix-sdk-crypto 0.19.0 olm/group_sessions/outbound.rs:594-598).
+describe("replies", () => {
+  test("chat.reply_content: the text and exactly the reply pointer the server takes", () => {
+    expect(replyContent("sure", "$q")).toEqual({
+      msgtype: "m.text",
+      body: "sure",
+      "m.relates_to": { "m.in_reply_to": { event_id: "$q" } },
+    });
+  });
+
+  test("chat.reply_quoted: a reply carries the message it answers, its text, or why there is none", () => {
+    const asked = event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body: "lunch?" } });
+    const reply = (to: string) => event({ type: "m.room.message", content: { ...replyContent("yes", to) } });
+    const known = new Map([[asked.getId() as string, asked]]);
+    const find = (eventId: string) => known.get(eventId);
+    const [answer, lost] = [reply(asked.getId() as string), reply("$gone")];
+    const shown = toMessages([asked, answer, lost], ME, { find });
+    expect(shown.map((m) => m.replyTo)).toEqual([
+      null,
+      { id: asked.getId(), mine: false, kind: "text", text: "lunch?" },
+      { id: "$gone", mine: false, kind: "unavailable" },
+    ]);
   });
 });

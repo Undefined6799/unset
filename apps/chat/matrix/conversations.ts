@@ -22,9 +22,10 @@
 //   one not known, or a sender that is not the device's owner), where Element shows its warning padlock (element-web
 //   v1.12.35 apps/web/src/viewmodels/room/timeline/event-tile/EventTileE2eState.ts:204-209). Grey, a key restored
 //   from backup, gets Element's plain padlock and no mark here.
+import type { RoomMessageEventContent } from "matrix-js-sdk/lib/@types/events.js";
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { type EventEncryptionInfo, EventShieldColour } from "matrix-js-sdk/lib/crypto-api/index.js";
-import { EventType, type MatrixEvent, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
+import { EventType, type MatrixEvent, MsgType, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
 import {
   availableOf,
   type Conversation,
@@ -33,6 +34,7 @@ import {
   isQuickReaction,
   type Message,
   nameOf,
+  type Quote,
   type Reaction,
 } from "../core/conversations.ts";
 
@@ -136,17 +138,21 @@ export type About = {
   readonly unconfirmed?: ReadonlySet<string>;
   /** An event's annotations by key, as Relations.getSortedAnnotationsByKey gives them (src/models/relations.ts:263). */
   readonly annotations?: (eventId: string) => readonly (readonly [string, ReadonlySet<MatrixEvent>])[] | null;
+  /** An event of the room by id, as Room.findEventById finds it, for the message a reply answers. */
+  readonly find?: (eventId: string) => MatrixEvent | undefined;
 };
 
 /** The timeline's text messages and unreadable ones, in order, with their reactions; anything else is left out. */
 export function toMessages(events: readonly MatrixEvent[], me: string, about: About = {}): Message[] {
-  const { unconfirmed = new Set(), annotations = () => null } = about;
+  const { unconfirmed = new Set(), annotations = () => null, find = () => undefined } = about;
   const messages: Message[] = [];
   for (const event of events) {
     const id = event.getId();
     if (id === undefined || event.isState()) continue;
     const reactions = reactionsOf(annotations(id), me);
-    const base = { id, mine: event.getSender() === me, at: event.getTs(), unconfirmed: unconfirmed.has(id), reactions };
+    const replyTo = event.replyEventId === undefined ? null : quoteOf(event.replyEventId, find(event.replyEventId), me);
+    const mine = event.getSender() === me;
+    const base = { id, mine, at: event.getTs(), unconfirmed: unconfirmed.has(id), reactions, replyTo };
     if (event.isDecryptionFailure()) {
       messages.push({ ...base, kind: "unreadable" });
       continue;
@@ -157,6 +163,24 @@ export function toMessages(events: readonly MatrixEvent[], me: string, about: Ab
     messages.push({ ...base, kind: "text", text: content.body });
   }
   return messages;
+}
+
+/**
+ * What a reply shows of the message `id` it answers (MatrixEvent.replyEventId, src/models/event.ts:697): its text; that
+ * it was deleted; or, for one not loaded, unreadable or not a text message, that it cannot be shown, where Element
+ * says it cannot load it (element-web v1.12.35 apps/web/src/components/views/elements/ReplyChain.tsx:296).
+ */
+export function quoteOf(id: string, target: MatrixEvent | undefined, me: string): Quote {
+  const base = { id, mine: target?.getSender() === me };
+  if (target?.isRedacted()) return { ...base, kind: "deleted" };
+  const content = target?.isDecryptionFailure() ? undefined : target?.getContent();
+  if (content?.msgtype !== "m.text" || typeof content.body !== "string") return { ...base, kind: "unavailable" };
+  return { ...base, kind: "text", text: content.body };
+}
+
+/** A reply's content: the text and exactly `m.relates_to.m.in_reply_to`, as Element's makeReplyMixIn writes it. */
+export function replyContent(text: string, replyTo: string): RoomMessageEventContent {
+  return { msgtype: MsgType.Text, body: text, "m.relates_to": { "m.in_reply_to": { event_id: replyTo } } };
 }
 
 /**

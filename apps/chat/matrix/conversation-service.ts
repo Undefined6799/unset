@@ -26,7 +26,8 @@
 //   sendEvent sends an m.reaction annotation, which matrix-js-sdk 43.0.0 never encrypts (src/client.ts:3056). A
 //   message's reactions are the timeline set's relations, as Element reads them (TimelinePanel.tsx:1810-1815).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
-// - send: sendTextMessage (client.ts:3272-3294), only while the composer sends, checked again just before sending:
+// - send: sendTextMessage (client.ts:3272-3294), or for a reply sendMessage with replyContent (matrix/conversations.ts;
+//   Element's makeReplyMixIn), only while the composer sends, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
 // A conversation that is not available (core/conversations.ts availableOf) has no view, cannot be accepted and is never
 // sent in, so the page never joins or encrypts to a room with a third person or one anyone may join.
@@ -47,7 +48,6 @@ import {
   RoomStateEvent,
 } from "matrix-js-sdk/lib/matrix.js";
 import {
-  type ChatId,
   type Composer,
   type Conversation,
   type ConversationId,
@@ -64,6 +64,7 @@ import {
   kindOf,
   otherMembership,
   otherPerson,
+  replyContent,
   seenOf,
   toConversation,
   toMessages,
@@ -147,6 +148,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     const messages = toMessages(events, me, {
       unconfirmed: await unconfirmedOf(events),
       annotations: (eventId) => annotationsOf(room, eventId)?.getSortedAnnotationsByKey() ?? null,
+      find: (eventId) => room.findEventById(eventId),
     });
     const other = conversation.with.id;
     const receipt = room.getReadReceiptForUserId(other);
@@ -183,10 +185,11 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     }
   };
 
-  const sendIn = async (room: Room, other: string, text: string): Promise<boolean> => {
+  const sendIn = async (room: Room, other: string, text: string, replyTo?: string): Promise<boolean> => {
     if (text.trim() === "" || !isAvailable(room) || !canSend(await composerFor(room, other))) return false;
     try {
-      await client.sendTextMessage(room.roomId, text);
+      if (replyTo === undefined) await client.sendTextMessage(room.roomId, text);
+      else await client.sendMessage(room.roomId, replyContent(text, replyTo));
       return true;
     } catch {
       return false;
@@ -271,10 +274,10 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
       const room = client.getRoom(id);
       if (room !== null) await client.scrollback(room, OLDER_PAGE).catch(() => undefined);
     },
-    async send(id, text) {
+    async send(id, text, replyTo) {
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());
-      return room !== null && other !== undefined && (await sendIn(room, other, text));
+      return room !== null && other !== undefined && (await sendIn(room, other, text, replyTo));
     },
     async react(id, messageId, key) {
       const room = client.getRoom(id);

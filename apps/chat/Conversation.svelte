@@ -20,6 +20,7 @@ import {
   type Conversations,
   type ConversationView,
   canSend,
+  type Message,
 } from "./core/conversations.ts";
 import { Icon } from "./lib/components/icon/index.js";
 import * as Alert from "./lib/components/ui/alert/index.js";
@@ -59,14 +60,25 @@ const WAITING: Record<Exclude<Composer, "on">, (name: string) => string> = {
   waiting_for_encryption: () => "Securing this conversation…",
 };
 
+/** The message the next Send answers, shown above the composer until sent or cancelled (ADR 0092 decision 3). */
+let replyingTo = $state<Message | null>(null);
+
+function startReply(message: Message) {
+  replyingTo = message;
+  document.getElementById("message")?.focus();
+}
+
 async function send(event: SubmitEvent) {
   event.preventDefault();
   if (sending || text.trim() === "") return;
   sending = true;
-  const sent = await conversations.send(id, text);
+  const sent = await conversations.send(id, text, replyingTo?.id);
   sending = false;
   failed = !sent;
-  if (sent) text = "";
+  if (sent) {
+    text = "";
+    replyingTo = null;
+  }
 }
 
 async function accept() {
@@ -100,7 +112,9 @@ async function accept() {
           {message}
           actions={actionsOf(message, view.composer)}
           seenAt={view.seen?.id === message.id ? view.seen.at : null}
+          otherName={view.conversation.with.name}
           onReact={(key) => conversations.react(id, message.id, key)}
+          onReply={() => startReply(message)}
         />
       {/each}
     </ol>
@@ -111,6 +125,19 @@ async function accept() {
       <Alert.Root>
         <Alert.Description>That did not go through. Try again in a moment.</Alert.Description>
       </Alert.Root>
+    {/if}
+    {#if replyingTo !== null && sends}
+      <div class="flex items-start gap-2 border-l-2 pl-2 text-sm" data-replying={replyingTo.id}>
+        <p class="min-w-0 flex-1">
+          <span class="font-medium">Replying to {replyingTo.mine ? "your message" : view.conversation.with.name}</span>
+          <span class="text-muted-foreground block truncate">
+            {replyingTo.kind === "text" ? replyingTo.text : "This message can't be read on this browser"}
+          </span>
+        </p>
+        <Button variant="ghost" size="icon" onclick={() => (replyingTo = null)}>
+          <Icon name="close" label="Cancel reply" />
+        </Button>
+      </div>
     {/if}
     <form class="flex gap-2" onsubmit={send}>
       <label class="sr-only" for="message">Message</label>

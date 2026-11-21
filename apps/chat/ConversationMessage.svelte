@@ -4,10 +4,17 @@
   MessageContextMenu.tsx). On a desktop the actions show
   while the pointer is over the message or focus is in it, and a right-click opens them; on a phone pressing and holding
   opens them. React offers Element's eight quick reactions (ADR 0092 decision 1); a reaction under the message is
-  pressed to add one's own or take it back. Text is the sender's own: Svelte escapes it, and nothing renders markup.
+  pressed to add one's own or take it back. Reply quotes the message above the composer, and a reply shows what it
+  answers above its own text (decision 3). Text is the sender's own: Svelte escapes it, and nothing renders markup.
 -->
 <script lang="ts">
-import { type Message, type MessageAction, QUICK_REACTIONS, type QuickReaction } from "./core/conversations.ts";
+import {
+  type Message,
+  type MessageAction,
+  QUICK_REACTIONS,
+  type QuickReaction,
+  type Quote,
+} from "./core/conversations.ts";
 import { Icon } from "./lib/components/icon/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
 
@@ -15,13 +22,18 @@ let {
   message,
   actions,
   seenAt,
+  otherName,
   onReact,
+  onReply,
 }: {
   message: Message;
   actions: readonly MessageAction[];
   /** When the other person read up to this message, if this is where "Seen" goes. */
   seenAt: number | null;
+  /** The other person's name, for a quote of their message. */
+  otherName: string;
   onReact: (key: QuickReaction) => void;
+  onReply: () => void;
 } = $props();
 
 /** closed: only hover or focus shows the actions; actions: opened by right-click or press and hold; react: the picker. */
@@ -32,6 +44,9 @@ let holding: ReturnType<typeof setTimeout> | undefined;
 
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const can = (action: MessageAction) => actions.includes(action);
+/** A quote's words, with Element's wording where it cannot load the message (ReplyChain.tsx:296). */
+const QUOTE_FALLBACK = { deleted: "Message deleted", unavailable: "Can't load the message this replies to." };
+const quoted = (quote: Quote) => (quote.kind === "text" ? quote.text : QUOTE_FALLBACK[quote.kind]);
 
 function openFromContextMenu(event: MouseEvent) {
   if (actions.length === 0) return;
@@ -71,6 +86,12 @@ function react(key: QuickReaction) {
   onpointerleave={endHold}
   onpointercancel={endHold}
 >
+  {#if message.replyTo !== null}
+    <blockquote class="text-muted-foreground border-l-2 pl-2 text-left text-xs" data-reply-to={message.replyTo.id}>
+      <span class="font-medium">{message.replyTo.mine ? "You" : otherName}</span>
+      <span class="break-words whitespace-pre-wrap">{quoted(message.replyTo)}</span>
+    </blockquote>
+  {/if}
   {#if message.kind === "text"}
     <p class="bg-muted rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap">{message.text}</p>
   {:else}
@@ -110,6 +131,16 @@ function react(key: QuickReaction) {
         <Button variant="ghost" size="sm" aria-expanded={menu === "react"} onclick={() => (menu = menu === "react" ? "actions" : "react")}>
           <Icon name="like" size={16} />React
         </Button>
+      {/if}
+      {#if can("reply")}
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={() => {
+            menu = "closed";
+            onReply();
+          }}><Icon name="reply" size={16} />Reply</Button
+        >
       {/if}
     </div>
   {/if}
