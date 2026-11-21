@@ -11,14 +11,19 @@ import { services } from "../../lib/server/compose.ts";
 import { notifyOwner } from "../../lib/server/invite-requests.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { single } from "../../lib/server/sign-in.ts";
+import type { ShellData } from "../../lib/shell.ts";
 
 const PAGE = "/request-invite";
 /** The send's own deadline, apart from the request's: the answer never waits for it (ADR 0080 point 4). */
 const MAIL_DEADLINE_MS = 20_000;
 
+/** The core shell, as the legal pages have, so a visitor keeps the app's navigation (staging test 2026-11-21, u7). */
+const SHELL: ShellData = { kind: "core", noindex: true };
+
 export const load: ServerLoad = ({ url, locals, setHeaders }) => {
   setHeaders({ "x-robots-tag": "noindex" });
   return {
+    shell: SHELL,
     open: services().inviteRequests !== null,
     signedIn: locals.did !== undefined,
     received: url.searchParams.get("sent") === "1",

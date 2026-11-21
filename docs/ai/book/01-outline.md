@@ -269,6 +269,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21x | Keep one profile layout, sticky site header, View as public, ADR 0077 (added 2026-11-20) | trusted | P1.21o | `phase-1.md` |
 | P1.21v | Edit Text cards in place, one Save for all through applyWrites, ADR 0074 (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
 | P1.21r | Fix the in-place editor's first press and the way back; owner's link from the public page (added 2026-11-21) | — | P1.21v | `phase-1.md` |
+| P1.21s | Make Markdown in a Text card behave as typed: paste, empty lines, quotes, line breaks, links, pasted HTML (added 2026-11-21) | — | P1.21r | `phase-1.md` |
 | P1.21y | Settings › Privacy with Search and AI and a search result preview (added 2026-11-20) | trusted | P1.21b | `phase-1.md` |
 | P1.21z | Make the Text editor's buttons toggle and show state; heading sizes in a menu (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
 | P1.22a | Who sees your page: Public, Signed-in members only, Only me; the limited page, ADR 0078 (added 2026-11-20) | trusted | P1.21y | `phase-1.md` |
@@ -1706,7 +1707,9 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.10 | `api` entrypoint: public XRPC | [SEC] | P3.05, P1.06 | `phase-3.md` |
 | P3.11 | Service-auth JWT verifier; signed-in `getTimeline` and `searchProfiles` | [SEC] | P3.10, P1.16 | `phase-3.md` |
 | P3.12 | Public `/@handle` and `/@handle/p/{rkey}` | [SEC] | P3.09, P2.20, P2.02 | `phase-3.md` |
+| P3.12t | Refuse profile text the public page cannot show | — | P3.12 | `phase-3.md` |
 | P3.13 | Handle hosts | — | P3.12 | `phase-3.md` |
+| P3.12u | Fix small rough edges from the staging test | — | P3.12 | `phase-3.md` |
 | P3.14 | Directory and search | — | P3.05 | `phase-3.md` |
 | P3.12v | Keep every card a member can save on the public page | [SEC] [ALEX] (typed line) | P3.12 | `phase-3.md` |
 | P3.14s | Web search through SearXNG behind the search bar (ADR 0035) | [SEC] [ALEX] (typed line) | P3.14, P1.18a | `phase-3.md` |

@@ -84,6 +84,7 @@ export const CARD_EDIT = {
   more: (name: string) => `More for ${name} card`,
   down: "Move down",
   remove: "Delete",
+  removing: "Deleting…",
   /** Names the card, so a page of similar cards says which one goes (staging audit 2026-11-19). */
   removeTitle: (name: string) => `Delete ${name} card?`,
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
@@ -105,10 +106,10 @@ export const CARD_EDIT = {
   /** A refusal shown beside the field it blames, by its code; any other code shows the catalog message there. */
   fieldError: {
     "card.required": "Fill this in.",
-    "card.url_invalid": "Use an http or https address, such as https://example.com.",
+    "card.url_invalid": "Use a public http or https address, such as https://example.com.",
     "card.email_invalid": "That email address does not look right.",
     "card.too_long": "This is too long. Shorten it and save again.",
-    "card.invalid": "This could not be read. Check it and save again.",
+    "card.invalid": "This could not be read. Remove any hidden characters, check it and save again.",
   } as Readonly<Record<string, string>>,
 } as const;
 

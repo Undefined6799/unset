@@ -17,8 +17,9 @@ import {
   rootCtx,
   serializerCtx,
 } from "@milkdown/core";
+import { clipboard } from "@milkdown/plugin-clipboard";
 import { history } from "@milkdown/plugin-history";
-import { commonmark, emphasisSchema, headingSchema, strongSchema } from "@milkdown/preset-commonmark";
+import { commonmark, emphasisSchema, headingSchema, imageSchema, strongSchema } from "@milkdown/preset-commonmark";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
 import { isHistoryTransaction, redo, redoDepth, undo, undoDepth } from "@milkdown/prose/history";
 import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model";
@@ -198,13 +199,13 @@ export type MountOptions = {
   readonly onToolbar: (state: ToolbarState) => void;
 };
 
-// The page's parser (apps/web/lib/profile/parse.ts) shows a quote as one paragraph of text, a list item as one
-// paragraph with optional lists of its own, and a line break as a space; remark writes a break in a list item as an
-// indented continuation line the parser moves out of the list. The schema stays Milkdown's full one, so any stored
-// text opens as it is; instead no edit (toolbar, shortcut or paste) may add a shape the saved card would flatten: a
-// second paragraph, heading or list inside a quote, a second paragraph, quote, heading or code block inside a list
-// item, a line break anywhere, or a list nested deeper than the page's three levels (parse.ts MAX_LIST_DEPTH), which
-// it shows beside the third. Text already stored that way stays editable.
+// The page's parser (apps/web/lib/profile/parse.ts) shows a quote as paragraphs with line breaks, a list item as one
+// paragraph with optional lists of its own, and a line break outside a list as a line break (P1.21s); remark writes a
+// break in a list item as an indented continuation line the parser moves out of the list. The schema stays Milkdown's
+// full one, so any stored text opens as it is; instead no edit (toolbar, shortcut or paste) may add a shape the saved
+// card would flatten: a heading, list or code block inside a quote, a second paragraph, quote, heading or code block
+// inside a list item, a line break inside a list, or a list nested deeper than the page's three levels (parse.ts
+// MAX_LIST_DEPTH), which it shows beside the third. Text already stored that way stays editable.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 const PAGE_LIST_DEPTH = 3;
 /**
@@ -216,9 +217,9 @@ function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: numb
   const name = node.type.name;
   let count = 0;
   if (ITEM_LISTS.has(name) && lists >= PAGE_LIST_DEPTH) count += 1;
-  if (holder === "blockquote" && (index > 0 || name !== "paragraph")) count += 1;
+  if (holder === "blockquote" && name !== "paragraph") count += 1;
   if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
-  if (name === "hardbreak") count += 1;
+  if (name === "hardbreak" && lists > 0) count += 1;
   if (!node.isBlock) return count;
   const inner = lists + (ITEM_LISTS.has(name) ? 1 : 0);
   node.forEach((child, _offset, at) => {
@@ -253,8 +254,33 @@ const pageShapes = $prose(
     }),
 );
 
-/** remark-stringify ends the document with a line feed; the plain field never did, so neither does the editor. */
-const withoutFinalNewline = (markdown: string) => markdown.replace(/\n$/, "");
+/**
+ * The markdown as the card stores it. remark-stringify ends the document with a line feed; the plain field never did,
+ * so neither does the editor. And an empty line is a blank line: preset-commonmark 7.23.0 writes each empty paragraph
+ * as a line of html "<br />" (node/paragraph.ts EMPTY_LINE_PLACEHOLDER), which the page would show as text, so such a
+ * line goes (in a quote or a list too, never in a code block) with the blank line it leaves doubled. Removing the preset's
+ * remarkPreserveEmptyLinePlugin instead makes its serializer drop the text around the empty paragraph.
+ */
+const EMPTY_LINE = /^[ >]*<br \/>[ ]*$/;
+const FENCE_LINE = /^[ >]*(```|~~~)/;
+function stored(markdown: string): string {
+  const kept: string[] = [];
+  let fenced = false;
+  let dropped = false;
+  for (const line of markdown.replace(/\n$/, "").split("\n")) {
+    if (FENCE_LINE.test(line)) fenced = !fenced;
+    const blank = /^[ >]*$/.test(line);
+    if (!fenced && EMPTY_LINE.test(line)) {
+      dropped = true;
+      continue;
+    }
+    // The blank line after a dropped one repeats the one before it.
+    if (dropped && blank && kept.length > 0 && /^[ >]*$/.test(kept[kept.length - 1] ?? "")) continue;
+    dropped = false;
+    kept.push(line);
+  }
+  return kept.join("\n");
+}
 
 /**
  * Where a press at the page point (x, y) leaves the caret: at the words under it (prosemirror-view 1.42.9
@@ -284,7 +310,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           options.onToolbar(toolbarState(mounted.state));
           const report = () => {
             frame = 0;
-            options.onChange(withoutFinalNewline(ctx.get(serializerCtx)(mounted.state.doc)));
+            options.onChange(stored(ctx.get(serializerCtx)(mounted.state.doc)));
           };
           // The last change is reported at once when the page goes away before the next frame (a reload right after
           // typing; WebKit may draw none first), so the words reach the page's drafts.
@@ -318,7 +344,6 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         ...prev,
         bullet: "-" as const,
         rule: "-" as const,
-        handlers: { ...prev.handlers, break: () => "\n" },
       }));
       // Milkdown keeps the marker each mark was typed or stored with (preset-commonmark 7.23.0 emphasisSchema and
       // strongSchema, attribute `marker`), so "**a *b***" would come back out; the parser reads that run of three
@@ -351,10 +376,26 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       });
       // A heading shows one level down, as the page shows it (readme.svelte: # is an h2 under the page's own h1), and
       // carries no id: preset-commonmark 7.23.0 headingSchema.toDOM gives each one an id made from its words, which
-      // would repeat across cards and clash with the page's own anchors. The markdown and parseDOM are unchanged.
+      // would repeat across cards and clash with the page's own anchors. parseDOM reads it back one level up, so a
+      // paste (plugin-clipboard 7.23.0 draws pasted Markdown with toDOM and parses that) or a copy between cards keeps
+      // its level; a pasted h1 is the top level, as an h2 is.
       ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
         ...prev(schemaCtx),
+        parseDOM: [1, 2, 3, 4, 5, 6].map((shown) => ({
+          tag: `h${shown}`,
+          getAttrs: () => ({ level: Math.max(shown - 1, 1) }),
+        })),
         toDOM: (node) => [`h${Math.min(Number(node.attrs.level) + 1, 6)}`, 0],
+      }));
+      // An image shows its alt text and loads nothing: the page shows it as a link (parse.ts) until the media proxy,
+      // and a remote address would be refused by the page's img-src anyway (preset-commonmark 7.23.0 imageSchema.toDOM
+      // draws an img with the stored src). Pasted HTML needs nothing more: prosemirror-view 1.42.9 reads it in a
+      // detached document (readHTML, detachedDoc), which loads nothing, and only the schema's own toDOM reaches the
+      // page, so no pasted image or script is ever drawn. Pasted style attributes are refused by the CSP and reported, not applied. A DOMParser of our own would be refused by the
+      // page's Trusted Types rule; prosemirror-view's "ProseMirrorClipboard" policy is the one the CSP allows.
+      ctx.update(imageSchema.key, (prev) => (schemaCtx) => ({
+        ...prev(schemaCtx),
+        toDOM: (node) => ["span", { "data-image": "" }, `[${String(node.attrs.alt) || "image"}]`],
       }));
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
@@ -368,6 +409,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       }));
     })
     .use(commonmark)
+    .use(clipboard)
     .use(pageShapes)
     .use(history)
     .use(changes)
@@ -378,7 +420,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         const view = ctx.get(editorViewCtx);
         commandFor(command, view.state)(view.state, view.dispatch, view);
       }),
-    markdown: () => withoutFinalNewline(editor.action(getMarkdown())),
+    markdown: () => stored(editor.action(getMarkdown())),
     flush: () => flush(),
     // The view's own focus puts its selection back (prosemirror-view 1.42.9 EditorView.focus calls selectionToDOM),
     // so a second toolbar press acts on the words the first one did; a plain DOM focus drops it.
