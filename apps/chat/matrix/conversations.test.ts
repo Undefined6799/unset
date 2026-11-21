@@ -4,7 +4,7 @@
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { createClient, MatrixEvent, NotificationCountType, Room } from "matrix-js-sdk/lib/matrix.js";
 import { describe, expect, test } from "vitest";
-import { directRooms, findDirect, otherJoined, toConversation, toMessages, withDirect } from "./conversations.ts";
+import { directRooms, findDirect, otherMembership, toConversation, toMessages, withDirect } from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -144,11 +144,13 @@ describe("toConversation", () => {
   });
 });
 
-describe("otherJoined", () => {
-  test("chat.other_joined: only the other person's join counts, not an invite", () => {
-    expect(otherJoined(dm("!a:unset.cc", THEM), THEM)).toBe(true);
-    expect(otherJoined(dm("!a:unset.cc", THEM, "invite"), THEM)).toBe(false);
-    expect(otherJoined(dm("!a:unset.cc", THEM, "leave"), THEM)).toBe(false);
+describe("otherMembership", () => {
+  test("chat.other_membership: the other person joined, invited, or out (left, refused, banned or never there)", () => {
+    expect(otherMembership(dm("!a:unset.cc", THEM), THEM)).toBe("join");
+    expect(otherMembership(dm("!a:unset.cc", THEM, "invite"), THEM)).toBe("invite");
+    expect(otherMembership(dm("!a:unset.cc", THEM, "leave"), THEM)).toBe("out");
+    expect(otherMembership(dm("!a:unset.cc", THEM, "ban"), THEM)).toBe("out");
+    expect(otherMembership(dm("!a:unset.cc", THEM), OTHER)).toBe("out");
   });
 });
 

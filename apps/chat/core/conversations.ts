@@ -35,30 +35,37 @@ export type Message = {
 
 /**
  * - on: the composer may send;
+ * - pending: it may send, and the other person, still invited, reads the messages once they accept (Alex, 2026-11-21:
+ *   the asker writes along with the request);
  * - request: accept the request first;
  * - gone: this member has left;
  * - not_encrypted: the room is not encrypted, and this page never sends in one;
- * - waiting_for_them: the other person has not joined yet;
- * - waiting_for_encryption: joined, but this browser's encryption has not switched on for the room yet.
+ * - they_left: the other person is not in the conversation any more (left, or turned the request down);
+ * - waiting_for_encryption: this browser's encryption has not switched on for the room yet.
  */
-export type Composer = "on" | "request" | "gone" | "not_encrypted" | "waiting_for_them" | "waiting_for_encryption";
+export type Composer = "on" | "pending" | "request" | "gone" | "not_encrypted" | "they_left" | "waiting_for_encryption";
 
 export type ComposerFacts = {
   readonly mine: "join" | "invite" | "leave";
-  readonly otherJoined: boolean;
+  /** Where the other person stands: joined, invited, or out of the room. */
+  readonly other: "join" | "invite" | "out";
   readonly kind: ConversationKind;
   /** The SDK's crypto has encryption on for the room (CryptoApi.isEncryptionEnabledInRoom). */
   readonly encryptionOn: boolean;
 };
 
-/** Off until this member and the other person have joined an encrypted room whose encryption is on here. */
+/** Off until this member has joined an encrypted room whose encryption is on here and the other person is in it. */
 export function composerOf(facts: ComposerFacts): Composer {
   if (facts.mine === "invite") return "request";
   if (facts.mine === "leave") return "gone";
   if (facts.kind !== "encrypted") return "not_encrypted";
-  if (!facts.otherJoined) return "waiting_for_them";
-  return facts.encryptionOn ? "on" : "waiting_for_encryption";
+  if (facts.other === "out") return "they_left";
+  if (!facts.encryptionOn) return "waiting_for_encryption";
+  return facts.other === "invite" ? "pending" : "on";
 }
+
+/** Whether the composer sends: on, or pending while the other person is invited. */
+export const canSend = (composer: Composer): boolean => composer === "on" || composer === "pending";
 
 /** How many people a conversation may hold, joined or invited: this member and one other. */
 const ROOM_SIZE = 2;
@@ -86,8 +93,13 @@ export type Conversations = {
   readonly watchList: (onList: (list: readonly Conversation[]) => void) => () => void;
   /** Calls `onView` now and on every change of the conversation, marking it read as it is shown. */
   readonly watch: (id: ConversationId, onView: (view: ConversationView | null) => void) => () => void;
-  /** The existing available conversation with this person, or a new encrypted one with them asked to join. */
-  readonly start: (with_: ChatId) => Promise<ConversationId | null>;
+  /** The available conversation already had with this person, or null; it makes nothing. */
+  readonly find: (with_: ChatId) => ConversationId | null;
+  /**
+   * Asks this person to talk with a first message: a new encrypted conversation with them invited, then `text` sent in
+   * it. Null when no conversation could be made; `sent` false when it was made but the message did not go.
+   */
+  readonly start: (with_: ChatId, text: string) => Promise<{ id: ConversationId; sent: boolean } | null>;
   readonly accept: (id: ConversationId) => Promise<boolean>;
   readonly older: (id: ConversationId) => Promise<void>;
   /** Sends only while the composer is on; false when it was not sent. */

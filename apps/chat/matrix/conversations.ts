@@ -89,8 +89,12 @@ export function toConversation(room: Room, direct: ReadonlyMap<string, string>):
   };
 }
 
-export const otherJoined = (room: Room, other: string): boolean =>
-  room.getMember(other)?.membership === KnownMembership.Join;
+/** Where the other person stands in the room: joined, invited, or out (left, refused, banned, or never there). */
+export function otherMembership(room: Room, other: string): "join" | "invite" | "out" {
+  const membership = room.getMember(other)?.membership;
+  if (membership === KnownMembership.Join) return "join";
+  return membership === KnownMembership.Invite ? "invite" : "out";
+}
 
 const present = (membership: string | undefined) =>
   membership === KnownMembership.Join || membership === KnownMembership.Invite;

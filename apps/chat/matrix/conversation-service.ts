@@ -1,10 +1,18 @@
 // The conversations the screens use (core/conversations.ts Conversations), run on matrix-js-sdk 43.0.0 as it ships.
 // What each call does, and where Element v1.12.35 does the same:
-// - start: an existing conversation first (findDirect); else createRoom({ preset: trusted_private_chat, is_direct,
-//   invite: [them] }), the options Element's createRoom picks for a DM (apps/web/src/createRoom.ts:141-172), then the
-//   room is recorded in m.direct (Rooms.ts:52-73, called at createRoom.ts:371) and awaited from sync
-//   (createRoom.ts:353-369). Element also sends initial_state; ours sends none, since the server's RoomPolicy takes
-//   exactly {preset, is_direct, invite} and adds Megolm itself (ADR 0085 decision 1).
+// - find: an existing conversation (findDirect), making nothing; the start route opens it, or a composer for a new one.
+// - start: only on the first Send of that composer, as Element starts a DM on its first message (startDmOnFirstMessage
+//   and createRoomFromLocalRoom, apps/web/src/utils/direct-messages.ts:24-91). createRoom({ preset:
+//   trusted_private_chat, is_direct, invite: [them] }), the options Element's createRoom picks for a DM
+//   (apps/web/src/createRoom.ts:141-172), then the room is recorded in m.direct (Rooms.ts:52-73, called at
+//   createRoom.ts:371) and awaited from sync (createRoom.ts:353-369). Element also sends initial_state; ours sends
+//   none, since the server's RoomPolicy takes exactly {preset, is_direct, invite} and adds Megolm itself (ADR 0085
+//   decision 1). The first message waits until the room is ready to send in, polled as Element's isRoomReady is
+//   (utils/local-room.ts:76-113, utils/localRoom/isRoomReady.ts:16-38): here, until the composer sends.
+// - Sending while the other person is only invited: the preset's history_visibility is `shared` (Synapse 1.165.0
+//   handlers/room.py:157-163), and matrix-js-sdk 43.0.0 then shares the Megolm key with invited members' devices too
+//   (Room.shouldEncryptForInvitedMembers, src/models/room.ts:1963-1979; rust-crypto/RoomEncryptor.ts:105, 204), so
+//   they read it once they accept. One with no device yet gets no key and sees the message as unreadable.
 // - accept: joinRoom, then m.direct records the inviter, as RoomView.updateDMState does after a join
 //   (apps/web/src/components/structures/RoomView.tsx:1707-1716).
 // - watch: re-read on the client's re-emitted room and event changes, as TimelinePanel listens on the client
@@ -14,7 +22,7 @@
 //   setting off (TimelinePanel.tsx:963-983, 1125-1130), passed as sendReadReceipt's own receiptType argument, whose
 //   default is the public m.read (src/client.ts:3911-3924).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
-// - send: sendTextMessage (client.ts:3272-3294), only once the composer is on, checked again just before sending:
+// - send: sendTextMessage (client.ts:3272-3294), only while the composer sends, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
 // A conversation that is not available (core/conversations.ts availableOf) has no view, cannot be accepted and is never
 // sent in, so the page never joins or encrypts to a room with a third person or one anyone may join.
@@ -40,6 +48,7 @@ import {
   type ConversationId,
   type Conversations,
   type ConversationView,
+  canSend,
   composerOf,
 } from "../core/conversations.ts";
 import {
@@ -47,15 +56,17 @@ import {
   findDirect,
   isAvailable,
   kindOf,
-  otherJoined,
+  otherMembership,
   otherPerson,
   toConversation,
   toMessages,
   withDirect,
 } from "./conversations.ts";
 
-/** How long a new conversation may take to arrive from sync before start gives up. */
+/** How long a new conversation may take to arrive from sync, and then to be ready to send in, before start gives up. */
 const ARRIVAL_MS = 30_000;
+/** How often start looks again whether a new conversation is ready (Element's isRoomReady interval). */
+const READY_POLL_MS = 500;
 const OLDER_PAGE = 30;
 
 /** Client events after which a list or a view is read again (each client re-emits it, src/sync.ts:1964-1983). */
@@ -91,7 +102,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     const membership = room.getMyMembership();
     return composerOf({
       mine: membership === "join" || membership === "invite" ? membership : "leave",
-      otherJoined: otherJoined(room, other),
+      other: otherMembership(room, other),
       kind: kindOf(room),
       encryptionOn: await crypto.isEncryptionEnabledInRoom(room.roomId),
     });
@@ -123,6 +134,26 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     client.sendReadReceipt(last, ReceiptType.ReadPrivate).catch(() => readSent.delete(room.roomId));
   };
 
+  /** Whether the composer sends in `roomId` now, looking again until `deadline` (Element's isRoomReady polling). */
+  const whenSendable = async (roomId: string, other: string, deadline: number): Promise<boolean> => {
+    for (;;) {
+      const room = client.getRoom(roomId);
+      if (room !== null && canSend(await composerFor(room, other))) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
+    }
+  };
+
+  const sendIn = async (room: Room, other: string, text: string): Promise<boolean> => {
+    if (text.trim() === "" || !isAvailable(room) || !canSend(await composerFor(room, other))) return false;
+    try {
+      await client.sendTextMessage(room.roomId, text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const recordDirect = (roomId: string, other: string) =>
     client.setAccountData(
       EventType.Direct,
@@ -144,20 +175,29 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
         if (view !== null && room !== null) markRead(room);
       });
     },
-    async start(other: ChatId) {
+    find(other) {
       const found = findDirect((roomId) => client.getRoom(roomId), direct(), other);
-      if (found !== undefined) return found.roomId as ConversationId;
+      return found === undefined ? null : (found.roomId as ConversationId);
+    },
+    async start(other, text) {
+      if (text.trim() === "") return null;
+      const deadline = Date.now() + ARRIVAL_MS;
+      let roomId: string;
       try {
-        const { room_id } = await client.createRoom({
+        ({ room_id: roomId } = await client.createRoom({
           preset: Preset.TrustedPrivateChat,
           is_direct: true,
           invite: [other],
-        });
-        await recordDirect(room_id, other);
-        return (await arrived(client, room_id, ARRIVAL_MS)) ? (room_id as ConversationId) : null;
+        }));
+        await recordDirect(roomId, other);
       } catch {
         return null;
       }
+      if (!(await arrived(client, roomId, ARRIVAL_MS))) return null;
+      const id = roomId as ConversationId;
+      const ready = await whenSendable(roomId, other, deadline);
+      const room = client.getRoom(roomId);
+      return { id, sent: ready && room !== null && (await sendIn(room, other, text)) };
     },
     async accept(id) {
       const room = client.getRoom(id);
@@ -178,14 +218,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     async send(id, text) {
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());
-      if (room === null || other === undefined || text.trim() === "" || !isAvailable(room)) return false;
-      if ((await composerFor(room, other)) !== "on") return false;
-      try {
-        await client.sendTextMessage(id, text);
-        return true;
-      } catch {
-        return false;
-      }
+      return room !== null && other !== undefined && (await sendIn(room, other, text));
     },
   };
 }
