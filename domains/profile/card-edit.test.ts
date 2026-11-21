@@ -3,6 +3,7 @@ import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
 import { parseCardKey } from "./cards.ts";
+import { MAX_RECORD_BYTES } from "./index-plan.ts";
 
 const NOW = "2026-11-17T05:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
@@ -103,6 +104,17 @@ describe("parseCardInput", () => {
     expect(parseCardInput({ kind: "links", items })).toEqual({ ok: false, code: "card.too_long" });
     const buttons = Array.from({ length: 6 }, () => ({ kind: "email", address: "a@b.example" }));
     expect(parseCardInput({ kind: "buttons", heading: "Hi", buttons })).toEqual({ ok: false, code: "card.too_long" });
+  });
+});
+
+// What the save accepts, the index keeps (book P3.12v): a record the index would skip is refused at save, the stored
+// fields an edit keeps included, so the owner never sees a card the public page leaves out.
+describe("a card the index would leave out is refused at save", () => {
+  test("kept fields past the index's size refuse the edit as too long", () => {
+    const input = parseCardInput({ kind: "readme", text: "hi" });
+    if (!input.ok) throw new Error(input.code);
+    const existing = stored({ $type: ref("readme"), text: "old" }, { note: "x".repeat(MAX_RECORD_BYTES) });
+    expect(toCardRecord(input.content, input.width, existing, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 });
 

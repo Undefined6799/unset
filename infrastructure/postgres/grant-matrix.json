@@ -441,7 +441,8 @@
           "rev": ["SELECT", "INSERT", "UPDATE"],
           "record": ["SELECT", "INSERT", "UPDATE"],
           "position": ["SELECT", "INSERT", "UPDATE"],
-          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"],
+          "bytes": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -462,7 +463,9 @@
           "did": ["SELECT"],
           "rkey": ["SELECT"],
           "cid": ["SELECT"],
-          "record": ["SELECT"]
+          "record": ["SELECT"],
+          "position": ["SELECT"],
+          "bytes": ["SELECT"]
         }
       }
     },
