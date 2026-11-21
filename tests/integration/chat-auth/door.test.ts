@@ -2,9 +2,10 @@
 // root, against real Postgres as `chat_auth` (TE-2), real chat-admin on loopback through a real net-guard, and web's own
 // client signing the tickets. Only MAS is a fake (harness.ts; an unmanaged dependency, TE-1). Every route has its
 // denial cases: no cookie, a wrong one-time value, a wrong Origin, an expired or replayed ticket, another member's
-// ticket in the same browser, and chat-admin down, which answers a typed 503 and nothing more. The chat count (ADR 0090):
-// the pushkey route's denials, Synapse's two bodies on the count port, strict parsing, and that the public listener
-// serves neither count route.
+// ticket in the same browser, and chat-admin down, which answers a typed 503 and nothing more. unset.sh's Log out
+// (POST /sign-out/redeem) mints only on the entry this browser already holds, and never renews it. The chat count
+// (ADR 0090): the pushkey route's denials, Synapse's two bodies on the count port, strict parsing, and that the public
+// listener serves neither count route.
 import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,7 +13,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { Did, Handle } from "@unset/domains-identity";
-import { type ChatUser, newChatUser, parseDoorState, sessionRef } from "@unset/domains-messaging";
+import { type ChatUser, type DoorState, newChatUser, parseDoorState, sessionRef } from "@unset/domains-messaging";
 import { createChatAdminClient } from "@unset/infrastructure-matrix";
 import { createNetGuard } from "@unset/infrastructure-net-guard";
 import { createPool, withClient } from "@unset/infrastructure-postgres";
@@ -141,12 +142,12 @@ function browser() {
         "127.0.0.1",
       ),
     );
-  /** GET /sign-in, then web's ticket for `did` bound to the value this browser now holds. */
-  const hop = async (user: ChatUser, did = ALICE, now?: () => number) => {
+  /** GET /sign-in, then web's ticket for `did` on web session `sid`, bound to the value this browser now holds. */
+  const hop = async (user: ChatUser, did = ALICE, now?: () => number, sid = sessionRef(Buffer.alloc(32, 1))) => {
     await get("/sign-in?return=%2Fc%2Fx");
     const state = parseDoorState(jar.get("__Host-chat-state") ?? null);
     if (state === null) throw new Error("no state cookie");
-    return web(now).signTicket({ user, did, sid: sessionRef(Buffer.alloc(32, 1)), state });
+    return web(now).signTicket({ user, did, sid, state });
   };
   return { jar, get, post, hop };
 }
@@ -373,6 +374,127 @@ describe("POST /sign-out", () => {
   test("door.sign_out_bad_device: a device ID of the wrong form is 400", async () => {
     const { tab } = await signedIn();
     expect((await tab.post("/sign-out", { deviceId: "../x" })).status).toBe(400);
+  });
+});
+
+describe("POST /sign-out/redeem (unset.sh's Log out; ADR 0083 decision 5)", () => {
+  // web's role, to queue the end as POST /logout does and to see whether the claim keeps it (migration 0044).
+  const webDb = createPool({
+    connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
+    service: "door-test-web",
+    max: 1,
+    connectTimeoutMs: 5000,
+  });
+  afterAll(() => webDb.end());
+
+  /** A browser signed in from a web session of its own, which the test may end as POST /logout does. */
+  async function signedIn(did = ALICE) {
+    const tab = browser();
+    const user = await member();
+    const sid = sessionRef(randomBytes(32));
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(user, did, undefined, sid) });
+    return { tab, user, sid, session: (await res.json()) as Record<string, string> };
+  }
+  /** What POST /logout signs: session.mint for the ended session, with a one-time value no browser holds. */
+  const logoutTicket = (user: ChatUser, did = ALICE, now?: () => number, sid = sessionRef(randomBytes(32))) =>
+    web(now).signTicket({ user, did, sid, state: randomBytes(32).toString("base64url") as DoorState });
+
+  test("door.sign_out_redeem: this browser's own device and lock key, with a fresh token and no new device", async () => {
+    const { tab, user, session } = await signedIn();
+    const res = await tab.post("/sign-out/redeem", { ticket: await logoutTicket(user) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = (await res.json()) as Record<string, string>;
+    expect(Object.keys(body).sort()).toEqual(["accessToken", "deviceId", "expiresAt", "storageKey", "userId"]);
+    expect([body.deviceId, body.storageKey, body.userId]).toEqual([
+      session.deviceId,
+      session.storageKey,
+      session.userId,
+    ]);
+    expect(body.accessToken).not.toBe(session.accessToken);
+    expect(activeOn(session.deviceId ?? "")).toHaveLength(1);
+    expect(await rowsOf(ALICE)).toEqual([session.deviceId]);
+  });
+
+  test("door.sign_out_redeem_keeps_the_end: the entry is not renewed, so the end web queued still fires", async () => {
+    const { tab, user, sid, session } = await signedIn();
+    await withClient(webDb, null, (c) => c.query("SELECT app.end_chat_sessions($1::text[], NULL, 0)", [[sid]]));
+    // Signed by a session other than the one that queued the end: a renewal would move the entry to it.
+    expect((await tab.post("/sign-out/redeem", { ticket: await logoutTicket(user) })).status).toBe(200);
+    const claimed = await withClient(webDb, null, (c) =>
+      c.query<{ device_id: string }>("SELECT device_id FROM app.claim_chat_session_end(100, 60)"),
+    );
+    expect(claimed.rows.map((r) => r.device_id)).toContain(session.deviceId);
+  });
+
+  test("door.sign_out_redeem_no_ticket: a body without web's ticket is 400 and mints nothing", async () => {
+    const { tab } = await signedIn();
+    for (const body of [{}, { ticket: "" }, { ticket: "x".repeat(10) }, { ticket: "a", extra: 1 }]) {
+      const res = await tab.post("/sign-out/redeem", body);
+      expect([res.status, await res.json()]).toEqual([400, { error: "chat.bad_ticket" }]);
+    }
+    expect(mas.sessions.filter((s) => !s.revoked)).toHaveLength(1);
+  });
+
+  test("door.sign_out_redeem_used: a ticket spent once is refused by chat-admin the second time", async () => {
+    const { tab, user } = await signedIn();
+    const ticket = await logoutTicket(user);
+    expect((await tab.post("/sign-out/redeem", { ticket })).status).toBe(200);
+    const minted = mas.sessions.length;
+    const again = await tab.post("/sign-out/redeem", { ticket });
+    expect([again.status, await again.json()]).toEqual([403, { error: "chat.ticket_refused" }]);
+    expect(mas.sessions).toHaveLength(minted);
+  });
+
+  test("door.sign_out_redeem_expired: a ticket past its 60 seconds is refused before chat-admin", async () => {
+    const { tab, user } = await signedIn();
+    const minted = mas.sessions.length;
+    const res = await tab.post("/sign-out/redeem", {
+      ticket: await logoutTicket(user, ALICE, () => Date.now() - 120_000),
+    });
+    expect([res.status, await res.json()]).toEqual([403, { error: "chat.ticket_expired" }]);
+    expect(mas.sessions).toHaveLength(minted);
+  });
+
+  test("door.sign_out_redeem_other_browser: a browser without the member's entry gets nothing, and no device is made", async () => {
+    const { session, user } = await signedIn();
+    const ticket = await logoutTicket(user);
+    // No door cookie at all.
+    const stranger = browser();
+    const bare = await stranger.post("/sign-out/redeem", { ticket });
+    expect([bare.status, await bare.json()]).toEqual([401, { error: "chat.no_session" }]);
+    // A browser that holds another member's entry only.
+    const other = await signedIn(BOB);
+    const minted = mas.sessions.length;
+    const res = await other.tab.post("/sign-out/redeem", { ticket: await logoutTicket(user) });
+    expect([res.status, await res.json()]).toEqual([401, { error: "chat.no_session" }]);
+    expect(mas.sessions).toHaveLength(minted);
+    expect(await rowsOf(ALICE)).toEqual([session.deviceId]);
+    expect(stranger.jar.has("__Host-chat-browser")).toBe(false);
+  });
+
+  test("door.sign_out_redeem_cross_site: a post from another site is refused by the CSRF gate before anything is read", async () => {
+    const { tab, user } = await signedIn();
+    const minted = mas.sessions.length;
+    const res = await tab.post("/sign-out/redeem", { ticket: await logoutTicket(user) }, "https://unset.sh");
+    expect([res.status, await res.json()]).toEqual([403, { error: "csrf.denied" }]);
+    expect(mas.sessions).toHaveLength(minted);
+  });
+
+  test("door.sign_out_redeem_ended: a device already ended is 409 and its entry and key go", async () => {
+    const { tab, user } = await signedIn();
+    for (const s of mas.sessions) s.revoked = true;
+    const res = await tab.post("/sign-out/redeem", { ticket: await logoutTicket(user) });
+    expect([res.status, await res.json()]).toEqual([409, { error: "chat.device_ended" }]);
+    expect(await rowsOf(ALICE)).toEqual([]);
+  });
+
+  test("door.sign_out_redeem_down: chat-admin unreachable is 503 and the entry stays for the queued end", async () => {
+    const { tab, user, session } = await signedIn();
+    mas.down = true;
+    const res = await tab.post("/sign-out/redeem", { ticket: await logoutTicket(user) });
+    expect([res.status, await res.json()]).toEqual([503, { error: "chat.unavailable" }]);
+    expect(await rowsOf(ALICE)).toEqual([session.deviceId]);
   });
 });
 

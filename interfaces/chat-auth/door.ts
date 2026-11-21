@@ -20,6 +20,9 @@ import { ASSETS, type ChatPage, pageCsp } from "./page.ts";
 
 /** The hop's landing path, where web sends the ticket (interfaces/web chat-sign-in.ts DOOR_RETURN_PATH). */
 const RETURN_PATH = "/sign-in/return";
+/** Where unset.sh's Log out sends the tab with its ticket (interfaces/web chat-sign-out.ts), and the page's way back. */
+const SIGN_OUT_RETURN_PATH = "/sign-out/return";
+const SIGNED_OUT_PATH = "/sign-out/done";
 /** A profile's Message link, `/dm/<did>` (ADR 0082 decision 6): the page, which asks for the chat ID once signed in. */
 const DM_PREFIX = "/dm/";
 const DM_ROUTE = "/dm/*";
@@ -83,6 +86,14 @@ function startSignIn(url: URL, deps: DoorDeps): DoorAnswer {
   return { response: new Response(null, { status: 303, headers }) };
 }
 
+/** GET /sign-out/done: the chat page, its Log out over, back to unset.sh's signed-out page. Sets nothing. */
+const signedOut: GetRoute = (_url, deps) => ({
+  response: new Response(null, {
+    status: 303,
+    headers: { ...BASE, ...NO_REFERRER, location: `${deps.webOrigin}/signed-out` },
+  }),
+});
+
 const IMMUTABLE = { "cache-control": "public, max-age=31536000, immutable" };
 
 /** The page's document, under its own CSP. */
@@ -119,6 +130,8 @@ const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   "/sign-in": { limit: "default", handle: startSignIn },
   "/": { limit: "default", handle: pageDocument },
   [RETURN_PATH]: { limit: "default", handle: pageDocument },
+  [SIGN_OUT_RETURN_PATH]: { limit: "default", handle: pageDocument },
+  [SIGNED_OUT_PATH]: { limit: "default", handle: signedOut },
   [ASSETS]: { limit: "default", handle: pageFile },
   [DM_ROUTE]: { limit: "default", handle: dmPage },
 };
