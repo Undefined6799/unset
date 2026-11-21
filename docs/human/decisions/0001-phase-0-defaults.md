@@ -731,3 +731,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   notifications are one inbox with one send call and one reason table, gone once opened and at 30 days; a new
   sign-in's entry only the member's older browsers can clear, keeping its time only, which amends the "no sign-in
   records" rule for this one kind. Proposed, awaiting Alex.
+- **Chat page served by the door (P6.06, 2026-11-21; own record: [0088](0088-chat-page-served-by-the-door.md)):**
+  the door on unset.cc serves the static chat page, which redeems the sign-in ticket in its own tab, keeps the
+  session in memory only, and renews by running the hop again. Accepted by Alex 2026-11-21.
