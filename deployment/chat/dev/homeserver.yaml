@@ -21,7 +21,8 @@ listeners:
         compress: false
 
 # Its own database and role in our Postgres (:1519). libpq reads the password from a passfile
-# (postgresql.org/docs/current/libpq-connect.html, "passfile"), so the config holds no password.
+# (postgresql.org/docs/current/libpq-connect.html, "passfile"), so the config holds no password. C36 allows exactly
+# these args.
 database:
   name: psycopg2
   args:
@@ -94,6 +95,8 @@ push:
 
 # No link previews (:2415). Client addresses are kept one day (:1103).
 url_preview_enabled: false
+# No uploads: the media repository is off, so Synapse serves no media endpoint (:2184).
+enable_media_repo: false
 user_ips_max_age: 1d
 
 # Sign-in is MAS's (:683-702). The endpoint is MAS's listener for Synapse, which serves discovery and oauth.

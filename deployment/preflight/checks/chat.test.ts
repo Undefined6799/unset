@@ -70,6 +70,9 @@ describe("C36 the chat servers' settings", () => {
       ["log_config", "/data/log.yaml"],
       ["matrix_authentication_service", { enabled: false }],
       ["matrix_authentication_service.endpoint", "http://elsewhere:8080/"],
+      // No uploads: the media repository is off (config_documentation.md `enable_media_repo` at v1.165.0).
+      ["enable_media_repo", true],
+      ["enable_media_repo", undefined],
     ];
     for (const [path, value] of cases) {
       const top = path.split(".")[0];
@@ -164,6 +167,19 @@ describe("C36 the chat servers' settings", () => {
     expect(synapseProblem(edited(synapse(), "database.name", "sqlite3"), SERVER)).toBe(
       "homeserver.yaml: database is not Postgres",
     );
+    // Only the connection keys we use; any other libpq or pool key (a TLS file, `options`, a service file) is refused.
+    for (const [path, value] of [
+      ["database.args.options", "-c search_path=public"],
+      ["database.args.sslrootcert", "/data/ca.pem"],
+      ["database.args.service", "synapse"],
+      ["database.args.cp_reconnect", true],
+      ["database.allow_unsafe_locale", true],
+      ["database.txn_limit", 10],
+    ] as const) {
+      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBe(
+        "homeserver.yaml: database is not its reviewed shape",
+      );
+    }
     expect(synapseProblem(edited(synapse(), "form_secret_path", "/config/form"), SERVER)).toBe(
       "homeserver.yaml: form_secret_path is not a mounted secret",
     );

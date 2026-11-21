@@ -53,6 +53,7 @@ function homeserverYaml(secret: string, module: string, retention: Retention): s
     "database: { name: sqlite3, args: { database: /data/homeserver.db } }",
     "signing_key_path: /data/signing.key",
     "media_store_path: /data/media",
+    "enable_media_repo: false",
     "report_stats: false",
     "trusted_key_servers: []",
     "federation_domain_whitelist: []",
