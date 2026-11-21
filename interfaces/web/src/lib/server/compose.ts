@@ -19,6 +19,7 @@ import {
   type IdentityNetwork,
   type OnboardingVersions,
   PRIVACY_VERSION,
+  parseDid,
   type SignInHistory,
   TERMS_VERSION,
 } from "@unset/domains-identity";
@@ -177,6 +178,8 @@ export type InviteRequests = {
   readonly window: AskWindow;
   readonly mailer: Mailer;
   readonly to: string;
+  /** The member whose inbox says when a request could not be mailed (P2.10s). */
+  readonly owner: Did;
   /** Mails still going after their answer; shutdown waits for them. */
   readonly pending: PendingSends;
 };
@@ -184,16 +187,19 @@ export type InviteRequests = {
 /** Each SMTP wait (connect, greeting, idle); the route's 20 s deadline bounds the whole send (policy.ts). */
 const MAIL_TIMEOUT_MS = 8000;
 
-/** The invite-request services, or null when off. config.ts's rules have checked all three values when on. */
+/** The invite-request services, or null when off. config.ts's rules have checked all four values when on. */
 function inviteRequestsOf(): InviteRequests | null {
   const { INVITE_REQUESTS: on, INVITE_REQUEST_SMTP_URL: url, INVITE_REQUEST_TO: to } = config;
   if (on !== "on") return null;
   const server = url === undefined ? null : parseSmtpUrl(url.reveal());
-  if (server === null || to === undefined) throw new Error("invite requests: on without their settings");
+  const owner = parseDid(config.INVITE_REQUEST_OWNER_DID);
+  if (server === null || to === undefined || owner === null)
+    throw new Error("invite requests: on without their settings");
   return {
     window: createAskWindow({ now: () => Date.now() }),
     mailer: createSmtpMailer({ server, from: config.INVITE_REQUEST_FROM, timeoutMs: MAIL_TIMEOUT_MS }),
     to: to.reveal(),
+    owner,
     pending: createPendingSends(),
   };
 }

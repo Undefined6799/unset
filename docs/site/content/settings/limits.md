@@ -71,10 +71,11 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | Process | Key | Kind | Allowed | Default | local | staging | Defined in |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `web` | `INVITE_COUNTRY_RULE` | oneOf | on, off | `on` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `web` | `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `web` | `INVITE_REQUEST_SMTP_URL` | secretFile | at least 16 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `web` | `INVITE_REQUEST_TO` | secretFile | at least 6 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `web` | `INVITE_REQUEST_FROM` | str | text (pattern in source) | (empty) | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | `on` | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_SMTP_URL` | secretFile | at least 16 bytes | optional | not set | secret file | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_TO` | secretFile | at least 6 bytes | optional | not set | secret file | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_FROM` | str | text (pattern in source) | (empty) | not set | `noreply@staging.unset.sh` | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_OWNER_DID` | str | text (pattern in source) | (empty) | not set | from env file: `INVITE_REQUEST_OWNER_DID` | `interfaces/web/src/lib/server/config.ts` |
 | `pds-admin` | `INVITE_WINDOW_HOURS` | int | 1 to 720 | `24` | not set | not set | `interfaces/pds-admin/config.ts` |
 | `pds-admin` | `INVITE_MAX_PER_WINDOW` | int | 1 to 1000 | `5` | not set | not set | `interfaces/pds-admin/config.ts` |
 | `pds-admin` | `INVITE_MAX_PER_DAY_GLOBAL` | int | 1 to 100000 | `100` | not set | not set | `interfaces/pds-admin/config.ts` |

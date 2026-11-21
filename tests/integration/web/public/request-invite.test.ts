@@ -1,19 +1,30 @@
 // P2.10r (ADR 0080): the invite-request page on the built web server. Postgres as `web` (TE-2). The mail provider is
 // what a test may not reach (TE-1): a TLS SMTP server on loopback (tests/support/smtp-server.ts) that the child trusts
 // through NODE_EXTRA_CA_CERTS, so the real adapter, TLS check and login run. A second server runs with requests off,
-// and a third against a mail server that never answers, to show the answer never waits for the mail.
+// and a third against a mail server that never answers, to show the answer never waits for the mail. A failed mail
+// puts one entry a day in the owner's inbox (P2.10s), read here as `web` reads it.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { type Did, parseDid } from "@unset/domains-identity";
+import { createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, test } from "vitest";
 import { startTestSmtp, type TestSmtp } from "../../../support/smtp-server.ts";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+import { readyMember } from "../members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
 const provided = inject("postgres");
 const database = provided.databases[relative(REPO, import.meta.filename)] ?? "";
 const pg = { host: provided.host, port: provided.port, database, ...provided.roles.web };
 const OWNER = "owner@unset.example";
+const OWNER_DID = parseDid(`did:plc:${"o".repeat(24)}`) as Did;
+const pool = createPool({
+  connection: { ...pg, ssl: false },
+  service: "web-invite-request-test",
+  max: 2,
+  connectTimeoutMs: 5000,
+});
 
 let smtp: TestSmtp;
 let stalled: TestSmtp;
@@ -26,6 +37,7 @@ let stopping: RunningWeb;
 
 beforeAll(async () => {
   buildOnce(provided.port);
+  await readyMember(pool, OWNER_DID);
   [smtp, stalled, unhurried] = await Promise.all([
     startTestSmtp(),
     startTestSmtp({ stall: true }),
@@ -42,6 +54,7 @@ beforeAll(async () => {
     INVITE_REQUEST_SMTP_URL_FILE: file(name, `smtps://user:pass@localhost:${server.port}`),
     INVITE_REQUEST_TO_FILE: file("to", OWNER),
     INVITE_REQUEST_FROM: "noreply@unset.example",
+    INVITE_REQUEST_OWNER_DID: OWNER_DID,
     NODE_EXTRA_CA_CERTS: server.certPath,
   });
   [web, closed, slow, stopping] = await Promise.all([
@@ -58,7 +71,19 @@ afterAll(async () => {
   await Promise.all([web?.stop(), closed?.stop(), slow?.stop(), stopping?.stop()]);
   await Promise.all([smtp?.close(), stalled?.close(), unhurried?.close()]);
   rmSync(secrets, { recursive: true, force: true });
+  await pool.end();
 });
+
+/** The owner's inbox as `web` reads it: each entry's reason and dedupe key. */
+async function ownerInbox(): Promise<{ reason: string; dedupe_key: string | null }[]> {
+  const { rows } = await withClient(pool, null, (db) =>
+    db.query<{ reason: string; dedupe_key: string | null }>(
+      "SELECT reason, dedupe_key FROM app.notification WHERE did = $1",
+      [OWNER_DID],
+    ),
+  );
+  return rows;
+}
 
 /** Waits for `done` (the mail goes after the answer), failing after `ms`. */
 async function until(done: () => boolean, ms = 4000): Promise<void> {
@@ -204,7 +229,7 @@ describe("the invite-request page", () => {
   });
 
   // Last: it stops the mail server.
-  test("invite_request.mail_fails: the visitor reads the same, the failure is logged, and the address may ask again", async () => {
+  test("invite_request.mail_fails: the visitor reads the same, the owner's inbox says so once a day, and the address may ask again", async () => {
     await smtp.close();
     const failures = () => web.logs().filter((line) => line.event === "invite.request_mail_failed").length;
     const first = await post(form({ ...ASK, email: "pat@example.ca" }));
@@ -213,5 +238,19 @@ describe("the invite-request page", () => {
     // Forgotten after the failure, so the same address is a first ask again and its mail is tried again.
     await post(form({ ...ASK, email: "pat@example.ca" }));
     await until(() => failures() === 2);
+    // Two failures, one entry for today, with no address in it.
+    const today = new Date().toISOString().slice(0, 10);
+    let inbox = await ownerInbox();
+    for (const end = Date.now() + 4000; inbox.length === 0 && Date.now() < end; inbox = await ownerInbox()) {
+      await new Promise((wake) => setTimeout(wake, 20));
+    }
+    expect(inbox).toEqual([{ reason: "invite_mail_failed", dedupe_key: `invite_mail_failed:${today}` }]);
+    // The owner dismisses it, which deletes the row (P2.27b), and another mail fails the same day: dismissed stays
+    // dismissed. Web decides before the failure's log line returns, so the inbox is final once the third is logged.
+    await withClient(pool, null, (db) => db.query("DELETE FROM app.notification WHERE did = $1", [OWNER_DID]));
+    await post(form({ ...ASK, email: "pat@example.ca" }));
+    await until(() => failures() === 3);
+    await new Promise((wake) => setTimeout(wake, 200));
+    expect(await ownerInbox()).toEqual([]);
   });
 });

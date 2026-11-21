@@ -1591,7 +1591,9 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.09d | `pds-admin` in the dev stack (split from P2.09, SE-6) | [SEC] | P2.09 | `phase-2.md` |
 | P2.10 | Invites and `/join?invite=` | [SEC] | P2.09d, P2.09, P2.05, P1.14, P1.14d | `phase-2.md` |
 | P2.10r | Request an invite: the owner gets one mail per visitor address (ADR 0080) | [SEC] | P2.10 | `phase-2.md` |
+| P2.10s | Tell the owner when invite mails fail: one inbox entry a day (ADR 0080, ADR 0079) | [SEC] | P2.10r, P2.27 | `phase-2.md` |
 | P2.10t | Offer Sign up on the limited page while invite requests are on (ADR 0078, ADR 0080) | — | P2.10r, P1.22a | `phase-2.md` |
+| P2.10u | Invite requests on in staging: mounts, env, C9 names a missing file | [SEC] | P2.10r | `phase-2.md` |
 | P2.14 | Module identity seam | [SEC] | P1.16, P2.03 | `phase-2.md` |
 | P2.16b | PDQ hasher (one module for images and video frames) | [SEC] | P1.01 | `phase-2.md` |
 | P2.16 | Image fingerprint stage (interface, local PDQ, fake check) | [SEC] [MOD] | P2.16b, P1.02, P1.12, P1.15 | `phase-2.md` |
