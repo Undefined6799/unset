@@ -49,16 +49,16 @@ function raw(headers: Record<string, string>, body: Buffer): Promise<number> {
 
 describe("review door", () => {
   test("a photo comes back as the standard's versions, checked by web's client", async () => {
-    const photo = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#228844" } })
+    const photo = await sharp({ create: { width: 6000, height: 4000, channels: 3, background: "#228844" } })
       .jpeg()
       .toBuffer();
     const result = await remote.process(new Uint8Array(photo), UPLOAD_LIMITS, imageVersions());
     expect(result.kind).toBe("ok");
     if (result.kind !== "ok") return;
-    expect(result.source).toEqual({ format: "jpeg", width: 3000, height: 2000 });
+    expect(result.source).toEqual({ format: "jpeg", width: 6000, height: 4000 });
     const main = result.versions.find((v) => v.name === "main");
-    expect([main?.width, main?.height]).toEqual([2560, 1707]);
-    expect((await sharp(main?.bytes).metadata()).format).toBe("jpeg");
+    expect([main?.width, main?.height]).toEqual([4096, 2731]);
+    expect((await sharp(main?.bytes).metadata()).format).toBe("webp");
   }, 60_000);
 
   test("a file that is not a picture is refused with its code", async () => {

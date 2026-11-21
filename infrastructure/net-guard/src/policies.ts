@@ -35,10 +35,16 @@ export const plc: Policy = { name: "plc", kind: "fixed", hosts: ["plc.directory"
 export const atproto: Policy = { name: "atproto", kind: "public" };
 
 /**
- * A member's picture to their PDS (`com.atproto.repo.uploadBlob`; ADR 0070 point 8): the atproto policy, with a body
- * of up to 2 MiB, room for the 2,000,000-byte main version. libraryFetch picks it for that one call only.
+ * A picture's main version, the largest object a hop carries: up to 5,000,000 bytes (ADR 0088, amending ADR 0070
+ * points 3 and 8), so 5 MiB gives each hop a little room and nothing more.
  */
-export const atprotoBlobUpload: Policy = { name: "atproto-upload", kind: "public", requestBytes: 2 * 1024 * 1024 };
+export const PICTURE_HOP_BYTES = 5 * 1024 * 1024;
+
+/**
+ * A member's picture to their PDS (`com.atproto.repo.uploadBlob`; ADR 0070 point 8, ADR 0088): the atproto policy,
+ * with a body of up to 5 MiB, room for the 5,000,000-byte main version. libraryFetch picks it for that one call only.
+ */
+export const atprotoBlobUpload: Policy = { name: "atproto-upload", kind: "public", requestBytes: PICTURE_HOP_BYTES };
 
 /** True when `origin` is exactly the serialised origin of an http or https URL (no path, case or default port). */
 const isHttpOrigin = (origin: string): boolean =>
@@ -74,12 +80,16 @@ export function internalPolicy(name: string, origins: readonly string[], request
  */
 export const localPlc: Policy = internalPolicy("plc", ["http://plc:2582"]);
 
+/** What one object-store call may send or bring back: a picture's main version (ADR 0088). */
+export const OBJECT_STORE_BYTES = PICTURE_HOP_BYTES;
+
 /**
  * The private object store (P2.18k; plan §5.8 drafts store): one exact internal origin, the `OBJECT_STORE_URL` the
  * calling process's composition root passes in, so its answers must be private and no other host or port is reachable.
- * A put may carry up to 2 MiB, room for a picture's 2,000,000-byte main version (ADR 0070 points 2.4 and 3).
+ * A put may carry up to 5 MiB, room for a picture's 5,000,000-byte main version (ADR 0070 point 2.4, ADR 0088). Reach
+ * it through `objectStoreFetch`, which caps the answer the same.
  */
-export const objectStore = (origin: string): Policy => internalPolicy("object-store", [origin], 2 * 1024 * 1024);
+export const objectStore = (origin: string): Policy => internalPolicy("object-store", [origin], OBJECT_STORE_BYTES);
 
 /**
  * The review process (ADR 0070 point 2.2): web's one call with a member's upload, by the `REVIEW_URL` web's composition
