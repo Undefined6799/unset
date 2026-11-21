@@ -76,8 +76,11 @@ Configurable per stack in the compose files.
 
 | Service | local | staging |
 | --- | --- | --- |
+| `chat-admin` | not in this stack | 128m memory, 0.25 CPU, 32 processes |
+| `chat-auth` | not in this stack | 256m memory, 0.5 CPU, 64 processes |
 | `edge` | 256m memory, 0.5 CPU, 128 processes | 256m memory, 0.5 CPU, 128 processes |
 | `indexer` | 512m memory, 0.5 CPU, 64 processes | 512m memory, 0.5 CPU, 64 processes |
+| `mas` | not in this stack | 256m memory, 0.5 CPU, 64 processes |
 | `migrate` | 256m memory, 0.5 CPU, 64 processes | 256m memory, 0.5 CPU, 64 processes |
 | `newt` | not in this stack | 128m memory, 0.5 CPU, 64 processes |
 | `objects` | 512m memory, 0.5 CPU, 256 processes | 512m memory, 0.5 CPU, 256 processes |
@@ -86,6 +89,7 @@ Configurable per stack in the compose files.
 | `pds-token-reader` | 128m memory, 0.25 CPU, 32 processes | not in this stack |
 | `postgres` | 1g memory, 1 CPU, 256 processes | 1g memory, 1 CPU, 256 processes |
 | `review` | 2g memory, 2 CPU, 128 processes | 2g memory, 2 CPU, 128 processes |
+| `synapse` | not in this stack | 1g memory, 1 CPU, 256 processes |
 | `web` | 1g memory, 1 CPU, 128 processes | 1g memory, 1 CPU, 128 processes |
 
 ## Limits fixed in code

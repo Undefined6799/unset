@@ -68,7 +68,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `CHAT_ADMIN_WEB_KEY` | secretFile | at least 64 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `CHAT_ADMIN_WEB_KID` | str | text (pattern in source) | required | `web-chat` | `web-chat` | `interfaces/web/src/lib/server/config.ts` |
 | `CHAT_DOOR_ORIGIN` | origin | https: | required | `https://staging.unset.cc` | `https://staging.unset.cc` | `interfaces/web/src/lib/server/config.ts` |
-| `CHAT_COUNT_URL` | origin | http: | required | `http://chat-auth:8091` | `http://chat-auth:8091` | `interfaces/web/src/lib/server/config.ts` |
+| `CHAT_COUNT_URL` | origin | http: | required | `http://10.250.38.19:8091` | `http://10.250.38.19:8091` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_URL` | origin | http: or https: | required | `http://objects:8333` | `http://objects:8333` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |
@@ -175,6 +175,50 @@ Every environment setting, by process. "not set" means the default applies.
 
 Services we run as shipped or without a settings schema: the keys each stack sets.
 
+### chat-admin
+
+| Key | local | staging |
+| --- | --- | --- |
+| `CHAT_ADMIN_ENV` | not in this stack | `dev` |
+| `LISTEN_ADDRESS` | not in this stack | `10.250.38.27` |
+| `MAS_ADMIN_URL` | not in this stack | `http://mas:8081` |
+| `MAS_CLIENT_ID` | not in this stack | `01M7XSE66CYPNSDBAK0KZR45NM` |
+| `MAS_TOKEN_URL` | not in this stack | set (secret, not shown) |
+| `NODE_OPTIONS` | not in this stack | `--max-old-space-size=96` |
+| `PORT` | not in this stack | `8080` |
+| `STATE_DIR` | not in this stack | `/app/state` |
+| `SYNAPSE_ADMIN_URL` | not in this stack | `http://synapse:8008` |
+
+### chat-auth
+
+| Key | local | staging |
+| --- | --- | --- |
+| `CHAT_ADMIN_DOOR_KEY_FILE` | not in this stack | file `/run/secrets/chat_auth_chat_admin_key` |
+| `CHAT_ADMIN_DOOR_KID` | not in this stack | `door-chat` |
+| `CHAT_ADMIN_URL` | not in this stack | `http://chat-admin:8080` |
+| `CHAT_SERVER_NAME` | not in this stack | `staging.unset.cc` |
+| `COUNT_LISTEN_ADDRESS` | not in this stack | `10.250.38.19` |
+| `COUNT_LISTEN_PORT` | not in this stack | `8091` |
+| `COUNT_ORIGIN` | not in this stack | `http://10.250.38.19:8091` |
+| `HTTP_ALLOWED_HOSTS` | not in this stack | `staging.unset.cc` |
+| `LISTEN_ADDRESS` | not in this stack | `10.250.38.43` |
+| `LISTEN_PORT` | not in this stack | `8090` |
+| `NETGUARD_INTERNAL_HOSTS` | not in this stack | `chat-admin` |
+| `NODE_OPTIONS` | not in this stack | `--max-old-space-size=192` |
+| `PG_DATABASE` | not in this stack | `unset` |
+| `PG_HOST` | not in this stack | `postgres` |
+| `PG_PASSWORD_FILE` | not in this stack | file `/run/secrets/pg_chat_auth_password` |
+| `PG_POOL_MAX` | not in this stack | `5` |
+| `PG_SSLMODE` | not in this stack | `disable` |
+| `PG_USER` | not in this stack | `chat_auth` |
+| `PUBLIC_ORIGIN` | not in this stack | `https://staging.unset.cc` |
+| `SEAL_KEYRING_FILE` | not in this stack | file `/run/secrets/chat_auth_seal_keyring` |
+| `TRUSTED_PROXY_MODE` | not in this stack | `socket` |
+| `UNSET_COMMIT` | not in this stack | `0000000000000000000000000000000000000000` |
+| `UNSET_ENV` | not in this stack | `dev` |
+| `UNSET_SERVICE` | not in this stack | `chat-auth` |
+| `WEB_ORIGIN` | not in this stack | from env file: `WEB_PUBLIC_ORIGIN` |
+
 ### edge
 
 | Key | local | staging |
@@ -185,6 +229,12 @@ Services we run as shipped or without a settings schema: the keys each stack set
 | `DOCS_HOST` | not set | `docs.unset.sh` |
 | `PDS_HOST` | from env file: `PDS_HOSTNAME` | from env file: `PDS_HOSTNAME` |
 | `PDS_UPSTREAM` | `pds:3000` | `pds:3000` |
+
+### mas
+
+| Key | local | staging |
+| --- | --- | --- |
+| `MAS_CONFIG` | not in this stack | `/config/mas.yaml` |
 
 ### newt
 
@@ -243,3 +293,7 @@ None.
 | `UNSET_COMMIT` | `0000000000000000000000000000000000000000` | `0000000000000000000000000000000000000000` |
 | `UNSET_ENV` | `dev` | `dev` |
 | `UNSET_SERVICE` | `review` | `review` |
+
+### synapse
+
+None.
