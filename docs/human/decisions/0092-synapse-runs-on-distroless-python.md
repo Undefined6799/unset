@@ -1,12 +1,16 @@
 ---
-status: Proposed
+status: Accepted
 date: "2026-11-21"
+accepted:
+  at: "2026-11-21T22:03:46Z"
+  head: 68f0026d68222647fb04d4ce26fce4cb748e799a
+  line: "yes accept 1944"
 step: P6.02
 ---
 # 0092 — The chat Synapse image runs on distroless Python
 
-Alex chose this on 2026-11-21 at 20:08Z, on the decision card "Yes, use distroless". Under ADR 0083 the record is
-accepted by his line naming the reviewed head of the pull request that adds it; until then it is Proposed.
+Alex chose this on 2026-11-21 at 20:08Z, on the decision card "Yes, use distroless", and accepted the record at
+22:03:46Z in the project chat ("yes accept 1944"), of pull request 1944's reviewed head 68f0026d (ADR 0083).
 
 ## Context
 
