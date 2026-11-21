@@ -1,7 +1,7 @@
 // The privacy save waits, a few seconds at most, until the index (which the public page reads) has the member's new
 // choice (staging break test 2026-11-21, second pass: the page still showed for about 2 s after "Privacy saved").
 import { expect, test } from "vitest";
-import { type CatchUpDeps, publicPageShows } from "./index-catch-up.ts";
+import { ANSWER_MS, type CatchUpDeps, publicPageShows } from "./index-catch-up.ts";
 
 /** A clock that only moves when the wait sleeps, and an index that answers from a list, one read at a time. */
 function world(answers: readonly unknown[]) {
@@ -14,6 +14,7 @@ function world(answers: readonly unknown[]) {
       at += ms;
     },
     signal: new AbortController().signal,
+    deadlineAt: 30_000,
   };
   return { deps, reads: () => reads, elapsed: () => at };
 }
@@ -64,4 +65,15 @@ test("stops when the request's deadline ends, and a failed read counts as not ca
       },
     }),
   ).toBe(false);
+});
+
+test("ends early enough that the request still answers inside its deadline", async () => {
+  // With less than CATCH_UP_MS left, the wait stops ANSWER_MS before the deadline, so the redirect is sent instead of
+  // the hooks' 503 (Codex review of #1906).
+  const w = world([record()]);
+  expect(await publicPageShows("ownerOnly", { ...w.deps, deadlineAt: 2_000 })).toBe(false);
+  expect(w.elapsed()).toBeLessThanOrEqual(2_000 - ANSWER_MS);
+  const late = world([record("ownerOnly")]);
+  expect(await publicPageShows("ownerOnly", { ...late.deps, deadlineAt: ANSWER_MS })).toBe(false);
+  expect(late.reads()).toBe(0);
 });

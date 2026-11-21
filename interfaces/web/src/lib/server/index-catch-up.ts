@@ -9,6 +9,11 @@ import { type ProfileVisibility, readProfileVisibility } from "@unset/domains-pr
 export const CATCH_UP_MS = 5_000;
 /** Between two reads of the index. */
 const STEP_MS = 250;
+/**
+ * Kept free before the request's deadline to send the answer: the hooks answer 503 at the deadline itself
+ * (interfaces/web/src/hooks.server.ts, withDeadline), which would hide a choice already saved (Codex review of #1906).
+ */
+export const ANSWER_MS = 500;
 
 export type CatchUpDeps = {
   /** The member's profile record as the public page reads it, or null when the index shows no page for them. */
@@ -17,6 +22,8 @@ export type CatchUpDeps = {
   readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   /** The request's deadline: the wait never outlives it. */
   readonly signal: AbortSignal;
+  /** When that deadline ends, on the clock `now` reads (locals.deadlineAt, performance.now()). */
+  readonly deadlineAt: number;
 };
 
 /**
@@ -24,10 +31,13 @@ export type CatchUpDeps = {
  * public page is a 404 either way). A read that fails counts as not yet, so the answer never claims more than is known.
  */
 export async function publicPageShows(wanted: ProfileVisibility, deps: CatchUpDeps): Promise<boolean> {
-  const until = deps.now() + CATCH_UP_MS;
+  const until = Math.min(deps.now() + CATCH_UP_MS, deps.deadlineAt - ANSWER_MS);
   for (;;) {
-    if (deps.signal.aborted) return false;
-    const record = await deps.read(deps.signal).catch(() => undefined);
+    const left = until - deps.now();
+    if (deps.signal.aborted || left <= 0) return false;
+    // A read that hangs ends with the wait, not with the request.
+    const signal = AbortSignal.any([deps.signal, AbortSignal.timeout(left)]);
+    const record = await deps.read(signal).catch(() => undefined);
     if (record === null) return true;
     if (record !== undefined && readProfileVisibility(record) === wanted) return true;
     if (deps.now() + STEP_MS > until) return false;

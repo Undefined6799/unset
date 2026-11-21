@@ -58,9 +58,10 @@ export const actions: Actions = {
       visibility === undefined ||
       (await publicPageShows(visibility, {
         read: async (signal) => (await services().publicProfiles.find({ did }, signal))?.record ?? null,
-        now: Date.now,
+        now: () => performance.now(),
         sleep,
         signal: locals.deadline,
+        deadlineAt: locals.deadlineAt,
       }));
     redirect(303, `/settings/privacy?saved${caughtUp ? "" : "=pending"}#privacy`);
   },
