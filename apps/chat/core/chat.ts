@@ -11,6 +11,9 @@ export type ChatSession = {
   readonly storageKey: Uint8Array;
 };
 
+/** What an unlock with a typed key came to (ADR 0083 decision 3): a wrong key is said plainly and asked again. */
+export type UnlockOutcome = "unlocked" | "wrong_key" | "unfinished" | "failed";
+
 /**
  * - signing_in: the hop, the redeem, or the client's first sync is under way.
  * - locked: encryption runs, but this browser cannot read history yet (not cross-signed by the account).
