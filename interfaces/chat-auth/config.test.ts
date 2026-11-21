@@ -39,6 +39,8 @@ const DOOR_ENV = {
   CHAT_ADMIN_DOOR_KEY_FILE: file("door", "k".repeat(64)),
   CHAT_ADMIN_DOOR_KID: "door-1",
   CHAT_SERVER_NAME: "staging.unset.cc",
+  COUNT_LISTEN_PORT: "8091",
+  COUNT_ORIGIN: "http://chat-auth:8091",
 };
 
 describe("door config", () => {
@@ -79,5 +81,13 @@ describe("door config", () => {
     const { CHAT_ADMIN_DOOR_KEY_FILE: _, ...without } = DOOR_ENV;
     expect(() => loadConfig(schema, without)).toThrow();
     expect(() => loadConfig(schema, { ...DOOR_ENV, CHAT_ADMIN_URL: "https://chat-admin" })).toThrow();
+  });
+
+  test("door_config.count_port: its own port, never the public one, and a plain-http internal origin", () => {
+    expect(loadConfig(schema, DOOR_ENV).COUNT_LISTEN_PORT).toBe(8091);
+    expect(() => loadConfig(schema, { ...DOOR_ENV, COUNT_LISTEN_PORT: "8090" })).toThrow();
+    const { COUNT_ORIGIN: _, ...without } = DOOR_ENV;
+    expect(() => loadConfig(schema, without)).toThrow();
+    expect(() => loadConfig(schema, { ...DOOR_ENV, COUNT_ORIGIN: "https://chat-auth:8091" })).toThrow();
   });
 });

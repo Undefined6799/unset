@@ -36,9 +36,16 @@ const door = await compose(
   loadChatPage(fileURLToPath(PAGE_DIR)),
 );
 const server = createServer({ requestTimeout: 15_000, headersTimeout: 10_000, maxHeaderSize: 16_384 }, door.listener);
-server.listen(config.LISTEN_PORT, () => log.info("door.started", {}));
+// The count port (ADR 0090 decision 2): a second listener, on its own port, that serves only the count routes.
+const counts = createServer(
+  { requestTimeout: 10_000, headersTimeout: 5_000, maxHeaderSize: 8_192 },
+  door.count.listener,
+);
+const listening = (s: typeof server, port: number) => new Promise<void>((resolve) => s.listen(port, resolve));
+await Promise.all([listening(server, config.LISTEN_PORT), listening(counts, config.COUNT_LISTEN_PORT)]);
+log.info("door.started", {});
 exitOnSignals(async () => {
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await Promise.all([server, counts].map((s) => new Promise<void>((resolve) => s.close(() => resolve()))));
   await door.close();
   log.info("door.stopped", {});
   return 0;

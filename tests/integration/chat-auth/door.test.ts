@@ -2,9 +2,13 @@
 // root, against real Postgres as `chat_auth` (TE-2), real chat-admin on loopback through a real net-guard, and web's own
 // client signing the tickets. Only MAS is a fake (harness.ts; an unmanaged dependency, TE-1). Every route has its
 // denial cases: no cookie, a wrong one-time value, a wrong Origin, an expired or replayed ticket, another member's
-// ticket in the same browser, and chat-admin down, which answers a typed 503 and nothing more.
+// ticket in the same browser, and chat-admin down, which answers a typed 503 and nothing more. The chat count (ADR 0090):
+// the pushkey route's denials, Synapse's two bodies on the count port, strict parsing, and that the public listener
+// serves neither count route.
 import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { Did, Handle } from "@unset/domains-identity";
@@ -74,6 +78,8 @@ beforeEach(async () => {
     CHAT_ADMIN_DOOR_KEY_FILE: file("door", String(service.door.privateKey.export({ type: "pkcs8", format: "pem" }))),
     CHAT_ADMIN_DOOR_KID: service.door.kid,
     CHAT_SERVER_NAME: "staging.unset.cc",
+    COUNT_LISTEN_PORT: "8091",
+    COUNT_ORIGIN: "http://chat-auth:8091",
   };
   door = await compose(
     loadConfig(schema, env),
@@ -427,4 +433,169 @@ test("door.browser_key_is_hashed: the stored browser is sha256 of the cookie, ne
     return rows.map((r) => r.h);
   });
   expect(stored).toEqual([createHash("sha256").update(cookie).digest("hex")]);
+});
+
+describe("the chat count (ADR 0082, ADR 0090)", () => {
+  const NOTIFY = "/_matrix/push/v1/notify";
+  async function signedIn(did = ALICE) {
+    const tab = browser();
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(await member(), did) });
+    return { tab, deviceId: ((await res.json()) as { deviceId: string }).deviceId };
+  }
+  /** What Synapse 1.165.0 posts for an event (httppusher.py dispatch_push_event, format event_id_only). */
+  const event = (pushkey: string, unread: number) => ({
+    notification: {
+      event_id: "$e",
+      room_id: "!r:staging.unset.cc",
+      prio: "high",
+      counts: { unread },
+      devices: [{ app_id: "sh.unset.chat", pushkey, pushkey_ts: 1, data: { format: "event_id_only" } }],
+    },
+  });
+  /** Its badge-only update after a read receipt (httppusher.py _send_badge). */
+  const badge = (pushkey: string, unread: number) => ({
+    notification: {
+      id: "",
+      type: null,
+      sender: "",
+      counts: { unread },
+      devices: [{ app_id: "sh.unset.chat", pushkey, pushkey_ts: 1, data: { format: "event_id_only" } }],
+    },
+  });
+  const internal = (path: string, init: RequestInit = {}) =>
+    door.count.handle(new Request(`http://chat-auth:8091${path}`, init));
+  const notify = (body: unknown) =>
+    internal(NOTIFY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const countOf = async (did: Did) => (await (await internal(`/count?did=${did}`)).json()) as { unread: unknown };
+
+  test("door.push_key_issued: a signed-in browser gets a key and the internal notify address", async () => {
+    const { tab, deviceId } = await signedIn();
+    const res = await tab.post("/push/key", { deviceId });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = (await res.json()) as Record<string, string>;
+    expect(Object.keys(body).sort()).toEqual(["pushkey", "url"]);
+    expect(body.pushkey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(body.url).toBe(`http://chat-auth:8091${NOTIFY}`);
+  });
+
+  test("door.push_key_denied: no cookie, another browser's device, a bad body or a cross-site post gets no key", async () => {
+    const { tab, deviceId } = await signedIn();
+    const other = await signedIn(BOB);
+    const stranger = await other.tab.post("/push/key", { deviceId });
+    expect([stranger.status, await stranger.json()]).toEqual([401, { error: "chat.no_session" }]);
+    const crossSite = await tab.post("/push/key", { deviceId }, "https://unset.sh");
+    expect([crossSite.status, await crossSite.json()]).toEqual([403, { error: "csrf.denied" }]);
+    expect((await tab.post("/push/key", { deviceId: "../x" })).status).toBe(400);
+    expect((await tab.post("/push/key", { deviceId, extra: 1 })).status).toBe(400);
+    tab.jar.clear();
+    expect((await tab.post("/push/key", { deviceId })).status).toBe(401);
+    const rows = await withClient(db, null, (c) => c.query("SELECT 1 FROM door.push"));
+    expect(rows.rowCount).toBe(0);
+  });
+
+  test("door.count_rises_and_falls: an event's number and a read's badge update reach web's read", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };
+    expect(await countOf(ALICE)).toEqual({ unread: null });
+    const pushed = await notify(event(pushkey, 2));
+    expect([pushed.status, await pushed.json()]).toEqual([200, { rejected: [] }]);
+    expect(await countOf(ALICE)).toEqual({ unread: 2 });
+    expect((await notify(badge(pushkey, 0))).status).toBe(200);
+    expect(await countOf(ALICE)).toEqual({ unread: 0 });
+    expect(await countOf(BOB)).toEqual({ unread: null });
+  });
+
+  test("door.notify_rejects_unknown: a key the door never issued, or one replaced, is rejected", async () => {
+    const { tab, deviceId } = await signedIn();
+    const first = ((await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string }).pushkey;
+    await tab.post("/push/key", { deviceId });
+    const unknown = randomBytes(32).toString("base64url");
+    for (const key of [first, unknown]) {
+      const res = await notify(event(key, 5));
+      expect([res.status, await res.json()]).toEqual([200, { rejected: [key] }]);
+    }
+    expect(await countOf(ALICE)).toEqual({ unread: null });
+  });
+
+  test("door.notify_strict: a body that is not the push gateway's shape is 400 and records nothing", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };
+    const good = event(pushkey, 1);
+    const bad: unknown[] = [
+      {},
+      { ...good, extra: 1 },
+      { notification: { ...good.notification, devices: [] } },
+      { notification: { ...good.notification, devices: [{ pushkey: 7 }] } },
+      { notification: { ...good.notification, counts: { unread: -1 } } },
+      { notification: { ...good.notification, counts: { unread: 1.5 } } },
+      { notification: { ...good.notification, counts: "1" } },
+    ];
+    for (const body of bad) expect((await notify(body)).status).toBe(400);
+    const notJson = await internal(NOTIFY, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{",
+    });
+    expect(notJson.status).toBe(400);
+    expect(await countOf(ALICE)).toEqual({ unread: null });
+    expect((await internal("/count?did=nope")).status).toBe(400);
+    expect((await internal(NOTIFY)).status).toBe(405);
+  });
+
+  test("door.count_port_apart: the public door answers neither route; the internal one serves no public route", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };
+    expect((await tab.post(NOTIFY, event(pushkey, 3))).status).toBe(404);
+    expect((await tab.get(`/count?did=${ALICE}`)).status).toBe(404);
+    expect(await countOf(ALICE)).toEqual({ unread: null });
+    for (const path of ["/", "/sign-in", "/health", "/push/key"]) expect((await internal(path)).status).toBe(404);
+  });
+
+  test("door.count_listeners: on real sockets the public port refuses the notify path and the count port takes it", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };
+    const servers = [createServer(door.listener), createServer(door.count.listener)];
+    const ports = await Promise.all(
+      servers.map(
+        (s) => new Promise<number>((ok) => s.listen(0, "127.0.0.1", () => ok((s.address() as AddressInfo).port))),
+      ),
+    );
+    try {
+      const body = JSON.stringify(event(pushkey, 4));
+      const post = (port: number) =>
+        fetch(`http://127.0.0.1:${port}${NOTIFY}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        });
+      // The public listener refuses it (421 for this Host, 404 under the door's own) and records nothing.
+      expect([404, 421]).toContain((await post(ports[0] ?? 0)).status);
+      expect(await countOf(ALICE)).toEqual({ unread: null });
+      expect((await post(ports[1] ?? 0)).status).toBe(200);
+      expect(await countOf(ALICE)).toEqual({ unread: 4 });
+    } finally {
+      for (const s of servers) s.close();
+    }
+  });
+
+  test("door.push_key_goes_at_sign_out: after Log out the key is rejected and the count is gone", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };
+    await notify(event(pushkey, 2));
+    await tab.post("/sign-out", { deviceId });
+    expect(await (await notify(event(pushkey, 2))).json()).toEqual({ rejected: [pushkey] });
+    expect(await countOf(ALICE)).toEqual({ unread: null });
+  });
+
+  test("door.count_logs_nothing_personal: no DID, pushkey or number in a log line", async () => {
+    const { tab, deviceId } = await signedIn();
+    const { pushkey } = (await (await tab.post("/push/key", { deviceId })).json()) as { pushkey: string };
+    logs.length = 0;
+    await notify(event(pushkey, 31337));
+    await countOf(ALICE);
+    const text = logs.join("\n");
+    expect(logs.length).toBeGreaterThan(0);
+    for (const secret of [pushkey, ALICE, "31337"]) expect(text).not.toContain(secret);
+  });
 });
