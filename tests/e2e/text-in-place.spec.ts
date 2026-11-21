@@ -238,3 +238,36 @@ test("a_layout_change_saved_while_a_draft_is_offered_keeps_the_draft", async ({ 
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
 });
+
+// Codex on edc4570: while an earlier visit's draft is offered, a Width change discarded leaves the draft, and Throw
+// them away removes it even with a Width change unsaved.
+test("discarding_a_layout_change_keeps_an_offered_draft_and_throwing_it_away_removes_it", async ({ page }) => {
+  const word = `answer${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" kept");
+  const offer = page.getByText(/This device kept unsaved words/);
+  const half = async () => {
+    await page
+      .locator('[data-slot="card"]', { hasText: word })
+      .getByRole("button", { name: /^More for / })
+      .click();
+    await page.getByRole("menuitemradio", { name: "Half width" }).click();
+    await page.keyboard.press("Escape");
+    await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  };
+  await openOwnPage(page);
+  await half();
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await openOwnPage(page);
+  await expect(offer).toBeVisible();
+  await half();
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await openOwnPage(page);
+  await expect(offer).toHaveCount(0);
+  await removeCard(page, word);
+});

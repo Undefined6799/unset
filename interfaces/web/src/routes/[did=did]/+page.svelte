@@ -125,8 +125,10 @@ function forget(keys: Iterable<string>) {
   if (store !== null) for (const key of keys) void clearDraft(store, data.account.did, key);
 }
 
+// While an earlier visit's draft is offered the stored draft is that one (typing retires the offer), so Discard leaves
+// it and Throw them away removes it, whatever Width or Style is unsaved.
 function discard() {
-  forget(edits.keys());
+  forget([...edits.keys()].filter((key) => !offered.has(key)));
   edits = NO_EDITS;
   said = undefined;
   generation += 1;
@@ -224,7 +226,7 @@ function restore() {
 }
 
 function dropDrafts() {
-  forget([...offered.keys()].filter((key) => !edits.has(key)));
+  forget(offered.keys());
   offered = new Map();
 }
 </script>
