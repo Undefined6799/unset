@@ -61,9 +61,10 @@ read in the pinned sources decide how they run:
      the pusher range, MAS, the module, retention, profile lookups, the user directory, how long addresses are kept,
      logging and stats; for MAS its http, matrix, passwords and account security settings. The database, secret,
      client and policy shape checks stay as they were.
-   - Tuning settings are named in an allowlist and may take any value: display name and avatar changes, per-room
-     profiles, push on and its unread count, Synapse's message, room, join, invite, profile, redaction and key-request
-     rate limits; MAS's display name changes.
+   - Tuning settings are named in an allowlist and may take any value: push on and its unread count, and Synapse's
+     message, room, join, invite, profile, redaction and key-request rate limits. Display name and avatar changes,
+     per-room profiles and MAS's display name changes are security settings, held at false: the display name is the
+     member's verified handle, so a member who could change it could show someone else's handle as their own.
    - A key in neither list is refused, so a new tuning setting is one name added to the list.
    The full exact-match check is held while settings are tuned and turned back on when Alex says they are final.
 3. **Databases.** Each server has its own database and role in our existing Postgres, with its password in a file
