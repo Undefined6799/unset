@@ -91,9 +91,9 @@ Every change:
   Run `gh pr list --state open` before starting a step; if three are waiting, pick up review feedback instead.
 - **D8 Decisions:** anything expensive to reverse (data model, external or lexicon contract, process, role or network
   boundary, a service or a package touching auth, crypto, egress or personal data, new pattern or top-level folder,
-  security mechanism) gets its own ADR in `docs/human/decisions/`, in the first PR that depends on it. Never edit an
-  accepted ADR except to mark it superseded; ADR 0001 is an append-only log. Contradicting an accepted ADR: stop and
-  ask. Small means our own code, not the package count: other packages meet ADR 0057's bar in the PR, no ADR.
+  security mechanism) gets its own ADR in `docs/human/decisions/`, in the first PR that depends on it, its status in
+  its front matter; edit no shared index; ADR 0001 is closed (ADR 0083). Never edit an accepted ADR except, before
+  0083, to mark it superseded. Contradicting one: stop and ask. Small means our own code, not the package count: other packages meet ADR 0057's bar in the PR, no ADR.
 - **Merging (decision 40; ADR 0008; ADR 0017 superseding ADR 0009; ADR 0019):** agents open PRs and never push to
   `main`; author threads never merge them. A separate verifier may merge checked PRs; ADR 0019 says what stays Alex's.
 - **D1 Functions:** one job at one level of abstraction, usually fitting on a screen; never split to meet a line
