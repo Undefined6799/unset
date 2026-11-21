@@ -1,5 +1,5 @@
-"""Synapse module for unset.cc chat; see encrypted_only.py."""
+"""Synapse module for unset.cc chat; see room_policy.py."""
 
-from unset_chat_policy.encrypted_only import EncryptedOnly
+from unset_chat_policy.room_policy import RoomPolicy
 
-__all__ = ["EncryptedOnly"]
+__all__ = ["RoomPolicy"]

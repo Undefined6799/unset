@@ -12,9 +12,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { docker } from "./docker.ts";
 
-/** matrixdotorg/synapse v1.162.0 by index digest (Docker Hub; read 2026-11-21 with `docker pull`). */
+/** matrixdotorg/synapse v1.165.0 by index digest (Docker Hub; read 2026-11-21 with `docker pull`). */
 export const SYNAPSE_IMAGE =
-  "docker.io/matrixdotorg/synapse:v1.162.0@sha256:6b84a7bbac36f080b2d2e51e0289cf1b08b349598ea44a558df38d558f2c2311";
+  "docker.io/matrixdotorg/synapse:v1.165.0@sha256:673b4223c81a7634fd07d832b939a58f97081cfdaae7cdd2d1664cdcf7611b62";
 
 /** The module folder, mounted read-only at /modules. */
 export const MODULE_DIR = join(import.meta.dirname, "..", "..", "infrastructure", "matrix", "synapse-module");
@@ -35,8 +35,15 @@ function run(args: readonly string[]): string {
   return ran.out.trim();
 }
 
-/** A homeserver with every room encrypted by default (the stack's setting) and `module` loaded. */
-function homeserverYaml(secret: string, module: string): string {
+/**
+ * How long a plain room's messages live. The module pins rooms to 30 days; `allowedLifetimeMax` caps that on the server
+ * (as the stack's 30d does), so a test can shorten it without changing the rule, and `purgeInterval` runs the purge job.
+ */
+export type Retention = { readonly allowedLifetimeMax: string; readonly purgeInterval: string };
+const STACK_RETENTION: Retention = { allowedLifetimeMax: "30d", purgeInterval: "12h" };
+
+/** A homeserver with the stack's chat settings and `module` loaded. */
+function homeserverYaml(secret: string, module: string, retention: Retention): string {
   const unlimited = "{ per_second: 1000, burst_count: 1000 }";
   return [
     "server_name: unset.test",
@@ -52,7 +59,13 @@ function homeserverYaml(secret: string, module: string): string {
     `registration_shared_secret: "${secret}"`,
     `macaroon_secret_key: "${randomBytes(24).toString("hex")}"`,
     `form_secret: "${randomBytes(24).toString("hex")}"`,
-    "encryption_enabled_by_default_for_room_type: all",
+    // The module encrypts every room not asked for as plain; `all` would encrypt the plain kind too.
+    'encryption_enabled_by_default_for_room_type: "off"',
+    "enable_search: false",
+    "retention:",
+    "  enabled: true",
+    `  allowed_lifetime_max: ${retention.allowedLifetimeMax}`,
+    `  purge_jobs: [{ interval: ${retention.purgeInterval} }]`,
     `rc_message: ${unlimited}`,
     `rc_registration: ${unlimited}`,
     `rc_joins: { local: ${unlimited}, remote: ${unlimited} }`,
@@ -67,12 +80,15 @@ function homeserverYaml(secret: string, module: string): string {
 }
 
 /** Starts Synapse with `module` (a dotted class path under the module folder) and waits until it answers. */
-export async function startSynapse(module = "unset_chat_policy.EncryptedOnly"): Promise<Synapse> {
+export async function startSynapse(
+  module = "unset_chat_policy.RoomPolicy",
+  retention: Retention = STACK_RETENTION,
+): Promise<Synapse> {
   const secret = randomBytes(24).toString("hex");
   const dir = mkdtempSync(join(tmpdir(), "unset-synapse-"));
   DIRS.add(dir);
   chmodSync(dir, 0o755);
-  writeFileSync(join(dir, "homeserver.yaml"), homeserverYaml(secret, module));
+  writeFileSync(join(dir, "homeserver.yaml"), homeserverYaml(secret, module, retention));
   chmodSync(join(dir, "homeserver.yaml"), 0o644);
   const name = `unset-synapse-${process.pid}-${randomBytes(4).toString("hex")}`;
   STARTED.add(name);
@@ -117,7 +133,7 @@ function logsOf(name: string): string {
 
 /**
  * Registers a user through Synapse's shared-secret admin API: a nonce, then an HMAC-SHA1 over
- * nonce NUL user NUL password NUL "notadmin" (element-hq/synapse v1.162.0 docs/admin_api/register_api.md).
+ * nonce NUL user NUL password NUL "notadmin" (element-hq/synapse v1.165.0 docs/admin_api/register_api.md).
  */
 export async function registerUser(synapse: Synapse, username: string): Promise<MatrixUser> {
   const url = `${synapse.origin}/_synapse/admin/v1/register`;
@@ -133,6 +149,32 @@ export async function registerUser(synapse: Synapse, username: string): Promise<
   if (res.status !== 200) throw new Error(`register ${username}: ${res.status} ${await res.text()}`);
   const registered = (await res.json()) as { user_id: string; access_token: string };
   return { userId: registered.user_id, token: registered.access_token };
+}
+
+export type Answer = { readonly status: number; readonly body: Record<string, unknown> };
+
+/** One client-server API call (spec v1.18 /_matrix/client/v3) as `user`. */
+export async function clientCall(
+  synapse: Synapse,
+  user: MatrixUser,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<Answer> {
+  const headers = { authorization: `Bearer ${user.token}`, "content-type": "application/json" };
+  const init = { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
+  const res = await fetch(`${synapse.origin}/_matrix/client/v3${path}`, init); // guard-allow: egress the loopback Synapse this file started
+  return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+}
+
+/** Rows of one read-only query on Synapse's own database, run inside the container. */
+export function synapseRows(synapse: Synapse, query: string, params: readonly string[]): unknown[][] {
+  const script = [
+    "import json, sqlite3, sys",
+    "db = sqlite3.connect('file:/data/homeserver.db?mode=ro', uri=True)",
+    "print(json.dumps(db.execute(sys.argv[1], sys.argv[2:]).fetchall()))",
+  ].join("\n");
+  return JSON.parse(run(["exec", synapse.name, "python", "-c", script, query, ...params])) as unknown[][];
 }
 
 /** Removes every Synapse this process started and their config folders. For afterAll. */
