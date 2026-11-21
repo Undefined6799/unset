@@ -1,5 +1,28 @@
 # Phase 6 — Chat
 
+**Minimal build (2026-11-21).** Chat is built first as a minimal version that follows the build plan "Chat: minimal
+build plan with verified values" (2026-11-21) and ADRs 0093 to 0097, not the steps below where they differ (Alex: the
+old Phase 6 plan does not bind it). Where this file disagrees with those records (chat-auth as MAS's OIDC provider,
+MAS consent, `seed` as `chat-admin`'s only verb, back-channel logout, wipe on every sign-out, "later" at signup, no
+badge, the `chat.unset.sh` hosts), the records win. Its eleven build steps map to these step ids, one PR each:
+
+| Build step | Step id |
+| --- | --- |
+| 1 Decision records | P6.00 |
+| 2 Servers | P6.02 |
+| 3 The server rule | P6.10a |
+| 4 `chat-admin` | P6.04 |
+| 5 Ticket and signup | P6.05 |
+| 6 The door | P6.03 |
+| 7 Chat page shell | P6.06 |
+| 8 Recovery key | P6.08 |
+| 9 Conversations | P6.10, P6.12 |
+| 10 Count, chat icon, Message button | P6.12 |
+| 11 Log out, expiry, erasure, suspension, end-to-end test | P6.16, P6.04a |
+
+The rest of this file is the full Phase 6 plan as reviewed in 2026-10; its steps are rewritten when the pieces the
+minimal version leaves out (the dock, passkeys, reset, groups, media, export, reports) are taken up.
+
 Status: **round 2 plus the editor pass (2026-10-03).** Planning only. Source of truth: `../unset-sh-rebuild-plan.md` §2 rules
 17–21 and the chat defects, §5.1 ("chat is not part of this app"), §5.2, §5.6 (as revised 2026-10-03 03:02Z with the
 round-1 review's chat facts), §5.7, §5.8, §6, §6.1, §8 Phase 6, §11 Q4. Supporting: `reviews/r1-phase-6.md` (round 1,

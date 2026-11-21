@@ -404,6 +404,26 @@ The first draft built a complete plugin system into the core before any plugin e
 
 Chat is part of the core product, not a module or plugin. It runs **beside the core but connected** (Alex, 2026-10-02): its own service and origin, so its encryption keys and sessions are isolated from the main app, joined to it only by the identity seam and the profile's "Message" button. **Matrix confirmed** (Alex, 2026-10-02) after comparing Signal, SimpleX, XMPP, P2P messengers, Keybase, PGP and Threema: Matrix is the only one that is browser-first, self-hostable, tied to our identity and has mature group encryption.
 
+**Minimal build (2026-11-21, ADRs 0093 to 0097; Alex's decisions of 2026-11-20/21 in the chat planning thread).**
+Chat is built first as a minimal version: two members exchange encrypted 1:1 text on a full page at `unset.cc`, with
+nothing on screen saying Matrix. Where the bullets below differ, these records win:
+- **Sign-in is minted by our servers (ADR 0093).** `web` signs a single-use ticket; the door (`chat-auth`, public on
+  `unset.cc`) redeems it; internal `chat-admin` alone holds the MAS admin credential and mints a MAS personal session.
+  MAS has no public address, no login pages and no upstream provider, so third-party Matrix clients cannot sign in.
+  This replaces "no access token ... is made for the user", the MAS consent step, the upstream links,
+  `login_hint` and back-channel logout below, and decision 13's single `seed` verb.
+- **A count on unset.sh (ADR 0094).** The chat page registers a pusher to the door's internal port; `web` reads the
+  number, chats with new messages only. unset.sh carries no chat code: the chat icon and the Message button are links.
+- **Keys stay in the browser (ADR 0095).** Saving the generated recovery key is a required signup step ("later" is
+  gone). Expiry keeps the local key store locked by a key only the door hands back; only Log out wipes.
+- **The chat account follows the Unset account (ADR 0096).** Suspended locks it in MAS with sessions kept; deleted
+  deactivates and erases it; there is no reactivate.
+- **The server refuses unencrypted messages (ADR 0097)** with every new room encrypted and one ~20-line module; the
+  rest of the Python module (invite throttle, server-side "no text before accept", media refusal) waits, and "no text
+  before accept" is a client rule until another client can sign in.
+- **Later:** the in-app dock on unset.sh, passkeys and approve from another browser, reset, photos and files, groups,
+  export, the device list, block and report, server-side message requests, removing browsers unused for 90 days.
+
 **Every unset.sh user can message every other one (Alex, 2026-10-02).** This needs, designed in Phase 6 from how Element and the spec do it, not invented:
 - **the chat account is seeded at signup (Alex, 2026-10-02):** when an unset.sh account is created, its Matrix account and `did↔mxid` mapping (plus the MAS user ULID) are created too: `POST /api/admin/v1/users`, then `POST /api/admin/v1/upstream-oauth-links` with the DID as subject, in that order, idempotent on 409. Seeding is an `app.chat_seed` row committed in the signup transaction and worked by `chat-admin` afterwards, never a call inside the signup request; the same row twice gives one account. Back-channel logout and every `pds-admin` verb that `web` triggers run the same way (review against the engineering rules, 2026-10-04, rule DA-2). Seeding creates the account only: no access token, device or encryption key is made for the user, and no membership is forged;
 - **seeding runs in an isolated `chat-admin` service, never in `web` (Alex, 2026-10-02, decision 13):** the MAS admin scope is all-or-nothing and can mint a device or token for any user, so it follows the `pds-admin` pattern (internal network, one verb `seed(did, localpart)`, in the secret inventory). The client ships **`OnlySignedDevicesIsolationMode`** (MSC4153) from day one, so a device the user did not cross-sign receives no room keys; the "unable to decrypt" cases this creates are accepted;
@@ -419,25 +439,22 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 
 
 - **Engine:**
-  - Synapse (1.162) + MAS (1.26) + a `chat-auth` bridge (atproto identity → OIDC, `sub` = DID); `matrix-js-sdk` 43 pinned exactly (v43 moved OAuth refresh into the SDK; the prototype's `tokens.ts` is not ported). Still the only spec-stable path: conduwuit is archived, Dendrite in maintenance.
+  - Synapse (1.162) + MAS (1.26, internal only, sessions minted through its admin API by `chat-admin`) + the door `chat-auth` on `unset.cc` (ADR 0093; it was an atproto-to-OIDC bridge for MAS until 2026-11-21); `matrix-js-sdk` 43 pinned exactly (v43 moved OAuth refresh into the SDK; the prototype's `tokens.ts` is not ported). Still the only spec-stable path: conduwuit is archived, Dendrite in maintenance.
   - Federation off: `federation_domain_whitelist: []`, no `.well-known/matrix/server`, no 8448.
   - **`server_name` is `unset.cc`** (Alex, 2026-10-16, ADR 0025). It is the domain in every MXID (`@localpart:unset.cc`) and the host of the homeserver. No account has an MXID yet, so this replaces the earlier `unset.sh` name and the delegation to a chat subdomain.
-  - Served only from `unset.cc`. Cold-load budget ≤3.5 MB gzipped (the crypto WASM alone is 2.1 MB): immutable caching, crypto loaded lazily after the MAS callback, store persisted in IndexedDB (§6.1).
+  - Served only from `unset.cc`. Cold-load budget ≤3.5 MB gzipped (the crypto WASM alone is 2.1 MB): immutable caching, crypto loaded lazily after sign-in through the door, key store persisted in IndexedDB under a storage lock key, sync state in memory only (§6.1, ADR 0095).
   - Hosting for chat: Synapse, MAS, `chat-auth` and their Postgres need ~4 GB at launch, 8 GB or more by 2,500 users; the Phase 5 hosting decision includes it.
 - **What the core provides:**
   - the identity seam from §4 (signed, single-use, audience-bound assertion; `did↔account` table);
   - handle resolution;
   - a "Message" link on the profile.
-- **The app shell shows no chat badge in the MVP**, because chat state lives on the chat origin.
-- **MVP slice:**
-  - 1:1 encrypted DMs between members;
-  - recovery key;
+- **The app shell shows the chat icon with a count only** (Alex, 2026-11-20; ADR 0094), read by `web` from the door; this replaces "no chat badge in the MVP". No names or text reach unset.sh.
+- **Minimal version first (2026-11-21):** 1:1 encrypted text between members, the recovery key at signup and on a new browser, Log out and expiry, suspension and erasure, the count and the Message button. **MVP slice after it:**
   - own-device verification and the device list;
-  - full logout and revoke;
   - attachments with the safety gates;
-  - an unread badge inside chat.
+  - the rest of the "Later" list above.
 - **Later slices:** Spaces with a redesigned join model (knock, or an invite bot), then voice.
-- **Size:** 5–7k lines for the MVP (review, 2026-10-02; the prototype spent 10.7k on DMs, Spaces and voice and never built request gating). The device-trust posture and the invite question are settled above, not "before GA".
+- **Size:** about 2,000 lines of our own code for the minimal version (build plan estimate, 2026-11-21); 5–7k lines for the MVP (review, 2026-10-02; the prototype spent 10.7k on DMs, Spaces and voice and never built request gating). The device-trust posture and the invite question are settled above, not "before GA".
 
 ### 5.7 Admin panel (internal; from the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`))
 

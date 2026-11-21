@@ -35,7 +35,7 @@ The work is in [`interfaces/web/src/lib/server/`](../../../interfaces/web/src/li
 
 [`routes/welcome/onboarding.server.ts`](../../../interfaces/web/src/routes/welcome/onboarding.server.ts) is the shared helper for the onboarding pages.
 
-`welcome/chat` is a placeholder. Continuing calls `finishChat`, which marks onboarding done. The page's comment says P6.17 replaces it. Nothing here sets up chat.
+`welcome/chat` is the required chat step (book P6.17; ADR 0095 decision 2). The recovery key is never made here: the step links to `https://<chat origin>/welcome`, where the chat page runs its first sign-in setup (two cards: save the key, then type its last 4 characters) and registers the count's pusher, then sends the tab back through the door's fixed `/welcome/done`. Continue calls `finishChat` only when the door's count port says a browser of the member took a pushkey (`GET /set-up?did=`), which the chat page asks for only once it is ready. No answer keeps the member on the step (fail closed). While the chat account is still being created, the step says so and offers Try again. `/chat/sign-in` lets a member at this step through without the app gate, so they can set chat up before their email is confirmed.
 
 ## Domain rules
 
