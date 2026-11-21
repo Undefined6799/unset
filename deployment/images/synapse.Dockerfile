@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY --from=build /opt/synapse /opt/synapse/
 # The server rule (P6.10a; ADR 0085), from infrastructure/matrix/synapse-module/ (its folder lands with #1864), into the
-# venv's site-packages, where homeserver.yaml's `modules:` entry imports unset_chat_policy.EncryptedOnly.
+# venv's site-packages, where homeserver.yaml's `modules:` entry imports unset_chat_policy.RoomPolicy.
 COPY infrastructure/matrix/synapse-module/unset_chat_policy /opt/synapse/lib/python3.13/site-packages/unset_chat_policy
 # Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): this base
 # also ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1 (checked 2026-11-21), and Debian fixed CVE-2026-76844 and

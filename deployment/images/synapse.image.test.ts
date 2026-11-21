@@ -155,15 +155,15 @@ describe("synapse image", () => {
 
           // The rule loads from the image: given a config it refuses, Synapse stops instead of serving without it.
           const refused = homeserver.replace(
-            "  - module: unset_chat_policy.EncryptedOnly\n    config: {}",
-            "  - module: unset_chat_policy.EncryptedOnly\n    config: { allow_plaintext: true }",
+            "  - module: unset_chat_policy.RoomPolicy\n    config: {}",
+            "  - module: unset_chat_policy.RoomPolicy\n    config: { allow_plaintext: true }",
           );
           expect(refused).not.toBe(homeserver);
           const broken = startSynapse(image, network, configDir(refused), secrets);
           started.push(broken);
           const stopped = exited(broken);
           expect(stopped.code).not.toBe("0");
-          expect(stopped.logs).toContain("unset_chat_policy.EncryptedOnly takes no config");
+          expect(stopped.logs).toContain("unset_chat_policy.RoomPolicy takes no config");
         },
         () => {
           for (const name of started) docker(["rm", "-f", name], { timeoutMs: CALL_MS });

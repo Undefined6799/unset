@@ -76,7 +76,12 @@ read in the pinned sources decide how they run:
 ## Consequences
 
 - A change to a chat setting is a change to the file and to C36's list, reviewed together; C36's unit tests run the
-  committed files through the same rules.
+  committed files through the same rules, Synapse's in YAML 1.1 as its PyYAML reads it.
+- Alex allowed plain rooms with a 30-day auto-delete (2026-11-21, P6.10a): the server rule `RoomPolicy` encrypts every
+  room not asked for as plain, so C36 requires `encryption_enabled_by_default_for_room_type: "off"`, `enable_search:
+  false`, and `retention` with only `allowed_lifetime_max: 30d` and one unbounded 12-hour purge job, never a
+  `default_policy` (synapse `config_documentation.md`, `retention` and `enable_search`, at v1.165.0). A stack without
+  the rule, or with it configured, never starts.
 - The Synapse admin API is mounted on its client listener (Synapse mounts it with `client`); the edge must deny
   `/_synapse/*` when the chat site is added.
 - Synapse's discovery document advertises MAS's internal name as issuer. Clients never talk to MAS (build plan step 2), so
