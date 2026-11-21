@@ -21,8 +21,8 @@ import {
   pageShownTo,
   parseRepoDid,
   readAvatarShape,
+  readPageVisibility,
   readProfileRecord,
-  readProfileVisibility,
   type Viewer,
 } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
@@ -53,7 +53,7 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
 
   const fields = readProfileRecord(found.record);
   const name = fields.displayName || handle || did;
-  const visibility = readProfileVisibility(found.record);
+  const visibility = readPageVisibility(found.record);
   const viewer: Viewer = locals.did === undefined ? "visitor" : locals.did === did ? "owner" : "member";
   const shown = pageShownTo(visibility, viewer);
   const who = { did, handle, name, letter: accountLetter(name), avatarShape: readAvatarShape(found.record) };

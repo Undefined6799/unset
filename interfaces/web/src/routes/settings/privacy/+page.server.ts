@@ -7,12 +7,7 @@
 // or DID, as the public page does with no name. A dead grant sends the member to sign in.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { canonicalActorPath, parseHandle } from "@unset/domains-identity";
-import {
-  DISCOVERABILITY_LIMITS,
-  EMPTY_PROFILE,
-  readProfileRecord,
-  readProfileVisibility,
-} from "@unset/domains-profile";
+import { DISCOVERABILITY_LIMITS, EMPTY_PROFILE, readPageVisibility, readProfileRecord } from "@unset/domains-profile";
 import { loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
 import { pdsSignInRedirect } from "../../../lib/server/pds-failure.ts";
@@ -43,7 +38,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const name = fields.displayName || handle || did;
   // Who sees the page (ADR 0078), from the record itself: none yet without a profile, unknown when the PDS did not answer.
   const visibility =
-    read.kind !== "ok" ? "unreadable" : stored === undefined ? "noProfile" : readProfileVisibility(stored);
+    read.kind !== "ok" ? "unreadable" : stored === undefined ? "noProfile" : readPageVisibility(stored);
   return {
     shell: settingsShell(request, "/settings/privacy"),
     visibility,

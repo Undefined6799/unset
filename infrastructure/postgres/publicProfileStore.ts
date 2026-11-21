@@ -87,7 +87,7 @@ const pageOf = (where: string) => `
 const BY_DID = pageOf("p.did = $1");
 const BY_HANDLE = pageOf("p.handle = $1");
 // A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a record with no
-// visibility, or "public", counts, as domains/profile readProfileVisibility reads it (anything else fails closed).
+// visibility, or "public", counts, as domains/profile readPageVisibility reads it (anything else fails closed).
 const PUBLIC_PAGE = `(NOT p.record ? 'visibility' OR p.record->'visibility' = '"public"'::jsonb)`;
 // The column is chosen from two fixed names, never from input.
 const LISTED = {

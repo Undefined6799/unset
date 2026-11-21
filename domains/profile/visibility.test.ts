@@ -3,26 +3,26 @@
 import { validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import { toProfileRecord } from "./profile.ts";
-import { pageShownTo, parseProfileVisibility, readProfileVisibility, type Viewer } from "./visibility.ts";
+import { pageShownTo, parsePageVisibility, readPageVisibility, type Viewer } from "./visibility.ts";
 
 const T = "2026-11-20T20:00:00.000Z";
 const stored = { $type: "sh.unset.profile", createdAt: T, displayName: "Alice", future: 1 };
 
 describe("page visibility", () => {
   test("reads public when absent and only the member for anything unknown", () => {
-    expect(readProfileVisibility(stored)).toBe("public");
-    expect(readProfileVisibility(null)).toBe("public");
-    expect(readProfileVisibility({ ...stored, visibility: "signed-in" })).toBe("signedIn");
-    expect(readProfileVisibility({ ...stored, visibility: "owner-only" })).toBe("ownerOnly");
-    expect(readProfileVisibility({ ...stored, visibility: "signedIn" })).toBe("ownerOnly");
-    expect(readProfileVisibility({ ...stored, visibility: "friends" })).toBe("ownerOnly");
-    expect(readProfileVisibility({ ...stored, visibility: 1 })).toBe("ownerOnly");
+    expect(readPageVisibility(stored)).toBe("public");
+    expect(readPageVisibility(null)).toBe("public");
+    expect(readPageVisibility({ ...stored, visibility: "signed-in" })).toBe("signedIn");
+    expect(readPageVisibility({ ...stored, visibility: "owner-only" })).toBe("ownerOnly");
+    expect(readPageVisibility({ ...stored, visibility: "signedIn" })).toBe("ownerOnly");
+    expect(readPageVisibility({ ...stored, visibility: "friends" })).toBe("ownerOnly");
+    expect(readPageVisibility({ ...stored, visibility: 1 })).toBe("ownerOnly");
   });
 
   test("a save reads the choice strictly", () => {
-    expect(parseProfileVisibility("signedIn")).toBe("signedIn");
-    expect(parseProfileVisibility("friends")).toBeNull();
-    expect(parseProfileVisibility(["public"])).toBeNull();
+    expect(parsePageVisibility("signedIn")).toBe("signedIn");
+    expect(parsePageVisibility("friends")).toBeNull();
+    expect(parsePageVisibility(["public"])).toBeNull();
   });
 
   test("a non-public choice is stored, public clears the field, and leaving it out keeps what was stored", () => {

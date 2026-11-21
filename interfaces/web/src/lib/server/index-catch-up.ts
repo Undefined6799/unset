@@ -3,7 +3,7 @@
 // stream a second or two later (ADR 0052). So the save waits, a few seconds at most and inside the request's own
 // deadline (rule RE-1), until the index has the choice before it says "Privacy saved"; if the wait runs out it says
 // the page is catching up instead. Reads only; nothing here runs inside a transaction (rule DA-4).
-import { type ProfileVisibility, readProfileVisibility } from "@unset/domains-profile";
+import { type PageVisibility, readPageVisibility } from "@unset/domains-profile";
 
 /** The longest the save waits for the index before it answers anyway. */
 export const CATCH_UP_MS = 5_000;
@@ -30,7 +30,7 @@ export type CatchUpDeps = {
  * Whether the public page already follows `wanted`. A member the index shows no page for has nothing to catch up (the
  * public page is a 404 either way). A read that fails counts as not yet, so the answer never claims more than is known.
  */
-export async function publicPageShows(wanted: ProfileVisibility, deps: CatchUpDeps): Promise<boolean> {
+export async function publicPageShows(wanted: PageVisibility, deps: CatchUpDeps): Promise<boolean> {
   const until = Math.min(deps.now() + CATCH_UP_MS, deps.deadlineAt - ANSWER_MS);
   for (;;) {
     // performance.now() is fractional, and AbortSignal.timeout takes whole milliseconds only (it throws a RangeError
@@ -42,7 +42,7 @@ export async function publicPageShows(wanted: ProfileVisibility, deps: CatchUpDe
     const signal = AbortSignal.any([deps.signal, AbortSignal.timeout(left)]);
     const record = await Promise.race([deps.read(signal), aborted(signal)]).catch(() => undefined);
     if (record === null) return true;
-    if (record !== undefined && readProfileVisibility(record) === wanted) return true;
+    if (record !== undefined && readPageVisibility(record) === wanted) return true;
     if (deps.now() + STEP_MS > until) return false;
     await deps.sleep(STEP_MS, deps.signal);
   }

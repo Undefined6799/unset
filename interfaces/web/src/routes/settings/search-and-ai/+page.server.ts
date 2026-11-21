@@ -7,7 +7,7 @@
 // shows its code and the field to blame. A new visibility waits a few seconds at most for the index the public page
 // reads (index-catch-up.ts). The route has no page of its own, so a GET is a 404, as /profile's is.
 import { type Actions, error, redirect, type ServerLoad } from "@sveltejs/kit";
-import { type ProfileVisibility, parseDiscoverabilityForm, parseProfileVisibility } from "@unset/domains-profile";
+import { type PageVisibility, parseDiscoverabilityForm, parsePageVisibility } from "@unset/domains-profile";
 import { ERROR_CODES, type ErrorCode } from "@unset/shared-errors";
 import { services } from "../../../lib/server/compose.ts";
 import { publicPageShows, sleep } from "../../../lib/server/index-catch-up.ts";
@@ -20,11 +20,11 @@ function refuse(code: ErrorCode, field?: string): never {
 }
 
 /** The form's one `visibility`, or undefined when the page did not offer the choice (no profile, or none read). */
-function readVisibility(form: URLSearchParams): ProfileVisibility | undefined {
+function readVisibility(form: URLSearchParams): PageVisibility | undefined {
   const sent = form.getAll("visibility");
   form.delete("visibility");
   if (sent.length === 0) return undefined;
-  const visibility = sent.length === 1 ? parseProfileVisibility(sent[0]) : null;
+  const visibility = sent.length === 1 ? parsePageVisibility(sent[0]) : null;
   return visibility ?? refuse("profile.invalid", "visibility");
 }
 

@@ -5,7 +5,7 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { fitsIndex } from "./index-plan.ts";
 import { isPlainName, isPlainText } from "./member-text.ts";
-import { type ProfileVisibility, VISIBILITY_VALUES } from "./visibility.ts";
+import { type PageVisibility, VISIBILITY_VALUES } from "./visibility.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
@@ -22,7 +22,7 @@ export const EMPTY_PROFILE: ProfileFields = {
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
 /** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, Settings › Privacy). */
-export type ProfileEdit = Partial<ProfileFields> & { readonly visibility?: ProfileVisibility };
+export type ProfileEdit = Partial<ProfileFields> & { readonly visibility?: PageVisibility };
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };

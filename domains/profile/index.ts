@@ -95,11 +95,11 @@ export {
   withAvatarShape,
 } from "./profile.ts";
 export {
+  PAGE_VISIBILITIES,
   type PageShown,
-  PROFILE_VISIBILITIES,
-  type ProfileVisibility,
+  type PageVisibility,
   pageShownTo,
-  parseProfileVisibility,
-  readProfileVisibility,
+  parsePageVisibility,
+  readPageVisibility,
   type Viewer,
 } from "./visibility.ts";
