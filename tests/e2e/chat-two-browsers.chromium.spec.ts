@@ -47,7 +47,7 @@ type Redeemed = { accessToken: string; deviceId: string; storageKey: string; new
 async function browserFor(browser: Browser, handle: string) {
   const context = await browser.newContext({ proxy: { server: stack.proxy }, ignoreHTTPSErrors: true });
   contexts.push(context);
-  await context.addCookies([{ name: "member", value: handle, domain: "unset.sh", path: "/", secure: true }]);
+  await context.addCookies([{ name: "member", value: handle, url: "https://unset.sh/", secure: true }]);
   const page = await context.newPage();
   const redeems: Redeemed[] = [];
   const problems: string[] = [];
