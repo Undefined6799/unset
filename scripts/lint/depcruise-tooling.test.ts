@@ -19,8 +19,8 @@ test("product_never_imports_the_tooling_set", async () => {
     edge("shared/http/a.ts", "./__fixtures__/b.ts"),
     edge("shared/http/a.ts", "./b.fixture.ts"),
     edge("shared/http/a.ts", "./b.vector.json"),
-    edge("scripts/ui/css-scope.ts", "../lint/depcruise-fixture.ts"),
-    edge("scripts/ui/css-scope.ts", "./css-scope.test.ts"),
+    edge("scripts/ui/tokens.ts", "../lint/depcruise-fixture.ts"),
+    edge("scripts/ui/tokens.ts", "./tokens.test.ts"),
   ]) {
     const { exitCode, rules } = await check([e]);
     expect(exitCode, `${e.from} → ${e.spec}`).toBe(1);
@@ -36,7 +36,7 @@ test("tooling_may_import_product_and_tooling", async () => {
     edge("shared/http/via.test.ts", "./helper.test.ts"),
     edge("shared/http/via.test.ts", "./fixtures/b.ts"),
     edge("tests/integration/a.test.ts", "../../shared/http/index.ts"),
-    edge("scripts/lint/a.ts", "../ui/css-scope.ts"),
+    edge("scripts/lint/a.ts", "../ui/tokens.ts"),
     edge("shared/http/fixtures/a.ts", "../b.vector.json"),
   ]) {
     expect(await cruiseFixture([e], alone), `${e.from} → ${e.spec}`).toEqual({ exitCode: 0, rules: [] });

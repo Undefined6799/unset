@@ -442,14 +442,11 @@ describe("boundary rules", () => {
   });
 
   test("app_build_config_is_tooling", async () => {
-    // P1.23v: an app's vite.config.ts may use Node and the shared class-name hash; app source may not, and nothing
-    // imports the config.
-    await expectPass(
-      edge("apps/web/vite.config.ts", "node:crypto"),
-      edge("apps/web/vite.config.ts", "../../scripts/ui/css-scope.ts"),
-    );
+    // P1.23v: an app's vite.config.ts may use Node; app source may not, and nothing imports the config. No script
+    // is allowed any more: scripts/ui/css-scope.ts, the one it reached, is gone (P1.38v).
+    await expectPass(edge("apps/web/vite.config.ts", "node:crypto"));
     await expectFail(null, edge("apps/web/src/a.ts", "node:crypto"));
-    await expectFail("app-only-shared", edge("apps/web/src/a.ts", "../../../scripts/ui/css-scope.ts"));
+    await expectFail("app-only-shared", edge("apps/web/src/a.ts", "../../../scripts/ui/tokens.ts"));
     await expectFail(
       "app-build-config-not-imported",
       edge("apps/web/render.tsx", "./vite.config.ts"),
@@ -459,6 +456,7 @@ describe("boundary rules", () => {
     await expectFail(
       "app-build-config-imports",
       edge("apps/web/vite.config.ts", "../../scripts/guards/x.ts"),
+      edge("apps/web/vite.config.ts", "../../scripts/ui/css-scope.ts"),
       edge("apps/web/vite.config.ts", "../../domains/identity/index.ts"),
       edge("apps/web/vite.config.ts", "../admin/b.ts"),
     );

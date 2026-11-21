@@ -29,7 +29,7 @@ Rules that refuse an edge the row would otherwise allow:
 | --- | --- |
 | `no-app-to-app` | No import from another app. |
 | `app-only-shared` | No import from another repository root (`interfaces/`, `domains/`, `infrastructure/`, `deployment/`, `scripts/`, `tests/`). `apps/<app>/vite.config.ts` is outside this rule. |
-| `app-build-config-imports` | `apps/<app>/vite.config.ts` may also import Node built-ins and `scripts/ui/css-scope.ts`. |
+| `app-build-config-imports` | `apps/<app>/vite.config.ts` may also import Node built-ins. |
 | `app-build-config-not-imported` | Nothing imports `apps/<app>/vite.config.ts`. |
 | `infra-shared-via-index` | A module under `shared/<name>/` is reached through its `index.ts`. A `.css` file is the exception this rule allows. |
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported by tests and `interfaces/*/compose.ts`. An app does not import one. |
