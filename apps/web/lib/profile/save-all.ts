@@ -32,8 +32,10 @@ export function cardSaveForm(edits: readonly CardEdit[], limitBytes: number): Sa
 }
 
 /** What the page makes of the action's answer (SvelteKit's ActionResult, kit 3.2.0 `deserialize`). */
+/** Each written card's new version as the PDS gave it, by card key: what the page settles words typed meanwhile on. */
+export type WrittenVersions = ReadonlyMap<string, string>;
 export type SaveAnswer =
-  | { readonly kind: "saved" }
+  | { readonly kind: "saved"; readonly versions?: WrittenVersions }
   | {
       readonly kind: "refused";
       readonly code: string;
@@ -41,6 +43,7 @@ export type SaveAnswer =
       readonly card?: string;
       readonly field?: string;
       readonly saved?: readonly string[];
+      readonly versions?: WrittenVersions;
     }
   /** Sent elsewhere with nothing written, such as to sign in again: the page follows it and keeps the drafts. */
   | { readonly kind: "elsewhere"; readonly location: string }
@@ -51,7 +54,10 @@ export function readSaveAnswer(
   result: { readonly type: string; readonly data?: unknown; readonly location?: string },
   here: string,
 ): SaveAnswer {
-  if (result.type === "success") return { kind: "saved" };
+  if (result.type === "success") {
+    const versions = writtenVersions(result.data);
+    return versions === undefined ? { kind: "saved" } : { kind: "saved", versions };
+  }
   if (result.type === "redirect") {
     if (typeof result.location !== "string") return { kind: "failed" };
     return result.location === here ? { kind: "saved" } : { kind: "elsewhere", location: result.location };
@@ -59,6 +65,7 @@ export function readSaveAnswer(
   if (result.type !== "failure" || typeof result.data !== "object" || result.data === null) return { kind: "failed" };
   const { code, message, card, field, saved } = result.data as Record<string, unknown>;
   if (typeof code !== "string" || typeof message !== "string") return { kind: "failed" };
+  const versions = writtenVersions(result.data);
   return {
     kind: "refused",
     code,
@@ -66,5 +73,19 @@ export function readSaveAnswer(
     ...(typeof card === "string" ? { card } : {}),
     ...(typeof field === "string" ? { field } : {}),
     ...(Array.isArray(saved) ? { saved: saved.filter((key): key is string => typeof key === "string") } : {}),
+    ...(versions === undefined ? {} : { versions }),
   };
+}
+
+/** The answer's `versions` (`[{ key, version }]`, card-writes.server.ts CardWritten), each pair of strings; else none. */
+function writtenVersions(data: unknown): WrittenVersions | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const { versions } = data as Record<string, unknown>;
+  if (!Array.isArray(versions)) return undefined;
+  const pairs = versions.flatMap((entry: unknown): [string, string][] => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const { key, version } = entry as Record<string, unknown>;
+    return typeof key === "string" && typeof version === "string" ? [[key, version]] : [];
+  });
+  return pairs.length === 0 ? undefined : new Map(pairs);
 }

@@ -1,0 +1,62 @@
+{{- /*
+  The ADR index (ADR 0083), built from the ADR files the same way `npm run adr:index` builds it
+  (scripts/docs/adrs.ts, adrIndex): a file with front matter gives its status, and its title unless it has a frozen row
+  in legacy-index.yaml, whose decision text wins; any other file takes its frozen row, with its status replaced by a
+  "Status: Superseded by NNNN." line; an accepted ADR's supersedes and amends are written onto the rows they name.
+  It also publishes the rows as /adr-index.json, which CI compares with adrIndex so the two cannot drift.
+  hugo.yaml mounts docs/human/decisions at assets/adrs and its legacy-index.yaml under data/adrs.
+*/ -}}
+{{- $rows := dict -}}
+{{- range index hugo.Data.adrs "legacy-index" -}}
+  {{- $rows = merge $rows (dict .adr (dict "file" .file "decision" .decision "status" .status)) -}}
+{{- end -}}
+{{- $accepted := slice -}}
+{{- range sort (resources.Match "adrs/[0-9][0-9][0-9][0-9]-*.md") "Name" -}}
+  {{- $file := path.Base .Name -}}
+  {{- $adr := substr $file 0 4 -}}
+  {{- $text := .Content -}}
+  {{- if hasPrefix $text "---\n" -}}
+    {{- $fm := transform.Unmarshal (dict "format" "yaml") (index (split (strings.TrimPrefix "---\n" $text) "\n---\n") 0) -}}
+    {{- $title := index (index (findRESubmatch (printf `(?m)^# %s — (.+)$` $adr) $text 1) 0) 1 -}}
+    {{- $status := "Rejected" -}}
+    {{- if eq $fm.status "Accepted" -}}
+      {{- $status = printf "Accepted %s" (substr $fm.accepted.at 0 10) -}}
+      {{- $accepted = $accepted | append (dict "adr" $adr "fm" $fm) -}}
+    {{- else if eq $fm.status "Proposed" -}}
+      {{- $status = "Proposed (awaiting Alex)" -}}
+    {{- end -}}
+    {{- with index $rows $adr }}{{ $title = .decision }}{{ end -}}
+    {{- $rows = merge $rows (dict $adr (dict "file" $file "decision" $title "status" $status)) -}}
+  {{- else if not (index $rows $adr) -}}
+    {{- errorf "ADR %s has no front matter and no row in legacy-index.yaml" $adr -}}
+  {{- else -}}
+    {{- with findRESubmatch `(?im)^Status: Superseded by (\d{4})\.?$` $text 1 -}}
+      {{- $rows = merge $rows (dict $adr (merge (index $rows $adr) (dict "status" (printf "Superseded by %s" (index (index . 0) 1))))) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- range $accepted -}}
+  {{- $by := .adr -}}
+  {{- range .fm.supersedes -}}
+    {{- $target := index $rows .adr -}}
+    {{- if $target -}}
+      {{- $status := printf "Superseded by %s" $by -}}
+      {{- if .part }}{{ $status = printf "%s; %s superseded by %s" $target.status .part $by }}{{ end -}}
+      {{- $rows = merge $rows (dict .adr (merge $target (dict "status" $status))) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range .fm.amends -}}
+    {{- $target := index $rows .adr -}}
+    {{- if $target -}}
+      {{- $status := printf "%s; %s amended by %s" $target.status .part $by -}}
+      {{- $rows = merge $rows (dict .adr (merge $target (dict "status" $status))) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- /* The same rows as JSON, for CI's docs-site job to compare with `npm run adr:index -- --compare` (ADR 0083). */ -}}
+{{- (resources.FromString "adr-index.json" (jsonify $rows)).Publish }}
+| # | Decision | Status |
+| --- | --- | --- |
+{{ range $adr, $row := $rows -}}
+| [{{ $adr }}](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/{{ $row.file }}) | {{ $row.decision }} | {{ $row.status }} |
+{{ end -}}
