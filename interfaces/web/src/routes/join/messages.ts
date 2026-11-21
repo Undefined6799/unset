@@ -5,6 +5,8 @@ export const JOIN = {
   codeLabel: "Your invite code",
   malformed: "This invite link looks broken. Ask the person who sent it for a new one.",
   noCode: "Open the link from your invite to see your code here.",
+  noInvite: "No invite yet?",
+  request: "Request an invite",
   next: (host: string): string =>
     `You'll pick your handle and password on ${host}, where you enter this code, then come back here.`,
   country: "Invites are only for people who do not live in the EU, the UK or Australia.",

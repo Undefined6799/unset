@@ -15,6 +15,7 @@ const OPTIONAL_SESSION = new Set([
   "/legal/privacy",
   "/legal/domains",
   `/join?invite=${JOIN_CODE}`,
+  "/request-invite",
 ]);
 // P2.10: /join's URL holds an invite code, so it sends no Referer at all (routes/join/+page.server.ts).
 const referrerPolicy = (route: string): string => (route === "/join" ? "no-referrer" : "same-origin");
