@@ -3,8 +3,8 @@
 // browser unlocks with the recovery key and reads the history; Log out leaves nothing behind; suspension locks an open
 // page and lifting it brings the same browser back with no unlock (ADR 0084 decisions 1 and 2); deletion ends the
 // account and the other member keeps the conversation (decision 3). It also records the build plan's step-11
-// unverified items as annotations: how fast a lock stops an open page, what the homeserver keeps of an erased
-// account, and the name the other member sees afterwards.
+// unverified items as annotations: how fast a lock stops an open page and what the homeserver keeps of an erased
+// account.
 // Chromium only, by its name (playwright.config.ts). Skipped, saying why, when the run is not pointed at the servers.
 import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { type RealServers, type RealStack, realServers, startRealStack } from "./fixtures/chat-servers.ts";
@@ -209,7 +209,8 @@ test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversatio
   // Bob keeps his copy, Alice's messages included, and sees that she left.
   await expect(messages(b.page)).toContainText("hello from alice");
   await expect(conversation(b.page)).not.toHaveAttribute("data-composer", "on", { timeout: 60_000 });
-  note("name_bob_sees_after_delete", (await conversation(b.page).locator("h2").first().textContent()) ?? "");
+  // Erasure deletes her profile, so Bob sees a neutral name, never her chat ID (core/conversations.ts nameOf).
+  await expect(conversation(b.page).locator("h2").first()).toHaveText("Former member", { timeout: 60_000 });
   // What the homeserver keeps of the erased account (build plan unverified, ADR 0084 Consequences).
   const user = await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}`);
   expect(user).toMatchObject({ deactivated: true, erased: true });

@@ -12,7 +12,7 @@ export type ConversationKind = "encrypted" | "not_encrypted";
 
 export type Conversation = {
   readonly id: ConversationId;
-  /** The other person: their chat ID and the name they show. */
+  /** The other person: their chat ID, which is never shown, and the name they are shown by (nameOf). */
   readonly with: { readonly id: string; readonly name: string };
   readonly kind: ConversationKind;
   /** Someone asked to talk and this member has not accepted yet (the invite is the request). */
@@ -76,6 +76,22 @@ export type Conversations = {
   /** Sends only while the composer is on; false when it was not sent. */
   readonly send: (id: ConversationId, text: string) => Promise<boolean>;
 };
+
+/** Who a person is shown as when they have no name of their own: erased, or never named. */
+const FORMER_MEMBER = "Former member";
+
+/**
+ * The name `chatId` is shown by: their display name, or Former member, never the chat ID itself (ADR 0010: opaque).
+ * No name is what an erased member leaves (Synapse 1.165.0 handlers/deactivate_account.py:180-195 deletes the profile
+ * and :316-326 expires their membership events before the leave), which matrix-js-sdk 43.0.0 reports as the user ID
+ * (src/models/room-member.ts:152-153, 215-217); a homeserver's default name is the local part (handlers/register.py:
+ * 320-321).
+ */
+export function nameOf(displayName: string | undefined, chatId: string): string {
+  const name = displayName?.trim() ?? "";
+  const localPart = chatId.slice(1, chatId.indexOf(":"));
+  return name === "" || name === chatId || name === localPart ? FORMER_MEMBER : name;
+}
 
 const LOCAL_PART = /^@u[a-z2-7]{20}$/;
 

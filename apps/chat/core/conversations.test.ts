@@ -2,7 +2,7 @@
 // composer is on. The composer stays off until the other person has joined and encryption is on in this browser's
 // crypto (the spike of 2026-11-20 sent plaintext right after createRoom otherwise).
 import { describe, expect, test } from "vitest";
-import { composerOf, parseChatId, startTarget } from "./conversations.ts";
+import { composerOf, nameOf, parseChatId, startTarget } from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -65,5 +65,21 @@ describe("composerOf", () => {
     [{ ...on, otherJoined: false, encryptionOn: false }, "waiting_for_them"],
   ] as const)("chat.composer_off: %o is %s", (facts, composer) => {
     expect(composerOf(facts)).toBe(composer);
+  });
+});
+
+describe("nameOf", () => {
+  test("chat.name_shown: a person is shown by the name they chose", () => {
+    expect(nameOf("Bea", THEM)).toBe("Bea");
+  });
+
+  test.each<[string | undefined, string]>([
+    [undefined, "no member event"],
+    ["", "an empty name"],
+    ["  ", "a blank name"],
+    [THEM, "the SDK's fallback to the chat ID"],
+    ["ubbbbbbbbbbbbbbbbbbbb", "the chat ID's local part, the homeserver's default"],
+  ])("chat.name_former_member: %j (%s) is shown as Former member, never as the chat ID", (name) => {
+    expect(nameOf(name, THEM)).toBe("Former member");
   });
 });
