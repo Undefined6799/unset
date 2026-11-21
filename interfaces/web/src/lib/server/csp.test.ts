@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { narrowed, STATIC_CSP, withMediaImages, zeroScriptCsp } from "./csp.ts";
 
 const ORIGIN = "https://unset.sh";
-const MEDIA = "https://media.unset.net";
+const MEDIA = "https://usercontent.unset.site";
 /** A header shaped like the one SvelteKit builds from kit.csp in vite.config.ts. */
 const KIT =
   "default-src 'none'; script-src 'self' 'sha256-abc='; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'";
@@ -23,7 +23,7 @@ describe("web csp", () => {
 
   test("narrowed_replaces_self_only_in_file_directives", () => {
     expect(narrowed(KIT, ORIGIN, MEDIA)).toBe(
-      "default-src 'none'; script-src https://unset.sh/_app/ 'sha256-abc='; style-src https://unset.sh/_app/; font-src https://unset.sh/fonts/; img-src 'self' https://media.unset.net; connect-src 'self'",
+      "default-src 'none'; script-src https://unset.sh/_app/ 'sha256-abc='; style-src https://unset.sh/_app/; font-src https://unset.sh/fonts/; img-src 'self' https://usercontent.unset.site; connect-src 'self'",
     );
   });
 
@@ -31,9 +31,11 @@ describe("web csp", () => {
   // nothing else changes, and the public group (no script, no member pictures yet) keeps its own.
   test("app_img_src_names_the_media_origin_only", () => {
     expect(withMediaImages(KIT, MEDIA)).toBe(
-      "default-src 'none'; script-src 'self' 'sha256-abc='; style-src 'self'; font-src 'self'; img-src 'self' https://media.unset.net; connect-src 'self'",
+      "default-src 'none'; script-src 'self' 'sha256-abc='; style-src 'self'; font-src 'self'; img-src 'self' https://usercontent.unset.site; connect-src 'self'",
     );
-    expect(withMediaImages("default-src 'none'", MEDIA)).toBe("default-src 'none'; img-src https://media.unset.net");
+    expect(withMediaImages("default-src 'none'", MEDIA)).toBe(
+      "default-src 'none'; img-src https://usercontent.unset.site",
+    );
     expect(zeroScriptCsp(ORIGIN).public).not.toContain(MEDIA);
   });
 
