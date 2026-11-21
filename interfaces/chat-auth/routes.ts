@@ -1,17 +1,22 @@
-// The door's two POST routes (build step 6; ADR 0081 decision 4, ADR 0083 decisions 4 and 5), behind door.ts's Host,
-// CSRF and rate-limit checks. Redeem reads exactly `{ ticket }`, takes the hop's one-time value and return path from
+// The door's POST routes (build step 6; ADR 0081 decision 4, ADR 0083 decisions 2, 4 and 5; ADR 0089), behind
+// door.ts's Host, CSRF and rate-limit checks. Redeem reads exactly `{ ticket }`, takes the hop's one-time value and return path from
 // their cookies and clears both whatever happens, and answers the chat page's session: the token, the member's chat
-// ID, the device and its lock key. Log out reads exactly `{ deviceId }` and needs the browser cookie. Each refusal is
+// ID, the device and its lock key. Log out, and the setup claim and its release, read exactly `{ deviceId }` and need
+// the browser cookie. Each refusal is
 // a catalog code; none carries a ticket, token, key, DID or chat user (SE-3, SE-7).
 import { createHash, randomBytes } from "node:crypto";
 import {
   type BrowserKey,
+  type BrowserList,
+  claimSetup,
   type DoorPorts,
   parseDeviceId,
   parseDoorState,
   type RedeemRefusal,
   readTicket,
   redeem,
+  releaseSetup,
+  type SetupClaims,
   signOut,
 } from "@unset/domains-messaging";
 import { safeReturnPath } from "@unset/shared-http";
@@ -141,6 +146,46 @@ export function signOutRoute({ ports }: Pick<RouteSettings, "ports">): PostRoute
       const headers = new Headers();
       if (outcome.browserEmpty) headers.append("set-cookie", clearCookie(BROWSER_COOKIE, "Strict"));
       return answer(200, { signedOut: true }, headers);
+    },
+  };
+}
+
+type SetupPorts = { readonly list: BrowserList; readonly claims: SetupClaims };
+
+/** The browser and the device it names, or the refusal: 401 without the cookie, 400 for a malformed device. */
+async function deviceOf(request: Request) {
+  const browser = browserOf(request);
+  if (browser === null) return { refusal: answer(401, { error: "chat.no_session" }) };
+  const device = parseDeviceId(await onlyField(request, "deviceId", 16));
+  if (device === null) return { refusal: answer(400, { error: "chat.bad_device" }) };
+  return { browser: browser.key, device };
+}
+
+/** POST /setup/claim: this browser runs the account's recovery-key setup, unless another live one does (ADR 0089). */
+export function setupClaimRoute(ports: SetupPorts): PostRoute {
+  return {
+    limit: "default",
+    async handle(request, deadline) {
+      const asked = await deviceOf(request);
+      if (asked.refusal !== undefined) return asked.refusal;
+      const outcome = await claimSetup(ports, { ...asked, deadline });
+      if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
+      if (outcome.kind === "elsewhere") return answer(409, { error: "chat.setup_elsewhere" });
+      return answer(200, { claimed: true });
+    },
+  };
+}
+
+/** POST /setup/release: this browser's setup is done; another browser of the account may claim again. */
+export function setupReleaseRoute(ports: SetupPorts): PostRoute {
+  return {
+    limit: "default",
+    async handle(request, deadline) {
+      const asked = await deviceOf(request);
+      if (asked.refusal !== undefined) return asked.refusal;
+      const outcome = await releaseSetup(ports, { ...asked, deadline });
+      if (outcome.kind === "no_session") return answer(401, { error: "chat.no_session" });
+      return answer(200, { released: true });
     },
   };
 }

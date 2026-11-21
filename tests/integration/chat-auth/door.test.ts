@@ -367,6 +367,53 @@ describe("POST /sign-out", () => {
   });
 });
 
+describe("POST /setup/claim and /setup/release", () => {
+  /** A browser signed in to `user`'s account (a new member unless given). */
+  async function signedIn(user?: ChatUser) {
+    const tab = browser();
+    const account = user ?? (await member());
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(account) });
+    return { tab, user: account, deviceId: ((await res.json()) as { deviceId: string }).deviceId };
+  }
+
+  test("door.setup_one_browser: the first browser of an account claims setup, a second one is refused", async () => {
+    const a = await signedIn();
+    const b = await signedIn(a.user);
+    const first = await a.tab.post("/setup/claim", { deviceId: a.deviceId });
+    expect([first.status, await first.json()]).toEqual([200, { claimed: true }]);
+    const second = await b.tab.post("/setup/claim", { deviceId: b.deviceId });
+    expect([second.status, await second.json()]).toEqual([409, { error: "chat.setup_elsewhere" }]);
+    expect((await a.tab.post("/setup/claim", { deviceId: a.deviceId })).status).toBe(200);
+  });
+
+  test("door.setup_release: after the holder's release the other browser may claim", async () => {
+    const a = await signedIn();
+    const b = await signedIn(a.user);
+    await a.tab.post("/setup/claim", { deviceId: a.deviceId });
+    const released = await a.tab.post("/setup/release", { deviceId: a.deviceId });
+    expect([released.status, await released.json()]).toEqual([200, { released: true }]);
+    expect((await b.tab.post("/setup/claim", { deviceId: b.deviceId })).status).toBe(200);
+  });
+
+  test("door.setup_denied: no cookie, another browser's device or a cross-site post claims nothing", async () => {
+    const a = await signedIn();
+    const other = await signedIn();
+    const stranger = await other.tab.post("/setup/claim", { deviceId: a.deviceId });
+    expect([stranger.status, await stranger.json()]).toEqual([401, { error: "chat.no_session" }]);
+    const strangerRelease = await other.tab.post("/setup/release", { deviceId: a.deviceId });
+    expect(strangerRelease.status).toBe(401);
+    const crossSite = await a.tab.post("/setup/claim", { deviceId: a.deviceId }, "https://unset.sh");
+    expect([crossSite.status, await crossSite.json()]).toEqual([403, { error: "csrf.denied" }]);
+    expect((await a.tab.post("/setup/claim", { deviceId: "../x" })).status).toBe(400);
+    a.tab.jar.clear();
+    expect((await a.tab.post("/setup/claim", { deviceId: a.deviceId })).status).toBe(401);
+    const claims = await withClient(db, null, (c) =>
+      c.query("SELECT 1 FROM door.chat_setup WHERE chat_user = $1", [a.user]),
+    );
+    expect(claims.rowCount).toBe(0);
+  });
+});
+
 test("door.browser_key_is_hashed: the stored browser is sha256 of the cookie, never the cookie", async () => {
   const user = await member();
   const tab = browser();

@@ -493,6 +493,16 @@
         },
         "rowPrivileges": ["DELETE"]
       }
+    },
+    "door.chat_setup": {
+      "chat_auth": {
+        "columns": {
+          "chat_user": ["SELECT", "INSERT"],
+          "browser_id": ["SELECT", "INSERT", "UPDATE"],
+          "claimed_until": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
     }
   }
 }
