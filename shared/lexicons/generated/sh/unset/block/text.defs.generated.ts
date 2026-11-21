@@ -15,7 +15,7 @@ type Main = {
   $type?: "sh.unset.block.text";
 
   /**
-   * CommonMark Markdown. Readers never render raw HTML, keep only http and https links, and never load pictures from the Markdown: they show them as links.
+   * Markdown: CommonMark, which readers may extend with common syntax such as GFM tables, task lists and strikethrough. Syntax a reader does not support is shown as plain text. Readers never render raw HTML, keep only http and https links, and never load a picture from an address in the text: they show it as a link.
    */
   text: string;
 };

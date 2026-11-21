@@ -39,12 +39,13 @@ The profile listed bare record keys, which name nothing outside its own reposito
    (`full` or `half`, absent means full), optional `surface` (`filled`, `outlined`, `plain`, absent means filled),
    optional `createdAt`. Anything else about how a card looks is a later optional field.
 2. **A block is its own lexicon in the one group `sh.unset.block.*`**, so the same block can sit in a card today and
-   in another record later: `text` (Markdown, 20,000 bytes), `links` (up to 50), `showcase` (titled entries, up to
-   50), `buttons` (up to 5: `#email` or `#link`; link presets `book-call`, `hire`, `subscribe`, and no preset means
-   the label shows) and `images` (up to 20 pictures with one `fit`, `contain` or `cover`). `sh.unset.block.defs`
-   holds `#image` (blob `image/*` up to 5,000,000 bytes, required `alt` and `aspectRatio`, optional `caption`) and
-   `#aspectRatio`. No list has a minimum in the lexicon; the editor keeps its own rules. The build refuses any other
-   group (`scripts/build.ts`).
+   in another record later: `text` (Markdown, 20,000 bytes: CommonMark, which readers may extend with common syntax
+   such as GFM tables, task lists and strikethrough, showing what they do not support as plain text), `links` (up to
+   50), `showcase` (titled entries, up to 50), `buttons` (up to 5: `#email` or `#link`; link presets `book-call`,
+   `hire`, `subscribe`, and no preset means the label shows) and `images` (up to 20 pictures with one `fit`,
+   `contain` or `cover`). `sh.unset.block.defs` holds `#image` (blob `image/*` up to 5,000,000 bytes, required `alt`
+   and `aspectRatio`, optional `caption`) and `#aspectRatio`. No list has a minimum in the lexicon; the editor keeps
+   its own rules. The build refuses any other group (`scripts/build.ts`).
 3. **The profile's `cards` lists `{uri}` references** (`#cardRef`, at most 100): the full `at://<DID>/sh.unset.card/<rkey>`
    address. Readers accept only an address of a card in the profile's own repository, written with that DID, and
    compare it as text: they never resolve a handle, and they skip any other entry. Only the cards listed show; a
