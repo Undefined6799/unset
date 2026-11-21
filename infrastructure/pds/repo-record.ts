@@ -12,7 +12,7 @@ export type PdsCall = <T>(
   ctx: PdsContext | null,
   did: Did,
   op: (xrpc: Agent) => Promise<T>,
-  opts: { readonly idempotent: boolean },
+  opts: { readonly idempotent: boolean; readonly timeoutMs?: number },
 ) => Promise<PdsResult<T>>;
 
 export function isXrpcError(error: unknown, name: string): boolean {
@@ -50,7 +50,8 @@ export type BuiltRecord<C extends string> =
   | { readonly ok: false; readonly code: C };
 
 export type SaveOutcome<C extends string> =
-  | { readonly kind: "saved" }
+  /** `rev` is the commit's revision (a TID, so revisions sort by time), absent when the PDS wrote nothing new. */
+  | { readonly kind: "saved"; readonly rev?: string }
   | { readonly kind: "refused"; readonly code: C }
   /** The record changed between our read and our write (another tab or client); nothing was written. */
   | { readonly kind: "conflict" };
@@ -80,14 +81,15 @@ export async function saveRecord<C extends string>(
     did,
     async (agent): Promise<SaveOutcome<C>> => {
       try {
-        await agent.com.atproto.repo.putRecord({
+        const { data } = await agent.com.atproto.repo.putRecord({
           repo: did,
           collection: at.collection,
           rkey: at.rkey,
           record: { ...built.record },
           swapRecord: swap,
         });
-        return { kind: "saved" };
+        // @atproto/pds 0.5.51 putRecord.ts answers no commit when the record was already exactly this.
+        return data.commit === undefined ? { kind: "saved" } : { kind: "saved", rev: data.commit.rev };
       } catch (error: unknown) {
         if (isXrpcError(error, "InvalidSwap")) return { kind: "conflict" };
         throw error;
