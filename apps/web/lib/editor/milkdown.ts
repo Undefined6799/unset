@@ -28,6 +28,7 @@ import { type Command, type EditorState, Plugin, Selection, TextSelection } from
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
+import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 
 /** The toolbar's actions, by name. */
 export const EDITOR_COMMANDS = [
@@ -185,6 +186,8 @@ export type MarkdownEditor = {
   /** Types `text` at the caret, as the member's own keys would. */
   readonly type: (text: string) => void;
   readonly destroy: () => Promise<void>;
+  /** The side handle, block menu and floating bar, when the caller drew them (`MountOptions.menus`). */
+  readonly menus?: Menus;
 };
 
 export type MountOptions = {
@@ -197,6 +200,8 @@ export type MountOptions = {
   readonly onChange: (markdown: string) => void;
   /** Called with the bar's state when the editor opens and at once after the text or the selection changes. */
   readonly onToolbar: (state: ToolbarState) => void;
+  /** Where to draw the side handle, block menu and floating bar, if the editor has them (the in-place editor). */
+  readonly menus?: Omit<MenusOptions, "isOn">;
 };
 
 // The page's parser (apps/web/lib/profile/parse.ts) shows a quote as paragraphs with line breaks, a list item as one
@@ -336,7 +341,12 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         },
       }),
   );
-  const editor = await Editor.make()
+  const made = Editor.make();
+  const menus =
+    options.menus === undefined
+      ? undefined
+      : withMenus(made, { ...options.menus, isOn: (item, state) => isActive(item, state) });
+  const editor = await made
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, options.value);
@@ -443,5 +453,6 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     destroy: async () => {
       await editor.destroy();
     },
+    menus,
   };
 }
