@@ -22,16 +22,20 @@
 //   one not known, or a sender that is not the device's owner), where Element shows its warning padlock (element-web
 //   v1.12.35 apps/web/src/viewmodels/room/timeline/event-tile/EventTileE2eState.ts:204-209). Grey, a key restored
 //   from backup, gets Element's plain padlock and no mark here.
+import type { RoomMessageEventContent } from "matrix-js-sdk/lib/@types/events.js";
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { type EventEncryptionInfo, EventShieldColour } from "matrix-js-sdk/lib/crypto-api/index.js";
-import { EventType, type MatrixEvent, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
+import { EventType, type MatrixEvent, MsgType, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
 import {
   availableOf,
   type Conversation,
   type ConversationId,
   type ConversationKind,
+  isQuickReaction,
   type Message,
   nameOf,
+  type Quote,
+  type Reaction,
 } from "../core/conversations.ts";
 
 const MEGOLM = "m.megolm.v1.aes-sha2";
@@ -129,27 +133,109 @@ export function unconfirmedDevice(info: EventEncryptionInfo | null): boolean {
 }
 
 /**
- * The timeline's text messages and unreadable ones, in order; anything else is left out. `unconfirmed` holds the ids
- * of events sent from a device its owner has not confirmed (unconfirmedDevice).
+ * The types a message is sent as; a redacted one is a deleted message (MatrixEvent.isRedacted,
+ * src/models/event.ts:1309).
  */
-export function toMessages(
-  events: readonly MatrixEvent[],
-  me: string,
-  unconfirmed: ReadonlySet<string> = new Set(),
-): Message[] {
+const MESSAGE_TYPES: ReadonlySet<string> = new Set([EventType.RoomMessageEncrypted, EventType.RoomMessage]);
+
+/** What toMessages is told about the events beside the events themselves. */
+export type About = {
+  /** Ids of events sent from a device its owner has not confirmed (unconfirmedDevice). */
+  readonly unconfirmed?: ReadonlySet<string>;
+  /** An event's annotations by key, as Relations.getSortedAnnotationsByKey gives them (src/models/relations.ts:263). */
+  readonly annotations?: (eventId: string) => readonly (readonly [string, ReadonlySet<MatrixEvent>])[] | null;
+  /** An event of the room by id, as Room.findEventById finds it, for the message a reply answers. */
+  readonly find?: (eventId: string) => MatrixEvent | undefined;
+};
+
+/**
+ * The timeline's text messages, unreadable ones and deleted ones, in order, with their reactions and the message each
+ * reply answers; anything else is left out.
+ */
+export function toMessages(events: readonly MatrixEvent[], me: string, about: About = {}): Message[] {
   const messages: Message[] = [];
   for (const event of events) {
-    const id = event.getId();
-    if (id === undefined || event.isState()) continue;
-    const base = { id, mine: event.getSender() === me, at: event.getTs(), unconfirmed: unconfirmed.has(id) };
-    if (event.isDecryptionFailure()) {
-      messages.push({ ...base, kind: "unreadable" });
-      continue;
-    }
-    const content = event.getContent();
-    if (event.getType() !== EventType.RoomMessage || content.msgtype !== "m.text") continue;
-    if (typeof content.body !== "string" || content.body === "") continue;
-    messages.push({ ...base, kind: "text", text: content.body });
+    const message = messageOf(event, me, about);
+    if (message !== null) messages.push(message);
   }
   return messages;
+}
+
+/** One event as a message, or null for anything that is not one. */
+function messageOf(event: MatrixEvent, me: string, about: About): Message | null {
+  const { unconfirmed = new Set(), annotations = () => null, find = () => undefined } = about;
+  const id = event.getId();
+  if (id === undefined || event.isState()) return null;
+  const mine = event.getSender() === me;
+  if (event.isRedacted()) {
+    if (!MESSAGE_TYPES.has(event.getType())) return null;
+    return { id, mine, at: event.getTs(), unconfirmed: false, reactions: [], replyTo: null, kind: "deleted" };
+  }
+  const reactions = reactionsOf(annotations(id), me);
+  const replyTo = event.replyEventId === undefined ? null : quoteOf(event.replyEventId, find(event.replyEventId), me);
+  const base = { id, mine, at: event.getTs(), unconfirmed: unconfirmed.has(id), reactions, replyTo };
+  if (event.isDecryptionFailure()) return { ...base, kind: "unreadable" };
+  const content = event.getContent();
+  if (event.getType() !== EventType.RoomMessage || content.msgtype !== "m.text") return null;
+  if (typeof content.body !== "string" || content.body === "") return null;
+  return { ...base, kind: "text", text: content.body };
+}
+
+/**
+ * What a reply shows of the message `id` it answers (MatrixEvent.replyEventId, src/models/event.ts:697): its text; that
+ * it was deleted; or, for one not loaded, unreadable or not a text message, that it cannot be shown, where Element
+ * says it cannot load it (element-web v1.12.35 apps/web/src/components/views/elements/ReplyChain.tsx:296).
+ */
+export function quoteOf(id: string, target: MatrixEvent | undefined, me: string): Quote {
+  const base = { id, mine: target?.getSender() === me };
+  if (target?.isRedacted()) return { ...base, kind: "deleted" };
+  const content = target?.isDecryptionFailure() ? undefined : target?.getContent();
+  if (content?.msgtype !== "m.text" || typeof content.body !== "string") return { ...base, kind: "unavailable" };
+  return { ...base, kind: "text", text: content.body };
+}
+
+/** A reply's content: the text and exactly `m.relates_to.m.in_reply_to`, as Element's makeReplyMixIn writes it. */
+export function replyContent(text: string, replyTo: string): RoomMessageEventContent {
+  return { msgtype: MsgType.Text, body: text, "m.relates_to": { "m.in_reply_to": { event_id: replyTo } } };
+}
+
+/**
+ * A message's quick reactions, most first as Relations.getSortedAnnotationsByKey orders them (src/models/
+ * relations.ts:263): each key's annotations not redacted, and whether this member is among their senders, as
+ * Element's ReactionPicker reads its own (element-web v1.12.35 apps/web/src/components/views/emojipicker/
+ * ReactionPicker.tsx:68-79). A key outside the quick set, which the server refuses, is left out.
+ */
+export function reactionsOf(
+  byKey: readonly (readonly [string, ReadonlySet<MatrixEvent>])[] | null,
+  me: string,
+): Reaction[] {
+  const reactions: Reaction[] = [];
+  for (const [key, events] of byKey ?? []) {
+    const live = [...events].filter((e) => !e.isRedacted());
+    if (!isQuickReaction(key) || live.length === 0) continue;
+    reactions.push({ key, count: live.length, mine: live.some((e) => e.getSender() === me) });
+  }
+  return reactions;
+}
+
+/**
+ * Where "Seen" goes: under this member's last message at or before the other person's read receipt (`readUpTo`, the
+ * event Room.getEventReadUpTo gives, src/models/read-receipt.ts:127), with the receipt's time. Null with no receipt,
+ * one outside the loaded timeline, or no message of this member's at or before it. Element shows a receipt under the
+ * last event its reader has read (element-web v1.12.35 apps/web/src/components/views/rooms/ReadReceiptGroup.tsx).
+ */
+export function seenOf(
+  events: readonly MatrixEvent[],
+  messages: readonly Message[],
+  readUpTo: string | null,
+  at: number | undefined,
+): { readonly id: string; readonly at: number } | null {
+  if (readUpTo === null || at === undefined) return null;
+  const upTo = events.findIndex((e) => e.getId() === readUpTo);
+  const mine = new Set(messages.filter((m) => m.mine).map((m) => m.id));
+  for (let i = upTo; i >= 0; i--) {
+    const id = events[i]?.getId();
+    if (id !== undefined && mine.has(id)) return { id, at };
+  }
+  return null;
 }

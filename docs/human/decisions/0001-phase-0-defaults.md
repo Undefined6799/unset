@@ -790,3 +790,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   security settings": while the chat servers' settings are tuned, preflight C36 holds only security settings to their
   reviewed value, lets the named tuning settings change, and still refuses any other key. The full exact-match check
   is turned back on when Alex says the settings are final.
+- **Chat keeps Element's device trust as built (P6.10, 2026-11-21; own record:
+  [0095](0095-chat-device-trust-kept-and-what-it-gives-up.md)):** `AllDevicesIsolationMode(false)` stays. A browser
+  signed in through unset.sh that has not entered the recovery key still receives new room keys, so the recovery key
+  protects history only; anyone who can create a device can read new messages with no warning to the sender. Unset's
+  own 2FA/TOTP layer is the later mitigation. Amends ADR 0093's Consequences. Accepted by Alex 2026-11-21 22:18:09Z.

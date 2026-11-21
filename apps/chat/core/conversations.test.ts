@@ -2,7 +2,20 @@
 // composer is on. The composer stays off until encryption is on in this browser's crypto (the spike of 2026-11-20 sent
 // plaintext right after createRoom otherwise); while the other person is only invited it is pending and still sends.
 import { describe, expect, test } from "vitest";
-import { availableOf, canSend, composerOf, nameOf, parseChatId, startTarget } from "./conversations.ts";
+import {
+  actionsOf,
+  availableOf,
+  canSend,
+  composerOf,
+  draftAfterSend,
+  isQuickReaction,
+  type Message,
+  nameOf,
+  parseChatId,
+  QUICK_REACTIONS,
+  selectable,
+  startTarget,
+} from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -109,5 +122,64 @@ describe("nameOf", () => {
     ["ubbbbbbbbbbbbbbbbbbbb", "the chat ID's local part, the homeserver's default"],
   ])("chat.name_former_member: %j (%s) is shown as Former member, never as the chat ID", (name) => {
     expect(nameOf(name, THEM)).toBe("Former member");
+  });
+});
+
+describe("reactions", () => {
+  test("chat.quick_reactions: Element's eight, the only keys the server takes (ADR 0092 decision 1)", () => {
+    expect(QUICK_REACTIONS).toEqual(["👍", "👎", "😄", "🎉", "😕", "❤️", "🚀", "👀"]);
+    expect(QUICK_REACTIONS.every(isQuickReaction)).toBe(true);
+    for (const key of ["👍🏽", "❤", "meet me at 5", "", 1, null]) expect(isQuickReaction(key), String(key)).toBe(false);
+  });
+});
+
+describe("actionsOf", () => {
+  const base = { id: "$m", at: 1, unconfirmed: false, reactions: [], replyTo: null } as const;
+  const text = (mine: boolean): Message => ({ ...base, mine, kind: "text", text: "hi" });
+
+  test("chat.react_while_sending: a message may be reacted to only while the composer sends", () => {
+    expect(actionsOf(text(false), "on")).toContain("react");
+    expect(actionsOf(text(true), "pending")).toContain("react");
+    for (const composer of ["request", "gone", "not_encrypted", "they_left", "waiting_for_encryption"] as const)
+      expect(actionsOf(text(false), composer), composer).not.toContain("react");
+    expect(actionsOf({ ...base, mine: false, kind: "unreadable" }, "on")).toContain("react");
+  });
+
+  test("chat.reply_while_sending: a message may be replied to only while the composer sends", () => {
+    expect(actionsOf(text(false), "on")).toEqual(["react", "reply"]);
+    expect(actionsOf(text(false), "pending")).toEqual(["react", "reply"]);
+    expect(actionsOf(text(false), "they_left")).toEqual([]);
+  });
+
+  test("chat.delete_own: only this member's own message, while still a member of an encrypted conversation", () => {
+    expect(actionsOf(text(true), "on")).toEqual(["react", "reply", "delete"]);
+    expect(actionsOf(text(true), "they_left")).toEqual(["delete"]);
+    expect(actionsOf(text(true), "waiting_for_encryption")).toEqual(["delete"]);
+    expect(actionsOf(text(false), "on")).not.toContain("delete");
+    for (const composer of ["request", "gone", "not_encrypted"] as const)
+      expect(actionsOf(text(true), composer), composer).not.toContain("delete");
+    expect(actionsOf({ ...base, mine: true, kind: "deleted" }, "on")).toEqual([]);
+  });
+
+  test("chat.select_own_only: selection takes the messages Delete is offered on, and nothing once one has left", () => {
+    const shown: Message[] = [
+      { ...text(true), id: "$mine" },
+      { ...text(false), id: "$theirs" },
+      { ...base, id: "$gone", mine: true, kind: "deleted" },
+      { ...base, id: "$unreadable", mine: true, kind: "unreadable" },
+    ];
+    expect(selectable(shown, "on")).toEqual(["$mine", "$unreadable"]);
+    expect(selectable(shown, "they_left")).toEqual(["$mine", "$unreadable"]);
+    expect(selectable(shown, "gone")).toEqual([]);
+  });
+});
+
+describe("draftAfterSend", () => {
+  test("chat.draft_kept_while_sending: a send clears only what it sent; text typed meanwhile, or after a failure, stays", () => {
+    expect(draftAfterSend("hello", "hello", true)).toBe("");
+    expect(draftAfterSend("hello", "next one", true)).toBe("next one");
+    expect(draftAfterSend("hello", "", true)).toBe("");
+    expect(draftAfterSend("hello", "hello", false)).toBe("hello");
+    expect(draftAfterSend("hello", "hello again", false)).toBe("hello again");
   });
 });
