@@ -16,6 +16,11 @@ export const VENDOR_IMAGES: ReadonlySet<string> = new Set([
 /**
  * Vendor images a Dockerfile may build on, each by its exact name, as a runtime base only: SeaweedFS, the object store
  * (accepted ADR 0041; P2.18s). Our objects image adds no package, drops the upstream entrypoint and runs `weed` as a
- * non-root user, so only the binary and its Alpine base ship. Never a run-only image (VENDOR_IMAGES), never a builder.
+ * non-root user, so only the binary and its Alpine base ship. Google's distroless Python 3 on Debian 13, the chat
+ * Synapse image's runtime base (accepted ADR 0092; P6.02): no shell, pip or package manager. Never a run-only image
+ * (VENDOR_IMAGES), never a builder.
  */
-export const VENDOR_BASES: ReadonlySet<string> = new Set(["docker.io/chrislusf/seaweedfs"]);
+export const VENDOR_BASES: ReadonlySet<string> = new Set([
+  "docker.io/chrislusf/seaweedfs",
+  "gcr.io/distroless/python3-debian13",
+]);

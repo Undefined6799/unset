@@ -35,6 +35,16 @@
     "stage": "runtime"
   },
   {
+    "source": "docker.io/library/python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+    "mirror": "ghcr.io/undefined6799/mirror/python",
+    "stage": "build"
+  },
+  {
+    "source": "gcr.io/distroless/python3-debian13:nonroot@sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71",
+    "mirror": "ghcr.io/undefined6799/mirror/python3-debian13",
+    "stage": "runtime"
+  },
+  {
     "source": "ghcr.io/element-hq/matrix-authentication-service:1.29.0@sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
     "mirror": "ghcr.io/undefined6799/mirror/matrix-authentication-service",
     "stage": "runtime"

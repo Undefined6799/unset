@@ -47,7 +47,13 @@ type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
 
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
-const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
+const LIBRARY_IMAGES = new Set([
+  "docker.io/library/node",
+  "docker.io/library/caddy",
+  "docker.io/library/postgres",
+  // P6.02 (ADR 0092): the chat Synapse image's build-only base.
+  "docker.io/library/python",
+]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || VENDOR_BASES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
@@ -1100,6 +1106,8 @@ describe("base images", () => {
       "pds",
       "newt",
       "seaweedfs",
+      "python",
+      "python3-debian13",
       "mas",
     ]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
@@ -1162,6 +1170,17 @@ describe("base images", () => {
       stage: "runtime",
       buildStage: false,
     });
+    // P6.02 (ADR 0092): the Synapse image's build-only base, which upstream pairs with distroless python3-debian13.
+    // No Dockerfile on main builds on it yet, so buildStage stays false (lock_build_stage_matches_dockerfiles) until
+    // synapse.Dockerfile lands with its build stage.
+    expect(lock.python).toStrictEqual({
+      ref: "docker.io/library/python",
+      tag: expect.stringMatching(/^3\.13(?:\.\d+)?-slim-trixie$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "build",
+      buildStage: false,
+    });
     // P6.02: Element's Matrix Authentication Service, the chat server's sign-in, run as shipped likewise.
     expect(lock.mas).toStrictEqual({
       ref: "ghcr.io/element-hq/matrix-authentication-service",
@@ -1176,14 +1195,30 @@ describe("base images", () => {
   test("vendor_bases_are_named_runtime_bases", () => {
     // P2.18s (ADR 0041): SeaweedFS is the one vendor image a Dockerfile may build on, by its exact name, as a runtime
     // base only. A run-only vendor image is never a base, and the two lists never share a name.
-    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs"]);
+    // P6.02 (ADR 0092): Google's distroless Python is the second, the Synapse image's runtime base.
+    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs", "gcr.io/distroless/python3-debian13"]);
     for (const ref of VENDOR_BASES) expect(VENDOR_IMAGES.has(ref), ref).toBe(false);
-    for (const ref of ["docker.io/chrislusf/other", "docker.io/chrislusf/seaweedfs-x", "ghcr.io/chrislusf/seaweedfs"]) {
+    for (const ref of [
+      "docker.io/chrislusf/other",
+      "docker.io/chrislusf/seaweedfs-x",
+      "ghcr.io/chrislusf/seaweedfs",
+      "gcr.io/distroless/python3",
+      "gcr.io/distroless/python3-debian12",
+      "docker.io/distroless/python3-debian13",
+    ]) {
       expect(allowed(ref), ref).toBe(false);
     }
     expect(lock.seaweedfs).toStrictEqual({
       ref: "docker.io/chrislusf/seaweedfs",
       tag: expect.stringMatching(/^\d+\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    expect(lock["python3-debian13"]).toStrictEqual({
+      ref: "gcr.io/distroless/python3-debian13",
+      tag: "nonroot",
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
