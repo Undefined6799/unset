@@ -20,7 +20,7 @@ const HEADING_LOOK = [
 
 {#snippet inline(nodes: readonly Inline[])}
   {#each nodes as node, i (i)}
-    {#if node.kind === "text"}{node.text}{:else if node.kind === "code"}<code class="rounded-sm bg-muted px-1 font-mono text-sm">{node.text}</code
+    {#if node.kind === "text"}{node.text}{:else if node.kind === "break"}<br />{:else if node.kind === "code"}<code class="rounded-sm bg-muted px-1 font-mono text-sm">{node.text}</code
       >{:else if node.kind === "strong"}<strong>{@render inline(node.children)}</strong
       >{:else if node.kind === "em"}<em>{@render inline(node.children)}</em
       >{:else}<a class="underline" href={node.href} rel="nofollow ugc noopener noreferrer"
@@ -51,7 +51,9 @@ const HEADING_LOOK = [
     {:else if block.kind === "paragraph"}
       <p>{@render inline(block.children)}</p>
     {:else if block.kind === "quote"}
-      <blockquote class="border-s-3 border-input ps-3.5 text-muted-foreground"><p>{@render inline(block.children)}</p></blockquote>
+      <blockquote class="flex flex-col gap-3 border-s-3 border-input ps-3.5 text-muted-foreground">
+        {#each block.paragraphs as paragraph, j (j)}<p class="my-0">{@render inline(paragraph)}</p>{/each}
+      </blockquote>
     {:else if block.kind === "list"}
       {@render list(block)}
     {:else if block.kind === "code"}

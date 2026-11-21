@@ -4939,6 +4939,19 @@ anywhere else lets go of them, and the first key it cannot replay (Backspace, En
 nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
 member was typing. Tabbing into the words shows the same focus ring as every other field.
 
+### P1.21s — Make Markdown in a Text card behave as typed (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21r · **Plan:** staging test of #1857, 2026-11-21 (Alex: "its the markdown")
+
+Pasted Markdown becomes formatting, as on the Milkdown playground, through the official @milkdown/plugin-clipboard
+7.23.0. An empty line no longer saves as a visible "<br />": the editor drops Milkdown's empty-line placeholder from
+what it stores, and the page's parser drops one it still finds. Enter in a quote starts the quote's next paragraph and
+Shift+Enter breaks the line; the page draws both. After a Save from the Show Markdown field, typing goes on there
+(Codex on #1902). No editor machinery of our own is added while Crepe (Milkdown's ready-made editor) is weighed
+against ADR 0073 (Alex, 2026-11-21: "do not reinvent the wheel"). Pasted HTML is read by prosemirror-view in a
+detached document, so nothing in it loads; a pasted style is refused by the CSP and reported (known noise, left until Crepe is decided). A pasted image
+shows as its alt text, as the page shows it, until the media proxy. Headings keep their level through a paste.
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
