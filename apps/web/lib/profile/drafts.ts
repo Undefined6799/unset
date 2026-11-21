@@ -21,7 +21,9 @@ const known = new Map<string, string>();
 
 function storageKey(did: string, card: string): string | Promise<string> {
   const name = `${did}\n${card}`;
-  return known.get(name) ?? digestKey(name);
+  const cached = known.get(name);
+  if (cached !== undefined) return cached;
+  return digestKey(name);
 }
 
 async function digestKey(name: string): Promise<string> {
