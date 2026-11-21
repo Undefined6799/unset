@@ -1,0 +1,377 @@
+// The unset.cc door end to end (build step 6; ADR 0081 decision 4, ADR 0083 decisions 4 and 5): its own composition
+// root, against real Postgres as `chat_auth` (TE-2), real chat-admin on loopback through a real net-guard, and web's own
+// client signing the tickets. Only MAS is a fake (harness.ts; an unmanaged dependency, TE-1). Every route has its
+// denial cases: no cookie, a wrong one-time value, a wrong Origin, an expired or replayed ticket, another member's
+// ticket in the same browser, and chat-admin down, which answers a typed 503 and nothing more.
+import { createHash, randomBytes } from "node:crypto";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import type { Did, Handle } from "@unset/domains-identity";
+import { type ChatUser, newChatUser, parseDoorState, sessionRef } from "@unset/domains-messaging";
+import { createChatAdminClient } from "@unset/infrastructure-matrix";
+import { createNetGuard } from "@unset/infrastructure-net-guard";
+import { createPool, withClient } from "@unset/infrastructure-postgres";
+import { loadConfig } from "@unset/shared-config";
+import { afterAll, afterEach, beforeEach, describe, expect, inject, test } from "vitest";
+import { compose } from "../../../interfaces/chat-auth/compose.ts";
+import { schema } from "../../../interfaces/chat-auth/config.ts";
+import { type FakeMas, fakeMas, startService } from "../chat-admin/harness.ts";
+
+const provided = inject("postgres");
+const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
+const ORIGIN = "https://unset.cc";
+const ALICE = `did:plc:${"a".repeat(24)}` as Did;
+const BOB = `did:plc:${"b".repeat(24)}` as Did;
+const guard = createNetGuard({ internalHosts: [], allowLoopback: true, commit: "c".repeat(40) });
+
+const dir = mkdtempSync(join(tmpdir(), "chat-auth-"));
+function file(name: string, contents: string): string {
+  const path = join(dir, name);
+  writeFileSync(path, contents);
+  chmodSync(path, 0o600);
+  return path;
+}
+
+let mas: FakeMas;
+let service: Awaited<ReturnType<typeof startService>>;
+let door: Awaited<ReturnType<typeof compose>>;
+const logs: string[] = [];
+const db = createPool({
+  connection: { host: provided.host, port: provided.port, ...provided.roles.chat_auth, database, ssl: false },
+  service: "door-test",
+  max: 2,
+  connectTimeoutMs: 5000,
+});
+afterAll(() => db.end());
+
+beforeEach(async () => {
+  // Each test starts with an empty list for the two members it signs in.
+  await withClient(db, null, (c) => c.query("DELETE FROM door.browser WHERE did = ANY($1)", [[ALICE, BOB]]));
+  mas = await fakeMas();
+  service = await startService(mas);
+  const env = {
+    UNSET_ENV: "dev",
+    UNSET_SERVICE: "chat-auth",
+    UNSET_COMMIT: "c".repeat(40),
+    LISTEN_PORT: "8090",
+    PUBLIC_ORIGIN: ORIGIN,
+    HTTP_ALLOWED_HOSTS: "unset.cc",
+    TRUSTED_PROXY_MODE: "socket",
+    WEB_ORIGIN: "https://unset.sh",
+    PG_HOST: provided.host,
+    PG_PORT: String(provided.port),
+    PG_DATABASE: database,
+    PG_USER: "chat_auth",
+    PG_PASSWORD_FILE: file("pg", provided.roles.chat_auth.password),
+    PG_SSLMODE: "disable",
+    PG_POOL_MAX: "2",
+    SEAL_KEYRING_FILE: file("seal", JSON.stringify({ active: "d1", keys: { d1: randomBytes(32).toString("base64") } })),
+    NETGUARD_ALLOW_LOOPBACK: "true",
+    CHAT_ADMIN_URL: service.base,
+    CHAT_ADMIN_DOOR_KEY_FILE: file("door", String(service.door.privateKey.export({ type: "pkcs8", format: "pem" }))),
+    CHAT_ADMIN_DOOR_KID: service.door.kid,
+    CHAT_SERVER_NAME: "staging.unset.cc",
+  };
+  door = await compose(loadConfig(schema, env), {
+    request: (line) => logs.push(JSON.stringify(line)),
+    untrustedPeer: () => undefined,
+  });
+});
+afterEach(async () => {
+  await door.close();
+  await service.close();
+  await mas.close();
+});
+
+const web = (now?: () => number) =>
+  createChatAdminClient(
+    guard,
+    { origin: service.base, env: "dev", key: { kid: service.web.kid, privateKey: service.web.privateKey } },
+    now,
+  );
+
+/** A member whose chat account chat-admin has created in MAS. */
+async function member(): Promise<ChatUser> {
+  const user = newChatUser((n) => randomBytes(n));
+  expect(await web().createAccount(user, "a.unset.name" as Handle)).toEqual({ kind: "created" });
+  return user;
+}
+
+/** One browser's cookie jar, as the door sets it. */
+function browser() {
+  const jar = new Map<string, string>();
+  const header = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  const keep = (res: Response) => {
+    for (const line of res.headers.getSetCookie()) {
+      const [pair = "", ...attributes] = line.split("; ");
+      const name = pair.slice(0, pair.indexOf("="));
+      if (attributes.includes("Max-Age=0")) jar.delete(name);
+      else jar.set(name, pair.slice(name.length + 1));
+    }
+    return res;
+  };
+  const get = async (path: string) =>
+    keep(
+      await door.handle(
+        new Request(`${ORIGIN}${path}`, { headers: { host: "unset.cc", cookie: header() } }),
+        "127.0.0.1",
+      ),
+    );
+  const post = async (path: string, body: unknown, origin = ORIGIN) =>
+    keep(
+      await door.handle(
+        new Request(`${ORIGIN}${path}`, {
+          method: "POST",
+          headers: { host: "unset.cc", origin, cookie: header(), "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        "127.0.0.1",
+      ),
+    );
+  /** GET /sign-in, then web's ticket for `did` bound to the value this browser now holds. */
+  const hop = async (user: ChatUser, did = ALICE, now?: () => number) => {
+    await get("/sign-in?return=%2Fc%2Fx");
+    const state = parseDoorState(jar.get("__Host-chat-state") ?? null);
+    if (state === null) throw new Error("no state cookie");
+    return web(now).signTicket({ user, did, sid: sessionRef(Buffer.alloc(32, 1)), state });
+  };
+  return { jar, get, post, hop };
+}
+
+const rowsOf = (did: Did) =>
+  withClient(db, null, async (c) => {
+    const { rows } = await c.query<{ device_id: string }>("SELECT device_id FROM door.browser WHERE did = $1", [did]);
+    return rows.map((r) => r.device_id);
+  });
+const activeOn = (device: string) => mas.sessions.filter((s) => !s.revoked && s.scope.endsWith(`device:${device}`));
+
+describe("POST /sign-in/redeem", () => {
+  test("door.redeem_signs_in: a token, the member's chat ID, a device and a 32-byte lock key; the hop cookies go", async () => {
+    const user = await member();
+    const tab = browser();
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = (await res.json()) as Record<string, string>;
+    expect(Object.keys(body).sort()).toEqual([
+      "accessToken",
+      "deviceId",
+      "expiresAt",
+      "returnTo",
+      "storageKey",
+      "userId",
+    ]);
+    expect(body.userId).toBe(`@${user}:staging.unset.cc`);
+    expect(body.deviceId).toMatch(/^[A-Z0-9]{10}$/);
+    expect(Buffer.from(body.storageKey ?? "", "base64url")).toHaveLength(32);
+    expect(Date.parse(body.expiresAt ?? "")).toBeGreaterThan(Date.now());
+    expect(body.returnTo).toBe("/c/x");
+    expect(activeOn(body.deviceId ?? "")).toHaveLength(1);
+    expect([...tab.jar.keys()]).toEqual(["__Host-chat-browser"]);
+    const set = res.headers.getSetCookie().find((l) => l.startsWith("__Host-chat-browser="));
+    expect(set).toMatch(/; Path=\/; Max-Age=34560000; Secure; HttpOnly; SameSite=Strict$/);
+    expect(await rowsOf(ALICE)).toEqual([body.deviceId]);
+  });
+
+  test("door.redeem_after_expiry: a new hop in the same browser gets the same device and lock key, minted first", async () => {
+    const user = await member();
+    const tab = browser();
+    const first = (await (await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) })).json()) as Record<
+      string,
+      string
+    >;
+    const again = (await (await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) })).json()) as Record<
+      string,
+      string
+    >;
+    expect([again.deviceId, again.storageKey]).toEqual([first.deviceId, first.storageKey]);
+    expect(again.accessToken).not.toBe(first.accessToken);
+    expect(activeOn(first.deviceId ?? "")).toHaveLength(1);
+  });
+
+  test("door.redeem_replay: the same ticket again fails at the door (value gone) and at chat-admin (jti burned)", async () => {
+    const user = await member();
+    const tab = browser();
+    const ticket = await tab.hop(user);
+    const state = tab.jar.get("__Host-chat-state") ?? "";
+    expect((await tab.post("/sign-in/redeem", { ticket })).status).toBe(200);
+    const again = await tab.post("/sign-in/redeem", { ticket });
+    expect([again.status, await again.json()]).toEqual([403, { error: "chat.no_state" }]);
+    // A browser that kept its value still cannot spend the ticket twice.
+    tab.jar.set("__Host-chat-state", state);
+    const kept = await tab.post("/sign-in/redeem", { ticket });
+    expect([kept.status, await kept.json()]).toEqual([403, { error: "chat.ticket_refused" }]);
+    expect(mas.sessions.filter((s) => !s.revoked)).toHaveLength(1);
+  });
+
+  test("door.redeem_wrong_state: a ticket made for another browser's value mints nothing", async () => {
+    const user = await member();
+    const victim = browser();
+    const ticket = await browser().hop(user);
+    await victim.get("/sign-in");
+    const res = await victim.post("/sign-in/redeem", { ticket });
+    expect([res.status, await res.json()]).toEqual([403, { error: "chat.state_mismatch" }]);
+    expect(mas.sessions).toEqual([]);
+    expect(victim.jar.has("__Host-chat-state")).toBe(false);
+  });
+
+  test("door.redeem_no_cookie: with no one-time value at all nothing is minted", async () => {
+    const user = await member();
+    const tab = browser();
+    const ticket = await tab.hop(user);
+    tab.jar.clear();
+    const res = await tab.post("/sign-in/redeem", { ticket });
+    expect([res.status, await res.json()]).toEqual([403, { error: "chat.no_state" }]);
+    expect(mas.sessions).toEqual([]);
+  });
+
+  test("door.redeem_wrong_origin: a cross-site post is refused by the CSRF gate before anything is read", async () => {
+    const user = await member();
+    const tab = browser();
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) }, "https://evil.example");
+    expect([res.status, await res.json()]).toEqual([403, { error: "csrf.denied" }]);
+    expect(mas.sessions).toEqual([]);
+    expect(tab.jar.has("__Host-chat-state")).toBe(true);
+  });
+
+  test("door.redeem_expired: a ticket past its 60 seconds is refused before chat-admin", async () => {
+    const user = await member();
+    const tab = browser();
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(user, ALICE, () => Date.now() - 120_000) });
+    expect([res.status, await res.json()]).toEqual([403, { error: "chat.ticket_expired" }]);
+    expect(mas.sessions).toEqual([]);
+  });
+
+  test("door.redeem_bad_ticket: a ticket that is not web's envelope is 400", async () => {
+    const tab = browser();
+    await tab.get("/sign-in");
+    for (const ticket of ["", "x".repeat(10), 42]) {
+      expect((await tab.post("/sign-in/redeem", { ticket })).status).toBe(400);
+    }
+    expect((await tab.post("/sign-in/redeem", { ticket: "a", extra: 1 })).status).toBe(400);
+  });
+
+  test("door.redeem_other_member: another member's ticket in the same browser never gets the first one's device or key", async () => {
+    const tab = browser();
+    const alice = await member();
+    const bob = await member();
+    const a = (await (await tab.post("/sign-in/redeem", { ticket: await tab.hop(alice) })).json()) as Record<
+      string,
+      string
+    >;
+    const b = (await (await tab.post("/sign-in/redeem", { ticket: await tab.hop(bob, BOB) })).json()) as Record<
+      string,
+      string
+    >;
+    expect(b.deviceId).not.toBe(a.deviceId);
+    expect(b.storageKey).not.toBe(a.storageKey);
+    expect(b.userId).toBe(`@${bob}:staging.unset.cc`);
+    expect(await rowsOf(ALICE)).toEqual([a.deviceId]);
+    expect(activeOn(a.deviceId ?? "")).toHaveLength(1);
+  });
+
+  test("door.redeem_chat_admin_down: MAS down or chat-admin gone is 503 chat.unavailable, nothing written", async () => {
+    const user = await member();
+    const tab = browser();
+    mas.down = true;
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) });
+    expect([res.status, await res.json()]).toEqual([503, { error: "chat.unavailable" }]);
+    mas.down = false;
+    await service.close();
+    const gone = await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) });
+    expect([gone.status, await gone.json()]).toEqual([503, { error: "chat.unavailable" }]);
+    expect(await rowsOf(ALICE)).toEqual([]);
+    service = await startService(mas);
+  });
+
+  test("door.redeem_logs_nothing_personal: no ticket, token, lock key, chat user or DID in a log line", async () => {
+    const user = await member();
+    const tab = browser();
+    const ticket = await tab.hop(user);
+    const body = (await (await tab.post("/sign-in/redeem", { ticket })).json()) as Record<string, string>;
+    const text = logs.join("\n");
+    for (const secret of [ticket, body.accessToken, body.storageKey, user, ALICE, body.deviceId]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+});
+
+describe("POST /sign-out", () => {
+  async function signedIn() {
+    const tab = browser();
+    const res = await tab.post("/sign-in/redeem", { ticket: await tab.hop(await member()) });
+    return { tab, session: (await res.json()) as Record<string, string> };
+  }
+
+  test("door.sign_out_wipes: the device is revoked, the entry and its key deleted, the cookie cleared", async () => {
+    const { tab, session } = await signedIn();
+    const res = await tab.post("/sign-out", { deviceId: session.deviceId });
+    expect([res.status, await res.json()]).toEqual([200, { signedOut: true }]);
+    expect(activeOn(session.deviceId ?? "")).toEqual([]);
+    expect(await rowsOf(ALICE)).toEqual([]);
+    expect(tab.jar.has("__Host-chat-browser")).toBe(false);
+  });
+
+  test("door.sign_out_no_cookie: without the door's cookie it is 401 and nothing is revoked", async () => {
+    const { tab, session } = await signedIn();
+    tab.jar.clear();
+    const res = await tab.post("/sign-out", { deviceId: session.deviceId });
+    expect([res.status, await res.json()]).toEqual([401, { error: "chat.no_session" }]);
+    expect(activeOn(session.deviceId ?? "")).toHaveLength(1);
+  });
+
+  test("door.sign_out_other_browser: another browser naming this device revokes nothing", async () => {
+    const { session } = await signedIn();
+    const other = await signedIn();
+    expect((await other.tab.post("/sign-out", { deviceId: session.deviceId })).status).toBe(200);
+    expect(activeOn(session.deviceId ?? "")).toHaveLength(1);
+    expect(await rowsOf(ALICE)).toHaveLength(2);
+  });
+
+  test("door.sign_out_wrong_origin: a cross-site post is refused by the CSRF gate", async () => {
+    const { tab, session } = await signedIn();
+    const res = await tab.post("/sign-out", { deviceId: session.deviceId }, "https://unset.sh");
+    expect([res.status, await res.json()]).toEqual([403, { error: "csrf.denied" }]);
+    expect(activeOn(session.deviceId ?? "")).toHaveLength(1);
+  });
+
+  test("door.sign_out_down: with chat-admin down it is 503 and the entry stays for another try", async () => {
+    const { tab, session } = await signedIn();
+    mas.down = true;
+    const res = await tab.post("/sign-out", { deviceId: session.deviceId });
+    expect([res.status, await res.json()]).toEqual([503, { error: "chat.unavailable" }]);
+    expect(await rowsOf(ALICE)).toEqual([session.deviceId]);
+    expect(tab.jar.has("__Host-chat-browser")).toBe(true);
+  });
+
+  test("door.sign_out_then_new_device: the next sign-in after Log out gets a new device and a new key", async () => {
+    const { tab, session } = await signedIn();
+    await tab.post("/sign-out", { deviceId: session.deviceId });
+    const next = (await (
+      await tab.post("/sign-in/redeem", { ticket: await tab.hop(await member()) })
+    ).json()) as Record<string, string>;
+    expect(next.deviceId).not.toBe(session.deviceId);
+    expect(next.storageKey).not.toBe(session.storageKey);
+  });
+
+  test("door.sign_out_bad_device: a device ID of the wrong form is 400", async () => {
+    const { tab } = await signedIn();
+    expect((await tab.post("/sign-out", { deviceId: "../x" })).status).toBe(400);
+  });
+});
+
+test("door.browser_key_is_hashed: the stored browser is sha256 of the cookie, never the cookie", async () => {
+  const user = await member();
+  const tab = browser();
+  await tab.post("/sign-in/redeem", { ticket: await tab.hop(user) });
+  const cookie = Buffer.from(tab.jar.get("__Host-chat-browser") ?? "", "base64url");
+  const stored = await withClient(db, null, async (c) => {
+    const { rows } = await c.query<{ h: string }>(
+      "SELECT encode(browser_hash, 'hex') AS h FROM door.browser WHERE did = $1",
+      [ALICE],
+    );
+    return rows.map((r) => r.h);
+  });
+  expect(stored).toEqual([createHash("sha256").update(cookie).digest("hex")]);
+});

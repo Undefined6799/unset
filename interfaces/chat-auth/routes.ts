@@ -1,0 +1,146 @@
+// The door's two POST routes (build step 6; ADR 0081 decision 4, ADR 0083 decisions 4 and 5), behind door.ts's Host,
+// CSRF and rate-limit checks. Redeem reads exactly `{ ticket }`, takes the hop's one-time value and return path from
+// their cookies and clears both whatever happens, and answers the chat page's session: the token, the member's chat
+// ID, the device and its lock key. Log out reads exactly `{ deviceId }` and needs the browser cookie. Each refusal is
+// a catalog code; none carries a ticket, token, key, DID or chat user (SE-3, SE-7).
+import { createHash, randomBytes } from "node:crypto";
+import {
+  type BrowserKey,
+  type DoorPorts,
+  parseDeviceId,
+  parseDoorState,
+  type RedeemRefusal,
+  readTicket,
+  redeem,
+  signOut,
+} from "@unset/domains-messaging";
+import { safeReturnPath } from "@unset/shared-http";
+import {
+  BROWSER_COOKIE,
+  BROWSER_MAX_AGE_S,
+  clearCookie,
+  RETURN_COOKIE,
+  readCookie,
+  STATE_COOKIE,
+  setCookie,
+} from "./cookies.ts";
+import { type DoorAnswer, json, type PostRoute } from "./door.ts";
+
+/** web's ticket is about 600 characters of base64url; anything near the body cap is not one. */
+const MAX_TICKET = 3000;
+const BROWSER_VALUE = /^[A-Za-z0-9_-]{43}$/;
+
+const STATUS: Readonly<Record<RedeemRefusal, number>> = {
+  "chat.no_state": 403,
+  "chat.state_mismatch": 403,
+  "chat.ticket_expired": 403,
+  "chat.ticket_refused": 403,
+  "chat.device_ended": 409,
+  "chat.busy": 409,
+  "chat.unavailable": 503,
+};
+
+const answer = (status: number, body: unknown, headers?: Headers): DoorAnswer => {
+  const response = json(status, body);
+  for (const line of headers?.getSetCookie() ?? []) response.headers.append("set-cookie", line);
+  const error = (body as { error?: unknown }).error;
+  return typeof error === "string" ? { response, reason: error.slice(error.indexOf(".") + 1) } : { response };
+};
+
+/** The body as an object with exactly `key`, a string, or null. */
+async function onlyField(request: Request, key: string, max: number): Promise<string | null> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return null;
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
+  const keys = Object.keys(body);
+  const value = (body as Record<string, unknown>)[key];
+  return keys.length === 1 && keys[0] === key && typeof value === "string" && value.length <= max ? value : null;
+}
+
+/** The list's name for a browser: sha256 of its cookie's bytes, so a stored row is never a cookie. */
+const browserKey = (bytes: Buffer) => new Uint8Array(createHash("sha256").update(bytes).digest()) as BrowserKey;
+
+/** The browser this request comes from: its cookie's bytes and their sha256, or null without a well-formed one. */
+function browserOf(request: Request): { value: string; key: BrowserKey } | null {
+  const value = readCookie(request.headers.get("cookie"), BROWSER_COOKIE);
+  if (value === null || !BROWSER_VALUE.test(value)) return null;
+  return { value, key: browserKey(Buffer.from(value, "base64url")) };
+}
+
+function returnPathOf(request: Request): string {
+  const raw = readCookie(request.headers.get("cookie"), RETURN_COOKIE);
+  let decoded: string | null = null;
+  try {
+    decoded = raw === null ? null : decodeURIComponent(raw);
+  } catch {
+    decoded = null;
+  }
+  return (decoded === null ? null : safeReturnPath(decoded)) ?? "/";
+}
+
+export type RouteSettings = {
+  readonly ports: DoorPorts;
+  /** CHAT_SERVER_NAME: the part after the colon in the member's chat ID. */
+  readonly serverName: string;
+  readonly random?: (bytes: number) => Buffer;
+};
+
+/** POST /sign-in/redeem: the hop's ticket for this browser's chat session. */
+export function redeemRoute({ ports, serverName, random = randomBytes }: RouteSettings): PostRoute {
+  return {
+    limit: "sign-in",
+    async handle(request, deadline) {
+      const headers = new Headers();
+      headers.append("set-cookie", clearCookie(STATE_COOKIE, "Lax"));
+      headers.append("set-cookie", clearCookie(RETURN_COOKIE, "Lax"));
+      const raw = await onlyField(request, "ticket", MAX_TICKET);
+      const ticket = raw === null ? null : readTicket(raw);
+      if (ticket === null) return answer(400, { error: "chat.bad_ticket" }, headers);
+      const state = parseDoorState(readCookie(request.headers.get("cookie"), STATE_COOKIE));
+      const browser = browserOf(request) ?? newBrowser(random);
+      const outcome = await redeem(ports, { ticket, state, browser: browser.key, deadline });
+      if (outcome.kind === "refused") return answer(STATUS[outcome.code], { error: outcome.code }, headers);
+      headers.append("set-cookie", setCookie(BROWSER_COOKIE, browser.value, BROWSER_MAX_AGE_S, "Strict"));
+      const { entry, token, expiresAtS } = outcome;
+      return answer(
+        200,
+        {
+          accessToken: token,
+          userId: `@${entry.user}:${serverName}`,
+          deviceId: entry.device,
+          expiresAt: new Date(expiresAtS * 1000).toISOString(),
+          storageKey: Buffer.from(entry.lockKey).toString("base64url"),
+          returnTo: returnPathOf(request),
+        },
+        headers,
+      );
+    },
+  };
+}
+
+function newBrowser(random: (bytes: number) => Buffer): { value: string; key: BrowserKey } {
+  const bytes = random(32);
+  return { value: bytes.toString("base64url"), key: browserKey(bytes) };
+}
+
+/** POST /sign-out: Log out of one device this browser holds (ADR 0083 decision 5: the key goes with it). */
+export function signOutRoute({ ports }: Pick<RouteSettings, "ports">): PostRoute {
+  return {
+    limit: "default",
+    async handle(request, deadline) {
+      const browser = browserOf(request);
+      if (browser === null) return answer(401, { error: "chat.no_session" });
+      const device = parseDeviceId(await onlyField(request, "deviceId", 16));
+      if (device === null) return answer(400, { error: "chat.bad_device" });
+      const outcome = await signOut(ports, { browser: browser.key, device, deadline });
+      if (outcome.kind === "unavailable") return answer(503, { error: "chat.unavailable" });
+      const headers = new Headers();
+      if (outcome.browserEmpty) headers.append("set-cookie", clearCookie(BROWSER_COOKIE, "Strict"));
+      return answer(200, { signedOut: true }, headers);
+    },
+  };
+}
