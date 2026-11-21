@@ -19,20 +19,39 @@ type Doc = Record<string, unknown>;
 /** The door's fixed address on the count network it shares with Synapse and web only (ADR 0090 decision 2). */
 export const DOOR_COUNT_ADDRESS = "10.250.38.19";
 
+/**
+ * Synapse's client listeners bind its fixed addresses (homeserver.yaml), which keep each on its networks only if
+ * Synapse holds exactly those addresses there (ADR 0086 Decision 4): the first for the edge and MAS, the second for
+ * chat-admin alone (ADR 0091 decision 8). Synapse also joins its database's network and the count network, where it
+ * binds nothing.
+ */
+const SYNAPSE_ADMIN_ADDRESS = "10.250.38.35";
+const SYNAPSE_NETWORKS: readonly ListenerNetwork[] = [
+  { name: "chat_edge_synapse", subnet: "10.250.38.48/29", address: "10.250.38.51", peer: "edge" },
+  { name: "chat_mas", subnet: "10.250.38.0/29", address: "10.250.38.2", peer: "mas" },
+  { name: "chat_admin_synapse", subnet: "10.250.38.32/29", address: SYNAPSE_ADMIN_ADDRESS, peer: "chat-admin" },
+];
+const SYNAPSE_JOINS = ["chat_synapse_db", "chat_count", "chat_mas", "chat_edge_synapse", "chat_admin_synapse"];
+
+function clientListener(bindAddresses: readonly string[]): Doc {
+  return {
+    port: 8008,
+    bind_addresses: bindAddresses,
+    type: "http",
+    tls: false,
+    x_forwarded: false,
+    resources: [{ names: ["client"], compress: false }],
+  };
+}
+
 /** Synapse 1.165.0's settings that must be exactly these (build plan step 1, Synapse table). */
 function synapseSettings(serverName: string): Doc {
   return {
     server_name: serverName,
     public_baseurl: `https://${serverName}/`,
     listeners: [
-      {
-        port: 8008,
-        bind_addresses: ["0.0.0.0"],
-        type: "http",
-        tls: false,
-        x_forwarded: false,
-        resources: [{ names: ["client"], compress: false }],
-      },
+      clientListener(SYNAPSE_NETWORKS.filter((n) => n.name !== "chat_admin_synapse").map((n) => n.address)),
+      clientListener([SYNAPSE_ADMIN_ADDRESS]),
     ],
     log_config: "/config/log.yaml",
     report_stats: false,
@@ -182,8 +201,13 @@ export const c36: Check = {
       const outcome = configProblem(inputs, service, rule, serverName);
       if (outcome !== null) return outcome;
     }
+    const synapse = inputs.compose.services.find((s) => s.name === "synapse");
     const mas = inputs.compose.services.find((s) => s.name === "mas");
-    return (mas === undefined ? null : listenerNetworksProblem(inputs, mas, MAS_NETWORKS, MAS_JOINS)) ?? pass();
+    return (
+      (synapse === undefined ? null : listenerNetworksProblem(inputs, synapse, SYNAPSE_NETWORKS, SYNAPSE_JOINS)) ??
+      (mas === undefined ? null : listenerNetworksProblem(inputs, mas, MAS_NETWORKS, MAS_JOINS)) ??
+      pass()
+    );
   },
 };
 
