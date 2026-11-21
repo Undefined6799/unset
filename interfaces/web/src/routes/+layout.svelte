@@ -223,9 +223,11 @@ function markSeen(event: ToggleEvent): void {
 // answers a 303, which enhance reads as a "redirect" result; anything else (a dropped connection gives an "error"
 // result: @sveltejs/kit 3.2.0 src/runtime/app/forms/client.js, handle_submit's catch) stored nothing, so the badge
 // comes back and the next opening tries again (Codex review of #1910).
-const markInBackground: SubmitFunction = () => async ({ result }) => {
-  if (result.type !== "redirect") seenUpTo = undefined;
-};
+const markInBackground: SubmitFunction =
+  () =>
+  async ({ result }) => {
+    if (result.type !== "redirect") seenUpTo = undefined;
+  };
 // The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
 // drawn as a small badge.
 const badge =
