@@ -13,6 +13,7 @@ import { CryptoEvent, OnlySignedDevicesIsolationMode } from "matrix-js-sdk/lib/c
 import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
+import { createConversations } from "./conversation-service.ts";
 import { createKeyHolder, type Keys, makeKey, phaseOf, readFacts, storeKey, unlock } from "./recovery.ts";
 
 const UNAVAILABLE = "chat.unavailable";
@@ -78,6 +79,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   await client.startClient({ lazyLoadMembers: true });
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
   const keys: Keys = { client, crypto, holder };
+  const conversations = createConversations(client, crypto, session.userId);
   // While a setup or an unlock runs its own steps, the trust events it causes do not repaint the page.
   let busy = false;
   const report = async () => {
@@ -87,7 +89,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     if (facts === null) return void fail(UNAVAILABLE);
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
-    tell(phase === "ready" ? { kind: "ready" } : { kind: "locked", unlock: tryKey });
+    tell(phase === "ready" ? { kind: "ready", conversations, me: session.userId } : { kind: "locked", unlock: tryKey });
   };
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;

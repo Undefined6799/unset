@@ -4,7 +4,7 @@
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { createClient, MatrixEvent, NotificationCountType, Room } from "matrix-js-sdk/lib/matrix.js";
 import { describe, expect, test } from "vitest";
-import { directRooms, findDirect, otherJoined, toConversation, toMessages } from "./conversations.ts";
+import { directRooms, findDirect, otherJoined, toConversation, toMessages, withDirect } from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -183,4 +183,16 @@ describe("toMessages", () => {
     expect(toMessages([sealed, pending], ME).map((m) => [m.mine, m.kind])).toEqual([[false, "unreadable"]]);
     reader.stopClient();
   }, 20_000);
+});
+
+describe("withDirect", () => {
+  test("chat.direct_record: a room is recorded for one person only, as Element's setDMRoom records it", () => {
+    const before = { [OTHER]: ["!x:unset.cc", "!a:unset.cc"], [THEM]: ["!y:unset.cc"], bad: "!z:unset.cc" };
+    expect(withDirect(before, "!a:unset.cc", THEM)).toEqual({
+      [OTHER]: ["!x:unset.cc"],
+      [THEM]: ["!y:unset.cc", "!a:unset.cc"],
+    });
+    expect(withDirect(undefined, "!a:unset.cc", THEM)).toEqual({ [THEM]: ["!a:unset.cc"] });
+    expect(withDirect({ [THEM]: ["!a:unset.cc"] }, "!a:unset.cc", THEM)).toEqual({ [THEM]: ["!a:unset.cc"] });
+  });
 });
