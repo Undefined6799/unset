@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import { MAX_DAYS, NEWT_MAX_DAYS, PDS_MAX_DAYS, SEAWEEDFS_MAX_DAYS, trivyIgnoreProblems } from "./trivyignore.ts";
+import {
+  MAX_DAYS,
+  NEWT_MAX_DAYS,
+  PDS_MAX_DAYS,
+  PYTHON_MAX_DAYS,
+  SEAWEEDFS_MAX_DAYS,
+  trivyIgnoreProblems,
+} from "./trivyignore.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const TODAY = new Date("2026-10-06T00:00:00Z");
@@ -317,6 +324,44 @@ describe(".github/trivyignore.newt.yaml", () => {
       const other = readFileSync(file, "utf8");
       expect(other, file).not.toContain("CVE-2026-78661");
       expect(other, file).not.toContain("usr/local/bin/newt");
+    }
+  });
+});
+
+const PYTHON_FILE = join(ROOT, ".github", "trivyignore.python.yaml");
+/**
+ * P6.02: Trivy v0.76.1's one OS finding in the python:3.13-slim-trixie base (e48f59cd), zlib1g, which Debian has fixed
+ * and the Synapse image built on it will upgrade under the zlib exception (ZLIB_UPGRADE in
+ * deployment/images/images.test.ts), so only the scans of the base itself read this file. It expires with that
+ * exception.
+ */
+const PYTHON_ENTRIES = [
+  {
+    id: "CVE-2026-85091",
+    statement: [
+      "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90:",
+      "python:3.13-slim-trixie ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, fixed in 1:1.3.dfsg+really1.3.1-1+deb13u1;",
+      "the Synapse image built on it upgrades zlib1g to the fixed version in its final stage (the zlib exception);",
+      "removed on the re-pin to a base that ships the fix, or with the zlib exception",
+    ].join(" "),
+    expired_at: "2026-11-30",
+  },
+];
+
+describe(".github/trivyignore.python.yaml", () => {
+  test("python_ignorefile_is_the_one_reviewed_entry", () => {
+    expect(PYTHON_MAX_DAYS).toBe(30);
+    const text = readFileSync(PYTHON_FILE, "utf8");
+    expect(trivyIgnoreProblems(text, new Date(), PYTHON_MAX_DAYS, "shape")).toEqual([]);
+    const doc = parse(text) as { vulnerabilities?: IgnoreEntry[] };
+    expect(Object.keys(doc)).toEqual(["vulnerabilities"]);
+    const entries = (doc.vulnerabilities ?? []).map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }));
+    expect(entries).toEqual(PYTHON_ENTRIES);
+  });
+
+  test("python_waiver_names_no_other_image", () => {
+    for (const file of [SHARED_FILE, PDS_FILE, SEAWEEDFS_FILE, NEWT_FILE]) {
+      expect(readFileSync(file, "utf8"), file).not.toContain("CVE-2026-85091");
     }
   });
 });

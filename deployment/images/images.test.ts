@@ -47,7 +47,13 @@ type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
 
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
-const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
+const LIBRARY_IMAGES = new Set([
+  "docker.io/library/node",
+  "docker.io/library/caddy",
+  "docker.io/library/postgres",
+  // P6.02 (Alex, 2026-11-21T19:23Z, "yes, you may add the chat image to the mirror list"): the chat Synapse image's base.
+  "docker.io/library/python",
+]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || VENDOR_BASES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
@@ -1092,7 +1098,17 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt", "seaweedfs"]);
+    expect(Object.keys(lock)).toEqual([
+      "node",
+      "caddy-builder",
+      "caddy",
+      "postgres",
+      "pds",
+      "newt",
+      "seaweedfs",
+      "python",
+      "mas",
+    ]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1147,6 +1163,25 @@ describe("base images", () => {
     // Fossorial's Newt (P1.37v, ADR 0030 Decision 2), the dev edge's tunnel to Pangolin, run as shipped likewise.
     expect(lock.newt).toStrictEqual({
       ref: "docker.io/fosrl/newt",
+      tag: expect.stringMatching(/^1\.\d+\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    // P6.02: the chat Synapse image's base, mirrored ahead of that image. No Dockerfile on it yet, so no build stage
+    // and no stripped paths: the scans read the whole image until the Synapse Dockerfile deletes pip.
+    expect(lock.python).toStrictEqual({
+      ref: "docker.io/library/python",
+      tag: expect.stringMatching(/^3\.13(?:\.\d+)?-slim-trixie$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    // P6.02: Element's Matrix Authentication Service, the chat server's sign-in, run as shipped likewise.
+    expect(lock.mas).toStrictEqual({
+      ref: "ghcr.io/element-hq/matrix-authentication-service",
       tag: expect.stringMatching(/^1\.\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",

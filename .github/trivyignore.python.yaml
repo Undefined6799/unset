@@ -1,0 +1,11 @@
+# Accepted findings in the upstream python:3.13-slim-trixie base only (P6.02, the chat Synapse image's base).
+# Format: Trivy v0.76.1 docs/guide/configuration/filtering.md (.trivyignore.yaml). `expired_at` is yyyy-mm-dd, at
+# most 30 days ahead (PYTHON_MAX_DAYS). Passed with --ignorefile only when the source is docker.io/library/python, in
+# mirror.yml and images.yml's pins job. The one finding is zlib1g, under Alex's "yes zlib exception" of 2026-11-16
+# (ZLIB_UPGRADE in deployment/images/images.test.ts), and it ends with that exception: Debian has the fix, and the
+# Synapse image to be built on this base upgrades zlib1g in its final stage, as the node and postgres images do.
+# Trivy v0.76.1 reported CVE-2026-85091 as this base's only OS finding for e48f59cd on 2026-11-21.
+vulnerabilities:
+  - id: CVE-2026-85091
+    statement: "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90: python:3.13-slim-trixie ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, fixed in 1:1.3.dfsg+really1.3.1-1+deb13u1; the Synapse image built on it upgrades zlib1g to the fixed version in its final stage (the zlib exception); removed on the re-pin to a base that ships the fix, or with the zlib exception"
+    expired_at: 2026-11-30

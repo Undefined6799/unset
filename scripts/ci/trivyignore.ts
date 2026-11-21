@@ -15,6 +15,8 @@ export const PDS_MAX_DAYS = 30;
 export const SEAWEEDFS_MAX_DAYS = 30;
 /** P1.37m: the Newt file expires within 30 days too. */
 export const NEWT_MAX_DAYS = 30;
+/** P6.02: the Python base's file expires within 30 days too. */
+export const PYTHON_MAX_DAYS = 30;
 const SECTIONS = ["vulnerabilities", "misconfigurations", "secrets", "licenses"] as const;
 const DAY_MS = 86_400_000;
 
