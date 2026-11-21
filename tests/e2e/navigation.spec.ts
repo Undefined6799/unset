@@ -83,8 +83,8 @@ test.describe("phone", () => {
   // Outside audit of staging, 2026-11-19: More actions, then one of its panels, then Escape left More actions open
   // with focus on the page, so the next Tab went behind the menu. Focus goes back to the row that opened the panel
   // once the client runs (an app page; the public pages run no script).
-  // Build step 10: for a member Messages is a link in the top bar (below), not a row here.
-  for (const name of ["Create", "Notifications"]) {
+  // Build step 10: for a member Messages is a link in the top bar (below), not a row here, and Search is.
+  for (const name of ["Create", "Search unset.sh", "Notifications"]) {
     test(`escape_from_${name.toLowerCase()}_returns_focus_to_more_actions`, async ({ page }) => {
       expect((await openPage(page, SETTINGS))?.status()).toBe(200);
       await page.waitForLoadState("networkidle");
@@ -113,7 +113,11 @@ test.describe("phone chat icon", () => {
     const width = await page.locator("html").evaluate((element: { scrollWidth: number }) => element.scrollWidth);
     expect(width).toBeLessThanOrEqual(320);
     await page.locator('header button[popovertarget="actions-menu"]').click();
-    await expect(page.locator("#actions-menu").getByRole("button", { name: "Messages" })).toHaveCount(0);
+    const actions = page.locator("#actions-menu");
+    await expect(actions.getByRole("button", { name: "Messages" })).toHaveCount(0);
+    // Search, still coming, moves from the bar into More actions for a member, so the bar fits 320px.
+    await actions.getByRole("button", { name: "Search unset.sh" }).click();
+    await expect(page.locator("#search-menu")).toBeVisible();
   });
 });
 
