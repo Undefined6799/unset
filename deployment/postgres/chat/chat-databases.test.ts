@@ -54,7 +54,7 @@ describe("chat-databases.sh", () => {
         "SELECT count(*) FROM pg_authid WHERE rolname IN ('synapse', 'mas') AND rolpassword LIKE 'SCRAM-SHA-256$%'",
       ),
     ).toBe("2");
-    // Synapse refuses a database whose collation and ctype are not C (synapse docs/postgres.md at v1.162.0).
+    // Synapse refuses a database whose collation and ctype are not C (synapse docs/postgres.md at v1.165.0).
     expect(
       pg.sql(
         "unset",

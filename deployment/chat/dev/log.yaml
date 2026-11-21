@@ -1,6 +1,6 @@
 # Synapse's logging (P6.02; a Python logging dictConfig, docs.python.org/3/library/logging.config.html, as
-# config_documentation.md:1641 at v1.162.0 says). Warnings and errors to stderr only. The access logger,
-# synapse.access.http.<port> (synapse/http/site.py:476 at v1.162.0), writes a user id and an address for every
+# config_documentation.md:1643 at v1.165.0 says). Warnings and errors to stderr only. The access logger,
+# synapse.access.http.<port> (synapse/app/_base.py:478 at v1.165.0), writes a user id and an address for every
 # request, so its parent has no handler and does not propagate (rule SE-7).
 version: 1
 formatters:

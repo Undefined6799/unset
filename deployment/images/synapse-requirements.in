@@ -1,0 +1,5 @@
+# What the Synapse image installs (P6.02; ADR 0086 Decision 1): Synapse's latest stable release with no extra (no
+# authlib, so no OIDC or JWT sign-in; MAS signs users in), and the PostgreSQL driver as a wheel that carries libpq,
+# because the image's final stage installs no OS package. synapse-requirements.txt is compiled from this file.
+matrix-synapse==1.165.0
+psycopg2-binary==2.9.13

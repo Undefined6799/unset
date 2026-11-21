@@ -1,10 +1,11 @@
 // C36 (P6.02; ADR 0086; chat build plan step 1): the chat servers run only with the reviewed settings. A service named
-// synapse or mas reads exactly one config file, mounted read-only, with no setting beside it in its environment: the
-// Synapse image's start.py reads SYNAPSE_CONFIG_PATH and also SYNAPSE_WORKER, UID and GID (docker/start.py:234-314
-// at v1.162.0), and MAS merges every MAS_* variable into its config and splits MAS_CONFIG on ":" into several files
-// (crates/cli/src/commands/mod.rs:90-109 at v1.26.0). The file's top-level keys are exactly the reviewed ones, so no
-// other module, provider or inline secret rides in, and every security setting is its reviewed value. A stack with
-// neither service passes. A reason names a setting from the lists below, never a value (P1.30m).
+// synapse or mas reads exactly one config file, mounted read-only, with no setting beside it in its environment. Our
+// Synapse image starts `synapse.app.homeserver -c /config/homeserver.yaml` (deployment/images/synapse.Dockerfile), so
+// the synapse service sets no variable at all; MAS merges every MAS_* variable into its config and splits MAS_CONFIG
+// on ":" into several files (crates/cli/src/commands/mod.rs:90-109 at v1.26.0), so mas sets MAS_CONFIG alone. The
+// file's top-level keys are exactly the reviewed ones, so no other module, provider or inline secret rides in, and
+// every security setting is its reviewed value. A stack with neither service passes. A reason names a setting from
+// the lists below, never a value (P1.30m).
 import { isDeepStrictEqual } from "node:util";
 import { parseDocument } from "yaml";
 import type { Service } from "../compose-parse.ts";
@@ -15,7 +16,7 @@ const SERVER_NAME: Readonly<Record<Env, string | null>> = { dev: "staging.unset.
 const SECRET = /^\/run\/secrets\/[a-z0-9_]+$/;
 type Doc = Record<string, unknown>;
 
-/** Synapse 1.162.0's settings that must be exactly these (build plan step 1, Synapse table). */
+/** Synapse 1.165.0's settings that must be exactly these (build plan step 1, Synapse table). */
 function synapseSettings(serverName: string): Doc {
   return {
     server_name: serverName,
@@ -37,7 +38,12 @@ function synapseSettings(serverName: string): Doc {
     allow_profile_lookup_over_federation: false,
     enable_registration: false,
     allow_guest_access: false,
-    encryption_enabled_by_default_for_room_type: "all",
+    // The rule encrypts every room not asked for as plain; "all" would encrypt the plain kind too (P6.10a).
+    encryption_enabled_by_default_for_room_type: "off",
+    enable_search: false,
+    // Exactly the cap and one unbounded job; a default_policy would purge encrypted history (config_documentation.md
+    // `retention` at v1.165.0).
+    retention: { enabled: true, allowed_lifetime_max: "30d", purge_jobs: [{ interval: "12h" }] },
     enable_set_displayname: false,
     enable_set_avatar_url: false,
     allow_per_room_profiles: false,
@@ -51,8 +57,9 @@ function synapseSettings(serverName: string): Doc {
       endpoint: "http://mas:8080/",
       secret_path: "/run/secrets/synapse_mas_secret",
     },
-    // The server rule and nothing else (P6.10a; ADR 0085): it refuses any config, so none is given.
-    modules: [{ module: "unset_chat_policy.EncryptedOnly", config: {} }],
+    // The server rule and nothing else (P6.10a; ADR 0085), the only guarantee that rooms are encrypted: it refuses
+    // any config, so none is given.
+    modules: [{ module: "unset_chat_policy.RoomPolicy", config: {} }],
   };
 }
 const SYNAPSE_SECRET_PATHS = ["signing_key_path", "macaroon_secret_key_path", "form_secret_path"];
@@ -146,8 +153,8 @@ export function masProblem(doc: unknown, serverName: string): string | null {
 }
 
 const SERVICES = [
-  { name: "synapse", variable: "SYNAPSE_CONFIG_PATH", path: "/config/homeserver.yaml", problem: synapseProblem },
-  { name: "mas", variable: "MAS_CONFIG", path: "/config/mas.yaml", problem: masProblem },
+  { name: "synapse", variable: null, path: "/config/homeserver.yaml", yaml: "1.1", problem: synapseProblem },
+  { name: "mas", variable: "MAS_CONFIG", path: "/config/mas.yaml", yaml: "1.2", problem: masProblem },
 ] as const;
 
 export const c36: Check = {
@@ -166,7 +173,7 @@ export const c36: Check = {
   },
 };
 
-/** The service reads its one mounted config through one literal variable, and that file is the reviewed one. */
+/** The service reads its one mounted config, through one literal variable where it has one, and that file is the reviewed one. */
 function configProblem(
   inputs: Inputs,
   service: Service,
@@ -175,11 +182,8 @@ function configProblem(
 ): Outcome | null {
   const { name } = service;
   if (service.envFiles.length > 0) return fail(`${name} reads an env file`);
-  if (service.environment.some(([key]) => key !== rule.variable))
-    return fail(`${name} sets a name other than its config path`);
-  const value = service.environment[0]?.[1];
-  if (service.environment.length !== 1 || value === undefined || !("literal" in value) || value.literal !== rule.path)
-    return fail(`${name} does not read exactly its reviewed config path`);
+  const outcome = rule.variable === null ? noEnvironment(service) : configVariable(service, rule.variable, rule.path);
+  if (outcome !== null) return outcome;
   const mounts = service.mounts.filter((m) => m.target === rule.path);
   const mount = mounts[0];
   if (mounts.length !== 1 || mount?.type !== "bind" || !mount.readOnly || mount.source === null)
@@ -187,8 +191,22 @@ function configProblem(
   const text = inputs.readRegular(mount.source);
   if (text === null) return missing(mount.source);
   if (text === "not a regular file") return fail(`${name}'s config is not a regular file`);
-  const problem = rule.problem(readStrict(text), serverName);
+  const problem = rule.problem(readStrict(text, rule.yaml), serverName);
   return problem === null ? null : fail(problem);
+}
+
+function noEnvironment(service: Service): Outcome | null {
+  return service.environment.length === 0 ? null : fail(`${service.name} sets an environment variable`);
+}
+
+function configVariable(service: Service, variable: string, path: string): Outcome | null {
+  const { name } = service;
+  if (service.environment.some(([key]) => key !== variable))
+    return fail(`${name} sets a name other than its config path`);
+  const value = service.environment[0]?.[1];
+  if (service.environment.length !== 1 || value === undefined || !("literal" in value) || value.literal !== path)
+    return fail(`${name} does not read exactly its reviewed config path`);
+  return null;
 }
 
 /**
@@ -223,11 +241,13 @@ function masNetworkProblem(inputs: Inputs, mas: Service): Outcome | null {
 
 /**
  * The file's value under the compose reader's strict subset (compose-parse.ts): no duplicate key, no alias, no merge
- * key. Anything else is null, which every rule refuses. YAML 1.2's core schema reads `yes` or `off` as text where
- * Synapse's PyYAML (YAML 1.1) reads a boolean, so a value written that way fails its rule rather than passing.
+ * key. Anything else is null, which every rule refuses. Each file is read in the YAML its server reads: Synapse's
+ * PyYAML is YAML 1.1, where a bare `off` or `yes` is a boolean, so only a quoted "off" passes its rule; MAS's serde
+ * YAML is 1.2.
  */
-function readStrict(text: string): unknown {
-  const doc = parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, strict: true });
+export function readStrict(text: string, version: "1.1" | "1.2"): unknown {
+  const schema = version === "1.1" ? "yaml-1.1" : "core";
+  const doc = parseDocument(text, { version, schema, uniqueKeys: true, merge: false, strict: true });
   if (doc.errors.length > 0) return null;
   try {
     return doc.toJS({ maxAliasCount: 0 });

@@ -350,7 +350,8 @@ const DATABASE_BY_KIND = new Map([
   [
     "objects",
     { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
-  ],
+  ], // P6.02: the Synapse image's Python base is Debian trixie, and synapse.Dockerfile drops dpkg as the node images do.
+  ["synapse", DPKG_DATABASE],
 ]);
 
 /** Every way a kind's package database holds more than inert data, or no longer names a package. */
@@ -385,6 +386,8 @@ const PRIVILEGES_BY_KIND = new Map<string, readonly string[]>([
   ["postgres", []],
   // objects.Dockerfile removes fuse, whose /bin/fusermount is the SeaweedFS base's only setuid file (4.53, checked).
   ["objects", []],
+  // synapse.Dockerfile removes the same eleven files from the official Python image, also Debian trixie (P6.02).
+  ["synapse", []],
 ]);
 
 /** Every privilege in a listing: setuid and setgid files, and every member's extended attributes. */

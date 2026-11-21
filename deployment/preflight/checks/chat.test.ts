@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
 import { parseCompose } from "../compose-parse.ts";
-import { c36, masProblem, synapseProblem } from "./chat.ts";
+import { c36, masProblem, readStrict, synapseProblem } from "./chat.ts";
 import type { Env, Inputs } from "./types.ts";
 
 const CHAT = join(import.meta.dirname, "../../chat/dev");
@@ -42,6 +42,20 @@ describe("C36 the chat servers' settings", () => {
       ["enable_registration", true],
       ["allow_guest_access", true],
       ["encryption_enabled_by_default_for_room_type", "invite"],
+      // "all" would encrypt the plain kind too; the server rule encrypts every other room (P6.10a).
+      ["encryption_enabled_by_default_for_room_type", "all"],
+      ["encryption_enabled_by_default_for_room_type", undefined],
+      ["enable_search", true],
+      ["enable_search", undefined],
+      ["retention", undefined],
+      ["retention.enabled", false],
+      // A default policy would purge encrypted rooms' history too; the cap is 30 days and nothing longer.
+      ["retention.default_policy", { max_lifetime: "30d" }],
+      ["retention.allowed_lifetime_max", "1y"],
+      ["retention.allowed_lifetime_max", undefined],
+      ["retention.allowed_lifetime_min", "1d"],
+      ["retention.purge_jobs", undefined],
+      ["retention.purge_jobs", [{ interval: "12h", shortest_max_lifetime: "3d" }]],
       ["enable_set_displayname", true],
       ["enable_set_avatar_url", true],
       ["allow_per_room_profiles", true],
@@ -84,7 +98,8 @@ describe("C36 the chat servers' settings", () => {
   });
 
   test("synapse_loads_exactly_the_server_rule", () => {
-    const rule = { module: "unset_chat_policy.EncryptedOnly", config: {} };
+    // The rule is the only guarantee that a room not asked for as plain is encrypted, so no stack runs without it.
+    const rule = { module: "unset_chat_policy.RoomPolicy", config: {} };
     const reason = "homeserver.yaml: modules is not its reviewed value";
     for (const modules of [
       undefined,
@@ -92,9 +107,26 @@ describe("C36 the chat servers' settings", () => {
       [{ ...rule, config: { allow_plain: true } }],
       [rule, { module: "other.Module", config: {} }],
       [{ module: "unset_chat_policy.Other", config: {} }],
+      [{ module: "unset_chat_policy.EncryptedOnly", config: {} }],
+      [{ module: "unset_chat_policy.RoomPolicy" }],
     ]) {
       expect(synapseProblem(edited(synapse(), "modules", modules), SERVER), JSON.stringify(modules)).toBe(reason);
     }
+  });
+
+  test("synapse_config_is_read_as_its_yaml_reads_it", () => {
+    // Synapse's PyYAML reads YAML 1.1, where a bare `off` is the boolean false, which Synapse refuses or misreads; only
+    // the quoted "off" is the string Synapse's room config takes (config_documentation.md:4049 at v1.165.0).
+    const committed = text("homeserver.yaml");
+    expect(synapseProblem(readStrict(committed, "1.1"), SERVER)).toBeNull();
+    const bare = committed.replace(
+      'encryption_enabled_by_default_for_room_type: "off"',
+      "encryption_enabled_by_default_for_room_type: off",
+    );
+    expect(bare).not.toBe(committed);
+    expect(synapseProblem(readStrict(bare, "1.1"), SERVER)).toBe(
+      "homeserver.yaml: encryption_enabled_by_default_for_room_type is not its reviewed value",
+    );
   });
 
   test("synapse_refuses_unreviewed_settings_and_inline_secrets", () => {
@@ -198,8 +230,6 @@ describe("C36 the chat servers' settings", () => {
 const SYNAPSE_SERVICE = [
   "  synapse:",
   "    image: s",
-  "    environment:",
-  "      SYNAPSE_CONFIG_PATH: /config/homeserver.yaml",
   "    volumes:",
   "      - ./chat/dev/homeserver.yaml:/config/homeserver.yaml:ro",
   "",
@@ -272,11 +302,14 @@ describe("C36 the chat services", () => {
   });
 
   test("the_config_is_the_one_mounted_file_and_no_override_rides_in", async () => {
-    const extra = SYNAPSE_SERVICE.replace(
-      "    volumes:",
-      "      SYNAPSE_WORKER: synapse.app.generic_worker\n    volumes:",
-    );
-    expect(await run(extra)).toEqual({ pass: false, reason: "synapse sets a name other than its config path" });
+    // Our image starts Synapse with its config path fixed (synapse.Dockerfile ENTRYPOINT), so nothing is set beside it.
+    for (const setting of [
+      "SYNAPSE_CONFIG_PATH: /config/homeserver.yaml",
+      "SYNAPSE_WORKER: synapse.app.generic_worker",
+    ]) {
+      const extra = SYNAPSE_SERVICE.replace("    volumes:", `    environment:\n      ${setting}\n    volumes:`);
+      expect(await run(extra)).toEqual({ pass: false, reason: "synapse sets an environment variable" });
+    }
     const override = MAS_SERVICE.replace("    volumes:", '      MAS_PASSWORDS_ENABLED: "true"\n    volumes:');
     expect(await run(override)).toEqual({ pass: false, reason: "mas sets a name other than its config path" });
     const two = MAS_SERVICE.replace("MAS_CONFIG: /config/mas.yaml", "MAS_CONFIG: /config/mas.yaml:/config/more.yaml");
