@@ -138,3 +138,30 @@ test("words_typed_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) => 
   await page.getByRole("button", { name: "Throw them away" }).click();
   await removeCard(page, word);
 });
+
+// Codex review of f6c6a2f: a Save sent to sign in again wrote nothing, so the words stay in this device's drafts.
+test("a_save_sent_to_sign_in_again_keeps_the_words_as_drafts", async ({ page }) => {
+  const word = `ended${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} kept` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" unsent");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  // The action's answer when the sign-in has ended (+page.server.ts write: 303 to the sign-in page), as kit sends it.
+  await page.route(/\?\/saveAll$/, (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ type: "redirect", status: 303, location: "/login?error=login.session_ended" }),
+    }),
+  );
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await page.waitForURL(/\/login/);
+  await page.unroute(/\?\/saveAll$/);
+  await openOwnPage(page);
+  await expect(page.getByText("This device kept unsaved words for 1 card from an earlier visit.")).toBeVisible();
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await removeCard(page, word);
+});

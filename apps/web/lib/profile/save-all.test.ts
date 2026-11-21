@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { type CardEdit, cardSaveForm, readSaveAnswer } from "./save-all.ts";
 
+const HERE = "/did:plc:abc";
 const V = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
 const edit = (key: string, text: string, extra: Partial<CardEdit> = {}): CardEdit => ({
   key,
@@ -43,27 +44,43 @@ describe("cardSaveForm", () => {
 });
 
 describe("readSaveAnswer", () => {
-  test("a redirect is saved", () => {
-    expect(readSaveAnswer({ type: "redirect" })).toEqual({ kind: "saved" });
+  test("a redirect back to the owner's page is saved", () => {
+    expect(readSaveAnswer({ type: "redirect", location: "/did:plc:abc" }, "/did:plc:abc")).toEqual({ kind: "saved" });
+    expect(readSaveAnswer({ type: "success" }, "/did:plc:abc")).toEqual({ kind: "saved" });
+  });
+
+  // Codex review of f6c6a2f: a sign-in that ended sends the Save to sign in again with nothing written.
+  test("a redirect anywhere else is followed with nothing saved", () => {
+    expect(readSaveAnswer({ type: "redirect", location: "/login?error=login.session_ended" }, "/did:plc:abc")).toEqual({
+      kind: "elsewhere",
+      location: "/login?error=login.session_ended",
+    });
+    expect(readSaveAnswer({ type: "redirect" }, "/did:plc:abc")).toEqual({ kind: "failed" });
   });
 
   test("a refusal keeps its message and names its card, field and the cards saved", () => {
     expect(
-      readSaveAnswer({
-        type: "failure",
-        data: { code: "card.save_partial", message: "Some of your cards were saved", saved: ["a"], card: undefined },
-      }),
+      readSaveAnswer(
+        {
+          type: "failure",
+          data: { code: "card.save_partial", message: "Some of your cards were saved", saved: ["a"], card: undefined },
+        },
+        HERE,
+      ),
     ).toEqual({ kind: "refused", code: "card.save_partial", message: "Some of your cards were saved", saved: ["a"] });
     expect(
-      readSaveAnswer({
-        type: "failure",
-        data: { code: "card.too_long", message: "Too long", card: "b", field: "cards.0.text" },
-      }),
+      readSaveAnswer(
+        {
+          type: "failure",
+          data: { code: "card.too_long", message: "Too long", card: "b", field: "cards.0.text" },
+        },
+        HERE,
+      ),
     ).toEqual({ kind: "refused", code: "card.too_long", message: "Too long", card: "b", field: "cards.0.text" });
   });
 
   test("anything else, a dropped connection or a page error, is a failure the member can try again", () => {
-    expect(readSaveAnswer({ type: "error" })).toEqual({ kind: "failed" });
-    expect(readSaveAnswer({ type: "failure", data: { message: 3 } })).toEqual({ kind: "failed" });
+    expect(readSaveAnswer({ type: "error" }, HERE)).toEqual({ kind: "failed" });
+    expect(readSaveAnswer({ type: "failure", data: { message: 3 } }, HERE)).toEqual({ kind: "failed" });
   });
 });

@@ -42,10 +42,20 @@ export type SaveAnswer =
       readonly field?: string;
       readonly saved?: readonly string[];
     }
+  /** Sent elsewhere with nothing written, such as to sign in again: the page follows it and keeps the drafts. */
+  | { readonly kind: "elsewhere"; readonly location: string }
   | { readonly kind: "failed" };
 
-export function readSaveAnswer(result: { readonly type: string; readonly data?: unknown }): SaveAnswer {
-  if (result.type === "redirect" || result.type === "success") return { kind: "saved" };
+/** `here` is the owner's page, where the action sends a Save that wrote (+page.server.ts write, 303 to `/${did}`). */
+export function readSaveAnswer(
+  result: { readonly type: string; readonly data?: unknown; readonly location?: string },
+  here: string,
+): SaveAnswer {
+  if (result.type === "success") return { kind: "saved" };
+  if (result.type === "redirect") {
+    if (typeof result.location !== "string") return { kind: "failed" };
+    return result.location === here ? { kind: "saved" } : { kind: "elsewhere", location: result.location };
+  }
   if (result.type !== "failure" || typeof result.data !== "object" || result.data === null) return { kind: "failed" };
   const { code, message, card, field, saved } = result.data as Record<string, unknown>;
   if (typeof code !== "string" || typeof message !== "string") return { kind: "failed" };

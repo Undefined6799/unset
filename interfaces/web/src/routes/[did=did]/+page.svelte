@@ -35,7 +35,7 @@ import {
 } from "@unset/apps-web/lib/profile/unsaved.ts";
 import { onMount, untrack } from "svelte";
 import { deserialize } from "$app/forms";
-import { refreshAll } from "$app/navigation";
+import { goto, refreshAll } from "$app/navigation";
 import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
 
 let { data, form } = $props();
@@ -79,7 +79,14 @@ let said: { text: string; refused: boolean } | undefined = $state();
 /** Drafts this device kept from an earlier visit, offered back until the member answers. */
 let offered: ReadonlyMap<string, Draft> = $state(new Map());
 
-const storage = () => (typeof localStorage === "undefined" ? null : localStorage);
+/** This device's storage, or null where there is none or the browser refuses it (reading it can throw SecurityError). */
+function storage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
 const textOf = (card: CardView) => {
   const fields = edits.get(card.key)?.fields;
   return fields?.text ?? (card.content.kind === "readme" ? card.content.text : "");
@@ -118,7 +125,8 @@ async function save() {
     return;
   }
   saving = true;
-  let answer = readSaveAnswer({ type: "error" });
+  const here = `/${data.account.did}`;
+  let answer = readSaveAnswer({ type: "error" }, here);
   try {
     // As use:enhance posts (kit 3.2.0 src/runtime/app/forms.js): the action header asks for the JSON answer.
     const response = await fetch("?/saveAll", {
@@ -126,12 +134,18 @@ async function save() {
       body: form.body,
       headers: { accept: "application/json", "x-sveltekit-action": "true" },
     });
-    answer = readSaveAnswer(deserialize(await response.text()));
+    answer = readSaveAnswer(deserialize(await response.text()), here);
   } catch {
     // Not sent, or no answer: nothing is known to be written, so everything stays unsaved.
   }
   // The cards as now stored, with the versions just written, before reading what is left: the editors stay open while
   // a Save is on its way, and words typed meanwhile stay unsaved on the new version (afterSave).
+  if (answer.kind === "elsewhere") {
+    // Nothing was written (an ended sign-in): every change stays in this device's drafts, offered back on return.
+    saving = false;
+    await goto(answer.location);
+    return;
+  }
   if (answer.kind !== "failed") await refreshAll();
   const written = answer.kind === "saved" ? sent : answer.kind === "refused" ? (answer.saved ?? []) : [];
   const before = edits;
