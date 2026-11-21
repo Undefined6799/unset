@@ -25,7 +25,7 @@ would want to hide, and counting it again on each device is the nuisance Alex fo
 
 ## Decision
 
-1. **The account keeps a seen mark**: `app.account.notifications_seen_at` (migration 0042), the time of the newest
+1. **The account keeps a seen mark**: `app.account.notifications_seen_at` (migration 0041), the time of the newest
    entry any of the member's browsers has shown. Opening the bell or a visit to `/notifications` that marks seen
    under 0085 point 3 moves this mark and the browser's own mark together, in one statement, only forward and only to
    an entry that browser may see (0085 point 4's checks, unchanged).

@@ -2625,7 +2625,7 @@ refused cross-site and harmless from the alert's new browser.
 ### P2.27f — Count a notification seen on one browser as seen on all
 Tags: [SEC]            Depends on: P2.27e
 Staging bug hunt 2026-11-21: the bell's count cleared per browser, so an entry seen on one device still counted on
-another. Alex 2026-11-21 19:36Z: seen once should count across the whole account. ADR 0090, Proposed; migration 0042.
+another. Alex 2026-11-21 19:36Z: seen once should count across the whole account. ADR 0090, Proposed; migration 0041.
 
 **What:** a seen mark on the account (`app.account.notifications_seen_at`), moved with the browser's own mark by the
 same look. `app.inbox.seen` takes either mark, except that a sign-in alert (sent `older_sessions_only`) is covered only

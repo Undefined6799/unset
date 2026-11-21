@@ -29,7 +29,7 @@ const DISMISS_UP_TO = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id 
 
 /**
  * The seen marks moved up to `upTo` ($3), an entry this browser may see, and never back: this browser's own (ADR
- * 0085, migration 0039) and the account's (ADR 0090, migration 0042), which counts on every browser of the member for
+ * 0085, migration 0039) and the account's (ADR 0090, migration 0041), which counts on every browser of the member for
  * every entry not sent `older_sessions_only` (app.inbox says which mark covers which row). greatest() ignores the
  * null of a mark not set yet (https://www.postgresql.org/docs/18/functions-conditional.html#FUNCTIONS-GREATEST-LEAST).
  * One statement: each row's lock orders two browsers marking at once (rule DA-4), and an id this browser may not see
