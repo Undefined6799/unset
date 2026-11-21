@@ -436,3 +436,45 @@ test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) =
   expect(ring).not.toBe("none");
   await removeCard(page, word);
 });
+
+// Codex on c6cddd7: words typed during a Save stay unsaved on the version that Save wrote, never on one another tab
+// wrote after it. So when the other tab saves the card while this Save's answer is on its way, this tab's next Save
+// is refused as a conflict instead of writing over the other tab's words.
+test("a_save_after_another_tab_wrote_the_card_meanwhile_is_a_conflict", async ({ page, context }) => {
+  const word = `tabs${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  const other = await context.newPage();
+  await page.route(/\?\/saveAll$/, async (route) => {
+    const answer = await route.fetch();
+    // The other tab writes the card after this Save landed and before this tab reads the cards again.
+    await openOwnPage(other);
+    const there = await editorHolding(other, word);
+    await there.editor.click();
+    await there.editor.press("End");
+    await there.editor.pressSequentially(" elsewhere");
+    await bar(other).getByRole("button", { name: "Save" }).click();
+    await expect(bar(other)).not.toContainText("unsaved changes");
+    await route.fulfill({ response: answer });
+  });
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
+  await editor.pressSequentially(" three");
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await page.unroute(/\?\/saveAll$/);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("alert")).toHaveText(
+    "This card changed somewhere else since you opened it. Reload to see it, then save again.",
+  );
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two elsewhere`);
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await other.close();
+  await removeCard(page, word);
+});

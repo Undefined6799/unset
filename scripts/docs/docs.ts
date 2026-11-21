@@ -3,6 +3,16 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  adrFiles,
+  DECISIONS,
+  frontMatterStatus,
+  frontMatterText,
+  LEGACY_INDEX,
+  type LegacyRow,
+  legacyRows,
+  parseFrontMatter,
+} from "./adrs.ts";
 
 // The step book says 80; the architecture thread set 120 for the five guideline imports (2026-10-04).
 export const CLAUDE_MD_MAX_LINES = 120;
@@ -17,7 +27,6 @@ export const CLAUDE_MD_IMPORTS = [
   TOP15_IMPORT,
 ];
 export const AI_NOTES_LINE = "AI notes: updated / none needed / which";
-const DECISIONS = "docs/human/decisions";
 const ADR_HEADINGS = ["Context", "Decision", "Alternatives", "Consequences", "Compliance"];
 export const ENTRYPOINTS = ["web", "api", "indexer", "media", "review", "admin", "pds-admin", "chat-admin"];
 /** Five headings (ADR 0044), each one a heading of the template before it, so an older PR body still passes. */
@@ -81,22 +90,43 @@ export function top15Problems(root: string): string[] {
   return found;
 }
 
-/** Every ADR file has an index row and every row a file; each ADR but 0001 has the DO-1 shape. */
+/**
+ * Every ADR is `NNNN-title.md` with a number of its own and the DO-1 shape (0001 aside). An ADR from before 0083 has a
+ * frozen row in legacy-index.yaml and a Status line; a later one carries valid front matter instead (ADR 0083).
+ */
 export function adrProblems(root: string): string[] {
-  const all = readdirSync(join(root, DECISIONS)).filter((f) => f !== "README.md");
-  const files = all.filter((f) => /^\d{4}-.*\.md$/.test(f));
-  const index = readText(root, `${DECISIONS}/README.md`);
-  const links = [...index.matchAll(/^\| \[(\d{4})\]\(([^)]+)\)/gm)];
-  const rows = links.map((m) => m[2] ?? "");
+  const all = readdirSync(join(root, DECISIONS)).filter((f) => f !== "README.md" && f !== LEGACY_INDEX);
+  const files = adrFiles(root);
+  const numbers = files.map((f) => f.slice(0, 4));
+  const adrs = new Set(numbers);
+  let legacy: Map<string, LegacyRow>;
+  try {
+    legacy = legacyRows(root);
+  } catch (error) {
+    return [(error as Error).message];
+  }
   const found = [
     ...all.filter((f) => !files.includes(f)).map((f) => `${f} is not named NNNN-title.md`),
-    ...links.filter((m) => !m[2]?.startsWith(`${m[1]}-`)).map((m) => `ADR index row ${m[1]} links ${m[2]}`),
-    ...files.filter((f) => !rows.includes(f)).map((f) => `${f} has no row in the ADR index`),
-    ...rows.filter((r) => !files.includes(r)).map((r) => `ADR index row ${r} has no file`),
+    ...[...adrs]
+      .filter((n) => numbers.indexOf(n) !== numbers.lastIndexOf(n))
+      .map((n) => `two ADR files have the number ${n}`),
+    ...[...legacy.values()]
+      .filter((r) => !files.includes(r.file) || !r.file.startsWith(`${r.adr}-`))
+      .map((r) => `${LEGACY_INDEX} row ${r.adr} links ${r.file}, which is not its file`),
   ];
-  for (const file of files.filter((f) => !f.startsWith("0001-"))) {
+  for (const file of files) {
     const text = readText(root, `${DECISIONS}/${file}`);
-    if (!/^Status: \S/m.test(text)) found.push(`${file} has no Status line`);
+    const yamlText = frontMatterText(text);
+    if (yamlText !== null) {
+      found.push(...parseFrontMatter(yamlText, adrs).problems.map((p) => `${file}: ${p}`));
+      if (/^Status:/m.test(text)) found.push(`${file} has a Status line as well as front matter`);
+      if (!text.includes(`\n# ${file.slice(0, 4)} — `))
+        found.push(`${file} lacks the title "# ${file.slice(0, 4)} — "`);
+    } else if (!legacy.has(file.slice(0, 4))) {
+      found.push(`${file} has no front matter and no row in ${LEGACY_INDEX} (ADR 0083)`);
+      continue;
+    } else if (!file.startsWith("0001-") && !/^Status: \S/m.test(text)) found.push(`${file} has no Status line`);
+    if (file.startsWith("0001-")) continue;
     for (const h of ADR_HEADINGS) if (!new RegExp(`^## ${h}\\s*$`, "m").test(text)) found.push(`${file} lacks ## ${h}`);
     const alternatives = section(text, "Alternatives")
       .split("\n")
@@ -110,6 +140,9 @@ const statusLine = (text: string): string => /^Status\b.*$/im.exec(text)?.[0].re
 const isAccepted = (text: string): boolean => /^Status\W+accepted\b/i.test(statusLine(text));
 const isSuperseded = (text: string): boolean => /^Status\W+superseded\b/i.test(statusLine(text));
 const withoutStatus = (text: string): string => text.replace(/^Status\b.*$/im, "");
+
+/** True when front matter says the decision is made (ADR 0083): its supersession is written in the later ADR. */
+const isDecided = (text: string): boolean => ["Accepted", "Rejected"].includes(String(frontMatterStatus(text)));
 
 /**
  * The one way to mark a status paragraph (from the Status line to the next blank line) superseded when it runs over
@@ -129,8 +162,9 @@ function supersededAbove(before: string, after: string): string | undefined {
 }
 
 /**
- * One changed ADR against its base text: 0001 only grows at its end; a superseded one never changes again; an accepted
- * one changes only its status, either its status line to exactly "Status: Superseded by NNNN." or as `supersededAbove`
+ * One changed ADR against its base text: 0001 only grows at its end, and not at all once `logClosed` (ADR 0083); an
+ * accepted or rejected ADR with front matter never changes, and neither does a superseded one; an older accepted one
+ * changes only its status, either its status line to exactly "Status: Superseded by NNNN." or as `supersededAbove`
  * allows, naming an ADR in `adrNumbers`.
  */
 export function adrChangeProblem(
@@ -138,11 +172,14 @@ export function adrChangeProblem(
   before: string,
   after: string | null,
   adrNumbers: ReadonlySet<string>,
+  logClosed = false,
 ): string | null {
   if (file.startsWith("0001-")) {
+    if (logClosed) return after === before ? null : `${file}: ADR 0001's log is closed (ADR 0083)`;
     const whole = before.endsWith("\n") ? before : `${before}\n`;
     return after?.startsWith(whole) ? null : `${file}: ADR 0001 may only gain lines at its end`;
   }
+  if (isDecided(before)) return after === before ? null : `${file}: an accepted or rejected ADR may not change`;
   if (isSuperseded(before)) return after === before ? null : `${file}: a superseded ADR may not change`;
   if (!isAccepted(before)) return null;
   if (after === null) return `${file}: an accepted ADR was deleted or renamed`;
@@ -153,7 +190,15 @@ export function adrChangeProblem(
     : `${file}: an accepted ADR may only change its status to "Superseded by NNNN" (an existing ADR)`;
 }
 
-/** Every ADR changed in the working tree since it left `base` (a git ref), checked with adrChangeProblem. */
+/** legacy-index.yaml against its base text: added once by the cut-over (ADR 0083), then never changed or removed. */
+export function legacyIndexProblem(before: string | null, after: string | null): string | null {
+  return before === null || after === before ? null : `${LEGACY_INDEX} may not change (ADR 0083)`;
+}
+
+/**
+ * Every ADR changed in the working tree since it left `base` (a git ref), checked with adrChangeProblem, and the
+ * frozen legacy rows with legacyIndexProblem. The 0001 log counts as closed once the base holds legacy-index.yaml.
+ */
 export function adrImmutableProblems(root: string, base: string): string[] {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
@@ -161,18 +206,26 @@ export function adrImmutableProblems(root: string, base: string): string[] {
   // No rename detection: a renamed ADR shows as its old path deleted, which the check refuses.
   const changed = git("diff", "--no-renames", "--name-only", mergeBase, "--", DECISIONS).split("\n").filter(Boolean);
   const adrNumbers = new Set(readdirSync(join(root, DECISIONS)).map((f) => f.slice(0, 4)));
+  const atBase = (path: string): string | null => {
+    try {
+      return git("show", `${mergeBase}:${path}`);
+    } catch {
+      return null;
+    }
+  };
+  const legacyPath = `${DECISIONS}/${LEGACY_INDEX}`;
+  const legacyBefore = atBase(legacyPath);
+  const legacyAfter = existsSync(join(root, legacyPath)) ? readText(root, legacyPath) : null;
   const found: string[] = [];
+  const legacy = legacyIndexProblem(legacyBefore, legacyAfter);
+  if (legacy) found.push(legacy);
   for (const path of changed) {
     const file = path.slice(DECISIONS.length + 1);
     if (!/^\d{4}-/.test(file)) continue;
-    let before: string;
-    try {
-      before = git("show", `${mergeBase}:${path}`);
-    } catch {
-      continue; // A new ADR.
-    }
+    const before = atBase(path);
+    if (before === null) continue; // A new ADR.
     const after = existsSync(join(root, path)) ? readText(root, path) : null;
-    const problem = adrChangeProblem(file, before, after, adrNumbers);
+    const problem = adrChangeProblem(file, before, after, adrNumbers, legacyBefore !== null);
     if (problem) found.push(problem);
   }
   return found;

@@ -20,6 +20,7 @@
     "lint": "biome ci . && depcruise --config scripts/lint/.dependency-cruiser.cjs .",
     "format": "biome format --write .",
     "guards": "vitest run scripts/guards",
+    "adr:index": "node scripts/docs/adrs.ts",
     "notes:index": "node scripts/guards/notes.ts",
     "test": "node scripts/test/run.ts",
     "test:images": "node scripts/test/run.ts --images",
