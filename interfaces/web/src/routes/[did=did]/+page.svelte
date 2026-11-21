@@ -136,6 +136,7 @@ function discard() {
 
 async function save() {
   const toSend = editsToSave(edits, data.cards);
+  const previous = data.cards;
   const sent = toSend.map((card) => card.key);
   const form = cardSaveForm(toSend, data.cardEditLimits.formBytes);
   if (form.kind === "too_large") {
@@ -168,7 +169,7 @@ async function save() {
   const keys = answer.kind === "saved" ? sent : answer.kind === "refused" ? (answer.saved ?? []) : [];
   const written = toSend.filter((card) => keys.includes(card.key));
   const before = edits;
-  edits = afterSave(edits, written, data.cards);
+  edits = afterSave(edits, written, data.cards, previous);
   keepDrafts(keys, before);
   if (answer.kind === "saved") said = { text: UNSAVED_BAR.saved, refused: false };
   else if (answer.kind === "refused") said = { text: answer.message, refused: true };

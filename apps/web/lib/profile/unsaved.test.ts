@@ -86,8 +86,8 @@ describe("unsaved cards", () => {
     let edits = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
     edits = edit(edits, page, "b", { fields: { text: "World" } });
     const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2")];
-    expect([...afterSave(edits, editsToSave(edits, page).slice(0, 1), stored).keys()]).toEqual(["b"]);
-    expect(afterSave(edits, editsToSave(edits, page), stored).size).toBe(0);
+    expect([...afterSave(edits, editsToSave(edits, page).slice(0, 1), stored, page).keys()]).toEqual(["b"]);
+    expect(afterSave(edits, editsToSave(edits, page), stored, page).size).toBe(0);
   });
 
   // Review of f6c6a2f: words typed while a Save is on its way must not be lost when its answer comes.
@@ -97,7 +97,7 @@ describe("unsaved cards", () => {
     });
     const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
     const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2"), text("c", "Again")];
-    const left = afterSave(typed, editsToSave(sent, page), stored);
+    const left = afterSave(typed, editsToSave(sent, page), stored, page);
     expect([...left.keys()]).toEqual(["a"]);
     expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hello there" } });
   });
@@ -107,7 +107,7 @@ describe("unsaved cards", () => {
       fields: { text: "World" },
     });
     const stored = [text("a", "Hello", "v-a2"), text("b", "There"), text("c", "Again")];
-    const left = afterSave(sent, editsToSave(sent, page).slice(0, 1), stored);
+    const left = afterSave(sent, editsToSave(sent, page).slice(0, 1), stored, page);
     expect([...left]).toEqual([["b", sent.get("b")]]);
   });
 
@@ -116,14 +116,34 @@ describe("unsaved cards", () => {
     const retyped = edit(edit(sent, page, "a", { fields: { text: "Hello!" } }), page, "a", {
       fields: { text: "Hello" },
     });
-    expect(afterSave(retyped, editsToSave(sent, page), [text("a", "Hello", "v-a2")]).size).toBe(0);
+    expect(afterSave(retyped, editsToSave(sent, page), [text("a", "Hello", "v-a2")], page).size).toBe(0);
   });
 
   // Codex on 1bdb437: the server trims the words and turns CRLF into LF before storing them (domains/profile
   // card-edit.ts field()), so what is stored can differ from what was sent while nothing new was typed.
   test("after_a_save_a_card_the_server_tidied_is_saved", () => {
     const sent = edit(NO_EDITS, page, "a", { fields: { text: "  Hello\r\nthere  " } });
-    expect(afterSave(sent, editsToSave(sent, page), [text("a", "Hello\nthere", "v-a2")]).size).toBe(0);
+    expect(afterSave(sent, editsToSave(sent, page), [text("a", "Hello\nthere", "v-a2")], page).size).toBe(0);
+  });
+
+  // Codex on b7db900: words put back to what was stored while the Save was on its way are now a change from what it
+  // wrote, so they stay unsaved on the new version rather than being replaced by the words just written.
+  test("after_a_save_words_put_back_during_it_stay_unsaved", () => {
+    const sent = edit(NO_EDITS, page, "a", { fields: { text: "Changed" } });
+    const toSend = editsToSave(sent, page);
+    const putBack = edit(sent, page, "a", { fields: { text: "Hi" } });
+    expect(putBack.size).toBe(0);
+    const left = afterSave(putBack, toSend, [text("a", "Changed", "v-a2")], page);
+    expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hi" } });
+  });
+
+  // Codex on b7db900: a refresh that could not read the written card confirms nothing, so newer words stay.
+  test("after_a_save_a_written_card_the_refresh_did_not_read_keeps_newer_words", () => {
+    const sent = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
+    const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
+    const left = afterSave(typed, editsToSave(sent, page), [], page);
+    expect(left.get("a")).toMatchObject({ version: "v-a", fields: { text: "Hello there" } });
+    expect(afterSave(sent, editsToSave(sent, page), [], page).size).toBe(0);
   });
 
   // Codex on 1bdb437: a card deleted from its menu leaves nothing unsaved behind.

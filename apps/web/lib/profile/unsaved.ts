@@ -83,25 +83,39 @@ const sameEdit = (a: Unsaved, b: Pick<Unsaved, "fields" | "width" | "surface">) 
 
 /**
  * What is left unsaved once a Save wrote the cards `written` (as they were sent), read against the cards as now
- * stored. A card that still holds what was sent is saved, even where the server tidied the words before storing them
- * (trimmed, CRLF to LF). The page stays editable while a Save is on its way, so a written card may hold newer words:
- * it stays unsaved, now on the version just written, so the next Save sends it without a conflict, unless those words
- * are what is now stored. A card the Save did not write keeps its edit as it was.
+ * `stored` and as they were `before` it. The page stays editable while a Save is on its way:
+ * - a card that still holds what was sent is saved, even where the server tidied the words (trimmed, CRLF to LF);
+ * - one that holds newer words stays unsaved, on the version just written so the next Save sends it without a
+ *   conflict, unless those words are what is now stored;
+ * - one put back to what was stored before has no edit left, yet differs from what was just written, so its earlier
+ *   state comes back as an edit on the new version;
+ * - one the refresh could not read (a failed or partial read) confirms nothing: newer words stay on their version.
+ * A card the Save did not write keeps its edit as it was.
  */
 export function afterSave(
   edits: UnsavedCards,
   written: readonly CardEdit[],
   stored: readonly CardView[],
+  before: readonly CardView[],
 ): UnsavedCards {
   const next = new Map(edits);
   for (const sent of written) {
-    const unsaved = edits.get(sent.key);
     const card = stored.find((c) => c.key === sent.key);
     const fields = card === undefined ? null : storedFields(card);
+    const unsaved = edits.get(sent.key) ?? putBack(before, sent);
     next.delete(sent.key);
-    if (unsaved === undefined || card?.version === undefined || fields === null) continue;
-    if (sameEdit(unsaved, sent) || sameEdit(unsaved, { fields, width: card.width, surface: card.surface })) continue;
-    next.set(sent.key, { ...unsaved, version: card.version });
+    if (unsaved === undefined || sameEdit(unsaved, sent)) continue;
+    if (card?.version === undefined || fields === null) next.set(sent.key, unsaved);
+    else if (!sameEdit(unsaved, { fields, width: card.width, surface: card.surface }))
+      next.set(sent.key, { ...unsaved, version: card.version });
   }
   return next;
+}
+
+/** A written card with no edit left was put back to what was stored before the Save: that state, as an edit. */
+function putBack(before: readonly CardView[], sent: CardEdit): Unsaved | undefined {
+  const card = before.find((c) => c.key === sent.key);
+  const fields = card === undefined ? null : storedFields(card);
+  if (card === undefined || fields === null) return undefined;
+  return { version: sent.version, kind: sent.kind, width: card.width, surface: card.surface, fields };
 }
