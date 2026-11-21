@@ -75,7 +75,7 @@ test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %
   expect(card?.surface).toBe(surface);
 });
 
-// P1.21o: the compact header's details panel repeats the page's published contact action, never an account address.
+// P1.21o: the header's About panel repeats the page's published contact action, never an account address.
 describe("contact action", () => {
   const buttons = (key: string, list: readonly { uri: string; label: string }[]) => ({
     key,

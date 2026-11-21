@@ -31,7 +31,7 @@ const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, com
   });
 
 describe("loadOwnProfile", () => {
-  test("reads the side column and the cards in the profile's order", async () => {
+  test("reads the profile fields and the cards in the profile's order", async () => {
     const result = await load(
       ok(profile({ headline: "Hi", cards: ["b", "a"] })),
       ok([card("a", readme("A")), card("b", readme("B", T2)), card("c", readme("C"))]),
@@ -41,14 +41,6 @@ describe("loadOwnProfile", () => {
       profile: { displayName: "Alice", headline: "Hi", location: "", website: "" },
     });
     expect(result.kind === "ok" && result.cards.map((c) => c.key)).toEqual(["b", "a", "c"]);
-  });
-
-  // ADR 0072: the page layout is read leniently; absent or unknown is the side column.
-  test("reads the page layout, sidebar when absent or unknown", async () => {
-    expect(await load(ok(profile({ layout: "compact" })), ok([]))).toMatchObject({ kind: "ok", layout: "compact" });
-    expect(await load(ok(profile({ layout: "magazine" })), ok([]))).toMatchObject({ kind: "ok", layout: "sidebar" });
-    expect(await load(ok(profile()), ok([]))).toMatchObject({ kind: "ok", layout: "sidebar" });
-    expect(await load(ok(null), ok([]))).toMatchObject({ kind: "ok", layout: "sidebar" });
   });
 
   // ADR 0074: the one Save names the version each card's editor opened, so the page carries each card's record CID.

@@ -8,11 +8,9 @@ import {
   type Card,
   type CardVersion,
   type ProfileFields,
-  type ProfileLayout,
   pageCards,
   parseCardVersion,
   readAvatarShape,
-  readProfileLayout,
   readProfileRecord,
 } from "@unset/domains-profile";
 import type { CardList, PdsResult, StoredRecord } from "@unset/infrastructure-pds";
@@ -24,8 +22,6 @@ export type OwnProfile =
       readonly profile: ProfileFields | null;
       /** The avatar's crop; round when unset or unknown. */
       readonly avatarShape: AvatarShape;
-      /** The page layout (ADR 0072); sidebar when unset or unknown. */
-      readonly layout: ProfileLayout;
       readonly cards: readonly Card[];
       /** Each card's record CID by key, the version its editor opens (ADR 0074); a card without a valid one is absent. */
       readonly versions: ReadonlyMap<string, CardVersion>;
@@ -57,7 +53,6 @@ export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
     avatarShape: readAvatarShape(record),
-    layout: readProfileLayout(record),
     cards: pageCards(record, cards.value.cards),
     versions: new Map(
       cards.value.cards.flatMap((stored) => {

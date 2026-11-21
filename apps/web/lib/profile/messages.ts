@@ -51,20 +51,18 @@ export const AVATAR_EDIT = {
   refused: "Your profile could not be saved.",
 } as const;
 
-/** The side column's labels (the profile-card mockup, Alex 2026-11-17). */
-export const PROFILE_SIDE = {
-  place: "Place",
-  web: "Web",
-  did: "DID",
+/** The profile header and its About panel (ADR 0072, ADR 0077). */
+export const PROFILE_HEADER = {
   edit: "Edit profile",
-} as const;
-
-/** The compact header and its details panel (ADR 0072, P1.21o). */
-export const PROFILE_PANEL = {
+  viewPublic: "View as public",
   /** The avatar's name: it opens the details, so it says so. */
   open: (name: string) => `About ${name}`,
   title: "About",
   close: "Close details",
+  handle: "Handle",
+  place: "Place",
+  web: "Web",
+  did: "DID",
 } as const;
 
 /** The owner's card controls (ADR 0051). */

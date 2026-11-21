@@ -4890,6 +4890,18 @@ edge rules and C18 accept exactly that site and that bind. Publishing is the man
 `docs/human/runbooks/docs-site.md`; DNS, the Pangolin resource and the deploy are Alex's. Proposed ADR 0075; it
 merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs/site.
 
+### P1.21x — Keep one profile layout (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21o · **Plan:** §5.4
+
+Alex, 2026-11-20 after trying staging: keep only the compact layout. The side column, the layout choice in Settings ›
+Profile and the unpublished `sh.unset.profile.layout` field go (Proposed ADR 0077, superseding 0072; it merges on
+Alex's line). The handle moves from under the name into the avatar's About panel, and hover no longer opens it, so
+the avatar behaves the same on every page. The own page gets View as public, a link to `/@<DID>`. The site header
+sticks to the top as the page scrolls, its height named once as `--site-header-height` in app.css for anchors and
+for a bar under it. Tests: e2e for the header and panel, the sticky header on desktop and phone in both shells, and
+a dialog over it. Ownership: apps/web → interfaces/web → domains/profile; shared/lexicons.
+
 ### P1.21v — Edit Text cards in place, saved together (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1, §6

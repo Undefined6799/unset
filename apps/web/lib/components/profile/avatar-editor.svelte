@@ -1,16 +1,13 @@
 <!--
-  The owner's avatar as a button (the profile-card mockup, Alex 2026-11-17): hovering or focusing it shows "Shape"
-  over it, on touch a small pen sits on its corner, and pressing it opens the stock Dialog with the shape choice
+  The owner's avatar shape editor: a small "Shape" button beside the name in the profile header (the avatar itself
+  opens the profile's details, ADR 0077), and pressing it opens the stock Dialog with the shape choice
   (sh.unset.profile avatarShape: round or rounded square), posted to the page's `avatar` action. There is no upload:
   showing a picture needs the media proxy (CLAUDE.md, Blobs), so the link and dialog are named for the shape and say
-  uploads come later (staging walkthrough 2026-11-18 round two, finding 4); no-underline keeps the letter clean (finding 3). As with the card
-  editors, a refused save keeps the dialog open with the reason inside, and with no script the avatar is a link to the
-  page with the choice in place (`?avatar`, drawn by card-panel.svelte with `panel`). In the compact header (ADR 0072)
-  the avatar opens the profile's details instead, so `look="button"` makes the trigger a small "Shape" button of its
-  own beside the name, with the same dialog and no-script link.
+  uploads come later (staging walkthrough 2026-11-18 round two, finding 4). As with the card
+  editors, a refused save keeps the dialog open with the reason inside, and with no script the button is a link to the
+  page with the choice in place (`?avatar`, drawn by card-panel.svelte with `panel`).
 -->
 <script lang="ts">
-import type { Snippet } from "svelte";
 import { AVATAR_EDIT } from "../../profile/messages.ts";
 import { opensHere, PANEL_ANCHOR } from "../../profile/panel.ts";
 import type { AvatarShape, CardPanelState, Enhance, SubmitHandler } from "../../profile/types.ts";
@@ -24,20 +21,12 @@ import Choice from "./choice.svelte";
 let {
   shape,
   enhance = () => undefined,
-  class: className = "",
-  children,
   panel,
-  look = "avatar",
 }: {
   shape: AvatarShape;
   enhance?: Enhance;
-  class?: string;
-  /** The avatar the trigger shows; absent with `panel`. */
-  children?: Snippet;
   /** Draw the choice in place instead (the page opened with `?avatar`). */
   panel?: CardPanelState;
-  /** The avatar itself is the trigger, or a pen button beside the name (the compact header). */
-  look?: "avatar" | "button";
 } = $props();
 
 let open = $state(false);
@@ -75,7 +64,6 @@ const save: SubmitHandler = ({ cancel }) => {
 $effect(() => {
   if (!open && panel === undefined) refused = undefined;
 });
-const rounded = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
 </script>
 
 {#snippet refusal()}
@@ -104,44 +92,18 @@ const rounded = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
   </Card.Root>
 {:else}
   <Dialog.Root bind:open>
-    {#if look === "button"}
-      <a
-        href="?avatar#{PANEL_ANCHOR}"
-        aria-haspopup="dialog"
-        data-slot="button"
-        aria-label={AVATAR_EDIT.trigger}
-        class="{buttonVariants({ variant: 'ghost', size: 'sm' })} shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:min-h-11 {className}"
-        onclick={(event) => {
-          if (opensHere(event)) open = true;
-        }}
-      >
-        <Icon name="profile" size={16} />{AVATAR_EDIT.change}
-      </a>
-    {:else}
     <a
       href="?avatar#{PANEL_ANCHOR}"
       aria-haspopup="dialog"
-      class="group/avatar relative block {rounded} no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 {className}"
+      data-slot="button"
+      aria-label={AVATAR_EDIT.trigger}
+      class="{buttonVariants({ variant: 'ghost', size: 'sm' })} shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:min-h-11"
       onclick={(event) => {
         if (opensHere(event)) open = true;
       }}
     >
-      {@render children?.()}
-      <span
-        aria-hidden="true"
-        class="absolute inset-0 flex items-center justify-center gap-1.5 {rounded} bg-background/70 font-mono text-xs tracking-wider text-foreground uppercase opacity-0 transition-opacity group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100 motion-reduce:transition-none pointer-coarse:hidden"
-      >
-        <Icon name="edit" size={16} />{AVATAR_EDIT.change}
-      </span>
-      <span
-        aria-hidden="true"
-        class="absolute right-0 bottom-0 hidden size-8 items-center justify-center rounded-full bg-primary text-primary-foreground pointer-coarse:flex"
-      >
-        <Icon name="edit" size={16} />
-      </span>
-      <span class="sr-only">{AVATAR_EDIT.trigger}</span>
+      <Icon name="profile" size={16} />{AVATAR_EDIT.change}
     </a>
-    {/if}
     <Dialog.Content>
       <Dialog.Header>
         <Dialog.Title>{AVATAR_EDIT.title}</Dialog.Title>

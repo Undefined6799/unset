@@ -82,3 +82,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0074](0074-one-save-for-cards-edited-in-place.md) | Text cards are edited in place on the owner's page and saved together by one Save, all or none, through applyWrites on the repo head; drafts stay on the device (P1.21v) | Proposed (awaiting Alex) |
 | [0075](0075-docs-site-on-the-staging-edge.md) | The docs site at docs.unset.sh is a third site on the staging edge, served as files from the checkout with its own CSP and zone (P1.21w) | Accepted 2026-11-20 |
 | [0076](0076-image-uploads-up-to-64-mib.md) | Image uploads up to 64 MiB and 110 megapixels; web, net-guard and review caps, memory and the edge's read window rise with it (P2.19e) | Accepted 2026-11-20 |
+| [0077](0077-one-profile-layout.md) | The profile page has one layout, the header above the cards; the unpublished layout field is removed (P1.21x); supersedes 0072 | Proposed (awaiting Alex) |
