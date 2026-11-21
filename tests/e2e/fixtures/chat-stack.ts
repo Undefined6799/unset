@@ -343,6 +343,8 @@ export async function startChatStack(db: ChatDatabase, pageDir: string, dir: str
     CHAT_SERVER_NAME: "staging.unset.cc",
     COUNT_LISTEN_PORT: "8091",
     COUNT_ORIGIN: "http://chat-auth:8091",
+    LISTEN_ADDRESS: "127.0.0.1",
+    COUNT_LISTEN_ADDRESS: "127.0.0.2",
   };
   const door = await compose(
     loadConfig(schema, env),
