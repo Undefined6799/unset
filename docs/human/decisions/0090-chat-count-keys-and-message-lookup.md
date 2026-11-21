@@ -1,6 +1,6 @@
 # 0090 — The door issues a pushkey per browser entry, keeps one number per entry, and answers web and the Message link on a port and a path of their own
 
-Status: Proposed 2026-11-21 (P6.12, build step 10 of the minimal chat build), awaiting Alex. Carries out ADR 0082
+Status: Accepted by Alex 2026-11-21 ("yes" in the project chat, 17:59Z); proposed 2026-11-21 (P6.12, build step 10 of the minimal chat build). Carries out ADR 0082
 (the chat count through a pusher to the door; accepted, on PR #1862's branch); builds on ADRs 0081 (the door), 0083
 (the browser list) and 0088 (the chat page).
 
