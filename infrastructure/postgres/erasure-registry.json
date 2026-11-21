@@ -100,5 +100,9 @@
   "app.notification.did": {
     "strategy": "delete_row",
     "reason": "the person's unopened notifications (P2.27, ADR 0079); they go when the person is erased"
+  },
+  "app.sign_in.did": {
+    "strategy": "delete_row",
+    "reason": "the times the person signed in, kept 30 days (P2.27c, ADR 0082); they go when the person is erased"
   }
 }
