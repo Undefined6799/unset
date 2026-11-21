@@ -305,7 +305,19 @@ describe("index store", () => {
        VALUES ('at://${I}/sh.unset.section/big', '${I}', 'big', '${CID}', '${rev(3)}', '{}', ${MAX_PAGE_BYTES - 10}, now())`,
     );
     const before = Number(stat("ingest_over_budget"));
-    await commit(I, rev(4), [section(CARD_1), section(CARD_2)]);
+    // CARD_1 grows and CARD_2 is new: neither fits. A card that does not grow would stay (the test below).
+    const grown: IndexChange = {
+      kind: "put",
+      collection: "sh.unset.section",
+      rkey: CARD_1,
+      cid: CID,
+      record: {
+        $type: "sh.unset.section",
+        content: { $type: "sh.unset.section#readme", text: "a".repeat(2_000) },
+        createdAt: T,
+      },
+    };
+    await commit(I, rev(4), [grown, section(CARD_2)]);
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${I}' ORDER BY rkey`)).toEqual(["big"]);
     expect(Number(stat("ingest_over_budget"))).toBe(before + 2);
   });
