@@ -271,7 +271,10 @@ function refused(
 /**
  * One card write for the signed-in owner: the DID from the session, the body read once, then the write. Saved goes
  * back to the page, or with `answered` (the one Save, which only the page's script posts) is answered with each
- * written card's new version; a refusal shows the page with its code; a dead grant goes to sign in.
+ * written card's new version; a refusal shows the page with its code; a dead grant goes to sign in. With `echo` a
+ * refusal carries what was typed, but only to a page drawn again with no script: the page's script (kit's
+ * `use:enhance`, which sends x-sveltekit-action, kit 3.2.0 src/runtime/app/forms/client.js) keeps the words in its
+ * open editor, so its answer stays small however long the card (staging change test 2026-11-21, finding 5).
  */
 async function write(
   { params, locals, request }: { params: Partial<Record<string, string>>; locals: App.Locals; request: Request },
@@ -285,7 +288,7 @@ async function write(
   let typed: Record<string, string> | undefined;
   try {
     const form = await formText(request);
-    if (echo) typed = Object.fromEntries(form);
+    if (echo && !request.headers.has("x-sveltekit-action")) typed = Object.fromEntries(form);
     written = await run(form, did);
   } catch (cause) {
     if (!(cause instanceof AppError) || !isShown(cause.code)) throw cause;
