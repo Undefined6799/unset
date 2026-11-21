@@ -9,7 +9,9 @@ const LIST = "SELECT id, signed_in_at FROM app.sign_in WHERE did = $1 ORDER BY s
 
 const REMOVE = "DELETE FROM app.sign_in WHERE did = $1 AND id = ANY($2::uuid[])";
 
-const REMOVE_ALL = "DELETE FROM app.sign_in WHERE did = $1";
+/** "Delete all": the newest sign-in the page listed and every older one, never one after the page was drawn. */
+const REMOVE_UP_TO = `DELETE FROM app.sign_in s WHERE s.did = $1
+   AND s.signed_in_at <= (SELECT u.signed_in_at FROM app.sign_in u WHERE u.did = $1 AND u.id = $2::uuid)`;
 
 /** A member with no account row yet (their first sign-in, before the terms step) has no history kept. */
 const RECORD = `INSERT INTO app.sign_in (did) SELECT $1::text
@@ -33,8 +35,8 @@ export function createSignInStore() {
       if (ids.length === 0) return 0;
       return (await db.query(REMOVE, [did, ids])).rowCount ?? 0;
     },
-    async removeAll(db: Db, did: Did): Promise<number> {
-      return (await db.query(REMOVE_ALL, [did])).rowCount ?? 0;
+    async removeUpTo(db: Db, did: Did, upTo: SignInId): Promise<number> {
+      return (await db.query(REMOVE_UP_TO, [did, upTo])).rowCount ?? 0;
     },
     /** `keepDays` is SIGN_IN_KEEP_DAYS in service; a test passes 0, as web may not backdate a row. */
     async sweep(db: Db, keepDays: number = SIGN_IN_KEEP_DAYS): Promise<number> {

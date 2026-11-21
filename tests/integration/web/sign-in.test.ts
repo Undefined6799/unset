@@ -473,6 +473,22 @@ describe("signing out", () => {
     ]);
   });
 
+  // P2.27c (ADR 0082): every sign-in of a member with an account row keeps one history row, written in the sign-in's
+  // own transaction, so its time is the new session's; nothing but the member and the time is stored.
+  test("a_sign_in_keeps_one_history_row_at_the_sessions_time", async () => {
+    await signIn();
+    await readyMember(pool, DID as Parameters<typeof readyMember>[1]);
+    await pool.query("DELETE FROM app.sign_in WHERE did = $1", [DID]);
+    await signIn();
+    await signIn();
+    const { rows } = await pool.query<{ same: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM app.session s WHERE s.did = h.did AND s.created_at = h.signed_in_at) AS same " +
+        "FROM app.sign_in h WHERE h.did = $1",
+      [DID],
+    );
+    expect(rows).toEqual([{ same: true }, { same: true }]);
+  });
+
   test("a_link_or_another_site_cannot_sign_a_member_out", async () => {
     const sid = await signIn();
     expect((await web.fetch("/logout", { headers: headers({ cookie: `__Host-sid=${sid}` }) })).status).toBe(405);

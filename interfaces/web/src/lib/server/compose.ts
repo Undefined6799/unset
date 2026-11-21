@@ -48,12 +48,12 @@ import {
   createInviteStore,
   createLockPool,
   createNotificationStore,
-  createSignInStore,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   createPublicProfileStore,
   createRequestLock,
+  createSignInStore,
   createSingleUseStore,
   type Db,
   type DiscoverabilityStore,
@@ -350,7 +350,7 @@ async function build(): Promise<Services> {
     history: (did, deadline) => ({
       list: (limit) => withClient(pool, deadline, (db) => signInRows.list(db, did, limit)),
       remove: (ids) => withClient(pool, deadline, (db) => signInRows.remove(db, did, ids)),
-      removeAll: () => withClient(pool, deadline, (db) => signInRows.removeAll(db, did)),
+      removeUpTo: (upTo) => withClient(pool, deadline, (db) => signInRows.removeUpTo(db, did, upTo)),
     }),
     recordIn: (db, did) => signInRows.record(db, did),
   };

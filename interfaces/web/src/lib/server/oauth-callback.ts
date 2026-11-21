@@ -5,7 +5,8 @@
 // back to the sign-in form with its code and creates nothing.
 //
 // A GET that changes state, protected by the state ↔ nonce binding, not by the CSRF gate. No audit row and no DID in
-// any log line (plan §6 "no user sign-in records"): only the counts `auth.login_succeeded` and `auth.login_denied`.
+// any log line: only the counts `auth.login_succeeded` and `auth.login_denied`. The one sign-in record is the member's
+// own history row, the time only (ADR 0082, amending plan §6 "no user sign-in records").
 // P2.06 step 11: once the session exists, one best-effort read of the member's email state (`emailAnswerAtSignIn`).
 // P2.05s: a sign-in is tried silently first (prompt=none). When the server cannot answer without a page, the callback
 // sends the same browser straight back to it once, with the page; `auth.login_silent_refused` counts that.

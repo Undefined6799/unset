@@ -8,8 +8,8 @@ export type SignInId = string & { readonly [signInIdBrand]: true };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-/** The page lists this many, newest first. */
-export const HISTORY_LIMIT = 100;
+/** The page lists this many, newest first; a delete form names at most these. */
+export const HISTORY_LIMIT = 50;
 /** No sign-in is kept longer than this (Alex 2026-11-21 00:21Z): web's sweep deletes older rows. */
 export const SIGN_IN_KEEP_DAYS = 30;
 
@@ -26,6 +26,10 @@ export function parseSignInIds(raw: readonly string[]): SignInId[] {
   return [...ids];
 }
 
+/** One id a form sends ("Delete all"'s newest listed sign-in), or null when it is not a UUID. */
+export const parseSignInId = (raw: string | null): SignInId | null =>
+  raw !== null && UUID.test(raw) ? (raw as SignInId) : null;
+
 /** One sign-in. */
 export type SignIn = {
   readonly id: SignInId;
@@ -38,6 +42,6 @@ export type SignInHistory = {
   readonly list: (limit: number) => Promise<readonly SignIn[]>;
   /** Deletes those of `ids` that are the member's; says how many went. */
   readonly remove: (ids: readonly SignInId[]) => Promise<number>;
-  /** Deletes every one of the member's sign-ins; says how many went. */
-  readonly removeAll: () => Promise<number>;
+  /** Deletes the member's sign-in `upTo` and every older one; says how many went. */
+  readonly removeUpTo: (upTo: SignInId) => Promise<number>;
 };

@@ -101,9 +101,21 @@ describe("sign-in store", () => {
     expect(await db((c) => store.remove(c, did, older))).toBe(0);
     expect(await db((c) => store.remove(c, did, []))).toBe(0);
     expect(ids(await list(did))).toEqual([newest]);
-    expect(await db((c) => store.removeAll(c, did))).toBe(1);
-    expect(await db((c) => store.removeAll(c, did))).toBe(0);
+    expect(await db((c) => store.removeUpTo(c, did, newest as SignInId))).toBe(1);
+    expect(await db((c) => store.removeUpTo(c, did, newest as SignInId))).toBe(0);
     expect(await list(did)).toEqual([]);
+  });
+
+  test("sign_in.delete_all_spares_a_sign_in_after_the_page_was_drawn", async () => {
+    const did = await member();
+    await signIn(did);
+    await signIn(did);
+    const [drawnNewest] = ids(await list(did));
+    await signIn(did); // someone signs in while the page is open
+    expect(await db((c) => store.removeUpTo(c, did, drawnNewest as SignInId))).toBe(2);
+    const [left] = ids(await list(did));
+    expect(left).not.toBe(drawnNewest);
+    expect(await list(did)).toHaveLength(1);
   });
 
   test("sign_in.another_members_ids_delete_nothing", async () => {
@@ -112,7 +124,7 @@ describe("sign-in store", () => {
     await signIn(bob);
     const theirs = ids(await list(alice));
     expect(await db((c) => store.remove(c, bob, theirs))).toBe(0);
-    expect(await db((c) => store.removeAll(c, bob))).toBe(1); // bob's own only
+    expect(await db((c) => store.removeUpTo(c, bob, theirs[0] as SignInId))).toBe(0); // alice's id, bob's DID
     expect(ids(await list(alice))).toEqual(theirs);
   });
 

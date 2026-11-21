@@ -60,7 +60,6 @@ export {
   migrateThenSyncPasswords,
 } from "./migrate.ts";
 export { createNotificationStore, type NotificationStore } from "./notificationStore.ts";
-export { createSignInStore, type SignInStore } from "./signInStore.ts";
 export {
   createOAuthSessionStore,
   createOAuthStateStore,
@@ -101,6 +100,7 @@ export {
   type SealedRow,
   sealedColumns,
 } from "./sealedColumns.ts";
+export { createSignInStore, type SignInStore } from "./signInStore.ts";
 export {
   createSingleUseStore,
   type Db,

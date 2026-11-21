@@ -398,6 +398,14 @@
       "notification-list.svelte": {
         "origin": "ours",
         "purpose": "The bell's notifications as rows: each a plain link to its detail on /notifications, times in UTC until script shows the device's zone (P2.27, ADR 0081)."
+      },
+      "sign-in-history.svelte": {
+        "origin": "ours",
+        "purpose": "The Sign-in history tab (P2.27c, ADR 0082): the member's sign-ins in the last 30 days, date and time and how long ago, in a list that scrolls under a header row that stays; a Delete form per row, Delete selected and Delete all; plain forms with no script."
+      },
+      "tabs.svelte": {
+        "origin": "ours",
+        "purpose": "The two tabs of /notifications (P2.27c): Notifications and Sign-in history, plain links, the current one aria-current=page."
       }
     }
   }

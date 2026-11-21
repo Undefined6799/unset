@@ -43,6 +43,15 @@ export {
   type IdentityErrorKind,
 } from "./resolve-did.ts";
 export { type HandleResolution, resolveHandle } from "./resolve-handle.ts";
+export {
+  HISTORY_LIMIT,
+  parseSignInId,
+  parseSignInIds,
+  SIGN_IN_KEEP_DAYS,
+  type SignIn,
+  type SignInHistory,
+  type SignInId,
+} from "./sign-in-history.ts";
 export { type Did, type Handle, isHandleSyntax, parseDid, parseHandle } from "./syntax.ts";
 export {
   createHandleVerifier,
@@ -50,11 +59,3 @@ export {
   type HandleVerdict,
   type HandleVerifierOptions,
 } from "./verify-handle.ts";
-export {
-  HISTORY_LIMIT,
-  parseSignInIds,
-  SIGN_IN_KEEP_DAYS,
-  type SignIn,
-  type SignInHistory,
-  type SignInId,
-} from "./sign-in-history.ts";
