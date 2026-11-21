@@ -99,3 +99,20 @@ the servers' Compose services, once the mirror holds both images.
 ## Follow-up
 
 2026-11-21: MAS pinned at 1.29.0 (Alex, 2026-11-21, 'use the latest version'), re-checked: `crates/cli/src/commands/mod.rs` (`MAS_*` merge, `MAS_CONFIG`, default subcommand) and `crates/handlers` listener resources are unchanged; `docs/config.schema.json` only reorders keys and adds `rate_limiting.username_availability`, which `deployment/chat/dev/mas.yaml` does not set; the image still runs as `nonroot` (`Dockerfile:200`, was 199). Index digest `sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af`, matching the registry; 1.29.0 is the latest stable release (1.30.0-rc.0 is a release candidate). Synapse 1.165.0 is still the latest stable on PyPI. Read from the v1.26.0 and v1.29.0 source trees on 2026-11-21; no live run of 1.29.0 was possible here (the image pull and the release binary download were both refused), so the 1.29.0 behaviour is unverified until the image test runs it.
+
+## Notes appended after acceptance
+
+2026-11-21: Decision 1's base changes. The Synapse image now runs on Google's distroless
+`gcr.io/distroless/python3-debian13:nonroot` (index digest
+`sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71`), Debian's own python3.13 3.13.5 with no
+pip, shell, apt or dpkg, and `python:3.13-slim-trixie` (`e48f59cd…`) is a build-only base that makes the venv. Alex's
+call, on the card of 2026-11-21 20:08Z: "Yes, use distroless". Why: every `python:*` image ships pip, whose vendored
+SBOM (`pip/_vendor/bom.cdx.json`) fails the mirror scan on five HIGH findings (msgpack 1.1.2 CVE-2026-114613 and
+GHSA-6v7p-g79w-8964, setuptools 70.3.0 CVE-2025-47273, urllib3 2.7.0 CVE-2026-97687 and CVE-2026-97689), and pip 26.3
+(2026-11-02) still vendors setuptools 70.3.0, so no newer python digest fixes it; Alex refused a waiver for them.
+Distroless documents this pairing (GoogleContainerTools/distroless `python3/README.md`, "Compatibility", read
+2026-11-21). Scanned with Trivy 0.76.1 (HIGH,CRITICAL, `--ignore-unfixed`, no ignore file, no skips) on 2026-11-21:
+the distroless base and the built Synapse image both have 0 findings, its zlib1g is already deb13u1, and the image's
+exported filesystem has no secret and no setuid or setgid file. So the final stage runs nothing, the zlib exception no
+longer covers the synapse kind, and `.github/trivyignore.python.yaml` is gone; distroless joins `VENDOR_BASES` as a
+runtime base, by its exact name.
