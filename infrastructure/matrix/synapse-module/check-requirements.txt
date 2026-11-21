@@ -1,0 +1,10 @@
+# The checkers tests/integration/matrix/synapse-module runs on this folder, installed only into a test image
+# with pip --require-hashes. Hashes from pypi.org/pypi/<name>/<version>/json (2026-11-21), wheels for Linux
+# x86_64 and aarch64, CPython 3.13, and pure-Python wheels.
+mypy==2.4.1 --hash=sha256:680ba5d9f0e3fe0c746b3d14df15f2a718e4bc308a1145616a1ea691ce7c354b --hash=sha256:1fb70621535c22fd4b1a0450d37ed1d6c5eb39656a1cebfb189084c12de54ba7 --hash=sha256:1784648d6ec8c2b5465e3f26241b845a0b3cb4e56c993c64abe16989e7698999
+mypy_extensions==1.2.0 --hash=sha256:993e7a20aa5671eb41a7132cf555af30062da99729601601b9a8382b11cae768
+pathspec==1.1.1 --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
+librt==0.17.0 --hash=sha256:343d12d5afd461a134280082bec8fb11f3880c83f9caff3de5268f933b7c826f --hash=sha256:e3dad4792d84979f5f1aaa46d22cd062b15f4551bcadc7d2b695d42aac971bf5
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+ruff==0.17.6 --hash=sha256:435241c61af5909a022f76219d3d1bf24730dc1bf0acabb5ddf4b569ab3cbb30 --hash=sha256:aa3b08254a732acba246891089a152c47c5733dc36b8ecb76ce8602f8326e5e4
+ast-serialize==0.13.1 --hash=sha256:4e385b17d5bde892a6184003a9aff3518387908b73f8f5ea539313c07c8c0ede --hash=sha256:121e1d08d58b75c15491cc3003609cbad71ac2b0016043c36d30a6b2032b6605 --hash=sha256:77a6201b69ce42e919f2fd9a559138d5410b5d8afff7c3a6b1f500b0481ff7d8 --hash=sha256:9f99786e0d62082a5b121b3437f3167562133711df22128de1e9886f57f0b226
