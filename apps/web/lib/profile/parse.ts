@@ -114,12 +114,109 @@ function takeAutolink(text: string, i: number): Taken | null {
   return { node: { kind: "link", href, children: [{ kind: "text", text: href }] }, next: i + match[0].length };
 }
 
+/** What may come before a bare `www.` name (micromark's previousWww); an address needs only no letter before it. */
+const BEFORE_WWW = /^[\s()*_[\]~]$/;
+const BARE_START = /^(?:https?:\/\/|www\.)/i;
+/** Ends an address: a space or a `<` (micromark's pathInside). */
+const ADDRESS_END = /[\s<]/;
+/** Ends a domain: a space, or Unicode punctuation or a symbol other than `-`, `.` and `_` (micromark's domainInside). */
+const DOMAIN_END = /\s|(?![-._])[\p{P}\p{S}]/u;
+/** Punctuation that ends an address is not part of it when only more of it, or the end, follows (tokenizeTrail). */
+const TRAIL = new Set([..."!\"')*,.:;?_~]"]);
+const isLetter = (ch: string | undefined) => ch !== undefined && /[a-zA-Z]/.test(ch);
+
+/**
+ * Bare addresses, `https://x` or `www.x` (GFM 0.29, "Autolinks (extension)", read as micromark-extension-gfm-autolink-
+ * literal 2.1.0 dev/lib/syntax.js, which the editor uses, so both link the same words): one runs to a space or a `<`,
+ * less trailing punctuation, a `)` that closes nothing, and a trailing `&name;`. A `www.` name opens over https
+ * (Alex 2026-11-21: "bare addresses become https"; GFM says http). Email addresses stay text: the page links only
+ * http and https. Each run of non-space characters is read once: an address refused ends the tries in its run, so
+ * no input reads a run again per start (a later start in that run, which GFM would still try, stays text).
+ */
+function bareLinker(text: string): (i: number) => Taken | null {
+  let runFrom = -1;
+  let runEnd = -1;
+  let refusedUntil = -1;
+  const endOfRun = (i: number) => {
+    if (i < runFrom || i >= runEnd) {
+      runFrom = i;
+      runEnd = i;
+      while (runEnd < text.length && !ADDRESS_END.test(text[runEnd] ?? "")) runEnd += 1;
+    }
+    return runEnd;
+  };
+  return (i) => {
+    if (i < refusedUntil) return null;
+    const prefix = barePrefix(text, i);
+    if (prefix === undefined) return null;
+    const end = endOfRun(i);
+    const words = trimTrail(text.slice(i, end));
+    const www = prefix.toLowerCase() === "www.";
+    const href = validDomain(words.slice(prefix.length)) ? safeHref(www ? `https://${words}` : words, WEB) : null;
+    if (href === null) {
+      refusedUntil = end;
+      return null;
+    }
+    return { node: { kind: "link", href, children: [{ kind: "text", text: words }] }, next: i + words.length };
+  };
+}
+
+/** `https://`, `http://` or `www.` at `i`, when what comes before lets an address start there. */
+function barePrefix(text: string, i: number): string | undefined {
+  const first = text[i]?.toLowerCase();
+  if (first !== "h" && first !== "w") return undefined;
+  const before = text[i - 1];
+  const allowed = before === undefined || (first === "w" ? BEFORE_WWW.test(before) : !isLetter(before));
+  return allowed ? BARE_START.exec(text.slice(i, i + 8))?.[0] : undefined;
+}
+
+/** Where a trailing `&name;` ending at `end` starts, or -1. */
+function referenceStart(words: string, end: number): number {
+  if (words[end - 1] !== ";") return -1;
+  let at = end - 2;
+  while (isLetter(words[at])) at -= 1;
+  return words[at] === "&" && at < end - 2 ? at : -1;
+}
+
+const count = (words: string, ch: string) => words.split(ch).length - 1;
+/** Trailing punctuation is not part of an address; a `)` is only while it closes no `(` in it. */
+const trailing = (ch: string, unmatched: number) => TRAIL.has(ch) && (ch !== ")" || unmatched > 0);
+
+/** Takes trailing punctuation, unmatched `)` and `&name;` off the end, reading each character once. */
+function trimTrail(words: string): string {
+  let unmatched = count(words, ")") - count(words, "(");
+  let end = words.length;
+  for (;;) {
+    const reference = referenceStart(words, end);
+    if (reference !== -1) {
+      end = reference;
+      continue;
+    }
+    const last = words[end - 1] ?? "";
+    if (!trailing(last, unmatched)) return words.slice(0, end);
+    if (last === ")") unmatched -= 1;
+    end -= 1;
+  }
+}
+
+/** Something before the first character that ends a domain, and no `_` in its last two parts (domainAfter). */
+function validDomain(rest: string): boolean {
+  const stop = rest.search(DOMAIN_END);
+  const domain = stop === -1 ? rest : rest.slice(0, stop);
+  if (domain === "") return false;
+  return !domain
+    .split(".")
+    .slice(-2)
+    .some((part) => part.includes("_"));
+}
+
 type Finders = {
   readonly labelClose: (from: number) => number;
   readonly destination: (from: number) => number;
   readonly bracket: (from: number) => number;
   readonly codeClose: (length: number, from: number) => number;
   readonly emphasisClose: (mark: Mark, from: number) => number;
+  readonly bare: (i: number) => Taken | null;
 };
 
 function takeLink(text: string, i: number, depth: number, find: Finders): Taken | null {
@@ -189,6 +286,7 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
     bracket: nextUnescaped(text, "["),
     codeClose: codeCloser(text),
     emphasisClose: emphasisCloser(text),
+    bare: bareLinker(text),
   };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
@@ -209,7 +307,10 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
         ? null
         : (takeCode(text, i, find) ??
           (links
-            ? (takeAutolink(text, i) ?? takeImage(text, i, depth, find) ?? takeLink(text, i, depth, find))
+            ? (takeAutolink(text, i) ??
+              find.bare(i) ??
+              takeImage(text, i, depth, find) ??
+              takeLink(text, i, depth, find))
             : null) ??
           takeEmphasis(text, i, depth, links, find) ??
           takeStrike(text, i, depth, links, find));
