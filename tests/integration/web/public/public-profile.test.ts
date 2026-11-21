@@ -230,6 +230,16 @@ describe("public profile", () => {
     expect(html).toContain('data-surface="plain"');
   });
 
+  test("message_link_goes_to_the_door_by_did: the same link for every visitor, naming no chat account", async () => {
+    // Build step 10 (ADR 0094 decision 6, ADR 0101 decision 3): the door finds the chat ID only for a signed-in browser.
+    const html = await (await get(`/@${SHOWN}`)).text();
+    const links = [...html.matchAll(/href="(https:\/\/staging\.unset\.cc\/[^"]*)"(.*?)<\/a>/gs)];
+    expect(links.map(([, href]) => href)).toEqual([`https://staging.unset.cc/dm/${SHOWN}`]);
+    expect(links[0]?.[2]).toContain("Message");
+    const alice = await (await get("/@alice.unset.org")).text();
+    expect(alice).toContain(`href="https://staging.unset.cc/dm/${NAMED}"`);
+  });
+
   test("canonical_redirects_to_the_verified_handle", async () => {
     for (const path of [`/@${NAMED}`, "/@ALICE.unset.org"]) {
       const response = await get(path);

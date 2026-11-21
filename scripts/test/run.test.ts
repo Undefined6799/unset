@@ -341,10 +341,11 @@ describe("repository settings", () => {
     };
     walk(JSON.parse(ls.stdout) as Node, []);
     expect(found.length).toBeGreaterThan(0);
-    // ADR 0054 Consequences: svelte-check 4.7.8 accepts typescript ^5 || ^6, so the two Svelte workspaces carry
+    // ADR 0054 Consequences: svelte-check 4.7.8 accepts typescript ^5 || ^6, so the Svelte workspaces carry
     // exactly 6.0.3 for it, directly and as svelte-check's and SvelteKit's peer. Everything else, the repo's tsc -b
     // included, is 7.0.
-    const SVELTE_CHECK = /^@unset\/(?:apps-web|interfaces-web)(?: > (?:svelte-check|@sveltejs\/kit))? > typescript$/;
+    const SVELTE_CHECK =
+      /^@unset\/(?:apps-web|apps-chat|interfaces-web)(?: > (?:svelte-check|@sveltejs\/kit))? > typescript$/;
     for (const { path, version } of found)
       expect(version, path).toMatch(SVELTE_CHECK.test(path) ? /^6\.0\.3$/ : /^7\.0\./);
     expect(found.filter(({ path }) => !SVELTE_CHECK.test(path)).length, "the repo's own typescript").toBeGreaterThan(0);

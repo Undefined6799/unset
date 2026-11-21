@@ -14,6 +14,7 @@
   "dependencies": {
     "@unset/domains-content": "*",
     "@unset/domains-identity": "*",
+    "@unset/domains-messaging": "*",
     "@unset/domains-notifications": "*",
     "@unset/domains-profile": "*",
     "@unset/infrastructure-net-guard": "*",

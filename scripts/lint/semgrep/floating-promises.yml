@@ -12,9 +12,13 @@ rules:
       other promise-returning call.
     # Off, so `$F(...);` matches only a statement that is exactly that call, never the same call inside
     # await, return, void or an assignment (semgrep interfaces/Rule_options.atd: implicit_deep_exprstmt,
-    # default true).
+    # default true). vardef_assign is off too: on (the default), a declaration such as
+    # `const x = await Promise.all([f()])` is matched as the assignment statement `x = ...`, and `$F(...);`
+    # then reports the call nested inside it (semgrep 1.185.0, Rule_options.atd: "assign-patterns will
+    # match var-defs"; found on PR #1935).
     options:
       implicit_deep_exprstmt: false
+      vardef_assign: false
     paths:
       exclude:
         - "scripts/"
@@ -42,7 +46,8 @@ rules:
           - pattern: $F(...);
           - pattern-not: await $F(...);
           - pattern-not: void $F(...);
-          - pattern-not: return $F(...);
+          # A returned value goes to the caller, whatever expression holds the call (`return c ? f() : g()`).
+          - pattern-not: return $E;
           # A call that initialises a binding is kept, not floating.
           - pattern-not-inside: const $V = $F(...);
           - pattern-not-inside: let $V = $F(...);
@@ -56,7 +61,7 @@ rules:
           - pattern: $F(...);
           - pattern-not: await $F(...);
           - pattern-not: void $F(...);
-          - pattern-not: return $F(...);
+          - pattern-not: return $E;
           - pattern-not-inside: const $V = $F(...);
           - pattern-not-inside: let $V = $F(...);
       - patterns:

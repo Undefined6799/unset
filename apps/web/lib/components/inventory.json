@@ -106,6 +106,18 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
+    "checkbox": {
+      "checkbox.svelte": {
+        "sha256": "00d655082458f50290c893f06db89af8dfc9610b09bd8a71fe75af4da5452e08",
+        "registrySha256": "583f00017e06117e4478eb1fcd0b2c5a149eb77ec028f382c78a74101a24fbe2",
+        "change": "Lucide check and minus swapped for our Icon done and remove, Iconoir check and minus (ADR 0055 point 4; decision 33). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "index.ts": {
+        "sha256": "6ebbd361c8c128576a8c6a8ef75b898a7dfe841e45ada987df0be0ea9d469de3",
+        "registrySha256": "39b322ab4a26c63f60c64588ff4b18552c8b596e8472b9261fb68429b8cff1d6",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
     "dialog": {
       "dialog-close.svelte": {
         "sha256": "1b0540073bd954b20c3d2f4623747721d2f7b3123cee8f3751f6d5412b74ed2f",

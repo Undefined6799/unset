@@ -12,9 +12,11 @@ const RULE = "css-layers";
 export const LAYERS_FILE = "shared/ui/src/layers.css";
 const TOKENS_FILE = "shared/ui/src/tokens.css";
 const DECLARATION = "declaration";
-/** ADR 0055: the Svelte UI's one theme file and its Tailwind entry. Tailwind, not layers.css, orders their layers. */
+/** ADR 0055: the Svelte UI's one theme file and its Tailwind entries, the web's and the chat page's (ADR 0099).
+ * Tailwind, not layers.css, orders their layers. */
 export const THEME_FILE = "shared/ui/theme.css";
 export const TAILWIND_FILE = "apps/web/app.css";
+const TAILWIND_FILES: ReadonlySet<string> = new Set([TAILWIND_FILE, "apps/chat/app.css"]);
 const THEME = "theme-file";
 const TAILWIND = "tailwind-entry";
 /** The only blocks the theme file may hold: the variables, and the two explicit colour-scheme choices. */
@@ -25,7 +27,7 @@ export function layerFor(file: string): string | undefined {
   if (file === LAYERS_FILE) return DECLARATION;
   if (file === TOKENS_FILE) return "tokens";
   if (file === THEME_FILE) return THEME;
-  if (file === TAILWIND_FILE) return TAILWIND;
+  if (TAILWIND_FILES.has(file)) return TAILWIND;
   if (file === "shared/ui/src/base.css") return "base";
   if (/^shared\/ui\/components\/.+\.module\.css$/.test(file)) return "components";
   if (/^apps\/[^/]+\/(?:src\/)?screens\/.+\.module\.css$/.test(file)) return "screens";
@@ -128,7 +130,7 @@ function layerFindings(file: string, css: string, ctx: Context): Finding[] {
 
 function varFindings(file: string, css: string, ctx: Context): Finding[] {
   // The Tailwind entry reads the theme file's variables, not the React UI's tokens.
-  const known = file === TAILWIND_FILE ? ctx.themeVars : ctx.tokens;
+  const known = TAILWIND_FILES.has(file) ? ctx.themeVars : ctx.tokens;
   const own = declaredVars(css);
   const findings: Finding[] = [];
   css.split("\n").forEach((text, i) => {

@@ -6,6 +6,8 @@ export { type FetchDefaults, guardedFetch, libraryFetch, objectStoreFetch } from
 export {
   atproto,
   atprotoBlobUpload,
+  chatAdmin,
+  chatCount,
   DEFAULT_REQUEST_BYTES,
   internalPolicy,
   OBJECT_STORE_BYTES,

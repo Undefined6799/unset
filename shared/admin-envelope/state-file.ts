@@ -1,4 +1,4 @@
-// Durable appends for pds-admin's state files: each line is written and fsynced before the call returns, so a crash
+// Durable appends for the admin services' state files (pds-admin, chat-admin): each line is written and fsynced before the call returns, so a crash
 // cannot lose a line the service has acted on. Synchronous on purpose: the service is tiny, and a line on disk before
 // the next await is what makes the replay check race-free (P2.09 step 7).
 import {

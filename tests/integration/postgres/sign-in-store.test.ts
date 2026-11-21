@@ -16,6 +16,7 @@ import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, inject, test } from "vitest";
+import { chatAccountsOf } from "../../support/chat-accounts.ts";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
@@ -36,6 +37,7 @@ const accounts = createAccountRepository(web, {
   recordUnderageBlock: async () => {
     throw new Error("never blocks");
   },
+  chatAccounts: chatAccountsOf(web),
 });
 
 const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: Buffer.alloc(32, 4).toString("base64") } }));

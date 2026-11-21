@@ -40,6 +40,9 @@ function connection(user: string, password: string) {
 }
 
 /** Writes a fresh password for each role and returns them by role. */
+/** Every role whose password roles.json reads from a secret file, in its order. */
+const SYNCED = ["web", "api", "indexer", "chat_auth"];
+
 function newPasswords(...roles: string[]): Record<string, string> {
   const passwords: Record<string, string> = {};
   for (const role of roles) {
@@ -111,9 +114,9 @@ describe("role passwords on postgres", () => {
   }, 120_000);
 
   test("password_sync", async () => {
-    const first = newPasswords("web", "api", "indexer");
-    expect(await sync()).toEqual({ ok: true, roles: ["web", "api", "indexer"] });
-    for (const role of ["web", "api", "indexer"]) expect(await login(role, first[role] ?? "")).toBe("ok");
+    const first = newPasswords(...SYNCED);
+    expect(await sync()).toEqual({ ok: true, roles: SYNCED });
+    for (const role of SYNCED) expect(await login(role, first[role] ?? "")).toBe("ok");
     // Stored as the client-side verifier, never as text the server hashed.
     expect(
       postgres.sql("postgres", "SELECT rolpassword LIKE 'SCRAM-SHA-256$4096:%' FROM pg_authid WHERE rolname = 'web'"),
@@ -127,7 +130,7 @@ describe("role passwords on postgres", () => {
   });
 
   test("password_sync_missing_file", async () => {
-    const before = newPasswords("web", "api", "indexer");
+    const before = newPasswords(...SYNCED);
     expect(await sync()).toMatchObject({ ok: true });
     newPasswords("web");
     rmSync(join(secretsDir, "pg_api_password"));
@@ -149,18 +152,18 @@ describe("role passwords on postgres", () => {
   });
 
   test("migrate_service_syncs_passwords_after_migrations", async () => {
-    const before = newPasswords("web", "api", "indexer");
+    const before = newPasswords(...SYNCED);
     expect(await sync()).toMatchObject({ ok: true });
-    const after = newPasswords("web", "api", "indexer");
+    const after = newPasswords(...SYNCED);
     expect(await migrateService()).toEqual({ ok: true });
-    for (const role of ["web", "api", "indexer"]) expect(await login(role, after[role] ?? "")).toBe("ok");
+    for (const role of SYNCED) expect(await login(role, after[role] ?? "")).toBe("ok");
     expect(await login("web", before.web ?? "")).toBe("28P01");
   });
 
   test("migrate_service_failed_migration_syncs_nothing", async () => {
-    const before = newPasswords("web", "api", "indexer");
+    const before = newPasswords(...SYNCED);
     expect(await sync()).toMatchObject({ ok: true });
-    newPasswords("web", "api", "indexer");
+    newPasswords(...SYNCED);
     // An applied migration that no longer matches its file: migrate refuses with exit 2 before touching anything.
     const checksum = postgres.sql("unset", "SELECT checksum FROM public.schema_migrations WHERE version = 1");
     expect(checksum).toMatch(/^[0-9a-f]{64}$/);
@@ -174,7 +177,7 @@ describe("role passwords on postgres", () => {
     } finally {
       postgres.sql("unset", `UPDATE public.schema_migrations SET checksum = '${checksum}' WHERE version = 1`);
     }
-    for (const role of ["web", "api", "indexer"]) expect(await login(role, before[role] ?? "")).toBe("ok");
+    for (const role of SYNCED) expect(await login(role, before[role] ?? "")).toBe("ok");
   });
 
   // docker logs is killed at 60 s (P1.27k), inside the test's 120 s budget.

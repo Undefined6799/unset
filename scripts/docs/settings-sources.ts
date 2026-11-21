@@ -75,7 +75,9 @@ export type SettingsModel = {
 export type LoadResult = { ok: true; model: SettingsModel } | { ok: false; problems: readonly string[] };
 
 function zoneRows(file: string, key: string, zones: unknown, problems: string[]): Row[] {
-  const host = { appRateLimitZones: "app host", docsRateLimitZones: "docs host" }[key] ?? "PDS host";
+  const host =
+    { appRateLimitZones: "app host", docsRateLimitZones: "docs host", chatRateLimitZones: "chat host" }[key] ??
+    "PDS host";
   return Object.entries(isObject(zones) ? zones : {}).flatMap(([zone, z]) => {
     if (isObject(z) && typeof z.events === "number" && typeof z.window === "string") {
       return [[code(zone), host, `${z.events} per ${z.window}`]];

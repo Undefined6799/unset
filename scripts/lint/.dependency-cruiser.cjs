@@ -108,8 +108,9 @@ const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
 // Non-TypeScript assets (a CSS Module) are imported directly; they export no code.
 const ASSET = "\\.css$";
 // P1.20c (ADR 0055 point 4): the Svelte Icon draws the pinned Iconoir data, read through @unset/shared-ui's
-// "./icons.json" export, because shared/ui's index.ts brings React. It is the only file that may, and only that file.
-const SVELTE_ICON = "^apps/web/lib/components/icon/icon\\.svelte$";
+// "./icons.json" export, because shared/ui's index.ts brings React. It and the chat page's byte-identical copy (P6.10)
+// are the only files that may.
+const SVELTE_ICON = "^apps/(web|chat)/lib/components/icon/icon\\.svelte$";
 const ICON_DATA = "^shared/ui/icons/icons\\.json$";
 // The web's font route reads the two woff2 files from shared/ui/fonts, their one copy in the repository (Alex
 // 2026-11-18 12:10Z: no identical copies), through @unset/shared-ui's "./fonts/*.woff2" export. Only that file may,
@@ -485,8 +486,8 @@ module.exports = {
     ),
     forbidden(
       "sveltekit-web-only",
-      "Only the web process and its screens import Svelte or SvelteKit; domains, infrastructure and shared stay framework-free (ADR 0056 decision 3).",
-      { pathNot: "^(interfaces/web|apps/web)/" },
+      "Only the web process, its screens and the chat page (ADR 0099) import Svelte or SvelteKit; domains, infrastructure and shared stay framework-free (ADR 0056 decision 3).",
+      { pathNot: "^(interfaces/web|apps/web|apps/chat)/" },
       { path: "^(node_modules/)?(svelte|@sveltejs/[^/]+)(/|$)" },
     ),
     forbidden(

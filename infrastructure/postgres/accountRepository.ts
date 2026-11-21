@@ -8,6 +8,7 @@ import type {
   OnboardingAccount,
   UnderageBlockRecord,
 } from "@unset/domains-identity";
+import type { ChatAccountStore } from "./chatAccountStore.ts";
 import type { Pool, PoolClient } from "./pool.ts";
 import { withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
@@ -31,6 +32,11 @@ export type AccountRepositoryOptions = {
    * that; `age.audit_failure_rolls_block_back` (tests/integration/http/onboarding.test.ts) pins the rollback.
    */
   readonly recordUnderageBlock: (tx: BlockTransaction, did: Did, hosted: boolean) => Promise<UnderageBlockRecord>;
+  /**
+   * Queues the member's chat account in the terms transaction (build step 5; ADR 0093 decision 3), so an accepted
+   * account always has its chat user and no failed acceptance leaves one. Required: no repository can forget it.
+   */
+  readonly chatAccounts: Pick<ChatAccountStore, "request">;
 };
 
 const STEPS = ["age", "terms", "chat", "done", "blocked_underage"] as const;
@@ -75,14 +81,18 @@ export function createAccountRepository(pool: Pool, options: AccountRepositoryOp
       return rows.length === 1;
     },
     async acceptTerms(did, terms, privacy, deadline) {
-      const { rows } = await write(deadline, (tx) =>
-        tx.query<{ onboarding: string }>(
+      const rows = await write(deadline, async (tx) => {
+        const accepted = await tx.query<{ onboarding: string }>(
           "UPDATE app.account SET terms_version = $2, privacy_version = $3, terms_accepted_at = now(), " +
             "onboarding = CASE WHEN onboarding = 'done' THEN 'done' ELSE 'chat' END " +
             "WHERE did = $1 AND onboarding IN ('terms', 'done') RETURNING onboarding",
           [did, terms, privacy],
-        ),
-      );
+        );
+        // A finished member accepting new terms is queued too, so members from before chat get their account; a
+        // second request keeps the chat user already drawn.
+        if (accepted.rows.length === 1) await options.chatAccounts.request(tx, did);
+        return accepted.rows;
+      });
       const onboarding = rows[0]?.onboarding;
       return onboarding === "chat" || onboarding === "done" ? onboarding : null;
     },

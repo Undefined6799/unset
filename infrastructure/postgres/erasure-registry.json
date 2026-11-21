@@ -104,5 +104,13 @@
   "app.sign_in.did": {
     "strategy": "delete_row",
     "reason": "the times the person signed in, kept 30 days (P2.27c, ADR 0082); they go when the person is erased"
+  },
+  "app.chat_account.did": {
+    "strategy": "delete_row",
+    "reason": "the member's chat mapping (ADR 0010); the row goes when they are erased, and its chat user, with no DID, is queued in app.chat_erasure for the MAS deactivation (ADR 0096)"
+  },
+  "door.browser.did": {
+    "strategy": "delete_row",
+    "reason": "which chat device each of the member's browsers holds and its sealed storage lock key (ADR 0093, ADR 0095); the rows go when they are erased, so no browser's local chat store opens again"
   }
 }
