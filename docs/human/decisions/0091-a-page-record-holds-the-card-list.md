@@ -46,14 +46,16 @@ and what an account shows lives in other records (`app.bsky.feed.post`, `app.bsk
 5. **The permission set `sh.unset.authFull` covers `sh.unset.profile`, `sh.unset.page` and `sh.unset.card`**, still
    nothing else in the account.
 6. **Room for later, built not at all now.** Several pages: a later ADR names where a page under another key shows
-   (an address, a switcher) and adds it to the index. Per-page visibility: a later optional field on the page,
-   whose absence means the profile's `visibility` applies, so today's records stay valid. A reader that does not
-   know such a field ignores it, so the main page always follows the profile's `visibility`, and only a page under
-   another key, which today's readers never show, may rely on its own. Community pages: a
+   (an address, a switcher) and adds it to the index. Per-page visibility: a later ADR decides how it works,
+   whether by a field on the page or by where the page is stored (atproto's permissioned-data proposal, "spaces",
+   would let these records be written there unchanged). Either way the main page always follows the profile's
+   `visibility`, since a reader that does not know the later mechanism shows the main page as the profile allows,
+   and only a page under another key, which today's readers never show, may rely on its own. Community pages: a
    community that is its own account uses its own `self` page unchanged; a community run from a member's account
    would be a page under another key, defined by that later ADR. An atproto repository has one writer, so who may
    edit a community's page (delegated editing through our server, or a page naming cards from several members'
-   repositories, which point 1's own-repository rule refuses today) is a separate design.
+   repositories) is a separate design. Point 1's own-repository rule refuses other repositories' cards today; a
+   later ADR may loosen it for such pages, and readers that keep today's rule skip those entries.
 7. **The published profile schema is replaced once more**, and `published/sh.unset.page.json` is added. This loosens
    the breaking-change guard for one file: the mechanism is replacing the snapshot the guard compares
    `sh.unset.profile` against; what it loosens is that one comparison in this one PR; the risk is a reader built on
