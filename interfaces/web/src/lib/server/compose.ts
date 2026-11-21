@@ -492,7 +492,7 @@ async function build(): Promise<Services> {
         job: "chat-room-sweep",
         run: async () => {
           const swept = await chatAdmin.sweepRooms();
-          if (swept.kind === "unavailable") return log.error("chat.rooms_sweep_failed", { reason: "unavailable" });
+          if (swept.kind === "unavailable") return log.warn("chat.rooms_sweep_failed", { reason: "unavailable" });
           log.info("chat.rooms_swept", { count: swept.deleted });
           if (swept.failed > 0) log.error("chat.rooms_sweep_failed", { count: swept.failed });
         },
