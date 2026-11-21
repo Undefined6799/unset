@@ -134,7 +134,7 @@ export function latestCommit(pdsCall: PdsCall, ctx: PdsContext | null, did: Did)
 }
 
 export type CreateOutcome =
-  | { readonly kind: "created"; readonly key: string }
+  | { readonly kind: "created"; readonly key: string; readonly rev?: string }
   /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was created. */
   | { readonly kind: "changed" };
 
@@ -172,7 +172,7 @@ export function createCardRecord(
         });
         const key = ownCardKey(data.uri, did);
         if (key === null) throw new Error("createRecord returned a record outside this repo");
-        return { kind: "created", key };
+        return data.commit === undefined ? { kind: "created", key } : { kind: "created", key, rev: data.commit.rev };
       } catch (error: unknown) {
         if (isXrpcError(error, "InvalidSwap")) return { kind: "changed" };
         throw error;
@@ -198,14 +198,15 @@ export function saveCardRecord<C extends string>(
   );
 }
 
+/** `rev`: the last landed commit's revision (a TID), when the PDS gave one. */
 export type SaveManyOutcome =
-  | { readonly kind: "saved" }
+  | { readonly kind: "saved"; readonly rev?: string }
   /** The repo's head was no longer `swapCommit`: something was written first, and none of the cards was written. */
   | { readonly kind: "changed" }
   /** This card alone would pass the PDS's JSON body limit, so nothing was sent and nothing was written. */
   | { readonly kind: "too_large"; readonly key: string }
   /** The cards did not fit one call; the first calls landed, a later one did not. `saved` are the cards written. */
-  | { readonly kind: "partial"; readonly saved: readonly string[] };
+  | { readonly kind: "partial"; readonly saved: readonly string[]; readonly rev?: string };
 
 /**
  * The most bytes of JSON one applyWrites body may hold. @atproto/pds 0.5.51 parses most JSON bodies up to 150 KiB
@@ -284,34 +285,37 @@ export async function saveCardRecords(
   if (!Array.isArray(packed)) return { kind: "ok", value: { kind: "too_large", key: packed.tooLarge } };
   const saved: string[] = [];
   let head: string | undefined = swapCommit;
+  let rev: string | undefined;
+  const partial = (): SaveManyOutcome =>
+    rev === undefined ? { kind: "partial", saved } : { kind: "partial", saved, rev };
   for (const batch of packed) {
-    if (head === undefined) return { kind: "ok", value: { kind: "partial", saved } };
+    if (head === undefined) return { kind: "ok", value: partial() };
     const result = await applyCardWrites(pdsCall, ctx, did, batch.writes, head);
     const first = saved.length === 0;
-    if (result.kind !== "ok") return first ? result : { kind: "ok", value: { kind: "partial", saved } };
-    if (result.value === "changed")
-      return { kind: "ok", value: first ? { kind: "changed" } : { kind: "partial", saved } };
+    if (result.kind !== "ok") return first ? result : { kind: "ok", value: partial() };
+    if (result.value === "changed") return { kind: "ok", value: first ? { kind: "changed" } : partial() };
     saved.push(...batch.keys);
     head = result.value.commit;
+    rev = result.value.rev;
   }
-  return { kind: "ok", value: { kind: "saved" } };
+  return { kind: "ok", value: rev === undefined ? { kind: "saved" } : { kind: "saved", rev } };
 }
 
-/** One applyWrites call: the new head's CID when it landed (absent if the PDS did not say), or `changed`. */
+/** One applyWrites call: the new head's CID and revision when it landed (absent if the PDS did not say), or `changed`. */
 function applyCardWrites(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
   writes: CardWriteOp[],
   swapCommit: string,
-): Promise<PdsResult<{ readonly commit: string | undefined } | "changed">> {
+): Promise<PdsResult<{ readonly commit: string | undefined; readonly rev: string | undefined } | "changed">> {
   return pdsCall(
     ctx,
     did,
     async (agent) => {
       try {
         const { data } = await agent.com.atproto.repo.applyWrites({ repo: did, swapCommit, writes });
-        return { commit: data.commit?.cid };
+        return { commit: data.commit?.cid, rev: data.commit?.rev };
       } catch (error: unknown) {
         if (isXrpcError(error, "InvalidSwap")) return "changed" as const;
         throw error;

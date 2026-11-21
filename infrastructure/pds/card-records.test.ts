@@ -16,6 +16,7 @@ import {
 } from "./card-records.ts";
 import { createPdsCall } from "./pds-call.ts";
 
+const REV = "3jzfcijpj2z2d";
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Did;
 const CID = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
 const CID2 = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae";
@@ -181,10 +182,13 @@ describe("createCardRecord", () => {
     const key = newCardKey();
     expect(key).toMatch(/^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/);
     expect(newCardKey() > key).toBe(true);
-    const { pdsCall, ctx, calls } = pds(() => Response.json({ uri: `at://${DID}/sh.unset.section/${key}`, cid: CID }));
+    const { pdsCall, ctx, calls } = pds(() =>
+      Response.json({ uri: `at://${DID}/sh.unset.section/${key}`, cid: CID, commit: { cid: CID2, rev: REV } }),
+    );
+    // The commit's revision comes back, by which saves of one card settle their pictures in order.
     expect(await createCardRecord(pdsCall, ctx, DID, card, CID2, key)).toEqual({
       kind: "ok",
-      value: { kind: "created", key },
+      value: { kind: "created", key, rev: REV },
     });
     expect(calls[0]?.body).toMatchObject({ rkey: key, swapCommit: CID2 });
   });
@@ -213,7 +217,7 @@ describe("createCardRecord", () => {
 
 describe("saveCardRecords", () => {
   test("writes every card in one applyWrites call, on the repo head it was given", async () => {
-    const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
+    const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: REV } }));
     const other = { ...card, content: { ...card.content, text: "Bye" } };
     const result = await saveCardRecords(
       pdsCall,
@@ -225,7 +229,7 @@ describe("saveCardRecords", () => {
       ],
       CID2,
     );
-    expect(result).toEqual({ kind: "ok", value: { kind: "saved" } });
+    expect(result).toEqual({ kind: "ok", value: { kind: "saved", rev: REV } });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.repo.applyWrites");
     expect(calls[0]?.body).toEqual({
@@ -258,8 +262,11 @@ describe("saveCardRecords", () => {
       Array.from({ length: 3 }, (_, n) => ({ key: rkey(n), record: long("e".repeat(40_000)) })),
       Array.from({ length: 2 }, (_, n) => ({ key: rkey(n), record: long("f".repeat(100_000)) })),
     ]) {
-      const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
-      expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });
+      const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: REV } }));
+      expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+        kind: "ok",
+        value: { kind: "saved", rev: REV },
+      });
       expect(calls).toHaveLength(1);
     }
   });
@@ -273,12 +280,10 @@ describe("saveCardRecords", () => {
 
   test("eleven_full_cards_save_in_two_chained_calls, the second on the commit the first returned", async () => {
     const commits = [CID, CID2];
-    const { pdsCall, ctx, calls } = pds(() =>
-      Response.json({ commit: { cid: commits[calls.length - 1], rev: "3jzfcijpj2z2d" } }),
-    );
+    const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: commits[calls.length - 1], rev: REV } }));
     expect(await saveCardRecords(pdsCall, ctx, DID, eleven(), "bafyhead")).toEqual({
       kind: "ok",
-      value: { kind: "saved" },
+      value: { kind: "saved", rev: REV },
     });
     const sent = calls.map((call) => call.body as { swapCommit: string; writes: { rkey: string }[] });
     expect(sent.map((body) => [body.swapCommit, body.writes.length])).toEqual([
@@ -294,7 +299,7 @@ describe("saveCardRecords", () => {
   test("a_foreign_write_between_batches stops the chain and names the cards already saved", async () => {
     const { pdsCall, ctx, calls } = pds(() =>
       calls.length === 1
-        ? Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } })
+        ? Response.json({ commit: { cid: CID, rev: REV } })
         : Response.json({ error: "InvalidSwap", message: "Commit was at bafy" }, { status: 400 }),
     );
     expect(await saveCardRecords(pdsCall, ctx, DID, eleven(), CID2)).toEqual({
@@ -304,6 +309,7 @@ describe("saveCardRecords", () => {
         saved: eleven()
           .slice(0, 9)
           .map((u) => u.key),
+        rev: REV,
       },
     });
     expect(calls).toHaveLength(2);
@@ -311,9 +317,7 @@ describe("saveCardRecords", () => {
 
   test("an outage after the first batch is a partial save, not an outage, since the first batch is written", async () => {
     const { pdsCall, ctx, calls } = pds(() =>
-      calls.length === 1
-        ? Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } })
-        : new Response("", { status: 502 }),
+      calls.length === 1 ? Response.json({ commit: { cid: CID, rev: REV } }) : new Response("", { status: 502 }),
     );
     expect(await saveCardRecords(pdsCall, ctx, DID, eleven(), CID2)).toEqual({
       kind: "ok",
@@ -322,6 +326,7 @@ describe("saveCardRecords", () => {
         saved: eleven()
           .slice(0, 9)
           .map((u) => u.key),
+        rev: REV,
       },
     });
   });
@@ -384,6 +389,16 @@ describe("saveCardRecord", () => {
       record: { ...card, width: "half" },
       swapRecord: CID,
     });
+  });
+
+  test("card.save_rev: a write that made a commit answers its revision", async () => {
+    const { pdsCall, ctx } = pds((call) =>
+      call.url.pathname.endsWith("getRecord")
+        ? Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID, value: card })
+        : Response.json({ uri: `at://${DID}/sh.unset.section/k1`, cid: CID2, commit: { cid: CID2, rev: REV } }),
+    );
+    const result = await saveCardRecord(pdsCall, ctx, DID, "k1", () => ({ ok: true, record: { ...card } }));
+    expect(result).toEqual({ kind: "ok", value: { kind: "saved", rev: REV } });
   });
 
   test("a card that is gone is reported, never recreated", async () => {
