@@ -731,6 +731,10 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   notifications are one inbox with one send call and one reason table, gone once opened and at 30 days; a new
   sign-in's entry only the member's older browsers can clear, keeping its time only, which amends the "no sign-in
   records" rule for this one kind. Proposed, awaiting Alex.
+- **Who sees the profile page (P1.22a, 2026-11-20; own record: [0078](0078-who-sees-the-profile-page.md)):** an optional
+  `visibility` on `sh.unset.profile` (public, signedIn, ownerOnly; absent public, unknown ownerOnly); anyone the choice
+  leaves out gets a limited page with the name and handle; a page that is not public is never listed. Partly
+  supersedes ADR 0004 and decision 35 D7 for the profile page. Proposed, awaiting Alex.
 - **ADR 0079 accepted** (2026-11-21 00:38Z): Alex's line "Merge 1855 at e8dcaa5", given after that head was reviewed;
   merged as d4e3599. Its status, index row and this line were added in the P2.27b pull request.
 - **Notifications stay until dismissed (P2.27b, 2026-11-21; own record:
