@@ -74,8 +74,19 @@ export function chatClient(session: ChatSession, baseUrl: string, cryptoCallback
     deviceId: session.deviceId,
     cryptoCallbacks,
     localTimeoutMs: REQUEST_DEADLINE_MS,
+    fetchFn: sameOriginFetch,
   });
 }
+
+/**
+ * The homeserver is this page's own origin, and on staging that origin sits behind Pangolin's login (Alex, 2026-11-21
+ * ~19:30Z: "the chat page's own calls ride that login"), so its calls carry same-origin cookies. matrix-js-sdk 43.0.0
+ * sends every homeserver call with credentials "omit" (src/http-api/fetch.ts:302-315) through `fetchFn` when one is
+ * given (fetch.ts:69-74; createClient's option, src/client.ts:313, 1358); this changes that one field and nothing else.
+ * The token still goes in the Authorization header.
+ */
+const sameOriginFetch: typeof globalThis.fetch = (input, init) =>
+  globalThis.fetch(input, { ...init, credentials: "same-origin" });
 
 /** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
 export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
