@@ -97,8 +97,10 @@ describe("media serves signed draft versions (book P2.19)", () => {
     expect(bodies.size).toBe(1);
   });
 
-  test("media.too_large: an object over 2 MiB is not served", async () => {
-    const { call } = await start({ [OBJECT]: new Uint8Array(2 * 1024 * 1024 + 1) });
+  test("media.too_large: a 5,000,000-byte main version is served; an object over 5 MiB is not (ADR 0088)", async () => {
+    const fits = await start({ [OBJECT]: new Uint8Array(5_000_000) });
+    expect((await fits.call(link())).status).toBe(200);
+    const { call } = await start({ [OBJECT]: new Uint8Array(5 * 1024 * 1024 + 1) });
     expect((await call(link())).status).toBe(404);
   });
 

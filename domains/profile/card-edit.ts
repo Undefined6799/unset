@@ -268,7 +268,7 @@ const SIZING_PICTURE = {
   image: {
     $type: "blob",
     ref: { $link: "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku" },
-    mimeType: "image/jpeg",
+    mimeType: "image/webp",
     size: 1,
   },
   aspectRatio: { width: 1, height: 1 },
