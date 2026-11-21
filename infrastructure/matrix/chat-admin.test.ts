@@ -97,6 +97,17 @@ describe("changeAccount", () => {
     }
   });
 
+  test("chat.client_set_locked: a lock and an unlock go to their own routes", async () => {
+    const { guard, seen } = network({ status: 200, body: { locked: true } });
+    const client = createChatAdminClient(guard, settings);
+    expect(await client.setLocked(USER, true)).toEqual({ kind: "done" });
+    expect(await client.setLocked(USER, false)).toEqual({ kind: "unavailable" });
+    expect(seen.map((s) => s.request.url)).toEqual([
+      "http://chat-admin:8080/v1/account.lock",
+      "http://chat-admin:8080/v1/account.unlock",
+    ]);
+  });
+
   test.each([
     ["never made", { status: 200, body: { deactivated: false } }, "account.deactivate", "no_account"],
     ["no account", { status: 409, body: { error: "no_account" } }, "account.lock", "no_account"],
