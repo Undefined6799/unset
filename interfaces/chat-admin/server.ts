@@ -17,6 +17,8 @@ import {
 } from "./envelope.ts";
 import type { Mas } from "./mas.ts";
 import type { Quotas } from "./quota.ts";
+import { type SweepCounts, sweepRooms } from "./sweep.ts";
+import type { Synapse } from "./synapse.ts";
 
 export type LogLine = {
   outcome: "ok" | "denied" | "error";
@@ -24,12 +26,14 @@ export type LogLine = {
   verb?: string;
   kid?: string;
   jti?: string;
-};
+} & Partial<Omit<SweepCounts, "listed" | "plain">>;
 
 export type HandlerDeps = {
   readonly keys: readonly ServiceKey[];
   readonly env: string;
   readonly mas: Mas;
+  /** The Synapse admin API, for the room sweep only (ADR 0091). */
+  readonly synapse: Synapse;
   readonly sessionTtl: number;
   readonly jti: JtiStore;
   readonly quotas: Quotas;
@@ -47,6 +51,7 @@ const ROUTES: Readonly<Record<string, ChatAdminVerb>> = {
   "/v1/account.lock": "account.lock",
   "/v1/account.unlock": "account.unlock",
   "/v1/account.deactivate": "account.deactivate",
+  "/v1/rooms.sweep": "rooms.sweep",
 };
 const BODY_CAP = 4096;
 
@@ -134,7 +139,7 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
       return clientGone() ? "client_gone" : null;
     };
     const result = await perAccount(command.user, () => run(command, mint.device, abandoned));
-    return answerFor(result, who);
+    return answerFor(result, command.verb === "rooms.sweep" ? { ...who, ...sweepCounts(result) } : who);
   }
 
   function run(command: Command, device: DeviceId | null, abandoned: Abandoned): Promise<Result<object>> {
@@ -142,6 +147,8 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     if (gone !== null) return Promise.resolve({ kind: "refused", status: 403, reason: gone });
     if (command.verb === "account.create") return createAccount(deps.mas, command.user, command.name);
     if (command.verb === "session.end") return endSessions(deps.mas, command.user, command.device);
+    if (command.verb === "rooms.sweep")
+      return sweepRooms({ mas: deps.mas, synapse: deps.synapse, now: deps.now }, abandoned);
     if (command.verb !== "session.mint") return changeAccount(deps.mas, command.user, command.verb);
     return mintSession(deps.mas, deps.sessionTtl, command.user, device, abandoned);
   }
@@ -158,6 +165,13 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     }
     deps.log({ outcome: "denied", reason: result.reason, ...who });
     return { status: result.status, body: { error: result.status === 409 ? result.reason : "denied" } };
+  }
+
+  /** The sweep's counts for its log line: numbers only, never a room (rule SE-7). */
+  function sweepCounts(result: Result<object>): Partial<LogLine> {
+    if (result.kind !== "ok") return {};
+    const { deleted, kept, failed } = result as unknown as SweepCounts;
+    return { deleted, kept, failed };
   }
 
   async function respond(req: IncomingMessage, res: ServerResponse): Promise<void> {

@@ -16,8 +16,11 @@ const CAP = 64 * 1024;
 export function createSender(Unavailable: new (reason: string) => Error, resolve: Resolve = systemResolve): Send {
   const fail = (reason: string) => new Unavailable(reason);
   const lookup = vettedLookup(resolve, () => fail("public_answer"));
-  return (url, method, headers, body) =>
+  return (url, method, given, body) =>
     new Promise<Answer>((resolveAnswer, reject) => {
+      // A body always carries its length: Node 26.12.0 sends a DELETE's body with neither a length nor chunking, which
+      // a server answers 400 (checked against node:http's own server, 2026-11-21).
+      const headers = body === undefined ? given : { ...given, "content-length": String(Buffer.byteLength(body)) };
       const req = request(url, { method, headers, timeout: TIMEOUT_MS, lookup }, (res) => {
         const chunks: Buffer[] = [];
         let size = 0;

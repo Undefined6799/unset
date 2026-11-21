@@ -17,6 +17,7 @@ function setup(keys: unknown, env: Record<string, string> = {}) {
     CHAT_ADMIN_ENV: "dev",
     MAS_ADMIN_URL: "http://mas:8082",
     MAS_TOKEN_URL: "http://mas:8080",
+    SYNAPSE_ADMIN_URL: "http://synapse-sweep:8008",
     MAS_CLIENT_ID: CLIENT_ID,
     STATE_DIR: dir,
     CHAT_ADMIN_SECRETS_DIR: dir,
@@ -37,6 +38,8 @@ describe("config", () => {
     ]);
     expect(config.clientSecret).toBe("s3cret");
     expect(config.sessionTtl).toBe(86_400);
+    // ADR 0091 decision 8: Synapse's listener on the network only chat-admin shares.
+    expect(config.synapseUrl.href).toBe("http://synapse-sweep:8008/");
   });
 
   test.each([
@@ -51,6 +54,9 @@ describe("config", () => {
   test.each([
     ["MAS_ADMIN_URL", "https://mas.example.com"],
     ["MAS_TOKEN_URL", "http://mas:8080/oauth2"],
+    ["SYNAPSE_ADMIN_URL", "https://synapse.example.com"],
+    ["SYNAPSE_ADMIN_URL", "http://synapse:8008/_synapse/admin"],
+    ["SYNAPSE_ADMIN_URL", ""],
     ["MAS_CLIENT_ID", "not-a-ulid"],
     ["SESSION_TTL_SECONDS", "0"],
     ["CHAT_ADMIN_ENV", "staging"],
