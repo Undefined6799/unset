@@ -226,6 +226,38 @@ describe("createCardRecord", () => {
 });
 
 describe("saveCardRecords", () => {
+  // P1.21v follow-up (Codex on c6cddd7): the page settles words typed during a Save on the version this Save wrote,
+  // never on one read later that another tab may have written. applyWrites answers each update's new CID
+  // (@atproto/api 0.30.3 com.atproto.repo.applyWrites OutputSchema.results, UpdateResult { uri, cid }).
+  test("each_card_written_comes_back_with_the_version_the_pds_gave_it", async () => {
+    const result = (rkey: string, cid: string) => ({
+      $type: "com.atproto.repo.applyWrites#updateResult",
+      uri: `at://${DID}/sh.unset.section/${rkey}`,
+      cid,
+    });
+    const { pdsCall, ctx } = pds(() =>
+      Response.json({
+        commit: { cid: CID, rev: REV },
+        results: [result("k1", CID), result("k2", CID2), result("not-sent", CID)],
+      }),
+    );
+    const updates = [
+      { key: "k1", record: card },
+      { key: "k2", record: card },
+    ];
+    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+      kind: "ok",
+      value: {
+        kind: "saved",
+        rev: REV,
+        versions: [
+          { key: "k1", cid: CID },
+          { key: "k2", cid: CID2 },
+        ],
+      },
+    });
+  });
+
   test("writes every card in one applyWrites call, on the repo head it was given", async () => {
     const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: REV } }));
     const other = { ...card, content: { ...card.content, text: "Bye" } };

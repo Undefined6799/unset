@@ -15,6 +15,7 @@ import {
   fitsPage,
   inSizeOrder,
   type ProfileError,
+  parseCardVersion,
   pictureLink,
   reorderCards,
   shownCards,
@@ -117,11 +118,15 @@ export type CardFailure =
   | "card.image_unavailable"
   | "profile.conflict"
   | "profile.pds_unavailable";
+/** A card a Save of several wrote, and the version (record CID) the PDS gave it. */
+export type CardWritten = { readonly key: CardKey; readonly version: CardVersion };
 export type CardWrite =
-  | { readonly kind: "saved" }
+  /** `versions`, in a Save of several, are the written cards whose new version the PDS named. */
+  | { readonly kind: "saved"; readonly versions?: readonly CardWritten[] }
   /**
    * `field`, when given, is the form field to blame (the card editor shows the refusal beside it); `card`, in a save
-   * of several cards, is the card it is about; `saved`, in a Save written only in part, are the cards that were.
+   * of several cards, is the card it is about; `saved`, in a Save written only in part, are the cards that were, and
+   * `versions` the new versions of those the PDS named.
    */
   | {
       readonly kind: "failed";
@@ -129,6 +134,7 @@ export type CardWrite =
       readonly field?: string;
       readonly card?: CardKey;
       readonly saved?: readonly CardKey[];
+      readonly versions?: readonly CardWritten[];
     }
   /** The PDS grant is gone or lacks a scope; the sign-in pages take over. */
   | { readonly kind: "redirect"; readonly location: string };
@@ -400,11 +406,18 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
         cards = updates;
         const saved = await store.saveMany(updates, head.value);
         if (saved.kind !== "ok") return done(pdsFailure(saved), [], unanswered(saved));
-        if (saved.value.kind === "saved") return done(SAVED, all, false, saved.value.rev);
+        if (saved.value.kind === "saved") {
+          const versions = writtenVersions(edits, saved.value.versions);
+          return done(versions.length === 0 ? SAVED : { kind: "saved", versions }, all, false, saved.value.rev);
+        }
         if (saved.value.kind === "too_large") return done(tooLarge(edits, saved.value.key), []);
         // The call that failed may still have landed, so the cards it carried keep their uses.
-        if (saved.value.kind === "partial")
-          return done(partly(edits, saved.value.saved), ofEdits(edits, saved.value.saved), true, saved.value.rev);
+        if (saved.value.kind === "partial") {
+          const versions = writtenVersions(edits, saved.value.versions);
+          const result = partly(edits, saved.value.saved);
+          const answer = versions.length === 0 ? result : { ...result, versions };
+          return done(answer, ofEdits(edits, saved.value.saved), true, saved.value.rev);
+        }
       }
       return done(failed("card.cards_changed"), []);
     },
@@ -495,6 +508,16 @@ const tooLarge = (edits: readonly CardEdit[], key: string): CardWrite => {
   const [card] = ofEdits(edits, [key]);
   return card === undefined ? failed("card.save_too_large") : named("card.save_too_large", card);
 };
+
+/** The versions the PDS gave the Save's cards, each a CID; any other answer is left out, so its card settles nothing. */
+function writtenVersions(edits: readonly CardEdit[], given: SaveManyOutcomeVersions): CardWritten[] {
+  return (given ?? []).flatMap(({ key, cid }) => {
+    const card = edits.find((edit) => edit.key === key)?.key;
+    const version = parseCardVersion(cid);
+    return card === undefined || version === null ? [] : [{ key: card, version }];
+  });
+}
+type SaveManyOutcomeVersions = Extract<SaveManyOutcome, { kind: "saved" }>["versions"];
 
 const partly = (edits: readonly CardEdit[], keys: readonly string[]): CardWrite => ({
   kind: "failed",

@@ -505,6 +505,43 @@ describe("saveAll", () => {
     expect(calls.many).toHaveLength(1);
   });
 
+  // P1.21v follow-up (Codex on c6cddd7): the answer names the version each written card now has, as the PDS gave it, so
+  // the page settles words typed meanwhile on that version and never on one another tab wrote after it. A CID that is
+  // not one is left out (the page then keeps those words on their own version, so a later Save is a conflict).
+  test("a_save_names_the_version_each_written_card_now_has", async () => {
+    const { writes, calls } = store({
+      list: async () =>
+        listing([
+          { key: "a", cid: V },
+          { key: "b", cid: V },
+        ]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        return ok({
+          kind: "saved",
+          versions: [
+            { key: "a", cid: V2 },
+            { key: "b", cid: "not a cid" },
+          ],
+        });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A"), edit("b", "New B")])).toEqual({
+      kind: "saved",
+      versions: [{ key: "a", version: V2 }],
+    });
+    const part = store({
+      list: async () => listing([{ key: "a", cid: V }]),
+      saveMany: async () => ok({ kind: "partial", saved: ["a"], versions: [{ key: "a", cid: V2 }] }),
+    });
+    expect(await part.writes.saveAll([edit("a", "New A")])).toEqual({
+      kind: "failed",
+      code: "card.save_partial",
+      saved: ["a"],
+      versions: [{ key: "a", version: V2 }],
+    });
+  });
+
   test("an outage is a retryable failure and an ended session sends the member to sign in", async () => {
     const down = async () => ({ kind: "transient", code: "pds_unavailable" }) as const;
     expect(await store({ head: down }).writes.saveAll([edit("a", "A")])).toEqual({
