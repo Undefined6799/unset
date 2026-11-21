@@ -10,7 +10,7 @@ import { join, relative } from "node:path";
 import { createPool, migrate, type Pool, type PoolClient, withClient } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
 import type { TestProject } from "vitest/node";
-import { failAfterCleanup } from "../../support/docker.ts";
+import { failAfterCleanup, removeOrphans } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -169,6 +169,9 @@ function integrationTestFiles(): string[] {
 }
 
 export default async function setup(project: TestProject): Promise<() => void> {
+  // A run killed before its teardown left its containers running; the next run removes them first (P1.38w).
+  const orphans = removeOrphans(60_000);
+  if (orphans.length > 0) process.stderr.write(`Removed test containers an ended run left: ${orphans.join(", ")}\n`);
   const { auditor, ...provided } = await startTestDatabase({
     migrationsDir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
     files: integrationTestFiles(),

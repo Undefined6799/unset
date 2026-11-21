@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { docker, OWNER_LABEL } from "./docker.ts";
+import { cleanUpAtExit, docker, OWNER_LABEL } from "./docker.ts";
 
 /** chrislusf/seaweedfs 4.53 by index digest (Docker Hub, published 2026-11-08; Apache-2.0). */
 export const OBJECTS_IMAGE =
@@ -100,3 +100,6 @@ export function stopAllObjects(): void {
 }
 
 export const STOP_OBJECTS_MS = 2 * CALL_MS;
+
+// A run that vitest ends on Ctrl-C or SIGTERM skips every afterAll; the stores still go (P1.38w).
+cleanUpAtExit(stopAllObjects);

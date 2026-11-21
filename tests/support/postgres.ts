@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPool, migrate, type Pool, type PoolOptions } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
-import { cleanUpAll, docker, failAfterCleanup, OWNER_LABEL } from "./docker.ts";
+import { cleanUpAll, cleanUpAtExit, docker, failAfterCleanup, OWNER_LABEL } from "./docker.ts";
 
 type LockEntry = { ref: string; tag: string; digest: string };
 
@@ -87,6 +87,9 @@ export const randomPassword = (): string => randomBytes(32).toString("base64url"
 export function stopAllPostgres(): void {
   stopAllPostgresWithin(CALL_MS);
 }
+
+// A run that vitest ends on Ctrl-C or SIGTERM skips every afterAll; the containers still go (P1.38w).
+cleanUpAtExit(stopAllPostgres);
 
 /** stopAllPostgres with each removal killed at `removeMs`; only the test of a killed removal lowers it. */
 export function stopAllPostgresWithin(removeMs: number): void {
