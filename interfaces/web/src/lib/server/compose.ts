@@ -24,9 +24,11 @@ import {
 import {
   type ChatAccountPorts,
   type ChatErasurePorts,
+  type ChatLockPorts,
   type ChatUser,
   createDueAccounts,
   eraseDueAccounts,
+  followAccountStates,
   newChatUser,
   type SignInPorts,
 } from "@unset/domains-messaging";
@@ -57,11 +59,13 @@ import {
 import {
   type ChatAccountStore,
   type ChatErasureStore,
+  type ChatLockStore,
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
   createChatAccountStore,
   createChatErasureStore,
+  createChatLockStore,
   createDiscoverabilityStore,
   createImageStore,
   createInviteStore,
@@ -262,6 +266,16 @@ function chatErasurePorts(store: ChatErasureStore, chatAdmin: ChatAdminClient): 
   };
 }
 
+/** Chat accounts following their members' state (domains/messaging followAccountStates; ADR 0084). */
+function chatLockPorts(store: ChatLockStore, chatAdmin: ChatAdminClient): ChatLockPorts {
+  return {
+    claim: async () => (await store.claim(1))[0] ?? null,
+    change: (user, lock) => chatAdmin.setLocked(user, lock),
+    settle: (job) => store.settle(job),
+    retry: (job, inS) => store.retry(job, inS),
+  };
+}
+
 /** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
 function standInsOf(): NonNullable<ReturnType<typeof publishedNote>>["standIns"] {
   const standIns = publishedNote()?.standIns;
@@ -447,6 +461,7 @@ async function build(): Promise<Services> {
   // delays them (ADR 0084 decision 4: chat never fails the account change).
   const chatPorts = chatAccountPorts(chatAccounts, handles, chatAdmin);
   const erasurePorts = chatErasurePorts(createChatErasureStore(pool, { leaseS: CHAT_LEASE_S }), chatAdmin);
+  const lockPorts = chatLockPorts(createChatLockStore(pool, { leaseS: CHAT_LEASE_S }), chatAdmin);
   const stopChatJobs = startSweeps({
     sweeps: [
       {
@@ -463,6 +478,7 @@ async function build(): Promise<Services> {
           if (counts.stuck > 0) log.error("chat.erasure_stuck", { count: counts.stuck });
         },
       },
+      { job: "chat-account-lock", run: async () => void (await followAccountStates(lockPorts, CHAT_JOBS_PER_RUN)) },
     ],
     everyMs: CHAT_JOBS_MS,
     log,

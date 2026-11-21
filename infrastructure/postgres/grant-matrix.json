@@ -309,7 +309,19 @@
           "attempts": ["SELECT", "UPDATE"],
           "due_at": ["SELECT", "UPDATE"],
           "lease_token": ["SELECT", "UPDATE"],
-          "updated_at": ["UPDATE"]
+          "updated_at": ["UPDATE"],
+          "locked": ["SELECT", "UPDATE"],
+          "lock_due_at": ["SELECT", "UPDATE"],
+          "lock_attempts": ["SELECT", "UPDATE"],
+          "lock_lease": ["SELECT", "UPDATE"]
+        }
+      }
+    },
+    "app.chat_lock_due": {
+      "web": {
+        "columns": {
+          "did": ["SELECT"],
+          "want_locked": ["SELECT"]
         }
       }
     },
