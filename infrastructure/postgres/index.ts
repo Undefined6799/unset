@@ -86,6 +86,7 @@ export {
   type PublicProfile,
   type PublicProfileStore,
 } from "./publicProfileStore.ts";
+export { createPushKeyStore } from "./pushKeyStore.ts";
 export { checkExit, type KidCounts, kidCounts, rewrapAll } from "./rewrapAll.ts";
 export {
   type PasswordSyncOptions,

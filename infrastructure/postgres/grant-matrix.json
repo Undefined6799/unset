@@ -494,6 +494,16 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "door.push": {
+      "chat_auth": {
+        "columns": {
+          "browser_id": ["SELECT", "INSERT"],
+          "pushkey_hash": ["SELECT", "INSERT", "UPDATE"],
+          "unread": ["SELECT", "UPDATE"],
+          "counted_at": ["SELECT", "UPDATE"]
+        }
+      }
+    },
     "door.chat_setup": {
       "chat_auth": {
         "columns": {
