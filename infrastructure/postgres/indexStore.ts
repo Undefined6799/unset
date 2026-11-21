@@ -360,10 +360,10 @@ export async function queueJob(tx: PoolClient, did: string, kind: JobKind): Prom
 
 /**
  * A commit's writes in the order they are applied, so each one is judged with room the others make: deletes first,
- * then the profile, then sections by how much each changes the account's size, the ones that shrink first. A commit
- * that keeps the account within MAX_PAGE_BYTES then never passes it partway (the sizes in between only fall, then
- * rise to the commit's own total), so a Save that grows one card and shrinks another is indexed whole (Codex review of
- * #1911).
+ * then the profile, then the sections that shrink the account, then the other sections, as the save sends them
+ * (domains/profile `inSizeOrder`). A commit that keeps the account within MAX_PAGE_BYTES then never passes it
+ * partway (the sizes in between only fall, then rise to the commit's own total), so a Save that grows one card and
+ * shrinks another is indexed whole (Codex review of #1911).
  */
 export async function inApplyOrder(tx: PoolClient, did: string, writes: readonly IndexWrite[]): Promise<IndexWrite[]> {
   const sections = writes.filter((write) => write.kind === "section");
@@ -377,7 +377,8 @@ export async function inApplyOrder(tx: PoolClient, did: string, writes: readonly
   return [
     ...writes.filter((write) => write.kind === "delete"),
     ...writes.filter((write) => write.kind === "profile"),
-    ...sections.sort((a, b) => change(a) - change(b)),
+    ...sections.filter((write) => change(write) < 0),
+    ...sections.filter((write) => change(write) >= 0),
   ];
 }
 

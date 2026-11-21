@@ -335,10 +335,9 @@ describe("a Save with pictures", () => {
       `main ${DRAFT}`,
       "upload",
       `published ${DRAFT} ${LINK}`,
-      // The card that shrinks goes first (domains/profile inSizeOrder), the uses settle in the order written.
-      "saveMany a,p",
-      `settle a ${REV} none -`,
+      "saveMany p,a",
       `settle p ${REV} ${LINK} ${DRAFT}`,
+      `settle a ${REV} none -`,
     ]);
   });
 

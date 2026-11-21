@@ -180,10 +180,11 @@ export function fitsPage(
 }
 
 /**
- * `writes` in the order to send them: by how much each changes the page's size against `stored`, the ones that shrink
- * first. A Save the PDS takes in several commits then never passes MAX_PAGE_BYTES between them, so the index, which
- * judges each commit in turn, keeps every card of a Save that fits (Codex review of #1911). The indexer orders the
- * cards within one commit the same way (indexStore.ts `inApplyOrder`).
+ * `writes` in the order to send them: the ones that shrink the page against `stored` first, then the rest, each group
+ * in the order given. The size then only falls and then rises to the Save's own total, so a Save the PDS takes in
+ * several commits never passes MAX_PAGE_BYTES between them, and the index, which judges each commit in turn, keeps
+ * every card of a Save that fits (Codex review of #1911). The indexer orders the cards within one commit by the same
+ * rule (indexStore.ts `inApplyOrder`).
  */
 export function inSizeOrder<W extends { readonly key: string | null; readonly record: unknown }>(
   stored: readonly { readonly key: string; readonly value: unknown }[],
@@ -191,7 +192,7 @@ export function inSizeOrder<W extends { readonly key: string | null; readonly re
 ): W[] {
   const before = new Map(stored.map((card) => [card.key, recordBytes(card.value)]));
   const change = (write: W) => recordBytes(write.record) - (write.key === null ? 0 : (before.get(write.key) ?? 0));
-  return [...writes].sort((a, b) => change(a) - change(b));
+  return [...writes.filter((write) => change(write) < 0), ...writes.filter((write) => change(write) >= 0)];
 }
 
 /**

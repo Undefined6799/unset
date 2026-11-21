@@ -489,11 +489,12 @@ describe("the one Save (ADR 0074)", () => {
       response = await saveAll([...text(0, CARD_A, "First of two"), ...text(1, CARD_C, "Second of two")]);
     });
     expect(response?.status).toBe(303);
+    // CARD_C shrinks (a collection of 100 becomes one line), so it is sent first (domains/profile inSizeOrder).
     expect(writes.map((w) => [w.method, w.rkey])).toEqual([
-      ["applyWrites", CARD_A],
       ["applyWrites", CARD_C],
+      ["applyWrites", CARD_A],
     ]);
-    expect(writes[1]?.record).toMatchObject({ width: "half", content: { text: "Second of two" } });
+    expect(writes[0]?.record).toMatchObject({ width: "half", content: { text: "Second of two" } });
     const shown = await (await page(`/${OWNER}`, { cookie })).text();
     expect(shown).toContain("First of two");
     expect(shown).toContain("Second of two");
