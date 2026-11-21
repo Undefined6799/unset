@@ -1,6 +1,6 @@
 // The one place the chat page talks to matrix-js-sdk 43.0.0 (guideline §1; dependency-cruiser vendor-sdk-one-adapter;
 // ADR 0088 decision 3). It starts a client on the session the door handed over, used as the SDK ships it:
-//   createClient({ baseUrl, accessToken, userId, deviceId, cryptoCallbacks })        src/matrix.ts:149
+//   createClient({ baseUrl, accessToken, userId, deviceId, cryptoCallbacks, localTimeoutMs }) src/matrix.ts:149
 //   initRustCrypto({ storageKey, cryptoDatabasePrefix })                              src/client.ts:2014-2063
 //   getCrypto().setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())          src/crypto-api/index.ts:91,840
 //   startClient({ lazyLoadMembers: true }), the default in-memory store               src/client.ts:1479
@@ -9,7 +9,11 @@
 // would also open a legacy crypto store named "matrix-js-sdk:crypto" for every account (src/browser-index.ts:36-41);
 // Element imports matrix-js-sdk/src/matrix for the same reason (apps/web/src/utils/createMatrixClient.ts:9-19).
 // Screens get our ChatState only, never an SDK object.
-import { CryptoEvent, OnlySignedDevicesIsolationMode } from "matrix-js-sdk/lib/crypto-api/index.js";
+import {
+  type CryptoCallbacks,
+  CryptoEvent,
+  OnlySignedDevicesIsolationMode,
+} from "matrix-js-sdk/lib/crypto-api/index.js";
 import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
@@ -39,17 +43,32 @@ export type ChatOptions = {
   readonly setup: { readonly claim: () => Promise<ClaimOutcome>; readonly release: () => Promise<void> };
 };
 
-/** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
-export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
-  const holder = createKeyHolder();
-  const client = createClient({
-    baseUrl: options.baseUrl,
+/**
+ * How long any request may take when its caller sets no timeout of its own (RE-1): createClient's localTimeoutMs, the
+ * default every call through the client's FetchHttpApi gets (src/client.ts:359-363, 1374; src/http-api/fetch.ts:267-273).
+ * The calls that set their own keep them: /sync its long poll plus 80 s (src/sync.ts:330, 943), the crypto's key
+ * requests 60 s (src/rust-crypto/OutgoingRequestProcessor.ts:227). 30 s matches the page's first-sync deadline and the
+ * wait for a new conversation; the SDK's own retries (setAccountData's five, client.ts:2290, 2319) each get it.
+ */
+export const REQUEST_DEADLINE_MS = 30_000;
+
+/** The client for this session, as the SDK ships it, with the request deadline. */
+export function chatClient(session: ChatSession, baseUrl: string, cryptoCallbacks: CryptoCallbacks): MatrixClient {
+  return createClient({
+    baseUrl,
     accessToken: session.accessToken,
     userId: session.userId,
     deviceId: session.deviceId,
-    // The recovery key, answered only while a setup or an unlock runs (recovery.ts createKeyHolder).
-    cryptoCallbacks: holder.callbacks,
+    cryptoCallbacks,
+    localTimeoutMs: REQUEST_DEADLINE_MS,
   });
+}
+
+/** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
+export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
+  const holder = createKeyHolder();
+  // The recovery key, answered only while a setup or an unlock runs (recovery.ts createKeyHolder).
+  const client = chatClient(session, options.baseUrl, holder.callbacks);
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
   const chat = {
