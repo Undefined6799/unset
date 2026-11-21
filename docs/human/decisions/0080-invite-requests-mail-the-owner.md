@@ -1,8 +1,9 @@
 # 0080 — Invite requests: web mails the owner each visitor's address over SMTP
 
-Status: Proposed (awaiting Alex). Book step P2.10r. Alex asked on 2026-11-20 at 21:19Z for a "request an invite"
-feature that "could send me an email", so he can send the invite by email, and chose on 2026-11-20 at 21:23Z that the
-mail to him carries the visitor's address.
+Status: Accepted by Alex, 2026-11-21 01:03Z, against 724bda1 (his line naming that head, given after it was reviewed;
+merged as 7f06e16). This status paragraph, the index row and the ADR 0001 acceptance line were added afterwards. Book
+step P2.10r. Alex asked on 2026-11-20 at 21:19Z for a "request an invite" feature that "could send me an email", so he
+can send the invite by email, and chose on 2026-11-20 at 21:23Z that the mail to him carries the visitor's address.
 
 ## Context
 

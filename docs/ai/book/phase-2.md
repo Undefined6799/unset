@@ -3237,7 +3237,7 @@ Where: `interfaces/web/src/routes/request-invite/`, `domains/identity/invite-req
   `shared/config` `optionalSecretFile`; links on `/login` and a bare `/join`.
 Goal: a visitor with no invite leaves one email address and the two sign-up ticks; the owner gets one mail with the
   address as Reply-To and sends an invite link from their own mailbox. No copy is kept (ADR 0080 point 3).
-Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
+Not in this step: the "Sign up" button on ADR 0078's limited-page card (built as P2.10t); the compose
   mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
 Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
   through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
@@ -3260,6 +3260,16 @@ Threats:
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
+
+### P2.10t — Offer Sign up on the limited page
+Tags: —            Depends on: P2.10r, P1.22a            Plan: §5.3 "Login and signup"; ADR 0078, ADR 0080
+Asked by Alex 2026-11-20 (a sign-up button on the limited page's card, pointing to request-an-invite for now).
+Where: `apps/web/lib/components/profile/limited-profile.svelte`, `interfaces/web/src/routes/@[actor]/+page.server.ts`.
+Goal: a visitor on a page shown to signed-in members only sees "Sign up" beside "Sign in", leading to
+  `/request-invite`, while invite requests are on; with them off there is no button. A page only its member sees
+  offers neither, since joining would not show it.
+Also carries the acceptance records of ADR 0080 and ADR 0078.
+Done when `signed_in_only_offers_a_visitor_sign_up_when_invite_requests_are_on` was shown red, and check is green.
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19
 Where: `domains/identity/identity-seam/{mint.ts, module-accounts.ts, verify.ts}` (`verify.ts` is the verifier: imports only
