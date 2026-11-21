@@ -180,6 +180,21 @@ export function fitsPage(
 }
 
 /**
+ * `writes` in the order to send them: by how much each changes the page's size against `stored`, the ones that shrink
+ * first. A Save the PDS takes in several commits then never passes MAX_PAGE_BYTES between them, so the index, which
+ * judges each commit in turn, keeps every card of a Save that fits (Codex review of #1911). The indexer orders the
+ * cards within one commit the same way (indexStore.ts `inApplyOrder`).
+ */
+export function inSizeOrder<W extends { readonly key: string | null; readonly record: unknown }>(
+  stored: readonly { readonly key: string; readonly value: unknown }[],
+  writes: readonly W[],
+): W[] {
+  const before = new Map(stored.map((card) => [card.key, recordBytes(card.value)]));
+  const change = (write: W) => recordBytes(write.record) - (write.key === null ? 0 : (before.get(write.key) ?? 0));
+  return [...writes].sort((a, b) => change(a) - change(b));
+}
+
+/**
  * Postgres's jsonb refuses a NUL character and a lone surrogate in any string or key (postgresql.org/docs/current/
  * datatype-json.html), and a record it refuses would fail its frame's transaction on every retry. Such a record passes
  * the lexicon, so it is skipped here as invalid.

@@ -63,6 +63,7 @@ export {
   type IndexedCollection,
   type IndexPlan,
   type IndexWrite,
+  inSizeOrder,
   MAX_PAGE_BYTES,
   MAX_RECORD_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,

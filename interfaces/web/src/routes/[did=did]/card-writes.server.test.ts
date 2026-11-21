@@ -304,6 +304,30 @@ describe("a page's cards together fit one page", () => {
     expect(calls.saved).toEqual([]);
   });
 
+  test("a Save sends the cards that shrink before the ones that grow, so each commit fits", async () => {
+    // Codex review of #1911: a Save past one applyWrites body lands in several commits, judged one at a time.
+    const stored = {
+      cards: [
+        { key: "a", value: readme("a".repeat(35_000)), cid: "c" },
+        { key: "b", value: readme("b".repeat(65_000)), cid: "c" },
+      ],
+      complete: true,
+      overflow: false,
+    };
+    const { writes, calls } = store({ list: async () => ok(stored) });
+    const version = "c" as Parameters<CardWrites["saveAll"]>[0][number]["version"];
+    const edit = (key: string, text: string) => ({
+      key: key as CardKey,
+      version,
+      content: { kind: "readme", text } as CardContent,
+      width: "full" as const,
+    });
+    expect(await writes.saveAll([edit("a", "a".repeat(65_000)), edit("b", "b".repeat(45_000))])).toEqual({
+      kind: "saved",
+    });
+    expect(calls.many.map((call) => (call.updates as { key: string }[]).map((u) => u.key))).toEqual([["b", "a"]]);
+  });
+
   test("a Save of several cards past the budget is refused and nothing is written", async () => {
     const stored = { cards: [{ key: "k0", value: readme("A"), cid: "c" }], complete: true, overflow: false };
     const { writes, calls } = store({ list: async () => ok(stored) });

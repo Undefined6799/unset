@@ -13,6 +13,7 @@ import {
   type CardWidth,
   type DraftImageId,
   fitsPage,
+  inSizeOrder,
   type ProfileError,
   pictureLink,
   reorderCards,
@@ -393,8 +394,11 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
         const built = buildEdits(ready, listed.value, now());
         if (!built.ok) return done(built.failed, []);
         if (!fitsPage(listed.value.cards, built.updates)) return done(failed("card.page_full"), []);
-        cards = built.updates;
-        const saved = await store.saveMany(built.updates, head.value);
+        // Cards that shrink go first: a Save past one write's size lands in several commits, and the page must fit
+        // after each of them, as the index judges it.
+        const updates = inSizeOrder(listed.value.cards, built.updates);
+        cards = updates;
+        const saved = await store.saveMany(updates, head.value);
         if (saved.kind !== "ok") return done(pdsFailure(saved), [], unanswered(saved));
         if (saved.value.kind === "saved") return done(SAVED, all, false, saved.value.rev);
         if (saved.value.kind === "too_large") return done(tooLarge(edits, saved.value.key), []);
