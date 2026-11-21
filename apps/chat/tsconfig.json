@@ -7,6 +7,6 @@
     "lib": ["es2025", "dom", "dom.iterable"],
     "types": ["node"]
   },
-  "include": ["core/**/*.ts", "matrix/**/*.ts"],
+  "include": ["*.test.ts", "core/**/*.ts", "matrix/**/*.ts", "lib/**/*.test.ts"],
   "exclude": ["dist"]
 }
