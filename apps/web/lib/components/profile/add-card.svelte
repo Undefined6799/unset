@@ -48,7 +48,12 @@ import { Icon } from "../icon/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import CardEditor from "./card-editor.svelte";
 
-let { limits, enhance }: { limits: CardEditLimits; enhance?: Enhance } = $props();
+let {
+  limits,
+  newKey,
+  enhance,
+}: { limits: CardEditLimits; /** The page's newCardKey, for the card the form adds. */ newKey?: string; enhance?: Enhance } =
+  $props();
 
 const KINDS = $derived(cardKinds(limits));
 
@@ -110,6 +115,7 @@ const backToAdd = () => document.getElementById(triggerId);
     submit={CARD_EDIT.add}
     max={maxRows(limits, option.kind)}
     textMax={limits.text}
+    {newKey}
     {enhance}
   />
 {/each}

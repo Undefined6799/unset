@@ -387,7 +387,11 @@ test.describe("on a phone", () => {
     await last.click();
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
+    const line = await editor.locator("p").last().boundingBox();
     await page.keyboard.type("/");
+    // The first change brings the unsaved bar, which takes its room above the cards: the line typed on stays where it
+    // was (WebKit has no scroll anchoring, and there it jumped down by the bar's height, off the screen).
+    expect((await editor.locator("p").last().boundingBox())?.y).toBe(line?.y);
     const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
     await expect(menu).toBeVisible();
     // plugin-slash 7.23.0 shows the menu at once and moves it when floating-ui's computePosition settles (a promise), so
