@@ -23,7 +23,7 @@ import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { Textarea } from "@unset/apps-web/lib/components/ui/textarea";
 import { clearDraft, type Draft, readDraft, writeDraft } from "@unset/apps-web/lib/profile/drafts.ts";
 import { cardName, OWN_PAGE, TEXT_IN_PLACE, UNSAVED_BAR } from "@unset/apps-web/lib/profile/messages.ts";
-import { cardSaveForm, readSaveAnswer } from "@unset/apps-web/lib/profile/save-all.ts";
+import { type CardEdit, cardSaveForm, readSaveAnswer } from "@unset/apps-web/lib/profile/save-all.ts";
 import type { CardView } from "@unset/apps-web/lib/profile/types.ts";
 import {
   afterSave,
@@ -31,6 +31,7 @@ import {
   edit,
   editsToSave,
   NO_EDITS,
+  offeredAfterSave,
   onPage,
   type UnsavedCards,
 } from "@unset/apps-web/lib/profile/unsaved.ts";
@@ -171,6 +172,7 @@ async function save() {
   const before = edits;
   edits = afterSave(edits, written, data.cards, previous);
   keepDrafts(keys, before);
+  moveOffered(written);
   if (answer.kind === "saved") said = { text: UNSAVED_BAR.saved, refused: false };
   else if (answer.kind === "refused") said = { text: answer.message, refused: true };
   else said = { text: UNSAVED_BAR.failed, refused: true };
@@ -191,6 +193,16 @@ function keepDrafts(written: readonly string[], before: UnsavedCards) {
       if (before.has(key)) void clearDraft(store, data.account.did, key);
     } else void writeDraft(store, data.account.did, key, { version: left.version, text });
   }
+}
+
+/** An offered draft whose card's Width or Style was just written moves to the new version, here and on the device. */
+function moveOffered(written: readonly CardEdit[]) {
+  const moved = offeredAfterSave(offered, written, data.cards);
+  if (moved === offered) return;
+  const store = storage();
+  for (const [key, draft] of moved)
+    if (store !== null && offered.get(key) !== draft) void writeDraft(store, data.account.did, key, draft);
+  offered = moved;
 }
 
 function toggleMarkdown(key: string) {

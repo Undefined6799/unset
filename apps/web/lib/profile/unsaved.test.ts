@@ -1,7 +1,7 @@
 // The owner's unsaved Text cards (ADR 0074 item 4): what the bar counts, what Save posts and what a Save leaves.
 import { describe, expect, test } from "vitest";
 import type { CardView } from "./types.ts";
-import { afterSave, edit, editsToSave, NO_EDITS, onPage } from "./unsaved.ts";
+import { afterSave, edit, editsToSave, NO_EDITS, offeredAfterSave, onPage } from "./unsaved.ts";
 
 const text = (key: string, words: string, version: string | null = `v-${key}`): CardView => ({
   key,
@@ -144,6 +144,22 @@ describe("unsaved cards", () => {
     const left = afterSave(typed, editsToSave(sent, page), [], page);
     expect(left.get("a")).toMatchObject({ version: "v-a", fields: { text: "Hello there" } });
     expect(afterSave(sent, editsToSave(sent, page), [], page).size).toBe(0);
+  });
+
+  // Codex on e6d4d1d: a Width or Style change written while an earlier draft is offered moves that draft to the
+  // version just written, so bringing it back and saving is no conflict. One that began on another version keeps it.
+  test("an_offered_draft_moves_to_the_version_its_card_s_layout_save_wrote", () => {
+    const layout = edit(NO_EDITS, page, "a", { width: "half" });
+    const offered = new Map([
+      ["a", { version: "v-a", text: "Draft words" }],
+      ["b", { version: "v-b-old", text: "Older" }],
+    ]);
+    const withB = edit(layout, page, "b", { width: "half" });
+    const stored = [text("a", "Hi", "v-a2"), text("b", "There", "v-b2")];
+    const moved = offeredAfterSave(offered, editsToSave(withB, page), stored);
+    expect(moved.get("a")).toEqual({ version: "v-a2", text: "Draft words" });
+    expect(moved.get("b")).toEqual({ version: "v-b-old", text: "Older" });
+    expect(offeredAfterSave(offered, [], stored)).toBe(offered);
   });
 
   // Codex on 1bdb437: a card deleted from its menu leaves nothing unsaved behind.

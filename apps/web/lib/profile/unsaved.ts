@@ -2,6 +2,7 @@
 // such as a Text card's words, and the Width and Style chosen in its menu) with the version its editor opened, until
 // one Save writes them. A card put back to what is stored is no longer unsaved, so the bar counts only real changes.
 // Kept as plain values (a new map per change) so the page's state and its tests read alike.
+import type { Draft } from "./drafts.ts";
 import type { CardEdit } from "./save-all.ts";
 import type { CardView } from "./types.ts";
 
@@ -118,4 +119,26 @@ function putBack(before: readonly CardView[], sent: CardEdit): Unsaved | undefin
   const fields = card === undefined ? null : storedFields(card);
   if (card === undefined || fields === null) return undefined;
   return { version: sent.version, kind: sent.kind, width: card.width, surface: card.surface, fields };
+}
+
+/**
+ * The drafts offered from an earlier visit once a Save wrote `written`: a card written from the version its draft began
+ * on (only its Width or Style changed, as typing retires the offer) moves the draft to the version now `stored`, so
+ * bringing it back and saving is no conflict. A draft that began on another version keeps it, so Save names the change
+ * made elsewhere. The same map when none moved.
+ */
+export function offeredAfterSave(
+  offered: ReadonlyMap<string, Draft>,
+  written: readonly CardEdit[],
+  stored: readonly CardView[],
+): ReadonlyMap<string, Draft> {
+  let next: Map<string, Draft> | undefined;
+  for (const sent of written) {
+    const draft = offered.get(sent.key);
+    const version = stored.find((c) => c.key === sent.key)?.version;
+    if (draft === undefined || draft.version !== sent.version || version === undefined) continue;
+    next ??= new Map(offered);
+    next.set(sent.key, { ...draft, version });
+  }
+  return next ?? offered;
 }
