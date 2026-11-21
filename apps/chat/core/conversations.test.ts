@@ -145,7 +145,17 @@ describe("actionsOf", () => {
 
   test("chat.reply_while_sending: a message may be replied to only while the composer sends", () => {
     expect(actionsOf(text(false), "on")).toEqual(["react", "reply"]);
-    expect(actionsOf(text(true), "pending")).toEqual(["react", "reply"]);
+    expect(actionsOf(text(false), "pending")).toEqual(["react", "reply"]);
     expect(actionsOf(text(false), "they_left")).toEqual([]);
+  });
+
+  test("chat.delete_own: only this member's own message, while still a member of an encrypted conversation", () => {
+    expect(actionsOf(text(true), "on")).toEqual(["react", "reply", "delete"]);
+    expect(actionsOf(text(true), "they_left")).toEqual(["delete"]);
+    expect(actionsOf(text(true), "waiting_for_encryption")).toEqual(["delete"]);
+    expect(actionsOf(text(false), "on")).not.toContain("delete");
+    for (const composer of ["request", "gone", "not_encrypted"] as const)
+      expect(actionsOf(text(true), composer), composer).not.toContain("delete");
+    expect(actionsOf({ ...base, mine: true, kind: "deleted" }, "on")).toEqual([]);
   });
 });

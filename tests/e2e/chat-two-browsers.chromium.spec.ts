@@ -136,6 +136,24 @@ async function talking(browser: Browser) {
   await expect(answer.locator("[data-reply-to]")).toContainText("You hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  // Alice deletes a message of hers after confirming; both see "Message deleted" in its place (ADR 0092 decision 2).
+  await send(a.page, "oops from alice");
+  await expect(messages(b.page)).toContainText("oops from alice", { timeout: 60_000 });
+  const oops = message(a.page, "oops from alice");
+  const oopsId = await oops.getAttribute("data-message");
+  // Only the sender has Delete; the toolbar is in the page but hidden until hover, hence includeHidden.
+  const deleteOn = (page: Page) =>
+    message(page, "oops from alice").getByRole("button", { name: "Delete", exact: true, includeHidden: true });
+  await expect(deleteOn(a.page)).toHaveCount(1);
+  await expect(deleteOn(b.page)).toHaveCount(0);
+  await oops.hover();
+  await oops.getByRole("button", { name: "Delete", exact: true }).click();
+  await oops.locator("[data-confirm-delete]").getByRole("button", { name: "Delete", exact: true }).click();
+  for (const p of [a, b])
+    await expect(p.page.locator(`[data-message="${oopsId}"] [data-deleted]`)).toHaveText("Message deleted", {
+      timeout: 60_000,
+    });
+  await expect(messages(b.page)).not.toContainText("oops from alice");
   for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
   return { alice, bob, a, b, aliceKey };
 }
@@ -161,7 +179,9 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
     .chunk as { type: string; content: unknown }[];
   const sent = chunk.filter((e) => e.type === "m.room.encrypted" || e.type === "m.room.message");
-  expect(sent.map((e) => e.type)).toEqual(Array(4).fill("m.room.encrypted"));
+  expect(sent.map((e) => e.type)).toEqual(Array(5).fill("m.room.encrypted"));
+  // The deleted one keeps no ciphertext on the server (spec v1.18 #redactions).
+  expect(sent.filter((e) => Object.keys(e.content as object).length === 0)).toHaveLength(1);
   // The reply's pointer is the one thing beside its ciphertext (ADR 0092 decision 3).
   const relations = sent.map((e) => (e.content as Record<string, unknown>)["m.relates_to"]).filter(Boolean);
   expect(relations).toEqual([{ "m.in_reply_to": { event_id: expect.stringMatching(/^\$/) } }]);

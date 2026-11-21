@@ -25,6 +25,9 @@
 //   ReactionPicker.tsx:86-115): this member's own annotation with that key is taken back with redactEvent, otherwise
 //   sendEvent sends an m.reaction annotation, which matrix-js-sdk 43.0.0 never encrypts (src/client.ts:3056). A
 //   message's reactions are the timeline set's relations, as Element reads them (TimelinePanel.tsx:1810-1815).
+// - remove: redactEvent with no reason, as Element's Remove does after its confirm when no reason is typed
+//   (apps/web/src/components/views/dialogs/ConfirmRedactDialog.tsx:63-72), only of this member's own message while
+//   they are still in an encrypted conversation (core/conversations.ts actionsOf; ADR 0092 decision 2).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
 // - send: sendTextMessage (client.ts:3272-3294), or for a reply sendMessage with replyContent (matrix/conversations.ts;
 //   Element's makeReplyMixIn), only while the composer sends, checked again just before sending:
@@ -48,6 +51,7 @@ import {
   RoomStateEvent,
 } from "matrix-js-sdk/lib/matrix.js";
 import {
+  actionsOf,
   type Composer,
   type Conversation,
   type ConversationId,
@@ -213,6 +217,20 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     }
   };
 
+  /** Deletes this member's own message, only where actionsOf offers it. */
+  const deleteOwn = async (room: Room, other: string, messageId: string) => {
+    const target = room.findEventById(messageId);
+    if (!isAvailable(room) || target === undefined) return false;
+    const [shown] = toMessages([target], me);
+    if (shown === undefined || !actionsOf(shown, await composerFor(room, other)).includes("delete")) return false;
+    try {
+      await client.redactEvent(room.roomId, messageId);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const recordDirect = (roomId: string, other: string) =>
     client.setAccountData(
       EventType.Direct,
@@ -278,6 +296,11 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());
       return room !== null && other !== undefined && (await sendIn(room, other, text, replyTo));
+    },
+    async remove(id, messageId) {
+      const room = client.getRoom(id);
+      const other = room === null ? undefined : otherPerson(room, direct());
+      return room !== null && other !== undefined && (await deleteOwn(room, other, messageId));
     },
     async react(id, messageId, key) {
       const room = client.getRoom(id);

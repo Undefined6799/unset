@@ -44,7 +44,10 @@ export type Quote = { readonly id: string; readonly mine: boolean } & (
   | { readonly kind: "unavailable" }
 );
 
-/** A line of the conversation: text, or a message this browser cannot read. User text is never markup. */
+/**
+ * A line of the conversation: text, a message this browser cannot read, or one its sender deleted (ADR 0092 decision
+ * 2). User text is never markup.
+ */
 export type Message = {
   readonly id: string;
   readonly mine: boolean;
@@ -55,14 +58,21 @@ export type Message = {
   readonly reactions: readonly Reaction[];
   /** The message this one answers (ADR 0092 decision 3), or null. */
   readonly replyTo: Quote | null;
-} & ({ readonly kind: "text"; readonly text: string } | { readonly kind: "unreadable" });
+} & ({ readonly kind: "text"; readonly text: string } | { readonly kind: "unreadable" } | { readonly kind: "deleted" });
 
 /** What a member can do with a message from its menu. */
-export type MessageAction = "react" | "reply";
+export type MessageAction = "react" | "reply" | "delete";
 
-/** React and reply while the composer sends. */
-export function actionsOf(_message: Message, composer: Composer): readonly MessageAction[] {
-  return canSend(composer) ? ["react", "reply"] : [];
+/**
+ * React and reply while the composer sends; delete one's own message while still a member of an encrypted
+ * conversation, the only redaction of a message the server takes (ADR 0092 decision 2). Nothing on a deleted message.
+ */
+export function actionsOf(message: Message, composer: Composer): readonly MessageAction[] {
+  if (message.kind === "deleted") return [];
+  const actions: MessageAction[] = canSend(composer) ? ["react", "reply"] : [];
+  const member = composer !== "request" && composer !== "gone" && composer !== "not_encrypted";
+  if (message.mine && member) actions.push("delete");
+  return actions;
 }
 
 /**
@@ -138,6 +148,8 @@ export type Conversations = {
   readonly older: (id: ConversationId) => Promise<void>;
   /** Sends only while the composer sends, as a reply to the message `replyTo` when given; false when not sent. */
   readonly send: (id: ConversationId, text: string, replyTo?: string) => Promise<boolean>;
+  /** Deletes this member's own message for both people; false when it was not deleted. */
+  readonly remove: (id: ConversationId, messageId: string) => Promise<boolean>;
   /** Puts `key` on the message, or takes this member's own `key` back off it; false when nothing changed. */
   readonly react: (id: ConversationId, messageId: string, key: QuickReaction) => Promise<boolean>;
 };

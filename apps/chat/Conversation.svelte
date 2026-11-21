@@ -81,6 +81,12 @@ async function send(event: SubmitEvent) {
   }
 }
 
+/** Deletes one's own message after its confirm; a reply being written to it is dropped (ADR 0092 decision 2). */
+async function remove(message: Message) {
+  if (replyingTo?.id === message.id) replyingTo = null;
+  failed = !(await conversations.remove(id, message.id));
+}
+
 async function accept() {
   failed = !(await conversations.accept(id));
 }
@@ -115,6 +121,7 @@ async function accept() {
           otherName={view.conversation.with.name}
           onReact={(key) => conversations.react(id, message.id, key)}
           onReply={() => startReply(message)}
+          onDelete={() => remove(message)}
         />
       {/each}
     </ol>

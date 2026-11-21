@@ -187,4 +187,21 @@ describe("replies", () => {
 });
 
 // Element shows a redacted message as "Message deleted" (element-web v1.12.35 apps/web/src/i18n/strings/en_EN.json,
-// timeline.self_redaction); the SDK strips a redacted event's content in place (src/models/event.ts:1309).
+// timeline.self_redaction); the SDK strips a redacted event's content in place (MatrixEvent.makeRedacted,
+// src/models/event.ts:1224) and isRedacted then reports it (event.ts:1309).
+describe("deleted messages", () => {
+  test("chat.message_deleted: a redacted message is shown as deleted, with no reactions, quote or text", () => {
+    const r = room("!d:unset.cc", [member(ME, "join"), member(THEM, "join")]);
+    const gone = event({ type: "m.room.message", room_id: "!d:unset.cc", content: replyContent("oops", "$x") });
+    const redaction = event({ type: "m.room.redaction", room_id: "!d:unset.cc", redacts: gone.getId(), content: {} });
+    gone.makeRedacted(redaction, r);
+    const quoting = event({ type: "m.room.message", content: replyContent("what?", gone.getId() as string) });
+    const shown = toMessages([gone, quoting], ME, {
+      annotations: () => [["👍", new Set([event({ type: "m.reaction", content: {} })])]],
+      find: (eventId) => (eventId === gone.getId() ? gone : undefined),
+    });
+    expect(shown[0]).toMatchObject({ kind: "deleted", reactions: [], replyTo: null });
+    expect(shown[0]).not.toHaveProperty("text");
+    expect(shown[1]?.replyTo).toMatchObject({ kind: "deleted" });
+  });
+});

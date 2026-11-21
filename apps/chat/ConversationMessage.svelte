@@ -5,7 +5,10 @@
   while the pointer is over the message or focus is in it, and a right-click opens them; on a phone pressing and holding
   opens them. React offers Element's eight quick reactions (ADR 0092 decision 1); a reaction under the message is
   pressed to add one's own or take it back. Reply quotes the message above the composer, and a reply shows what it
-  answers above its own text (decision 3). Text is the sender's own: Svelte escapes it, and nothing renders markup.
+  answers above its own text (decision 3). Delete asks to confirm first, as Element's ConfirmRedactDialog does
+  (apps/web/src/components/views/dialogs/ConfirmRedactDialog.tsx:63-72), and a deleted message shows "Message deleted"
+  (en_EN.json timeline.self_redaction; decision 2). Text is the sender's own: Svelte escapes it, and nothing renders
+  markup.
 -->
 <script lang="ts">
 import {
@@ -25,6 +28,7 @@ let {
   otherName,
   onReact,
   onReply,
+  onDelete,
 }: {
   message: Message;
   actions: readonly MessageAction[];
@@ -34,10 +38,14 @@ let {
   otherName: string;
   onReact: (key: QuickReaction) => void;
   onReply: () => void;
+  onDelete: () => void;
 } = $props();
 
-/** closed: only hover or focus shows the actions; actions: opened by right-click or press and hold; react: the picker. */
-let menu = $state<"closed" | "actions" | "react">("closed");
+/**
+ * closed: only hover or focus shows the actions; actions: opened by right-click or press and hold; react: the picker;
+ * delete: the confirm before deleting.
+ */
+let menu = $state<"closed" | "actions" | "react" | "delete">("closed");
 /** How long a press is held before it opens the actions, as a long press on a phone. */
 const HOLD_MS = 500;
 let holding: ReturnType<typeof setTimeout> | undefined;
@@ -67,6 +75,11 @@ function closeOnEscape(event: KeyboardEvent) {
   if (event.key === "Escape") menu = "closed";
 }
 
+function confirmDelete() {
+  menu = "closed";
+  onDelete();
+}
+
 function react(key: QuickReaction) {
   menu = "closed";
   onReact(key);
@@ -94,6 +107,8 @@ function react(key: QuickReaction) {
   {/if}
   {#if message.kind === "text"}
     <p class="bg-muted rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap">{message.text}</p>
+  {:else if message.kind === "deleted"}
+    <p class="text-muted-foreground text-sm italic" data-deleted>Message deleted</p>
   {:else}
     <p class="text-muted-foreground text-sm italic" data-unreadable>This message can't be read on this browser</p>
   {/if}
@@ -142,6 +157,25 @@ function react(key: QuickReaction) {
           }}><Icon name="reply" size={16} />Reply</Button
         >
       {/if}
+      {#if can("delete")}
+        <Button variant="ghost" size="sm" aria-expanded={menu === "delete"} onclick={() => (menu = "delete")}>
+          <Icon name="delete" size={16} />Delete
+        </Button>
+      {/if}
+    </div>
+  {/if}
+  {#if menu === "delete"}
+    <div
+      class="flex flex-wrap items-center gap-1"
+      role="group"
+      aria-label="Delete message"
+      tabindex="-1"
+      onkeydown={closeOnEscape}
+      data-confirm-delete
+    >
+      <p class="text-sm">Delete this message? It is deleted for both of you.</p>
+      <Button variant="destructive" size="sm" onclick={confirmDelete}>Delete</Button>
+      <Button variant="ghost" size="sm" onclick={() => (menu = "closed")}>Cancel</Button>
     </div>
   {/if}
   {#if menu === "react"}

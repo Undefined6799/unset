@@ -132,6 +132,12 @@ export function unconfirmedDevice(info: EventEncryptionInfo | null): boolean {
   return info !== null && info.shieldColour === EventShieldColour.RED;
 }
 
+/**
+ * The types a message is sent as; a redacted one is a deleted message (MatrixEvent.isRedacted,
+ * src/models/event.ts:1309).
+ */
+const MESSAGE_TYPES: ReadonlySet<string> = new Set([EventType.RoomMessageEncrypted, EventType.RoomMessage]);
+
 /** What toMessages is told about the events beside the events themselves. */
 export type About = {
   /** Ids of events sent from a device its owner has not confirmed (unconfirmedDevice). */
@@ -142,27 +148,37 @@ export type About = {
   readonly find?: (eventId: string) => MatrixEvent | undefined;
 };
 
-/** The timeline's text messages and unreadable ones, in order, with their reactions; anything else is left out. */
+/**
+ * The timeline's text messages, unreadable ones and deleted ones, in order, with their reactions and the message each
+ * reply answers; anything else is left out.
+ */
 export function toMessages(events: readonly MatrixEvent[], me: string, about: About = {}): Message[] {
-  const { unconfirmed = new Set(), annotations = () => null, find = () => undefined } = about;
   const messages: Message[] = [];
   for (const event of events) {
-    const id = event.getId();
-    if (id === undefined || event.isState()) continue;
-    const reactions = reactionsOf(annotations(id), me);
-    const replyTo = event.replyEventId === undefined ? null : quoteOf(event.replyEventId, find(event.replyEventId), me);
-    const mine = event.getSender() === me;
-    const base = { id, mine, at: event.getTs(), unconfirmed: unconfirmed.has(id), reactions, replyTo };
-    if (event.isDecryptionFailure()) {
-      messages.push({ ...base, kind: "unreadable" });
-      continue;
-    }
-    const content = event.getContent();
-    if (event.getType() !== EventType.RoomMessage || content.msgtype !== "m.text") continue;
-    if (typeof content.body !== "string" || content.body === "") continue;
-    messages.push({ ...base, kind: "text", text: content.body });
+    const message = messageOf(event, me, about);
+    if (message !== null) messages.push(message);
   }
   return messages;
+}
+
+/** One event as a message, or null for anything that is not one. */
+function messageOf(event: MatrixEvent, me: string, about: About): Message | null {
+  const { unconfirmed = new Set(), annotations = () => null, find = () => undefined } = about;
+  const id = event.getId();
+  if (id === undefined || event.isState()) return null;
+  const mine = event.getSender() === me;
+  if (event.isRedacted()) {
+    if (!MESSAGE_TYPES.has(event.getType())) return null;
+    return { id, mine, at: event.getTs(), unconfirmed: false, reactions: [], replyTo: null, kind: "deleted" };
+  }
+  const reactions = reactionsOf(annotations(id), me);
+  const replyTo = event.replyEventId === undefined ? null : quoteOf(event.replyEventId, find(event.replyEventId), me);
+  const base = { id, mine, at: event.getTs(), unconfirmed: unconfirmed.has(id), reactions, replyTo };
+  if (event.isDecryptionFailure()) return { ...base, kind: "unreadable" };
+  const content = event.getContent();
+  if (event.getType() !== EventType.RoomMessage || content.msgtype !== "m.text") return null;
+  if (typeof content.body !== "string" || content.body === "") return null;
+  return { ...base, kind: "text", text: content.body };
 }
 
 /**
