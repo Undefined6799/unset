@@ -12,12 +12,22 @@ const key = (raw: string) => {
   return parsed;
 };
 const stored = (content: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
-  $type: "sh.unset.section",
+  $type: "sh.unset.card",
   content,
   createdAt: T1,
   ...extra,
 });
-const ref = (kind: string) => `sh.unset.section#${kind}`;
+/** Each kind's block (ADR 0086), and the buttons block's two button defs. */
+const REFS: Record<string, string> = {
+  readme: "sh.unset.block.text",
+  links: "sh.unset.block.links",
+  collection: "sh.unset.block.showcase",
+  buttons: "sh.unset.block.buttons",
+  image: "sh.unset.block.images",
+  emailButton: "sh.unset.block.buttons#email",
+  linkButton: "sh.unset.block.buttons#link",
+};
+const ref = (kind: string) => REFS[kind] ?? `sh.unset.block.${kind}`;
 
 describe("parseCardInput", () => {
   test("trims fields, adds https to bare addresses and drops empty optional fields", () => {
@@ -131,7 +141,7 @@ describe("toCardRecord", () => {
     const built = toCardRecord(content, width, null, NOW);
     expect(built.ok).toBe(true);
     expect(built.ok && built.record.createdAt).toBe(NOW);
-    expect(built.ok && validateRecord("sh.unset.section", built.record, "write")).toMatchObject({ ok: true });
+    expect(built.ok && validateRecord("sh.unset.card", built.record, "write")).toMatchObject({ ok: true });
   });
 
   test("empty optional fields and the default width are not written", () => {
@@ -139,7 +149,7 @@ describe("toCardRecord", () => {
     expect(toCardRecord(content, width, null, NOW)).toEqual({
       ok: true,
       record: {
-        $type: "sh.unset.section",
+        $type: "sh.unset.card",
         content: { $type: ref("collection"), layout: "carousel", items: [{ title: "A" }] },
         createdAt: NOW,
       },
@@ -152,7 +162,7 @@ describe("toCardRecord", () => {
     expect(toCardRecord(content, width, existing, NOW)).toEqual({
       ok: true,
       record: {
-        $type: "sh.unset.section",
+        $type: "sh.unset.card",
         pinned: true,
         width: "half",
         content: { $type: ref("readme"), mood: "calm", text: "new" },
@@ -253,9 +263,9 @@ describe("toCardRecord", () => {
   });
 
   test("the editor adds at most its own limit of rows, under the lexicon's", () => {
-    expect(CARD_EDIT_LIMITS.links).toBeLessThanOrEqual(LIMITS.section.linksMax);
-    expect(CARD_EDIT_LIMITS.collection).toBeLessThanOrEqual(LIMITS.section.entriesMax);
-    expect(CARD_EDIT_LIMITS.buttons).toBeLessThanOrEqual(LIMITS.section.buttonsMax);
+    expect(CARD_EDIT_LIMITS.links).toBeLessThanOrEqual(LIMITS.card.linksMax);
+    expect(CARD_EDIT_LIMITS.collection).toBeLessThanOrEqual(LIMITS.card.entriesMax);
+    expect(CARD_EDIT_LIMITS.buttons).toBeLessThanOrEqual(LIMITS.card.buttonsMax);
     const links = (n: number) => Array.from({ length: n }, (_, i) => ({ uri: `https://x.example/${i}` }));
     const at = parsed({ kind: "links", items: links(CARD_EDIT_LIMITS.links) });
     expect(toCardRecord(at.content, at.width, null, NOW).ok).toBe(true);
@@ -316,7 +326,7 @@ describe("card surfaces", () => {
     expect(built.ok).toBe(true);
     if (!built.ok) throw new Error("record refused");
     expect(built.record.surface).toBe(surface === "filled" ? undefined : surface);
-    expect(validateRecord("sh.unset.section", built.record, "write").ok).toBe(true);
+    expect(validateRecord("sh.unset.card", built.record, "write").ok).toBe(true);
   });
 
   test.each(["", "future", " Plain ", null, 1, {}])("refuses new surface %j", (surface) => {

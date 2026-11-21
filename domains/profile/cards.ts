@@ -1,5 +1,5 @@
-// Profile cards (ADR 0051): each card is one sh.unset.section record in the member's PDS, and the profile's `cards`
-// list sets their order. Readers are lenient, since any client may write these records: a card that does not
+// Profile cards (ADR 0051, ADR 0086): each card is one sh.unset.card record in the member's PDS holding one
+// sh.unset.block, and the profile's `cards` list of at:// addresses sets their order. Readers are lenient, since any client may write these records: a card that does not
 // validate, or whose kind this version does not know, is hidden, and an address that is not plain http(s) is
 // dropped. Writing is in card-edit.ts.
 // Lexicon rules: https://atproto.com/specs/lexicon ("Lexicon Evolution", "Authority and Control").
@@ -9,8 +9,11 @@ import { isWebAddress } from "./web-address.ts";
 export type Obj = Readonly<Record<string, unknown>>;
 
 declare const cardKey: unique symbol;
-/** A record key of one of the member's sh.unset.section records. */
+/** A record key of one of the member's sh.unset.card records. */
 export type CardKey = string & { readonly [cardKey]: true };
+declare const repoDid: unique symbol;
+/** The DID of the repository a profile and its cards live in; the card list's addresses must name it. */
+export type RepoDid = string & { readonly [repoDid]: true };
 
 export type CardSurface = "filled" | "outlined" | "plain";
 export type CardWidth = "full" | "half";
@@ -89,9 +92,39 @@ export type CardError =
  */
 export type Failed = { readonly ok: false; readonly code: CardError; readonly field?: string };
 
-export const NSID = "sh.unset.section";
-/** The most cards a member keeps: the profile's `cards` order holds this many, and the page reads this many. */
-export const CARDS_MAX = LIMITS.profile.cardsMax;
+export const NSID = "sh.unset.card";
+/**
+ * The block each card kind writes (ADR 0086). The kinds keep the editor's names; the record's names are the
+ * lexicon's, and only this map and the value maps below join them.
+ */
+export const BLOCKS = {
+  readme: "sh.unset.block.text",
+  links: "sh.unset.block.links",
+  collection: "sh.unset.block.showcase",
+  buttons: "sh.unset.block.buttons",
+  image: "sh.unset.block.images",
+} as const satisfies Record<CardKind, string>;
+const KIND_OF_BLOCK = new Map<string, CardKind>(
+  Object.entries(BLOCKS).map(([kind, block]) => [block, kind as CardKind]),
+);
+/**
+ * The lexicon's kebab-case values for the presets and fits whose editor names differ. A custom button writes no preset:
+ * the lexicon has no such value, and an absent preset means the reader shows the label (ADR 0086).
+ */
+export const PRESET_VALUES: Readonly<Record<LinkPreset, string>> = {
+  bookCall: "book-call",
+  hire: "hire",
+  subscribe: "subscribe",
+  custom: "",
+};
+export const FIT_VALUES: Readonly<Record<CardFit, string>> = { contain: "contain", fill: "cover" };
+const fromValue = <T extends string>(values: Readonly<Record<T, string>>, raw: unknown): T | undefined =>
+  (Object.keys(values) as T[]).find((key) => values[key] === raw);
+/**
+ * The most cards a member keeps: the editor creates and the page reads this many. The lexicon's ceiling is
+ * LIMITS.profile.cardsMax (100), so this can grow without a new schema (ADR 0086; Alex, 2026-11-21).
+ */
+export const CARDS_MAX = 50;
 /** The kinds a page shows; a picture card stays hidden until P2.19c draws it (book P2.19a). */
 const KINDS: readonly ShownCardContent["kind"][] = ["readme", "links", "collection", "buttons"];
 export const FITS: readonly CardFit[] = ["contain", "fill"];
@@ -139,24 +172,22 @@ export function parseCardVersion(raw: unknown): CardVersion | null {
  * (? & = # %) can pass, so a stored address can never add headers or recipients to the link (RFC 6068 section 2).
  */
 export function isEmailAddress(value: string): boolean {
-  return bytes(value) <= LIMITS.section.emailBytes && /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(value);
+  return bytes(value) <= LIMITS.card.emailBytes && /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(value);
 }
 
 function readButton(value: unknown): CardButton | null {
   if (!isObject(value)) return null;
-  if (value.$type === `${NSID}#emailButton`) {
+  if (value.$type === `${BLOCKS.buttons}#email`) {
     const address = text(value.address);
     return isEmailAddress(address) ? { kind: "email", address } : null;
   }
-  if (value.$type !== `${NSID}#linkButton` || !isWebAddress(text(value.uri))) return null;
-  const preset = oneOf(PRESETS, value.preset) ? value.preset : "custom";
+  if (value.$type !== `${BLOCKS.buttons}#link` || !isWebAddress(text(value.uri))) return null;
+  const preset = fromValue(PRESET_VALUES, value.preset) ?? "custom";
   return { kind: "link", preset, uri: text(value.uri), label: text(value.label) };
 }
 
 function readContent(content: Obj): ShownCardContent | null {
-  const prefix = `${NSID}#`;
-  const type = text(content.$type);
-  const kind = type.startsWith(prefix) ? type.slice(prefix.length) : "";
+  const kind = KIND_OF_BLOCK.get(text(content.$type));
   if (!oneOf(KINDS, kind)) return null;
   const items = Array.isArray(content.items) ? content.items.filter(isObject) : [];
   const layout = (fallback: CardLayout) => (oneOf(LAYOUTS, content.layout) ? content.layout : fallback);
@@ -206,18 +237,36 @@ export function readCard(key: CardKey, value: unknown): Card | null {
   return { key, width, surface, createdAt: text(value.createdAt), content };
 }
 
+/** A DID as the at:// addresses in a card list carry it (atproto.com/specs/did, "DID Syntax"). */
+export function parseRepoDid(raw: unknown): RepoDid | null {
+  return typeof raw === "string" && /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2040}$/.test(raw) && !raw.endsWith(":")
+    ? (raw as RepoDid)
+    : null;
+}
+
+/** The at:// address the profile's card list names a card of `owner` by (atproto.com/specs/at-uri-scheme). */
+export const cardUri = (owner: RepoDid, key: CardKey) => `at://${owner}/${NSID}/${key}`;
+
+/** The key of a listed card, or null when the entry names no card of `owner` (another account's cards are skipped). */
+function listedKey(owner: RepoDid, entry: unknown): string | null {
+  const uri = isObject(entry) ? entry.uri : undefined;
+  const prefix = `at://${owner}/${NSID}/`;
+  return typeof uri === "string" && uri.startsWith(prefix) ? uri.slice(prefix.length) : null;
+}
+
 /**
- * Page order (ADR 0051 decision 2): cards the profile lists, in its order, skipping keys with no card and repeats;
+ * Page order (ADR 0051 decision 2): cards the profile lists, in its order, skipping entries with no card and repeats;
  * then the cards it does not list, oldest first. `order` is the stored profile's `cards`, unchecked.
  */
-export function orderCards(order: unknown, cards: readonly Card[]): Card[] {
+export function orderCards(owner: RepoDid, order: unknown, cards: readonly Card[]): Card[] {
   const byKey = new Map(cards.map((card) => [card.key as string, card]));
   const listed: Card[] = [];
-  for (const raw of Array.isArray(order) ? order : []) {
-    const card = typeof raw === "string" ? byKey.get(raw) : undefined;
-    if (card === undefined) continue;
+  for (const entry of Array.isArray(order) ? order : []) {
+    const key = listedKey(owner, entry);
+    const card = key === null ? undefined : byKey.get(key);
+    if (key === null || card === undefined) continue;
     listed.push(card);
-    byKey.delete(raw);
+    byKey.delete(key);
   }
   const rest = [...byKey.values()].sort(byMadeAt);
   return [...listed, ...rest];
@@ -238,8 +287,8 @@ export function shownCards(stored: readonly StoredCardRecord[]): Card[] {
 }
 
 /** The shown cards in page order: as the profile record's `cards` list sets it, then the rest oldest first. */
-export function pageCards(profileRecord: unknown, stored: readonly StoredCardRecord[]): Card[] {
-  return orderCards(cardOrder(profileRecord), shownCards(stored));
+export function pageCards(owner: RepoDid, profileRecord: unknown, stored: readonly StoredCardRecord[]): Card[] {
+  return orderCards(owner, cardOrder(profileRecord), shownCards(stored));
 }
 
 function cardOrder(record: unknown): unknown {

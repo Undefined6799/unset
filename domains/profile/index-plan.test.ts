@@ -15,13 +15,13 @@ const profile = (extra: Record<string, unknown> = {}): IndexChange => ({
   cid: CID,
   record: { $type: "sh.unset.profile", displayName: "Ada", createdAt: T, ...extra },
 });
-const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.unset.section#readme", text: "hi" }) =>
+const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.unset.block.text", text: "hi" }) =>
   ({
     kind: "put",
-    collection: "sh.unset.section",
+    collection: "sh.unset.card",
     rkey,
     cid: CID,
-    record: { $type: "sh.unset.section", content, createdAt: T },
+    record: { $type: "sh.unset.card", content, createdAt: T },
   }) satisfies IndexChange;
 const active = { lastRev: "3jzfcijpj2z2b", active: true };
 
@@ -69,17 +69,15 @@ describe("planCommit", () => {
   });
 
   test("index.gallery_records_each_picture_once", () => {
-    // ADR 0070: the media proxy serves only blobs a record references, so every picture of a gallery is recorded,
+    // ADR 0070: the media proxy serves only blobs a record references, so every picture of an images block is recorded,
     // and a picture used twice is recorded once.
     const OTHER = "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
     const picture = (link: string) => ({
-      image: {
-        image: { $type: "blob", ref: { $link: link }, mimeType: "image/jpeg", size: 1000 },
-        alt: "",
-        aspectRatio: { width: 4, height: 3 },
-      },
+      image: { $type: "blob", ref: { $link: link }, mimeType: "image/jpeg", size: 1000 },
+      alt: "",
+      aspectRatio: { width: 4, height: 3 },
     });
-    const content = { $type: "sh.unset.section#gallery", images: [picture(BLOB), picture(OTHER), picture(BLOB)] };
+    const content = { $type: "sh.unset.block.images", images: [picture(BLOB), picture(OTHER), picture(BLOB)] };
     expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({
       kind: "apply",
       writes: [
@@ -119,7 +117,7 @@ describe("planCommit", () => {
   // The repo now holds this record in a form we do not index, so any older version indexed under its key goes, as a
   // backfill of the same repo would remove it (trackStore.ts applySnapshot): the stream and a rebuild agree.
   test.each([
-    ["a record of another type", { ...profile(), record: { $type: "sh.unset.section", createdAt: T } }],
+    ["a record of another type", { ...profile(), record: { $type: "sh.unset.card", createdAt: T } }],
     ["a record the lexicon refuses", profile({ displayName: 7 })],
     ["a record over the size cap", profile({ note: "x".repeat(MAX_RECORD_BYTES) })],
     ["a record with a NUL character", profile({ displayName: "A\0da" })],
@@ -159,9 +157,9 @@ describe("planCommit", () => {
   });
 
   test("index.delete_passes_through", () => {
-    const del: IndexChange = { kind: "delete", collection: "sh.unset.section", rkey: TID };
+    const del: IndexChange = { kind: "delete", collection: "sh.unset.card", rkey: TID };
     expect(planCommit(active, "3jzfcijpj2z2c", [del])).toMatchObject({
-      writes: [{ kind: "delete", collection: "sh.unset.section", rkey: TID }],
+      writes: [{ kind: "delete", collection: "sh.unset.card", rkey: TID }],
     });
   });
 });

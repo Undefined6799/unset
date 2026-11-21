@@ -15,6 +15,7 @@ import {
   parseCardInput,
   parseCardKey,
   parseCardVersion,
+  parseRepoDid,
 } from "@unset/domains-profile";
 import {
   createCardRecord,
@@ -89,11 +90,13 @@ function cardPanel(query: URLSearchParams, cards: readonly CardView[], editable:
 
 export const load: ServerLoad = async ({ params, locals, request, url }) => {
   const did = ownDid(params.did, locals.did, "GET");
+  const owner = parseRepoDid(did);
+  if (owner === null) error(404);
   const { pdsCall } = services().pds;
   const ctx = pdsContext(locals);
   const [account, own] = await Promise.all([
     accountView(services(), did, locals.issuerOrigin, locals.deadline),
-    loadOwnProfile({
+    loadOwnProfile(owner, {
       profile: () => loadProfileRecord(pdsCall, ctx, did),
       cards: () => listCardRecords(pdsCall, ctx, did),
     }),
@@ -124,7 +127,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes, formBytes: CARD_FORM_LIMIT_BYTES },
+    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.card.textBytes, formBytes: CARD_FORM_LIMIT_BYTES },
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
     cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",
@@ -153,7 +156,10 @@ function writesFor(did: Did, locals: App.Locals) {
   };
   const { images, drafts, pds } = services();
   const upload = (bytes: Uint8Array) => uploadImageBlob(pds.pdsCall, ctx, did, bytes);
+  const owner = parseRepoDid(did);
+  if (owner === null) error(404);
   return cardWrites(
+    owner,
     store,
     () => new Date().toISOString(),
     picturesFor(did, { images, drafts, upload }, locals.deadline),

@@ -52,7 +52,7 @@ describe("indexConsumer", () => {
   test("indexer.frames_reach_the_store", async () => {
     const { store, applied } = recordingStore();
     const consumer = indexConsumer(store);
-    const changes = [{ kind: "delete", collection: "sh.unset.section", rkey: "3jzfcijpj2z2a" }] as const;
+    const changes = [{ kind: "delete", collection: "sh.unset.card", rkey: "3jzfcijpj2z2a" }] as const;
     await consumer.apply({ kind: "repoCommit", seq: 5, did: DID, rev: "3l", changes });
     await consumer.apply({ kind: "identity", seq: 6, did: DID });
     await consumer.apply({ kind: "sync", seq: 7, did: DID, rev: "3m" });

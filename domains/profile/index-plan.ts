@@ -8,7 +8,7 @@ import { LIMITS, NSID, validateRecord } from "@unset/shared-lexicons";
 import { parseCardKey } from "./cards.ts";
 
 /** The collections the index reads; every other op in a commit is ignored. */
-export const INDEXED_COLLECTIONS = [NSID.profile, NSID.section] as const;
+export const INDEXED_COLLECTIONS = [NSID.profile, NSID.card] as const;
 export type IndexedCollection = (typeof INDEXED_COLLECTIONS)[number];
 
 /** A record's stored JSON is capped, so one member cannot fill the index (coordinator review, 2026-11-18). */
@@ -102,7 +102,7 @@ function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null
   if (!checked.ok) return null;
   const record = checked.value;
   const blobs = blobRefs(record);
-  if (collection === NSID.section) return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs };
+  if (collection === NSID.card) return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs };
   return {
     kind: "profile",
     cid: change.cid,

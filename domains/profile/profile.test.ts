@@ -2,7 +2,7 @@
 // input once into checked fields; toProfileRecord builds the sh.unset.profile record we write to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import type { CardKey } from "./cards.ts";
+import type { CardKey, RepoDid } from "./cards.ts";
 import {
   APP_LIMITS,
   EMPTY_PROFILE,
@@ -117,7 +117,7 @@ describe("toProfileRecord", () => {
       $type: "sh.unset.profile",
       displayName: "Old",
       headline: "Old line",
-      cards: ["3jzfcijpj2z2a"],
+      cards: [{ uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzfcijpj2z2a" }],
       listed: true,
       createdAt: "2026-10-01T00:00:00.000Z",
     };
@@ -126,7 +126,7 @@ describe("toProfileRecord", () => {
       ok: true,
       record: {
         $type: "sh.unset.profile",
-        cards: ["3jzfcijpj2z2a"],
+        cards: [{ uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzfcijpj2z2a" }],
         listed: true,
         displayName: good.displayName,
         location: good.location,
@@ -208,26 +208,28 @@ describe("readProfileRecord", () => {
 });
 
 describe("withCardOrder", () => {
+  const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as RepoDid;
   const T = "2026-10-23T03:00:00.000Z";
   const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1 };
 
   test("sets the order and keeps every other field", () => {
-    const built = withCardOrder(["b", "a"] as CardKey[], stored, "2027-01-01T00:00:00.000Z");
-    expect(built).toEqual({ ok: true, record: { ...stored, cards: ["b", "a"] } });
+    const built = withCardOrder(OWNER, ["b", "a"] as CardKey[], stored, "2027-01-01T00:00:00.000Z");
+    const uri = (key: string) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` });
+    expect(built).toEqual({ ok: true, record: { ...stored, cards: [uri("b"), uri("a")] } });
   });
 
   test("an empty order is written as no order", () => {
-    const built = withCardOrder([], { ...stored, cards: ["a"] }, T);
+    const built = withCardOrder(OWNER, [], { ...stored, cards: [{ uri: `at://${OWNER}/sh.unset.card/a` }] }, T);
     expect(built.ok && "cards" in built.record).toBe(false);
   });
 
   test("there is no order without a profile", () => {
-    expect(withCardOrder(["a"] as CardKey[], null, T)).toEqual({ ok: false, code: "profile.name_required" });
+    expect(withCardOrder(OWNER, ["a"] as CardKey[], null, T)).toEqual({ ok: false, code: "profile.name_required" });
   });
 
   test("an order past the lexicon's count is too long", () => {
     const order = Array.from({ length: LIMITS.profile.cardsMax + 1 }, (_, i) => `k${i}`) as CardKey[];
-    expect(withCardOrder(order, stored, T)).toEqual({ ok: false, code: "profile.too_long" });
+    expect(withCardOrder(OWNER, order, stored, T)).toEqual({ ok: false, code: "profile.too_long" });
   });
 });
 
@@ -238,7 +240,8 @@ describe("avatar shape", () => {
   test("reads round when absent or unknown, and the stored known value otherwise", () => {
     expect(readAvatarShape(stored)).toBe("round");
     expect(readAvatarShape({ ...stored, avatarShape: "hexagon" })).toBe("round");
-    expect(readAvatarShape({ ...stored, avatarShape: "roundedSquare" })).toBe("roundedSquare");
+    expect(readAvatarShape({ ...stored, avatarShape: "rounded-square" })).toBe("roundedSquare");
+    expect(readAvatarShape({ ...stored, avatarShape: "roundedSquare" })).toBe("round");
     expect(readAvatarShape(null)).toBe("round");
   });
 
@@ -251,7 +254,7 @@ describe("avatar shape", () => {
 
   test("sets the shape and keeps every other field", () => {
     const built = withAvatarShape("roundedSquare", stored, "2027-01-01T00:00:00.000Z");
-    expect(built).toEqual({ ok: true, record: { ...stored, avatarShape: "roundedSquare" } });
+    expect(built).toEqual({ ok: true, record: { ...stored, avatarShape: "rounded-square" } });
   });
 
   test("there is no shape without a profile to hold it", () => {

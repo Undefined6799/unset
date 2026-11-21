@@ -15,8 +15,8 @@ const T1 = "2026-11-01T00:00:00.000Z";
 const T2 = "2026-11-02T00:00:00.000Z";
 const ok = <T>(value: T): PdsResult<T> => ({ kind: "ok", value });
 const readme = (text: string, createdAt = T1) => ({
-  $type: "sh.unset.section",
-  content: { $type: "sh.unset.section#readme", text },
+  $type: "sh.unset.card",
+  content: { $type: "sh.unset.block.text", text },
   createdAt,
 });
 const profile = (extra: Record<string, unknown> = {}): StoredRecord => ({
@@ -24,8 +24,11 @@ const profile = (extra: Record<string, unknown> = {}): StoredRecord => ({
   cid: "c",
 });
 const card = (key: string, value: unknown): StoredCard => ({ key, value, cid: "c" });
+const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as Parameters<typeof loadOwnProfile>[0];
+/** The profile's card list as it is written: the owner's card addresses (ADR 0086). */
+const listed = (...keys: string[]) => keys.map((k) => ({ uri: `at://${OWNER}/sh.unset.card/${k}` }));
 const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, complete = true) =>
-  loadOwnProfile({
+  loadOwnProfile(OWNER, {
     profile: async () => p,
     cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete, overflow: false } } : c),
   });
@@ -33,7 +36,7 @@ const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, com
 describe("loadOwnProfile", () => {
   test("reads the profile fields and the cards in the profile's order", async () => {
     const result = await load(
-      ok(profile({ headline: "Hi", cards: ["b", "a"] })),
+      ok(profile({ headline: "Hi", cards: listed("b", "a") })),
       ok([card("a", readme("A")), card("b", readme("B", T2)), card("c", readme("C"))]),
     );
     expect(result).toMatchObject({

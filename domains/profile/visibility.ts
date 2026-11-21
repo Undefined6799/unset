@@ -6,6 +6,12 @@
 
 export type ProfileVisibility = "public" | "signedIn" | "ownerOnly";
 export const PROFILE_VISIBILITIES: readonly ProfileVisibility[] = ["public", "signedIn", "ownerOnly"];
+/** Each choice as the record stores it: the lexicon's kebab-case known values (ADR 0086). */
+export const VISIBILITY_VALUES: Readonly<Record<ProfileVisibility, string>> = {
+  public: "public",
+  signedIn: "signed-in",
+  ownerOnly: "owner-only",
+};
 
 /** A save's choice, or null when it is not one we know (DM-1): a save writes only known values. */
 export function parseProfileVisibility(input: unknown): ProfileVisibility | null {
@@ -19,7 +25,7 @@ export function readProfileVisibility(record: unknown): ProfileVisibility {
       ? (record as Readonly<Record<string, unknown>>).visibility
       : undefined;
   if (stored === undefined) return "public";
-  return parseProfileVisibility(stored) ?? "ownerOnly";
+  return PROFILE_VISIBILITIES.find((visibility) => VISIBILITY_VALUES[visibility] === stored) ?? "ownerOnly";
 }
 
 /** Who is looking: the page's own member, another signed-in member, or someone not signed in. */

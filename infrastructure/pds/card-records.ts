@@ -1,4 +1,4 @@
-// The member's profile cards: sh.unset.section records in their own repo (ADR 0051), over pdsCall. Values are
+// The member's profile cards: sh.unset.card records in their own repo (ADR 0051), over pdsCall. Values are
 // returned unparsed; domains/profile reads them. Calls and errors: @atproto/api 0.30.3 com.atproto.repo.listRecords,
 // createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
 // record keys: atproto.com/specs/record-key.
@@ -8,7 +8,7 @@ import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
 import { type BuiltRecord, isXrpcError, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
 
-export const CARD_COLLECTION = "sh.unset.section";
+export const CARD_COLLECTION = "sh.unset.card";
 
 /**
  * How the cards are read (Codex on #1657; coordinator 2026-11-17 07:04Z). Every PDS response is capped at 1 MiB

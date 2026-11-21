@@ -385,25 +385,25 @@ async function putProfile(tx: PoolClient, did: string, rev: string, write: Extra
   );
   if (rowCount === 0) return;
   await replaceBlobs(tx, did, uri, write.blobs);
-  // Each section's place in the profile's `cards` list (ADR 0051), or null when the profile does not list it.
+  // Each card's place in the profile's `cards` list of at:// addresses (ADR 0086), or null when it is not listed.
   await tx.query(
     `UPDATE idx.section s SET position = (
-       SELECT (o.ord - 1)::integer FROM jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
-        WHERE o.rkey = s.rkey ORDER BY o.ord LIMIT 1)
+       SELECT (o.ord - 1)::integer FROM jsonb_array_elements(p.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
+        WHERE o.ref ->> 'uri' = s.uri ORDER BY o.ord LIMIT 1)
        FROM idx.profile p WHERE p.did = s.did AND s.did = $1`,
     [did],
   );
 }
 
 async function putSection(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "section" }>) {
-  const uri = `at://${did}/sh.unset.section/${write.rkey}`;
+  const uri = `at://${did}/sh.unset.card/${write.rkey}`;
   if (!(await sectionFits(tx, did, uri))) return count(tx, "ingest_capped");
   const { rowCount } = await tx.query(
     `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
      VALUES ($1, $2::types.did, $3, $4, $5, $6, (
        SELECT (o.ord - 1)::integer FROM idx.profile p,
-              jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
-        WHERE p.did = $2::types.did AND o.rkey = $3 ORDER BY o.ord LIMIT 1), now())
+              jsonb_array_elements(p.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
+        WHERE p.did = $2::types.did AND o.ref ->> 'uri' = $1 ORDER BY o.ord LIMIT 1), now())
      ON CONFLICT (uri) DO UPDATE SET cid = excluded.cid, rev = excluded.rev, record = excluded.record,
        position = excluded.position, indexed_at = excluded.indexed_at
      WHERE excluded.rev >= idx.section.rev AND idx.section.did = excluded.did`,

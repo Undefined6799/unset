@@ -11,7 +11,7 @@ import { createRepoReader, type RepoReaderOptions } from "./repo.ts";
 
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const PROFILE = "sh.unset.profile";
-const SECTION = "sh.unset.section";
+const SECTION = "sh.unset.card";
 
 type Answer = { status: number; body: Uint8Array; type?: string };
 
@@ -71,10 +71,11 @@ describe("createRepoReader", () => {
     expect(pds.asked).toEqual([`/xrpc/com.atproto.sync.getRepo?did=${encodeURIComponent(DID)}`]);
     expect(snapshot.rev).toMatch(/^[a-z2-7]{13}$/);
     expect(snapshot.records.map((r) => [r.collection, r.rkey])).toEqual([
-      [PROFILE, "self"],
       [SECTION, "3jzfcijpj2z2a"],
+      [PROFILE, "self"],
     ]);
-    expect(snapshot.records[0]).toMatchObject({ kind: "put", record: { $type: PROFILE, displayName: "Ada" } });
+    // A repo lists its records in key order (atproto.com/specs/repository), so a card comes before the profile.
+    expect(snapshot.records[1]).toMatchObject({ kind: "put", record: { $type: PROFILE, displayName: "Ada" } });
   });
 
   test("repo.refuses_a_repo_signed_with_another_key", async () => {

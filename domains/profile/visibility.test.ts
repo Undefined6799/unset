@@ -12,8 +12,9 @@ describe("page visibility", () => {
   test("reads public when absent and only the member for anything unknown", () => {
     expect(readProfileVisibility(stored)).toBe("public");
     expect(readProfileVisibility(null)).toBe("public");
-    expect(readProfileVisibility({ ...stored, visibility: "signedIn" })).toBe("signedIn");
-    expect(readProfileVisibility({ ...stored, visibility: "ownerOnly" })).toBe("ownerOnly");
+    expect(readProfileVisibility({ ...stored, visibility: "signed-in" })).toBe("signedIn");
+    expect(readProfileVisibility({ ...stored, visibility: "owner-only" })).toBe("ownerOnly");
+    expect(readProfileVisibility({ ...stored, visibility: "signedIn" })).toBe("ownerOnly");
     expect(readProfileVisibility({ ...stored, visibility: "friends" })).toBe("ownerOnly");
     expect(readProfileVisibility({ ...stored, visibility: 1 })).toBe("ownerOnly");
   });
@@ -27,9 +28,9 @@ describe("page visibility", () => {
   test("a non-public choice is stored, public clears the field, and leaving it out keeps what was stored", () => {
     expect(toProfileRecord({ visibility: "ownerOnly" }, stored, T)).toEqual({
       ok: true,
-      record: { ...stored, visibility: "ownerOnly" },
+      record: { ...stored, visibility: "owner-only" },
     });
-    expect(toProfileRecord({ visibility: "public" }, { ...stored, visibility: "signedIn" }, T)).toEqual({
+    expect(toProfileRecord({ visibility: "public" }, { ...stored, visibility: "signed-in" }, T)).toEqual({
       ok: true,
       record: stored,
     });

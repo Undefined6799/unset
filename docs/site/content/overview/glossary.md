@@ -15,8 +15,8 @@ Definitions are [`docs/human/glossary.md`](https://github.com/Undefined6799/unse
 | PDS | `infrastructure/pds` |
 | PLC | Policy `plc`, host `plc.directory`, in `infrastructure/net-guard/src/policies.ts`. `localPlc` is `http://plc:2582`. |
 | lexicon | `shared/lexicons` |
-| record | `sh.unset.profile`, `sh.unset.section`, `sh.unset.follow` and `sh.unset.authApp` in `shared/lexicons/schemas/` |
-| permission set | `sh.unset.authApp` is `type: permission-set`. `scopeString` in `shared/lexicons/src/scope.ts` requests `include:` plus that id. |
+| record | `sh.unset.profile`, `sh.unset.card`, the `sh.unset.block.*` blocks and `sh.unset.authFull` in `shared/lexicons/schemas/` |
+| permission set | `sh.unset.authFull` is `type: permission-set`. `scopeString` in `shared/lexicons/src/scope.ts` requests `include:` plus that id. |
 | net-guard | `infrastructure/net-guard`. Exports include `guardedFetch` and `createNetGuard`. |
 | seal | `seal` and `unseal` in `infrastructure/seal/seal.ts`. `sealStream` and `unsealStream` in `infrastructure/seal/sealStream.ts`. |
 | session | `infrastructure/session`. Table `app.session` in `infrastructure/postgres/migrations/0011_app_session.sql`. |

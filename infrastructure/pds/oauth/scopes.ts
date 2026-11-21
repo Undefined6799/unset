@@ -21,7 +21,7 @@ const repoWrite = (collection: string): Requirement[] =>
 const REQUIRED_GRANT: readonly Requirement[] = [
   { scope: "atproto", granted: (permissions) => permissions.scopes.has("atproto") },
   ...repoWrite(NSID.profile),
-  ...repoWrite(NSID.section),
+  ...repoWrite(NSID.card),
   // Every image type the app accepts: a server may narrow the wildcard to one type (review on #921).
   { scope: "blob:image/*", granted: (permissions) => IMAGE_ACCEPT.every((mime) => permissions.allowsBlob({ mime })) },
   {
@@ -41,7 +41,7 @@ const OUR_SET = scopeStringFallback()
  */
 export function grantCovers(granted: string): { ok: true } | { ok: false; missing: string[] } {
   const tokens = granted.split(" ").filter((token) => token !== "");
-  const expanded = tokens.flatMap((token) => (token === `include:${NSID.authApp}` ? OUR_SET : [token]));
+  const expanded = tokens.flatMap((token) => (token === `include:${NSID.authFull}` ? OUR_SET : [token]));
   const permissions = new ScopePermissions(expanded);
   const missing = REQUIRED_GRANT.filter((requirement) => !requirement.granted(permissions)).map((r) => r.scope);
   return missing.length === 0 ? { ok: true } : { ok: false, missing };

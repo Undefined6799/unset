@@ -43,6 +43,8 @@ const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const BLOB = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
 const CARD_1 = "3jzfcijpj2z2a";
 const CARD_2 = "3jzfcijpj2z2b";
+/** A profile's card list as it is written: the addresses of A's cards (ADR 0086). */
+const listOf = (...rkeys: string[]) => rkeys.map((rkey) => ({ uri: `at://${A}/sh.unset.card/${rkey}` }));
 const rev = (n: number) => `3kaaaaaaaaa${String(n).padStart(2, "2")}`; // TIDs that sort as n does, for n in 2..9
 const sql = (query: string) => postgres.sql("unset", query);
 const lines = (query: string) => postgres.sql("unset", query).split("\n").filter(Boolean);
@@ -57,10 +59,10 @@ const profile = (extra: Record<string, unknown> = {}): IndexChange => ({
 });
 const section = (rkey: string): IndexChange => ({
   kind: "put",
-  collection: "sh.unset.section",
+  collection: "sh.unset.card",
   rkey,
   cid: CID,
-  record: { $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text: "hi" }, createdAt: T },
+  record: { $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text: "hi" }, createdAt: T },
 });
 const commit = (did: string, r: string | null, changes: IndexChange[]) =>
   store.apply({ kind: "repoCommit", seq: ++seq, did, rev: r, changes });
@@ -86,7 +88,7 @@ afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 describe("index store", () => {
   test("index.cursor_starts_null_and_advances_only_with_a_frame", async () => {
     expect(await store.cursor()).toBeNull();
-    await commit(A, rev(3), [profile({ cards: [CARD_2, CARD_1], avatar: blob() })]);
+    await commit(A, rev(3), [profile({ cards: listOf(CARD_2, CARD_1), avatar: blob() })]);
     expect(await store.cursor()).toBe(seq);
     expect(lines(`SELECT display_name, avatar_cid, rev FROM idx.profile WHERE did = '${A}'`)).toEqual([
       `Ada|${BLOB}|${rev(3)}`,
@@ -100,7 +102,7 @@ describe("index store", () => {
     expect(
       lines(`SELECT rkey, coalesce(position::text, '-') FROM idx.section WHERE did = '${A}' ORDER BY rkey`),
     ).toEqual([`${CARD_1}|1`, `${CARD_2}|0`, "3jzfcijpj2z2c|-"]);
-    await commit(A, rev(4), [profile({ cards: [CARD_1] })]); // an equal rev applies (book P3.05, F-05)
+    await commit(A, rev(4), [profile({ cards: listOf(CARD_1) })]); // an equal rev applies (book P3.05, F-05)
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' AND position = 0`)).toEqual([CARD_1]);
     expect(lines(`SELECT count(*) FROM idx.record_blob WHERE did = '${A}'`)).toEqual(["0"]);
   });
@@ -133,7 +135,7 @@ describe("index store", () => {
     await commit(A, rev(5), [{ kind: "delete", collection: "sh.unset.profile", rkey: "self" }]);
     expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND position IS NOT NULL`)).toEqual(["0"]);
-    await commit(A, rev(5), [{ kind: "delete", collection: "sh.unset.section", rkey: CARD_1 }]);
+    await commit(A, rev(5), [{ kind: "delete", collection: "sh.unset.card", rkey: CARD_1 }]);
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual([CARD_2, "3jzfcijpj2z2c"]);
   });
 
@@ -150,7 +152,7 @@ describe("index store", () => {
     await commit(A, rev(6), [profile({ displayName: "Ada" }), section(CARD_1)]);
     await commit(A, rev(7), [
       profile({ displayName: 7 }),
-      { kind: "put", collection: "sh.unset.section", rkey: CARD_1, cid: CID, record: { $type: "x" } },
+      { kind: "put", collection: "sh.unset.card", rkey: CARD_1, cid: CID, record: { $type: "x" } },
     ]);
     expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
@@ -281,12 +283,12 @@ describe("index store", () => {
     track(H, true);
     sql(
       `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
-       SELECT 'at://${H}/sh.unset.section/old' || n, '${H}', 'old' || n, '${CID}', '${rev(2)}', '{}', now()
+       SELECT 'at://${H}/sh.unset.card/old' || n, '${H}', 'old' || n, '${CID}', '${rev(2)}', '{}', now()
          FROM generate_series(1, ${MAX_SECTIONS_PER_ACCOUNT}) AS n`,
     );
-    const drop: IndexChange = { kind: "delete", collection: "sh.unset.section", rkey: "3jzfcijpj2z2a" };
-    sql(`UPDATE idx.section SET rkey = '3jzfcijpj2z2a', uri = 'at://${H}/sh.unset.section/3jzfcijpj2z2a'
-         WHERE uri = 'at://${H}/sh.unset.section/old1'`);
+    const drop: IndexChange = { kind: "delete", collection: "sh.unset.card", rkey: "3jzfcijpj2z2a" };
+    sql(`UPDATE idx.section SET rkey = '3jzfcijpj2z2a', uri = 'at://${H}/sh.unset.card/3jzfcijpj2z2a'
+         WHERE uri = 'at://${H}/sh.unset.card/old1'`);
     await commit(H, rev(3), [section("3jzfcijpj2z2d"), drop]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${H}'`)).toEqual([String(MAX_SECTIONS_PER_ACCOUNT)]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${H}' AND rkey = '3jzfcijpj2z2d'`)).toEqual(["1"]);

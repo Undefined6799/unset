@@ -64,7 +64,7 @@ const NOW = "2026-11-18T00:00:00.000Z";
 
 /** A stored collection of `entries` rows, built the way the editor builds an edit of a card that already has them. */
 function storedCollection(entries: number) {
-  const existing = { content: { $type: "sh.unset.section#collection", items: Array(entries).fill({}) } };
+  const existing = { content: { $type: "sh.unset.block.showcase", items: Array(entries).fill({}) } };
   const items = Array(entries).fill({ title: "t", uri: "https://a.example/" });
   const built = toCardRecord(
     { kind: "collection", title: "Shelf", layout: "list", items } as never,
@@ -111,7 +111,7 @@ function fixture(
       did: OWNER,
       records: {
         "sh.unset.profile": { self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: NOW } },
-        "sh.unset.section": cards,
+        "sh.unset.card": cards,
       },
       writesFile,
       ...(failing === undefined ? {} : { failing }),
@@ -315,8 +315,8 @@ describe("card writes", () => {
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({
       method: "createRecord",
-      collection: "sh.unset.section",
-      record: { $type: "sh.unset.section", width: "half" },
+      collection: "sh.unset.card",
+      record: { $type: "sh.unset.card", width: "half" },
     });
   });
 
@@ -325,7 +325,7 @@ describe("card writes", () => {
       action("save", new URLSearchParams({ key: CARD_A, kind: "readme", width: "full", text: "Edited" }).toString()),
     );
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.section", rkey: CARD_A });
+    expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.card", rkey: CARD_A });
     expect(typeof writes[0]?.swapRecord).toBe("string");
     expect(await (await page(`/${OWNER}`, { cookie })).text()).toContain("Edited");
   });
@@ -343,7 +343,7 @@ describe("card writes", () => {
     const writes = await writesOf(() => action("avatar", "avatarShape=roundedSquare"));
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.profile", rkey: "self" });
-    expect(writes[0]?.record).toMatchObject({ avatarShape: "roundedSquare", displayName: "Member One" });
+    expect(writes[0]?.record).toMatchObject({ avatarShape: "rounded-square", displayName: "Member One" });
     for (const body of ["avatarShape=hexagon", "avatarShape=round&avatarShape=round", "avatarShape=round&key=x", ""]) {
       let response: Response | undefined;
       const refused = await writesOf(async () => {
@@ -368,7 +368,7 @@ describe("card writes", () => {
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ method: "putRecord", rkey: CARD_A });
     const content = (writes[0]?.record as { content?: { items?: { uri: string }[] } } | undefined)?.content;
-    expect(content).toMatchObject({ $type: "sh.unset.section#links", title: "Elsewhere" });
+    expect(content).toMatchObject({ $type: "sh.unset.block.links", title: "Elsewhere" });
     expect(content?.items?.map((item) => item.uri)).toEqual(["https://a.example", "https://b.example"]);
   });
 
@@ -390,7 +390,7 @@ describe("card writes", () => {
 
   test("a_remove_deletes_the_named_card", async () => {
     const writes = await writesOf(() => action("remove", `key=${CARD_B}`));
-    expect(writes).toEqual([{ method: "deleteRecord", collection: "sh.unset.section", rkey: CARD_B }]);
+    expect(writes).toEqual([{ method: "deleteRecord", collection: "sh.unset.card", rkey: CARD_B }]);
   });
 
   test("a_bad_key_is_a_missing_card_and_an_unknown_kind_is_refused_before_any_write", async () => {

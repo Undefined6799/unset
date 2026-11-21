@@ -20,7 +20,7 @@ Typed configuration, read once at boot. Package `@unset/shared-config`. Permanen
 | Constant | Value |
 | --- | --- |
 | `MATRIX_SERVER_NAME` | `unset.cc` |
-| `PERMISSION_SET_NSID` | `sh.unset.authApp` |
+| `PERMISSION_SET_NSID` | `sh.unset.authFull` |
 
 `SERVICES` in `schema.ts` is the `UNSET_SERVICE` allowlist: `http`, `admin`, `api`, `indexer`, `media`, `review`, `jobs`, `audit-verify`, `chat-auth`.
 
@@ -54,4 +54,4 @@ Each interface loads through its own `config.ts` and calls `bootOrExit` from `ma
 
 ## Data
 
-No schema, role or table. The values are the process environment and the two constants above. `shared/lexicons` repeats `sh.unset.authApp` because that package may not import this one. See [lexicons](../lexicons/).
+No schema, role or table. The values are the process environment and the two constants above. `shared/lexicons` repeats `sh.unset.authFull` because that package may not import this one. See [lexicons](../lexicons/).
