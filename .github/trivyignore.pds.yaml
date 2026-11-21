@@ -30,14 +30,14 @@ vulnerabilities:
       - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
     purls:
       - "pkg:npm/nodemailer@6.10.1"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, staging and local stacks; every address it sees is an account email the PDS validated (254 characters at most); accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, staging and local stacks; the PDS sends only its own templates (to, subject, html; never raw) over SMTP with a password, never OAuth2; accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
     expired_at: 2026-12-11
   - id: CVE-2026-82662
     paths:
       - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
     purls:
       - "pkg:npm/nodemailer@6.10.1"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, staging and local stacks; every address it sees is an account email the PDS validated (254 characters at most); accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, staging and local stacks; the PDS sends only its own templates (to, subject, html; never raw) over SMTP with a password, never OAuth2; accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
     expired_at: 2026-12-11
   - id: GHSA-2x7j-588g-ccc2
     paths:

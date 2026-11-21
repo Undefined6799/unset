@@ -61,6 +61,16 @@ const KEPT_STATEMENT = [
   "(254 characters at most); accepted by Alex 2026-10-14T20:34:16Z,",
   "removed on re-pin or before P1.34",
 ].join(" ");
+/** P1.38u: the two nodemailer ids outside the address parser (the message `raw` option and the OAuth2 token fetch).
+ * @atproto/pds 0.5.51 dist/mailer/index.js sendTemplate and moderation.js send pass only to, subject, from and html;
+ * dist/context.js builds the transport from the SMTP URL, which carries a password. */
+const KEPT_TEMPLATE_STATEMENT = [
+  "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
+  "newest upstream release, staging and local stacks; the PDS sends only its own templates (to, subject, html;",
+  "never raw) over SMTP with a password, never OAuth2; accepted by Alex 2026-10-14T20:34:16Z,",
+  "removed on re-pin or before P1.34",
+].join(" ");
+const TEMPLATE_ONLY_IDS = new Set(["CVE-2026-82659", "CVE-2026-82662"]);
 const KEPT_ENTRIES = [
   "CVE-2025-14874",
   "CVE-2026-82659",
@@ -71,7 +81,7 @@ const KEPT_ENTRIES = [
   id,
   paths: ["app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"],
   purls: ["pkg:npm/nodemailer@6.10.1"],
-  statement: KEPT_STATEMENT,
+  statement: TEMPLATE_ONLY_IDS.has(id) ? KEPT_TEMPLATE_STATEMENT : KEPT_STATEMENT,
   expired_at: "2026-12-11",
 }));
 /** P1.38u: each statement names why the finding is not a live risk on staging and local stacks. */
