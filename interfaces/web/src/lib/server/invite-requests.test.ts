@@ -1,7 +1,7 @@
 import { parseRequesterEmail, type RequesterEmail } from "@unset/domains-identity";
 import type { Mail } from "@unset/infrastructure-email";
 import { describe, expect, it } from "vitest";
-import { createAskWindow, notifyOwner } from "./invite-requests.ts";
+import { createAskWindow, createPendingSends, notifyOwner } from "./invite-requests.ts";
 
 const email = (raw: string): RequesterEmail => parseRequesterEmail(raw) as RequesterEmail;
 
@@ -31,6 +31,28 @@ describe("createAskWindow", () => {
     window.firstAsk(email("c@example.ca"));
     expect(window.firstAsk(email("c@example.ca"))).toBe(false);
     expect(window.firstAsk(email("a@example.ca"))).toBe(true);
+  });
+});
+
+describe("createPendingSends", () => {
+  it("lets shutdown wait for a send started after the answer, and not for one that has ended", async () => {
+    const sends = createPendingSends();
+    await sends.settled();
+    let finish = (): void => undefined;
+    let done = false;
+    sends.track(new Promise<void>((resolve) => (finish = resolve)));
+    const waited = sends.settled().then(() => (done = true));
+    await new Promise((wake) => setTimeout(wake, 10));
+    expect(done).toBe(false);
+    finish();
+    await waited;
+    expect(done).toBe(true);
+  });
+
+  it("counts a failed send as ended", async () => {
+    const sends = createPendingSends();
+    sends.track(Promise.reject(new Error("refused")));
+    await expect(sends.settled()).resolves.toBeUndefined();
   });
 });
 

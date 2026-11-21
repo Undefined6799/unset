@@ -31,7 +31,8 @@ of personal data: the email address of a visitor who is not a member.
    the whole site, which bounds the owner's inbox and the provider's quota; the edge's `app_burst` and `app_global`
    zones still apply. A repeat, a filled hidden trap field and a first ask all answer the same, so the page never
    says whether an address asked before, not even by how long it takes: the visitor is answered at once in every
-   case and the mail is sent after the answer, under its own 20 s deadline. A failed mail is logged
+   case and the mail is sent after the answer, under its own 20 s deadline; a graceful stop waits for a send under
+   way (one close hook, at most the drain's 5 s per hook). A failed mail is logged
    (`invite.request_mail_failed`, no address) and the address forgotten, so asking again sends again; the visitor is
    not told, since telling them would differ from a repeat. The CSRF gate and the 1 KiB body cap apply as on every
    form.
@@ -84,5 +85,6 @@ The PDS image's older nodemailer 6.10.1 (`.github/trivyignore.pds.yaml`) is a se
 - `tests/integration/web/public/request-invite.test.ts`: on the built server, one mail to the owner with Reply-To, a
   repeat mails nothing, bad input, a missing tick and the trap send nothing, a cross-site POST is refused, the fourth
   request from one address is refused, no address in any log line, the closed page, a failed mail, and a first ask,
-  a repeat and the trap answering well inside a second while the mail server never answers.
+  a repeat and the trap answering well inside a second while the mail server never answers, and a mail under way
+  still sent when web is stopped.
 - `interfaces/web/src/lib/server/limits.budget.test.ts`: normal use fits inside `inviteRequest`, a flood does not.

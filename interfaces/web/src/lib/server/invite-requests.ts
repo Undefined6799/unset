@@ -43,6 +43,32 @@ export function createAskWindow(options: { now: () => number; windowMs?: number;
   };
 }
 
+/**
+ * Mails sent after the visitor's answer (ADR 0080 point 4), so a graceful shutdown can wait for them as a close hook.
+ * Each ends by its own deadline; shared/http's drain gives a hook 5 s, enough for a send that is under way.
+ */
+export type PendingSends = {
+  readonly track: (send: Promise<unknown>) => void;
+  /** Resolves once every send tracked so far has ended, sent or failed. */
+  readonly settled: () => Promise<void>;
+};
+
+export function createPendingSends(): PendingSends {
+  const pending = new Set<Promise<unknown>>();
+  return {
+    track: (send) => {
+      pending.add(send);
+      const ended = (): void => {
+        pending.delete(send);
+      };
+      void send.then(ended, ended);
+    },
+    settled: async () => {
+      await Promise.allSettled([...pending]);
+    },
+  };
+}
+
 /** The owner's mail: the address, where to make the invite, and that replying writes to the visitor. */
 export function ownerNotice(email: RequesterEmail, origin: string): { subject: string; text: string } {
   return {

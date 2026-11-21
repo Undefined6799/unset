@@ -71,7 +71,7 @@ import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
-import { type AskWindow, createAskWindow } from "./invite-requests.ts";
+import { type AskWindow, createAskWindow, createPendingSends, type PendingSends } from "./invite-requests.ts";
 import { policiesFor } from "./limits.ts";
 import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
@@ -148,7 +148,13 @@ export type Services = {
   readonly inviteRequests: InviteRequests | null;
 };
 
-export type InviteRequests = { readonly window: AskWindow; readonly mailer: Mailer; readonly to: string };
+export type InviteRequests = {
+  readonly window: AskWindow;
+  readonly mailer: Mailer;
+  readonly to: string;
+  /** Mails still going after their answer; shutdown waits for them. */
+  readonly pending: PendingSends;
+};
 
 /** Each SMTP wait (connect, greeting, idle); the route's 20 s deadline bounds the whole send (policy.ts). */
 const MAIL_TIMEOUT_MS = 8000;
@@ -163,6 +169,7 @@ function inviteRequestsOf(): InviteRequests | null {
     window: createAskWindow({ now: () => Date.now() }),
     mailer: createSmtpMailer({ server, from: config.INVITE_REQUEST_FROM, timeoutMs: MAIL_TIMEOUT_MS }),
     to: to.reveal(),
+    pending: createPendingSends(),
   };
 }
 
@@ -367,6 +374,7 @@ async function build(): Promise<Services> {
     now: () => performance.now(),
   });
   health.setState("running");
+  const inviteRequests = inviteRequestsOf();
   shutdown.draining.push(() => health.setState("draining"));
   shutdown.close.push(
     async () => clearInterval(sweeper),
@@ -374,6 +382,8 @@ async function build(): Promise<Services> {
     () => pool.end(),
     () => lockPool.pool.end(),
   );
+  // A mail sent after its answer still goes once a deploy stops web (ADR 0080 point 4).
+  if (inviteRequests !== null) shutdown.close.unshift(() => inviteRequests.pending.settled());
   const oauth: OAuthServices = {
     client,
     signInScope: signIn.during,
@@ -402,7 +412,7 @@ async function build(): Promise<Services> {
     discoverability: createDiscoverabilityStore(pool),
     drafts,
     images,
-    inviteRequests: inviteRequestsOf(),
+    inviteRequests,
   };
 }
 

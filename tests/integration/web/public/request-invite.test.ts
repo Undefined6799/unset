@@ -17,14 +17,20 @@ const OWNER = "owner@unset.example";
 
 let smtp: TestSmtp;
 let stalled: TestSmtp;
+let unhurried: TestSmtp;
 let secrets: string;
 let web: RunningWeb;
 let closed: RunningWeb;
 let slow: RunningWeb;
+let stopping: RunningWeb;
 
 beforeAll(async () => {
   buildOnce(provided.port);
-  [smtp, stalled] = await Promise.all([startTestSmtp(), startTestSmtp({ stall: true })]);
+  [smtp, stalled, unhurried] = await Promise.all([
+    startTestSmtp(),
+    startTestSmtp({ stall: true }),
+    startTestSmtp({ slowMs: 150 }),
+  ]);
   secrets = mkdtempSync(join(tmpdir(), "invite-request-"));
   const file = (name: string, text: string): string => {
     const path = join(secrets, name);
@@ -38,18 +44,19 @@ beforeAll(async () => {
     INVITE_REQUEST_FROM: "noreply@unset.example",
     NODE_EXTRA_CA_CERTS: server.certPath,
   });
-  [web, closed, slow] = await Promise.all([
+  [web, closed, slow, stopping] = await Promise.all([
     startWeb(pg, mailTo(smtp, "smtp")),
     startWeb(pg, {}),
     startWeb(pg, mailTo(stalled, "stalled")),
+    startWeb(pg, mailTo(unhurried, "unhurried")),
   ]);
 }, 120_000);
 beforeEach(() => {
   smtp.received.length = 0;
 });
 afterAll(async () => {
-  await Promise.all([web?.stop(), closed?.stop(), slow?.stop()]);
-  await Promise.all([smtp?.close(), stalled?.close()]);
+  await Promise.all([web?.stop(), closed?.stop(), slow?.stop(), stopping?.stop()]);
+  await Promise.all([smtp?.close(), stalled?.close(), unhurried?.close()]);
   rmSync(secrets, { recursive: true, force: true });
 });
 
@@ -184,6 +191,16 @@ describe("the invite-request page", () => {
   test("invite_request.links: the sign-in page and a bare join page lead here", async () => {
     expect(await (await get("/login")).text()).toContain('href="/request-invite"');
     expect(await (await get("/join")).text()).toContain('href="/request-invite"');
+  });
+
+  test("invite_request.shutdown_waits: a mail still under way when web is stopped is sent before it exits", async () => {
+    // This mail server answers each command 150 ms late, so the send takes about a second; web is told to stop as
+    // soon as the visitor has their answer, and the mail must still arrive.
+    const response = await post(form({ ...ASK, email: "sol@example.ca" }), { server: stopping });
+    expect(response.headers.get("location")).toBe("/request-invite?sent=1");
+    expect(unhurried.received).toHaveLength(0);
+    await stopping.stop();
+    expect(unhurried.received).toHaveLength(1);
   });
 
   // Last: it stops the mail server.

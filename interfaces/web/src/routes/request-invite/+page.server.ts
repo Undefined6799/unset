@@ -49,18 +49,26 @@ export const actions: Actions = {
     let first = false;
     // Not awaited: a first ask would otherwise answer only once the mail server had, and a repeat at once. The window
     // is read before requestInvite's first await, so `first` is set here; a failed mail forgets the address again.
-    void requestInvite(
-      {
-        firstAsk: (who) => (first = requests.window.firstAsk(who)),
-        forget: (who) => requests.window.forget(who),
-        notify: notifyOwner(requests.mailer, requests.to, config.PUBLIC_ORIGIN, AbortSignal.timeout(MAIL_DEADLINE_MS)),
-      },
-      email,
-    ).then(
-      (outcome) => {
-        if (outcome === "failed") log.error("invite.request_mail_failed", {});
-      },
-      () => log.error("invite.request_mail_failed", {}),
+    // Tracked, so a graceful shutdown waits for the send.
+    requests.pending.track(
+      requestInvite(
+        {
+          firstAsk: (who) => (first = requests.window.firstAsk(who)),
+          forget: (who) => requests.window.forget(who),
+          notify: notifyOwner(
+            requests.mailer,
+            requests.to,
+            config.PUBLIC_ORIGIN,
+            AbortSignal.timeout(MAIL_DEADLINE_MS),
+          ),
+        },
+        email,
+      ).then(
+        (outcome) => {
+          if (outcome === "failed") log.error("invite.request_mail_failed", {});
+        },
+        () => log.error("invite.request_mail_failed", {}),
+      ),
     );
     log.info("invite.request_received", { kind: first ? "first" : "repeat" });
     redirect(303, `${PAGE}?sent=1`);
