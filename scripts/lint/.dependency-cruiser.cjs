@@ -482,8 +482,8 @@ module.exports = {
     ),
     forbidden(
       "sveltekit-web-only",
-      "Only the web process and its screens import Svelte or SvelteKit; domains, infrastructure and shared stay framework-free (ADR 0056 decision 3).",
-      { pathNot: "^(interfaces/web|apps/web)/" },
+      "Only the web process, its screens and the chat page (ADR 0088) import Svelte or SvelteKit; domains, infrastructure and shared stay framework-free (ADR 0056 decision 3).",
+      { pathNot: "^(interfaces/web|apps/web|apps/chat)/" },
       { path: "^(node_modules/)?(svelte|@sveltejs/[^/]+)(/|$)" },
     ),
     forbidden(
