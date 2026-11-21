@@ -214,6 +214,27 @@ export const TEXT_IN_PLACE = {
   failed: "The editor could not load. Reload the page to edit here.",
 } as const;
 
+/** The in-place editor's side handle, block menu and floating bar (P1.21v slice 3), named as Crepe 7.23.0 names them. */
+export const TEXT_MENUS = {
+  add: "Add a block below",
+  drag: "Drag to move this block",
+  blocks: "Blocks",
+  groups: { text: "Text", list: "List", advanced: "Advanced" },
+  bar: "Format the selected words",
+  items: {
+    text: "Text",
+    heading1: "Heading 1",
+    heading2: "Heading 2",
+    heading3: "Heading 3",
+    quote: "Quote",
+    divider: "Divider",
+    bullets: "Bullet list",
+    numbers: "Ordered list",
+    codeBlock: "Code",
+  },
+  format: { strong: "Bold", emphasis: "Italic", code: "Inline code" },
+} as const;
+
 /** The bar that holds the owner's unsaved changes (ADR 0074 item 4), and the drafts offered back when the page opens. */
 export const UNSAVED_BAR = {
   label: "Unsaved changes",
