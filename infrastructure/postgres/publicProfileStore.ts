@@ -5,7 +5,7 @@
 // Each card is its own row, in page order, and the read stops at MAX_PAGE_BYTES of cards (migration 0040), so one
 // page never makes web hold more than that, whatever the index holds (review of #1911).
 import { type Discoverability, MAX_PAGE_BYTES, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
-import { type Pool, withClient } from "./pool.ts";
+import { type Pool, readUntilAbort, withClient } from "./pool.ts";
 
 /** Who the page asks for: a DID from the path, or a handle the indexer verified (P3.08s). */
 export type PublicActor = { readonly did: string } | { readonly handle: string };
@@ -97,7 +97,12 @@ export function createPublicProfileStore(pool: Pool): PublicProfileStore {
     find: (actor, deadline) =>
       withClient(pool, deadline, async (client) => {
         const [sql, key] = "did" in actor ? [BY_DID, actor.did] : [BY_HANDLE, actor.handle];
-        const { rows } = await client.query<Row>(sql, [key, MAX_SECTIONS_PER_ACCOUNT, MAX_PAGE_BYTES]);
+        // The query itself stops at the deadline, not only the wait for a connection (pool.ts readUntilAbort).
+        const { rows } = await readUntilAbort(
+          client,
+          deadline ?? undefined,
+          client.query<Row>(sql, [key, MAX_SECTIONS_PER_ACCOUNT, MAX_PAGE_BYTES]),
+        );
         const pages = rows.filter((r) => r.n === "0");
         const row = pages.length === 1 ? pages[0] : undefined;
         if (row === undefined) return null;
