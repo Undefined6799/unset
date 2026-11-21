@@ -36,6 +36,10 @@
       "database": ["CONNECT"],
       "memberOf": []
     },
+    "chat_auth": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
     "auditor": {
       "database": ["CONNECT"],
       "memberOf": []
@@ -121,6 +125,12 @@
     "mod": {
       "owner": "migrator",
       "grants": {}
+    },
+    "door": {
+      "owner": "migrator",
+      "grants": {
+        "chat_auth": ["USAGE"]
+      }
     }
   },
   "tables": {
@@ -465,6 +475,21 @@
         "columns": {
           "did": ["SELECT"],
           "requested_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "door.browser": {
+      "chat_auth": {
+        "columns": {
+          "id": ["SELECT", "INSERT"],
+          "browser_hash": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "chat_user": ["SELECT", "INSERT"],
+          "web_session": ["INSERT", "UPDATE"],
+          "device_id": ["SELECT", "INSERT"],
+          "lock_key": ["SELECT", "INSERT"],
+          "last_used_at": ["UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
