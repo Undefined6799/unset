@@ -18,8 +18,6 @@ import {
   parseRepoDid,
 } from "@unset/domains-profile";
 import {
-  createCardRecord,
-  deleteCardRecord,
   latestCommit,
   listCardRecords,
   loadProfileRecord,
@@ -28,6 +26,7 @@ import {
   saveCardRecords,
   saveProfileRecord,
   uploadImageBlob,
+  writeCardAndList,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { LIMITS } from "@unset/shared-lexicons";
@@ -147,10 +146,10 @@ function writesFor(did: Did, locals: App.Locals) {
   const store: CardStore = {
     list: () => listCardRecords(pdsCall, ctx, did),
     head: () => latestCommit(pdsCall, ctx, did),
+    profile: () => loadProfileRecord(pdsCall, ctx, did),
     newKey: () => newCardKey() as CardKey,
-    create: (record, swapCommit, key) => createCardRecord(pdsCall, ctx, did, record, swapCommit, key),
+    write: (change, swapCommit) => writeCardAndList(pdsCall, ctx, did, change, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
-    remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
     saveMany: (updates, swapCommit) => saveCardRecords(pdsCall, ctx, did, updates, swapCommit),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };

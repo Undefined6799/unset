@@ -1,11 +1,12 @@
 // The member's profile cards: sh.unset.card records in their own repo (ADR 0051), over pdsCall. Values are
 // returned unparsed; domains/profile reads them. Calls and errors: @atproto/api 0.30.3 com.atproto.repo.listRecords,
-// createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
+// applyWrites (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
 // record keys: atproto.com/specs/record-key.
 import { TID } from "@atproto/common-web";
 import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
+import { PROFILE_COLLECTION, PROFILE_RKEY } from "./profile-record.ts";
 import { type BuiltRecord, isXrpcError, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
 
 export const CARD_COLLECTION = "sh.unset.card";
@@ -139,54 +140,11 @@ export function latestCommit(pdsCall: PdsCall, ctx: PdsContext | null, did: Did)
   });
 }
 
-export type CreateOutcome =
-  | { readonly kind: "created"; readonly key: string; readonly rev?: string }
-  /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was created. */
-  | { readonly kind: "changed" };
-
 /**
  * A new card's record key, for a card web must name before it is written (a picture card records its picture's use
  * first): a TID as the PDS itself would pick one (atproto.com/specs/tid; @atproto/common-web 0.5.17 TID.nextStr).
  */
 export const newCardKey = (): string => TID.nextStr();
-
-/**
- * Creates a card, only if the repo's head is still `swapCommit` (compare-and-swap on the whole repo: createRecord
- * `swapCommit`; @atproto/pds 0.5.51 checks it inside the repo's write transaction, processWrites, and answers
- * InvalidSwap, writing nothing). The PDS picks the key (a TID) unless `rkey` names one (newCardKey). Not retried: a
- * retry could create it twice.
- */
-export function createCardRecord(
-  pdsCall: PdsCall,
-  ctx: PdsContext | null,
-  did: Did,
-  record: Readonly<Record<string, unknown>>,
-  swapCommit: string,
-  rkey?: string,
-): Promise<PdsResult<CreateOutcome>> {
-  return pdsCall(
-    ctx,
-    did,
-    async (agent): Promise<CreateOutcome> => {
-      try {
-        const { data } = await agent.com.atproto.repo.createRecord({
-          repo: did,
-          collection: CARD_COLLECTION,
-          record: { ...record },
-          swapCommit,
-          ...(rkey === undefined ? {} : { rkey }),
-        });
-        const key = ownCardKey(data.uri, did);
-        if (key === null) throw new Error("createRecord returned a record outside this repo");
-        return data.commit === undefined ? { kind: "created", key } : { kind: "created", key, rev: data.commit.rev };
-      } catch (error: unknown) {
-        if (isXrpcError(error, "InvalidSwap")) return { kind: "changed" };
-        throw error;
-      }
-    },
-    { idempotent: false },
-  );
-}
 
 /**
  * Edits one card with compare-and-swap (saveRecord). A card that is gone is refused as `card.missing`, never
@@ -241,6 +199,16 @@ type CardWriteOp = {
   readonly rkey: string;
   readonly value: Record<string, unknown>;
 };
+/** An applyWrites write (@atproto/api 0.30.3 com.atproto.repo.applyWrites Create, Update, Delete). */
+type WriteOp =
+  | CardWriteOp
+  | {
+      readonly $type: "com.atproto.repo.applyWrites#create" | "com.atproto.repo.applyWrites#update";
+      readonly collection: string;
+      readonly rkey: string;
+      readonly value: Record<string, unknown>;
+    }
+  | { readonly $type: "com.atproto.repo.applyWrites#delete"; readonly collection: string; readonly rkey: string };
 type Batch = { readonly keys: string[]; readonly writes: CardWriteOp[] };
 
 /**
@@ -337,7 +305,7 @@ function applyCardWrites(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
-  writes: CardWriteOp[],
+  writes: WriteOp[],
   swapCommit: string,
 ): Promise<
   PdsResult<
@@ -360,19 +328,61 @@ function applyCardWrites(
   );
 }
 
-/** Deletes one card. Not retried. */
-export function deleteCardRecord(
+/** A card created or deleted with the profile write that lists or unlists it. */
+export type CardChange =
+  | { readonly kind: "create"; readonly key: string; readonly record: Readonly<Record<string, unknown>> }
+  | { readonly kind: "delete"; readonly key: string };
+/** The profile record to write, and whether one is stored (a first one is created, never written over another). */
+export type ProfileChange = { readonly record: Readonly<Record<string, unknown>>; readonly exists: boolean };
+export type ListedOutcome =
+  | { readonly kind: "written"; readonly rev?: string }
+  /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was written. */
+  | { readonly kind: "changed" }
+  /** The writes do not fit one applyWrites body (APPLY_WRITES_BODY_BYTES), so nothing was sent. */
+  | { readonly kind: "too_large" };
+
+/**
+ * A card and the profile that lists it, written in one commit and only if the repo's head is still `swapCommit`
+ * (ADR 0086 point 3: a card shows only when the profile lists it, so the two never land apart). One applyWrites call
+ * is all or none: @atproto/pds 0.5.51 applies it in one processWrites transaction and answers InvalidSwap with
+ * nothing written when the head moved (dist/api/com/atproto/repo/applyWrites.js). An update or delete of a record
+ * that is not stored fails the whole call there (dist/actor-store/repo/transactor.js, BadRecordSwapError), so the
+ * caller says whether the profile exists and deletes only a card it read. Not retried: the caller re-reads and decides.
+ */
+export async function writeCardAndList(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
-  key: string,
-): Promise<PdsResult<void>> {
-  return pdsCall(
-    ctx,
-    did,
-    async (agent) => {
-      await agent.com.atproto.repo.deleteRecord({ repo: did, collection: CARD_COLLECTION, rkey: key });
-    },
-    { idempotent: false },
-  );
+  change: { readonly card?: CardChange; readonly profile?: ProfileChange },
+  swapCommit: string,
+): Promise<PdsResult<ListedOutcome>> {
+  const writes: WriteOp[] = [];
+  const { card, profile } = change;
+  if (card?.kind === "create") {
+    writes.push({
+      $type: "com.atproto.repo.applyWrites#create",
+      collection: CARD_COLLECTION,
+      rkey: card.key,
+      value: { ...card.record },
+    });
+  }
+  if (card?.kind === "delete") {
+    writes.push({ $type: "com.atproto.repo.applyWrites#delete", collection: CARD_COLLECTION, rkey: card.key });
+  }
+  if (profile !== undefined) {
+    writes.push({
+      $type: profile.exists ? "com.atproto.repo.applyWrites#update" : "com.atproto.repo.applyWrites#create",
+      collection: PROFILE_COLLECTION,
+      rkey: PROFILE_RKEY,
+      value: { ...profile.record },
+    });
+  }
+  if (writes.length === 0) return { kind: "ok", value: { kind: "written" } };
+  const body = Buffer.byteLength(JSON.stringify({ repo: did, swapCommit, writes })) + BODY_SLACK_BYTES;
+  if (body > APPLY_WRITES_BODY_BYTES) return { kind: "ok", value: { kind: "too_large" } };
+  const result = await applyCardWrites(pdsCall, ctx, did, writes, swapCommit);
+  if (result.kind !== "ok") return result;
+  if (result.value === "changed") return { kind: "ok", value: { kind: "changed" } };
+  const { rev } = result.value;
+  return { kind: "ok", value: rev === undefined ? { kind: "written" } : { kind: "written", rev } };
 }

@@ -89,7 +89,9 @@ export {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
+  withCardListed,
   withCardOrder,
+  withCardUnlisted,
 } from "./profile.ts";
 export {
   type PageShown,
