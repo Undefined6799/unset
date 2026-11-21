@@ -79,14 +79,14 @@ export async function startChatDatabase(): Promise<ChatDatabase> {
 
 export const stopChatDatabase = stopAllPostgres;
 
-function file(dir: string, name: string, contents: string): string {
+export function file(dir: string, name: string, contents: string): string {
   const path = join(dir, name);
   writeFileSync(path, contents);
   chmodSync(path, 0o600);
   return path;
 }
 
-function certificate(dir: string): { key: Buffer; cert: Buffer } {
+export function certificate(dir: string): { key: Buffer; cert: Buffer } {
   execFileSync(
     "openssl",
     ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1", "-subj"].concat([
@@ -270,16 +270,16 @@ function fakeHomeserver() {
   return { seen, state, pushers, handle, rooms, now: () => clock };
 }
 
-const listen = (server: { listen(port: number, host: string, done: () => void): unknown }) =>
+export const listen = (server: { listen(port: number, host: string, done: () => void): unknown }) =>
   new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-const close = (server: { close(done: () => void): unknown }) =>
+export const close = (server: { close(done: () => void): unknown }) =>
   new Promise<void>((resolve) => server.close(() => resolve()));
 
 /**
  * The browser's proxy: it answers CONNECT for unset.cc:443 and unset.sh:443 only, by opening the tunnel to the edge on
  * 127.0.0.1, and refuses everything else, so a page that reached for any other host fails the test.
  */
-async function connectProxy(edgePort: number) {
+export async function connectProxy(edgePort: number) {
   const allowed = new Set(["unset.cc:443", "unset.sh:443"]);
   const proxy = createHttpServer((_req, res) => res.writeHead(405).end());
   proxy.on("connect", (req: IncomingMessage, client: Duplex, head: Buffer) => {

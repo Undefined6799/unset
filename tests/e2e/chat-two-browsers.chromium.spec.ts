@@ -1,0 +1,225 @@
+// The whole minimal chat in real browsers (build step 11), against real Synapse and MAS (fixtures/chat-servers.ts): two
+// members set up their keys, start a conversation, accept it and exchange end-to-end encrypted messages; a second
+// browser unlocks with the recovery key and reads the history; Log out leaves nothing behind; suspension locks an open
+// page and lifting it brings the same browser back with no unlock (ADR 0084 decisions 1 and 2); deletion ends the
+// account and the other member keeps the conversation (decision 3). It also records the build plan's step-11
+// unverified items as annotations: how fast a lock stops an open page, what the homeserver keeps of an erased
+// account, and the name the other member sees afterwards.
+// Chromium only, by its name (playwright.config.ts). Skipped, saying why, when the run is not pointed at the servers.
+import { type Browser, type BrowserContext, expect, type Page, test } from "@playwright/test";
+import { type RealServers, type RealStack, realServers, startRealStack } from "./fixtures/chat-servers.ts";
+import {
+  buildChatPage,
+  type ChatDatabase,
+  scratch,
+  startChatDatabase,
+  stopChatDatabase,
+} from "./fixtures/chat-stack.ts";
+
+const servers: RealServers | null = realServers();
+// biome-ignore lint/suspicious/noSkippedTests: skipped only when the run names no Synapse and MAS, and says so
+test.skip(servers === null, "set CHAT_E2E_* to a Synapse and MAS with our settings (fixtures/chat-servers.ts)");
+
+const dir = scratch();
+const pageDir = `${dir}/page`;
+let db: ChatDatabase;
+let stack: RealStack;
+let contexts: BrowserContext[] = [];
+
+test.beforeAll(async () => {
+  test.setTimeout(240_000);
+  buildChatPage(pageDir);
+  db = await startChatDatabase();
+});
+test.afterAll(() => stopChatDatabase());
+test.beforeEach(async () => {
+  stack = await startRealStack(db, pageDir, dir, servers as RealServers);
+});
+test.afterEach(async () => {
+  await Promise.all(contexts.map((c) => c.close()));
+  contexts = [];
+  await stack.close();
+});
+
+type Redeemed = { accessToken: string; deviceId: string; storageKey: string; newDevice: boolean };
+
+/** A browser signed in as `handle` (web's hop reads the member from its cookie), recording each redeem. */
+async function browserFor(browser: Browser, handle: string) {
+  const context = await browser.newContext({ proxy: { server: stack.proxy }, ignoreHTTPSErrors: true });
+  contexts.push(context);
+  await context.addCookies([{ name: "member", value: handle, domain: "unset.sh", path: "/", secure: true }]);
+  const page = await context.newPage();
+  const redeems: Redeemed[] = [];
+  const problems: string[] = [];
+  page.on("console", (m) => /Content Security Policy|Refused to/.test(m.text()) && problems.push(m.text()));
+  page.on("pageerror", (e) => problems.push(e.message));
+  page.on("response", async (res) => {
+    if (res.url().endsWith("/sign-in/redeem") && res.status() === 200) redeems.push((await res.json()) as Redeemed);
+  });
+  return { page, redeems, problems };
+}
+
+const state = (page: Page) => page.locator("main").getAttribute("data-state");
+const conversation = (page: Page) => page.locator("[data-screen=conversation]");
+const messages = (page: Page) => conversation(page).locator("ol");
+
+async function saveKey(page: Page): Promise<string> {
+  await expect.poll(() => state(page), { timeout: 60_000 }).not.toBe("signing_in");
+  if ((await state(page)) === "error") throw new Error(`chat page error: ${await page.locator("main").textContent()}`);
+  await expect.poll(() => state(page), { timeout: 60_000 }).toBe("save_key");
+  const key = await page.locator("#recovery-key").inputValue();
+  await page.locator("#key-end").fill(key.replaceAll(" ", "").slice(-4));
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect.poll(() => state(page), { timeout: 60_000 }).toBe("ready");
+  return key;
+}
+
+async function send(page: Page, text: string): Promise<void> {
+  await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 60_000 });
+  await page.locator("#message").fill(text);
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(messages(page)).toContainText(text);
+}
+
+/** Two members with keys saved, a conversation Alice started and Bob accepted, and one message each way. */
+async function talking(browser: Browser) {
+  const alice = await stack.member(`alice${Date.now()}.unset.name`);
+  const bob = await stack.member(`bob${Date.now()}.unset.name`);
+  const a = await browserFor(browser, alice.handle);
+  const b = await browserFor(browser, bob.handle);
+  await a.page.goto(`https://unset.cc/?with=${encodeURIComponent(bob.userId)}`);
+  const aliceKey = await saveKey(a.page);
+  await b.page.goto("https://unset.cc/");
+  await saveKey(b.page);
+  await expect(conversation(a.page)).toHaveAttribute("data-composer", "waiting_for_them", { timeout: 60_000 });
+  const request = b.page.locator(`[data-request="${alice.userId}"]`);
+  await expect(request).toContainText(alice.handle, { timeout: 60_000 });
+  await expect(request.locator("[data-mark]")).toHaveAttribute("data-mark", "encrypted");
+  await request.getByRole("button", { name: "Accept" }).click();
+  await send(a.page, "hello from alice");
+  await b.page.locator(`[data-conversation="${alice.userId}"]`).click();
+  await expect(messages(b.page)).toContainText("hello from alice", { timeout: 60_000 });
+  await send(b.page, "hello from bob");
+  await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  return { alice, bob, a, b, aliceKey };
+}
+
+/** A Synapse admin read, for the checks only. */
+async function admin(path: string): Promise<Record<string, unknown>> {
+  const token = await stack.synapseAdmin();
+  const url = new URL(path, (servers as RealServers).synapse);
+  const answer = await fetch(url, { headers: { authorization: `Bearer ${token}` } }); // guard-allow: egress test, local Synapse only
+  return (await answer.json()) as Record<string, unknown>;
+}
+/** How many of the room's sessions the member's key backup holds, read as that member (client-server API). */
+async function backedUp(token: string, roomId: string): Promise<number> {
+  const base = (servers as RealServers).synapse;
+  const auth = { authorization: `Bearer ${token}` };
+  const version = await fetch(new URL("/_matrix/client/v3/room_keys/version", base), { headers: auth }); // guard-allow: egress test, local Synapse only
+  const { version: v } = (await version.json()) as { version: string };
+  const url = new URL(`/_matrix/client/v3/room_keys/keys/${encodeURIComponent(roomId)}?version=${v}`, base);
+  const keys = await fetch(url, { headers: auth }); // guard-allow: egress test, local Synapse only
+  return Object.keys(((await keys.json()) as { sessions?: object }).sessions ?? {}).length;
+}
+const note = (type: string, description: string) => test.info().annotations.push({ type, description });
+
+test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser reads history; Log out wipes", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const { alice, a, b, aliceKey } = await talking(browser);
+  // The server holds ciphertext only: every message event in the room is m.room.encrypted.
+  const rooms = (await admin(`/_synapse/admin/v1/users/${encodeURIComponent(alice.userId)}/joined_rooms`))
+    .joined_rooms as string[];
+  expect(rooms).toHaveLength(1);
+  const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
+    .chunk as { type: string; content: unknown }[];
+  const timeline = chunk.filter(
+    (e) => !e.type.startsWith("m.room.") || e.type === "m.room.encrypted" || e.type === "m.room.message",
+  );
+  expect(timeline.map((e) => e.type)).toEqual(["m.room.encrypted", "m.room.encrypted"]);
+  expect(JSON.stringify(chunk)).not.toContain("hello from");
+  // A second browser of Alice's is locked, unlocks with the saved key, and reads the history from the key backup. The
+  // SDK asks the backup for a missing key once per decryption (matrix-js-sdk 43.0.0
+  // src/rust-crypto/PerSessionKeyBackupDownloader.ts:158-184) and the first browser uploads after up to 10 s
+  // (backup.ts:70), so the second browser is opened once the backup holds both of the room's sessions.
+  await expect
+    .poll(() => backedUp(a.redeems[0]?.accessToken ?? "", rooms[0] ?? ""), { timeout: 60_000 })
+    .toBeGreaterThanOrEqual(2);
+  const a2 = await browserFor(browser, alice.handle);
+  await a2.page.goto("https://unset.cc/");
+  await expect.poll(() => state(a2.page), { timeout: 60_000 }).toBe("locked");
+  await a2.page.locator("#unlock-key").fill(aliceKey);
+  await a2.page.getByRole("button", { name: "Unlock" }).click();
+  await expect.poll(() => state(a2.page), { timeout: 60_000 }).toBe("ready");
+  await a2.page.locator("[data-conversation]").first().click();
+  await expect(messages(a2.page)).toContainText("hello from bob", { timeout: 90_000 });
+  await expect(messages(a2.page)).toContainText("hello from alice", { timeout: 90_000 });
+  // Log out on the first browser: its device ends at the homeserver, nothing of the account is left in that browser,
+  // and the other browser is untouched.
+  const device = a.redeems[0]?.deviceId ?? "";
+  await a.page.getByRole("button", { name: "Log out" }).click();
+  await expect.poll(() => state(a.page), { timeout: 60_000 }).toBe("logged_out");
+  const names = await a.page.evaluate(async () => {
+    const { indexedDB } = globalThis as unknown as { indexedDB: { databases(): Promise<{ name?: string }[]> } };
+    return (await indexedDB.databases()).map((d) => d.name ?? "");
+  });
+  expect(names.filter((n) => n.startsWith("unset-chat:"))).toEqual([]);
+  const devices = (await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}/devices`)).devices as {
+    device_id: string;
+  }[];
+  expect(devices.map((d) => d.device_id)).not.toContain(device);
+  expect(await state(a2.page)).toBe("ready");
+  await send(b.page, "still here");
+  await expect(messages(a2.page)).toContainText("still here", { timeout: 60_000 });
+  for (const p of [a, b, a2]) expect(p.problems).toEqual([]);
+});
+
+test("chat_e2e.suspend_and_back: a lock stops Alice's open page; an unlock brings the same browser back", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const { alice, a, b } = await talking(browser);
+  const lockedAt = Date.now();
+  expect(await stack.chatAdmin.setLocked(alice.user, true)).toEqual({ kind: "done" });
+  // Build plan unverified: how fast a lock takes effect on an open page. The page stops once the homeserver refuses
+  // the token, and the sign-in it then tries is refused for a locked account.
+  await expect.poll(() => state(a.page), { timeout: 180_000, intervals: [500] }).not.toBe("ready");
+  note("lock_stops_open_page_ms", String(Date.now() - lockedAt));
+  await expect.poll(() => state(a.page), { timeout: 60_000 }).toBe("error");
+  // Bob can still see the conversation while Alice is suspended (ADR 0084 Consequences).
+  await expect(messages(b.page)).toContainText("hello from alice");
+  expect(await stack.chatAdmin.setLocked(alice.user, false)).toEqual({ kind: "done" });
+  await a.page.getByRole("link", { name: "Try again" }).click();
+  // The same browser, the same device and lock key: no unlock is asked (ADR 0084 decision 2).
+  await expect.poll(() => state(a.page), { timeout: 60_000 }).toBe("ready");
+  const [first, last] = [a.redeems[0], a.redeems.at(-1)];
+  expect([last?.deviceId, last?.storageKey, last?.newDevice]).toEqual([first?.deviceId, first?.storageKey, false]);
+  await a.page.locator("[data-conversation]").first().click();
+  await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+});
+
+test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversation; what the server keeps", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const { alice, a, b } = await talking(browser);
+  expect(await stack.chatAdmin.deactivateAccount(alice.user)).toEqual({ kind: "done" });
+  await expect.poll(() => state(a.page), { timeout: 180_000, intervals: [500] }).not.toBe("ready");
+  // Bob keeps his copy, Alice's messages included, and sees that she left.
+  await expect(messages(b.page)).toContainText("hello from alice");
+  await expect(conversation(b.page)).not.toHaveAttribute("data-composer", "on", { timeout: 60_000 });
+  note("name_bob_sees_after_delete", (await conversation(b.page).locator("h2").first().textContent()) ?? "");
+  // What the homeserver keeps of the erased account (build plan unverified, ADR 0084 Consequences).
+  const user = await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}`);
+  expect(user).toMatchObject({ deactivated: true, erased: true });
+  note("erased_displayname", JSON.stringify(user.displayname ?? null));
+  const data = (await admin(`/_synapse/admin/v1/users/${encodeURIComponent(alice.userId)}/accountdata`))
+    .account_data as { global: Record<string, unknown> };
+  note("erased_account_data_types", JSON.stringify(Object.keys(data.global).sort()));
+  const joined = (await admin(`/_synapse/admin/v1/users/${encodeURIComponent(alice.userId)}/joined_rooms`))
+    .joined_rooms as string[];
+  expect(joined).toEqual([]);
+  const devices = (await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}/devices`)).devices as [];
+  expect(devices).toEqual([]);
+});
