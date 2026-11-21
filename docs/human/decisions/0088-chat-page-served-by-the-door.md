@@ -1,7 +1,8 @@
 # 0088 — The chat page is a static Svelte build the door serves; it redeems the ticket itself and keeps the session in memory
 
-Status: Accepted by Alex 2026-11-21 ("yes" in the chat build thread, 04:06Z); proposed 2026-11-21 (P6.06, build step 7 of the minimal chat build). Builds on ADRs 0081
-(sign-in minted by our servers), 0083 (keys stay in the browser) and 0055 (shadcn-svelte, one theme file).
+Status: Accepted by Alex 2026-11-21 ("yes" in the chat build thread, 04:06Z); proposed 2026-11-21 (P6.06, build
+step 7 of the minimal chat build). Builds on ADRs 0081 (sign-in minted by our servers), 0083 (keys stay in the
+browser) and 0055 (shadcn-svelte, one theme file).
 
 ## Context
 ADR 0081 decision 6 settles how the browser reaches the homeserver: the edge routes unset.cc's `/_matrix/client/*`
