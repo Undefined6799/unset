@@ -234,7 +234,7 @@ export const TEXT_MENUS = {
   },
   format: { strong: "Bold", emphasis: "Italic", code: "Inline code", link: "Link" },
   /** What an empty line with the caret says. */
-  hint: "Type / to choose a block",
+  hint: "Type / to choose a block, Shift+Enter for a new one",
   link: {
     editor: "Link for the selected words",
     address: "Link address",

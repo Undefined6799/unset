@@ -4948,6 +4948,12 @@ Enter right after typing a filter picks from the new filter, and on a phone the 
 so it flips above a low line. Arrow down at the end of a last code block leaves it (gapcursor cannot, since a code
 block is a textblock). The 3 px ring while editing became a light outline 8 px out, kept for keyboard users.
 
+Slice 7 (2026-11-21, Alex: "swap the enter and shift enter everywhere"): in a paragraph, a quote's included, Enter
+breaks the line (a Markdown hard break, which the page shows) and Shift+Enter starts a new block; a second Enter at a
+line's end also starts one. A heading is one line, and a list item's line break would not show on the page, so there
+both keys start the next block (a new item in a list). In a code block Enter is a new line and Shift+Enter leaves it.
+An open block menu still takes Enter. The empty line's hint says "Shift+Enter for a new one".
+
 Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
 raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
 the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
