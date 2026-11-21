@@ -229,11 +229,20 @@ function readContent(content: Obj): ShownCardContent | null {
   }
 }
 
+/**
+ * A list block with no row left to show (ADR 0086): another client's empty list, or one whose every row was dropped
+ * on read. The editor never writes one (card-edit.ts `filled`), so it is hidden, never drawn as an empty card.
+ */
+function isEmpty(content: ShownCardContent): boolean {
+  if (content.kind === "links" || content.kind === "collection") return content.items.length === 0;
+  return content.kind === "buttons" && content.buttons.length === 0;
+}
+
 /** The card a stored record shows, or null when it is hidden. */
 export function readCard(key: CardKey, value: unknown): Card | null {
   if (!isObject(value) || !validateRecord(NSID, value, "read").ok || !isObject(value.content)) return null;
   const content = readContent(value.content);
-  if (content === null) return null;
+  if (content === null || isEmpty(content)) return null;
   const width = oneOf(WIDTHS, value.width) ? value.width : "full";
   const surface = oneOf(SURFACES, value.surface) ? value.surface : "filled";
   return { key, width, surface, createdAt: text(value.createdAt), content };
@@ -257,8 +266,9 @@ function listedKey(owner: RepoDid, entry: unknown): string | null {
 }
 
 /**
- * Page order (ADR 0051 decision 2): cards the profile lists, in its order, skipping entries with no card and repeats;
- * then the cards it does not list, oldest first. `order` is the stored profile's `cards`, unchecked.
+ * Page order (ADR 0086 point 3): only the cards the profile lists, in its order; an entry with no card is skipped and a
+ * repeat shows once, at its first place. A card the list does not name is not on the page. `order` is the stored
+ * profile's `cards`, unchecked.
  */
 export function orderCards(owner: RepoDid, order: unknown, cards: readonly Card[]): Card[] {
   const byKey = new Map(cards.map((card) => [card.key as string, card]));
@@ -270,8 +280,7 @@ export function orderCards(owner: RepoDid, order: unknown, cards: readonly Card[
     listed.push(card);
     byKey.delete(key);
   }
-  const rest = [...byKey.values()].sort(byMadeAt);
-  return [...listed, ...rest];
+  return listed;
 }
 
 /** A card record as a repo holds it: its record key and value, neither checked yet. */
@@ -288,7 +297,7 @@ export function shownCards(stored: readonly StoredCardRecord[]): Card[] {
   return cards;
 }
 
-/** The shown cards in page order: as the profile record's `cards` list sets it, then the rest oldest first. */
+/** The shown cards in page order: the ones the profile record's `cards` list names, in its order. */
 export function pageCards(owner: RepoDid, profileRecord: unknown, stored: readonly StoredCardRecord[]): Card[] {
   return orderCards(owner, cardOrder(profileRecord), shownCards(stored));
 }
@@ -297,18 +306,3 @@ function cardOrder(record: unknown): unknown {
   if (typeof record !== "object" || record === null) return undefined;
   return (record as { readonly cards?: unknown }).cards;
 }
-
-/**
- * Oldest first, by the instant each card was made: lexicon datetimes may carry any offset and precision
- * (https://atproto.com/specs/lexicon#datetime), so their text does not sort. Date.parse stops at milliseconds, so
- * within one millisecond the finer digits decide; offsets are whole minutes and never change them. A time that does
- * not parse sorts last.
- */
-function byMadeAt(a: Card, b: Card): number {
-  const [msA, msB] = [Date.parse(a.createdAt), Date.parse(b.createdAt)];
-  if (Number.isNaN(msA) || Number.isNaN(msB)) return Number(Number.isNaN(msA)) - Number(Number.isNaN(msB));
-  return msA - msB || finerDigits(a.createdAt).localeCompare(finerDigits(b.createdAt));
-}
-
-/** The fraction's digits past the millisecond, padded so that they compare as text. */
-const finerDigits = (datetime: string) => (/\.\d{3}(\d*)/.exec(datetime)?.[1] ?? "").padEnd(16, "0");

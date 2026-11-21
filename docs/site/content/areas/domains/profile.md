@@ -38,7 +38,9 @@ Edits are bounded by `APP_LIMITS` in `profile.ts`, never above the lexicon's `LI
 
 A card is one `sh.unset.card` record holding one `sh.unset.block.*` block (ADR 0086). `readCard` validates the stored record in read mode and returns `null`, so the card is hidden, when it does not validate or its kind is unknown. A link, entry address or button that is not plain `http` or `https` (or an email button whose address does not look like one) is dropped, and the rest of the card still shows. An unknown width, layout or preset reads as the default: full, `list` for links, `carousel` for collections, `custom` for a link button.
 
-`orderCards` puts the cards the profile's `cards` list names first, in its order, skipping keys with no card and repeats, then the rest oldest first.
+A list block (links, showcase, buttons) with no row left to show is hidden too; the editor never writes one.
+
+`orderCards` keeps only the cards the profile's `cards` list names, in its order, skipping entries with no card and showing a repeat once, at its first place. A card the list does not name is not on the page (ADR 0086 point 3). `withCardListed` adds a new card at the end of the list and `withCardUnlisted` takes a deleted one out; both keep every other stored entry as it is. `withCardOrder` writes the shown cards in their new order, then every entry the order does not name, unchanged.
 
 `parseCardInput` reads the editor's JSON (`kind`, optional `width`, the kind's fields). `toCardRecord` builds the record over the stored one: content is replaced, `createdAt` and fields this version does not know are kept, inside the content too while its kind is unchanged. `reorderCards` accepts only a list naming each existing card exactly once.
 

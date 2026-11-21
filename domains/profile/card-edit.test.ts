@@ -1,7 +1,7 @@
 // Writing profile cards (ADR 0051): the editor's input checked once, and the record that goes to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
+import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, TEXT_EDIT_BYTES, toCardRecord } from "./card-edit.ts";
 import { parseCardKey } from "./cards.ts";
 import { MAX_RECORD_BYTES } from "./index-plan.ts";
 
@@ -31,6 +31,18 @@ const REFS: Record<string, string> = {
 const ref = (kind: string) => REFS[kind] ?? `sh.unset.block.${kind}`;
 
 describe("parseCardInput", () => {
+  test("text.edit_limit: the editor writes at most 10,000 bytes of Markdown, under the lexicon's 20,000", () => {
+    // Alex 2026-11-21 18:55Z. Counted in UTF-8 bytes, as the lexicon counts: "é" is two.
+    expect(TEXT_EDIT_BYTES).toBe(10_000);
+    expect(TEXT_EDIT_BYTES).toBeLessThan(LIMITS.card.textBytes);
+    expect(parseCardInput({ kind: "readme", text: "é".repeat(5_000) })).toMatchObject({ ok: true });
+    expect(parseCardInput({ kind: "readme", text: `${"é".repeat(5_000)}a` })).toEqual({
+      ok: false,
+      code: "card.too_long",
+      field: "text",
+    });
+  });
+
   test("trims fields, adds https to bare addresses and drops empty optional fields", () => {
     const parsed = parseCardInput({
       kind: "links",
