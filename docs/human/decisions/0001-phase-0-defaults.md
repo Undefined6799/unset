@@ -737,3 +737,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0081](0081-notifications-stay-until-dismissed.md)):** looking at a notification no longer deletes it; a member
   dismisses one, the selected or all, and every entry still goes at 30 days. Amends 0079 point 3. Proposed, awaiting
   Alex.
+- **Sign-in history (P2.27c, 2026-11-21; own record: [0082](0082-sign-in-history.md)):** the time of each sign-in,
+  nothing else, kept 30 days in a tab beside Notifications; the member may delete any entry, and deleting will need
+  the second check of book P2.28 once it exists. Amends the "no sign-in records" rule for this record. Proposed,
+  awaiting Alex.
