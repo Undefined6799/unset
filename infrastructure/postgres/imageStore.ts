@@ -30,6 +30,17 @@ export type StoredImage = {
   readonly bytes: number;
 };
 
+/** A use a save asked for: the image's size, whether the call made it, and the lease (this save's hold) on it. */
+export type ImageUse = {
+  readonly width: number;
+  readonly height: number;
+  readonly created: boolean;
+  readonly lease: string;
+};
+
+/** A use this request holds, by the lease it got: its hold goes when the request settles or takes it back. */
+export type HeldUse = { readonly id: string; readonly lease: string };
+
 export type LibraryImage = StoredImage & { readonly state: string; readonly createdAt: Date; readonly inUse: boolean };
 
 export type SweepResult =
@@ -64,6 +75,16 @@ const LOCK = "SELECT pg_advisory_xact_lock(hashtext('image:' || $1))";
 async function lockImage(tx: PoolClient, did: Did, id: string): Promise<boolean> {
   const { rowCount } = await tx.query("SELECT 1 FROM app.image WHERE id = $1 AND did = $2 FOR UPDATE", [id, did]);
   return (rowCount ?? 0) > 0;
+}
+
+/** Images of the member's with no use left start their 7 days before their copies go. */
+async function markUnused(tx: PoolClient, did: Did, ids: readonly string[]): Promise<void> {
+  await tx.query(
+    `UPDATE app.image SET unused_since = now()
+      WHERE did = $1 AND id = ANY($2::uuid[])
+        AND NOT EXISTS (SELECT 1 FROM app.image_use u WHERE u.image_id = app.image.id)`,
+    [did, ids],
+  );
 }
 
 type UsageRow = { last_hour: number; last_day: number; live_bytes: string; quota_bytes: string | null };
@@ -122,38 +143,184 @@ export function createImageStore(pool: Pool) {
         return (rowCount ?? 0) > 0;
       }),
 
-    /** A save's record uses the image; false when it is not the member's, gone, held or blocked. */
-    addUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<boolean> =>
+    /**
+     * A save's record uses the image, once however often it is asked; its pixel size, which the record's aspect ratio
+     * gives, or null when it is not the member's, gone, held or blocked. Every call adds a hold (a new lease) to the use,
+     * so the use stays while any save that asked for it has not finished (removeUse, settleUse).
+     */
+    addUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<ImageUse | null> =>
       withTransaction(pool, deadline, async (tx) => {
-        if (!ownRecord(did, recordUri) || !(await lockImage(tx, did, id))) return false;
-        const { rowCount } = await tx.query(
+        if (!ownRecord(did, recordUri) || !(await lockImage(tx, did, id))) return null;
+        const { rows } = await tx.query<{ width: number; height: number }>(
           `UPDATE app.image SET state = 'published', unused_since = NULL
-            WHERE id = $1 AND did = $2 AND state IN ('uploaded', 'released', 'published')`,
+            WHERE id = $1 AND did = $2 AND state IN ('uploaded', 'released', 'published')
+            RETURNING width, height`,
           [id, did],
         );
-        if ((rowCount ?? 0) === 0) return false;
-        await tx.query("INSERT INTO app.image_use (image_id, record_uri) VALUES ($1, $2) ON CONFLICT DO NOTHING", [
-          id,
-          recordUri,
-        ]);
-        return true;
+        const [size] = rows;
+        if (size === undefined) return null;
+        const lease = randomUUID();
+        const inserted = await tx.query(
+          `INSERT INTO app.image_use (image_id, record_uri, holds) VALUES ($1, $2, ARRAY[$3::uuid])
+           ON CONFLICT DO NOTHING`,
+          [id, recordUri, lease],
+        );
+        const made = (inserted.rowCount ?? 0) > 0;
+        const held =
+          made ||
+          ((
+            await tx.query(
+              "UPDATE app.image_use SET holds = holds || $3::uuid WHERE image_id = $1 AND record_uri = $2",
+              [id, recordUri, lease],
+            )
+          ).rowCount ?? 0) > 0;
+        if (!held) throw new Error("image_use row vanished under its image lock");
+        return { width: Number(size.width), height: Number(size.height), created: made, lease };
       }),
 
-    /** A save dropped the image from the record; when no use is left its copies go 7 days later. */
-    removeUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<void> =>
+    /**
+     * A save whose write surely did not land gives up its hold (`lease`). The use goes only when no other save holds
+     * it and no write settled it, since those may rely on it. When no use is left its copies go 7 days later.
+     */
+    removeUse: (did: Did, id: string, recordUri: string, lease: string, deadline: AbortSignal | null): Promise<void> =>
       withTransaction(pool, deadline, async (tx) => {
         if (!(await lockImage(tx, did, id))) return;
+        await tx.query(
+          `UPDATE app.image_use u SET holds = array_remove(u.holds, $4::uuid) FROM app.image i
+            WHERE u.image_id = i.id AND i.id = $1 AND i.did = $2 AND u.record_uri = $3`,
+          [id, did, recordUri, lease],
+        );
         const { rowCount } = await tx.query(
           `DELETE FROM app.image_use u USING app.image i
-            WHERE u.image_id = i.id AND i.id = $1 AND i.did = $2 AND u.record_uri = $3`,
+            WHERE u.image_id = i.id AND i.id = $1 AND i.did = $2 AND u.record_uri = $3
+              AND cardinality(u.holds) = 0 AND u.settled_rev IS NULL`,
           [id, did, recordUri],
         );
         if ((rowCount ?? 0) === 0) return;
-        await tx.query(
-          `UPDATE app.image SET unused_since = now()
-            WHERE id = $1 AND did = $2 AND NOT EXISTS (SELECT 1 FROM app.image_use u WHERE u.image_id = $1)`,
-          [id, did],
+        await markUnused(tx, did, [id]);
+      }),
+
+    /** Notes the CID the member's PDS gave the image's main version, by which a settled write names it. */
+    notePublished: (did: Did, id: string, blobCid: string, deadline: AbortSignal | null): Promise<void> =>
+      withClient(pool, deadline, async (client) => {
+        await client.query("UPDATE app.image SET blob_cid = $3 WHERE id = $1 AND did = $2", [id, did, blobCid]);
+      }),
+
+    /**
+     * A write of the record landed as commit `rev`, showing the member's image published as `shownCid` (null: no
+     * picture). Writes of one record are settled one at a time, in revision order (a TID sorts by time;
+     * https://atproto.com/specs/tid): one not newer than the record's last settled write (`app.image_record`), or
+     * after the record was deleted, only gives up its saves' holds (`mine`). A newer one becomes the last settled
+     * write, gives up the holds and leaves the record exactly the shown image's use, stamped with its revision, taking
+     * back older settled uses; a use another save still holds stays (its own write settles it). Either way a use no
+     * save holds and no write settled goes, and an image left with no use has its copies deleted 7 days later.
+     */
+    settleUse: (
+      did: Did,
+      recordUri: string,
+      rev: string,
+      shownCid: string | null,
+      mine: readonly HeldUse[],
+      deadline: AbortSignal | null,
+    ): Promise<void> =>
+      withTransaction(pool, deadline, async (tx) => {
+        if (!ownRecord(did, recordUri)) return;
+        await tx.query("SELECT pg_advisory_xact_lock(hashtext('image_use:' || $1::text))", [recordUri]);
+        const fence = await tx.query<{ settled: string | null; removed: boolean }>(
+          `SELECT settled_rev AS settled, removed FROM app.image_record WHERE record_uri = $1 AND did = $2 FOR UPDATE`,
+          [recordUri, did],
         );
+        const last = fence.rows[0];
+        const newer = last !== undefined && (last.removed || (last.settled !== null && last.settled >= rev));
+        if (!newer) {
+          await tx.query(
+            `INSERT INTO app.image_record (record_uri, did, settled_rev) VALUES ($1, $2, $3)
+             ON CONFLICT (record_uri) DO UPDATE SET settled_rev = $3`,
+            [recordUri, did, rev],
+          );
+        }
+        const ids = mine.map((use) => use.id);
+        await tx.query(
+          `SELECT 1 FROM app.image_use u JOIN app.image i ON i.id = u.image_id
+            WHERE i.did = $1 AND u.record_uri = $2 ORDER BY u.image_id FOR UPDATE OF i`,
+          [did, recordUri],
+        );
+        // This write's saves are done: their holds go, whichever way it settles.
+        const uses = await tx.query<{ id: string; settled: string | null; idle: boolean }>(
+          `UPDATE app.image_use u
+              SET holds = ARRAY(SELECT h FROM unnest(u.holds) AS h WHERE h <> ALL ($3::uuid[]))
+             FROM app.image i
+            WHERE i.id = u.image_id AND i.did = $1 AND u.record_uri = $2
+           RETURNING u.image_id::text AS id, u.settled_rev AS settled, cardinality(u.holds) = 0 AS idle`,
+          [did, recordUri, mine.map((use) => use.lease)],
+        );
+        const shown =
+          shownCid === null
+            ? []
+            : (
+                await tx.query<{ id: string }>(
+                  "SELECT id::text AS id FROM app.image WHERE did = $1 AND blob_cid = $2 ORDER BY id",
+                  [did, shownCid],
+                )
+              ).rows.map((row) => row.id);
+        // A use no save holds and no write settled has no one left to settle it. The newest write also takes back
+        // the settled uses of pictures its record no longer shows.
+        const gone = uses.rows
+          .filter((use) =>
+            newer ? use.idle && use.settled === null : !shown.includes(use.id) && (use.settled !== null || use.idle),
+          )
+          .map((use) => use.id);
+        if (gone.length > 0) {
+          await tx.query("DELETE FROM app.image_use WHERE record_uri = $1 AND image_id = ANY($2::uuid[])", [
+            recordUri,
+            gone,
+          ]);
+          await markUnused(tx, did, gone);
+        }
+        if (newer || shown.length === 0) return;
+        const kept = uses.rows.filter((use) => shown.includes(use.id)).map((use) => use.id);
+        const target = kept.length > 0 ? kept : [ids.find((id) => shown.includes(id)) ?? (shown[0] as string)];
+        for (const id of target) {
+          await tx.query(
+            `INSERT INTO app.image_use (image_id, record_uri, settled_rev) VALUES ($1, $2, $3)
+             ON CONFLICT (image_id, record_uri) DO UPDATE SET settled_rev = $3`,
+            [id, recordUri, rev],
+          );
+          // A held or blocked image keeps its state; only a live one is published again (as addUse does).
+          await tx.query(
+            `UPDATE app.image SET state = 'published', unused_since = NULL
+              WHERE id = $1 AND did = $2 AND state IN ('uploaded', 'released', 'published')`,
+            [id, did],
+          );
+        }
+      }),
+
+    /**
+     * The record is gone: it is marked deleted, so no write settled later gives it a use again; its uses go, and an
+     * image left with no use has its copies deleted 7 days later. Each image is locked as removeUse locks it.
+     */
+    dropUses: (did: Did, recordUri: string, deadline: AbortSignal | null): Promise<void> =>
+      withTransaction(pool, deadline, async (tx) => {
+        if (!ownRecord(did, recordUri)) return;
+        await tx.query("SELECT pg_advisory_xact_lock(hashtext('image_use:' || $1::text))", [recordUri]);
+        await tx.query(
+          `INSERT INTO app.image_record (record_uri, did, removed) VALUES ($1, $2, true)
+           ON CONFLICT (record_uri) DO UPDATE SET removed = true`,
+          [recordUri, did],
+        );
+        const { rows } = await tx.query<{ id: string }>(
+          `SELECT i.id::text AS id FROM app.image i JOIN app.image_use u ON u.image_id = i.id
+            WHERE i.did = $1 AND u.record_uri = $2
+            ORDER BY i.id FOR UPDATE OF i`,
+          [did, recordUri],
+        );
+        const ids = rows.map((row) => row.id);
+        if (ids.length === 0) return;
+        await tx.query("DELETE FROM app.image_use WHERE record_uri = $1 AND image_id = ANY($2::uuid[])", [
+          recordUri,
+          ids,
+        ]);
+        await markUnused(tx, did, ids);
       }),
 
     /** The member's images, newest first, for the editor's picker and, later, export. */
@@ -198,6 +365,26 @@ export function createImageStore(pool: Pool) {
           [due],
         );
         return { kind: "deleted", images: deleted.rows.map((row) => ({ did: row.did, id: String(row.id) })) };
+      }),
+
+    /**
+     * Which of these ids still have a row, with their member, and how many rows there are in all: the orphan sweep's
+     * read (interfaces/web image-orphans.ts). Like the sweep it acts for no member, so it has no DID predicate; the
+     * caller matches each row's DID to its folder's.
+     */
+    named: (
+      ids: readonly string[],
+      deadline: AbortSignal | null,
+    ): Promise<{ live: number; images: { did: Did; id: string }[] }> =>
+      withClient(pool, deadline, async (client) => {
+        const { rows } = await client.query<{ did: Did; id: string; live: number }>(
+          `SELECT i.did, i.id::text AS id, (SELECT count(*) FROM app.image)::int AS live
+             FROM (SELECT 1) one LEFT JOIN app.image i ON i.id = ANY($1::uuid[])`,
+          [ids],
+        );
+        const live = rows[0]?.live ?? 0;
+        const images = rows.filter((row) => row.id !== null).map((row) => ({ did: row.did, id: String(row.id) }));
+        return { live, images };
       }),
   };
 }

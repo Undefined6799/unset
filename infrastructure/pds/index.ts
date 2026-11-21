@@ -2,6 +2,7 @@
 // OAuth client (P2.04) with its keys, metadata and scope check, and the start and end of a sign-in (P2.05, P2.06).
 
 export { createInviteIssuer, type InviteIssuerSettings, type IssueInviteResult } from "./admin-invite.ts";
+export { type UploadedBlob, uploadImageBlob } from "./blob-upload.ts";
 export {
   CARD_COLLECTION,
   type CardList,
@@ -10,6 +11,7 @@ export {
   deleteCardRecord,
   latestCommit,
   listCardRecords,
+  newCardKey,
   type SaveManyOutcome,
   type StoredCard,
   saveCardRecord,
