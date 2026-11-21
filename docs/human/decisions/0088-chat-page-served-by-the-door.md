@@ -91,3 +91,7 @@ until a bump re-runs them. `npm audit` lists nothing for the new packages.
 Chromium against the door, real Postgres, real chat-admin and a stand-in homeserver: hop, redeem, locked card, no
 CSP violation, nothing kept in storage or the address, renewal for the same device and key, no loop, axe in both
 themes. dependency-cruiser's `vendor-sdk-one-adapter` row for matrix-js-sdk.
+
+## Follow-ups
+- [ADR 0093](0093-chat-trusts-devices-as-element-does.md) amends decision 3's isolation mode to Element's default,
+  `AllDevicesIsolationMode(false)` (Alex, 2026-11-21 19:12Z).

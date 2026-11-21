@@ -17,7 +17,13 @@
 //   fails (MatrixEvent.isDecryptionFailure, src/models/event.ts:855); one still decrypting is left out until
 //   MatrixEventEvent.Decrypted, as Element's TimelinePanel waits for it (apps/web/src/components/structures/
 //   TimelinePanel.tsx:312, 891-905). Text only (spec #mtext).
+// - Unconfirmed device (ADR 0093): the SDK's red shield for an event (CryptoApi.getEncryptionInfoForEvent; the Rust
+//   crypto's lax shield, matrix-sdk-common 0.19.0 deserialized_responses.rs:139-184: a device its owner never signed,
+//   one not known, or a sender that is not the device's owner), where Element shows its warning padlock (element-web
+//   v1.12.35 apps/web/src/viewmodels/room/timeline/event-tile/EventTileE2eState.ts:204-209). Grey, a key restored
+//   from backup, gets Element's plain padlock and no mark here.
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
+import { type EventEncryptionInfo, EventShieldColour } from "matrix-js-sdk/lib/crypto-api/index.js";
 import { EventType, type MatrixEvent, NotificationCountType, type Room } from "matrix-js-sdk/lib/matrix.js";
 import {
   availableOf,
@@ -117,13 +123,25 @@ export function findDirect(
   return suitable.sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp())[0];
 }
 
-/** The timeline's text messages and unreadable ones, in order; anything else is left out. */
-export function toMessages(events: readonly MatrixEvent[], me: string): Message[] {
+/** Whether an event's encryption info is Element's warning: a red shield. None, for an event not decrypted here. */
+export function unconfirmedDevice(info: EventEncryptionInfo | null): boolean {
+  return info !== null && info.shieldColour === EventShieldColour.RED;
+}
+
+/**
+ * The timeline's text messages and unreadable ones, in order; anything else is left out. `unconfirmed` holds the ids
+ * of events sent from a device its owner has not confirmed (unconfirmedDevice).
+ */
+export function toMessages(
+  events: readonly MatrixEvent[],
+  me: string,
+  unconfirmed: ReadonlySet<string> = new Set(),
+): Message[] {
   const messages: Message[] = [];
   for (const event of events) {
     const id = event.getId();
     if (id === undefined || event.isState()) continue;
-    const base = { id, mine: event.getSender() === me, at: event.getTs() };
+    const base = { id, mine: event.getSender() === me, at: event.getTs(), unconfirmed: unconfirmed.has(id) };
     if (event.isDecryptionFailure()) {
       messages.push({ ...base, kind: "unreadable" });
       continue;

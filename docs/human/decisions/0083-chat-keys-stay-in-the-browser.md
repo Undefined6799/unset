@@ -71,3 +71,8 @@ What the pinned SDK does (matrix-js-sdk 43.0.0, `lib/crypto-api/index.d.ts`, `li
 - Build step 11: tests that expiry leaves the store locked and reopens it with no unlock, that Log out leaves no
   IndexedDB database of that account and no lock key, and that a second account on the same browser cannot open the
   first one's store.
+
+## Follow-ups
+- [ADR 0093](0093-chat-trusts-devices-as-element-does.md) amends decision 1's isolation mode. The page now sets
+  Element's default, `AllDevicesIsolationMode(false)`, and marks a message from a device its owner has not confirmed
+  (Alex, 2026-11-21 19:12Z).

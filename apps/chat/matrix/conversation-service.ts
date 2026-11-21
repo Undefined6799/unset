@@ -28,11 +28,12 @@
 // sent in, so the page never joins or encrypts to a room with a third person or one anyone may join.
 // Spec v1.18: https://spec.matrix.org/v1.18/client-server-api/#client-behaviour-21 (direct messages),
 // #receiving-notifications, #receipts, #get_matrixclientv3roomsroomidmessages.
-import type { CryptoApi } from "matrix-js-sdk/lib/crypto-api/index.js";
+import { type CryptoApi, CryptoEvent } from "matrix-js-sdk/lib/crypto-api/index.js";
 import {
   ClientEvent,
   EventType,
   type MatrixClient,
+  type MatrixEvent,
   MatrixEventEvent,
   Preset,
   ReceiptType,
@@ -60,6 +61,7 @@ import {
   otherPerson,
   toConversation,
   toMessages,
+  unconfirmedDevice,
   withDirect,
 } from "./conversations.ts";
 
@@ -84,6 +86,11 @@ const CHANGES = [
   RoomMemberEvent.Membership,
   RoomMemberEvent.Name,
   MatrixEventEvent.Decrypted,
+  // A device list or a person's trust changed: a message's shield may have too. Element re-checks on the trust change
+  // (EventTileE2eViewModel.ts:131-134); the Rust crypto says to look again when the sender's devices change
+  // (matrix-sdk-common 0.19.0 deserialized_responses.rs:165-167), as a new browser may get the message first.
+  CryptoEvent.DevicesUpdated,
+  CryptoEvent.UserTrustStatusChanged,
 ] as const;
 
 export function createConversations(client: MatrixClient, crypto: CryptoApi, me: string): Conversations {
@@ -108,13 +115,26 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     });
   };
 
+  /**
+   * The ids of decrypted events whose shield is Element's warning (Element asks per event, EventTileE2eViewModel.ts
+   * doVerifyEvent). One whose shield cannot be read is marked too: what cannot be checked is not shown as confirmed.
+   */
+  const unconfirmedOf = async (events: readonly MatrixEvent[]): Promise<Set<string>> => {
+    const decrypted = events.filter((e) => e.isEncrypted() && !e.isDecryptionFailure() && e.getId() !== undefined);
+    const marked = await Promise.all(
+      decrypted.map((e) => crypto.getEncryptionInfoForEvent(e).then(unconfirmedDevice, () => true)),
+    );
+    return new Set(decrypted.filter((_, i) => marked[i]).map((e) => e.getId() as string));
+  };
+
   const viewOf = async (id: ConversationId): Promise<ConversationView | null> => {
     const room = client.getRoom(id);
     const conversation = room === null ? null : toConversation(room, direct());
     if (room === null || conversation === null || !conversation.available) return null;
+    const events = room.getLiveTimeline().getEvents();
     return {
       conversation,
-      messages: toMessages(room.getLiveTimeline().getEvents(), me),
+      messages: toMessages(events, me, await unconfirmedOf(events)),
       composer: await composerFor(room, conversation.with.id),
       hasOlder: room.oldState.paginationToken !== null,
     };

@@ -2,9 +2,18 @@
 // them from sync (no double: the SDK is in-process; only the homeserver is unmanaged, TE-1, and none is reached here).
 // The calls that need a homeserver run in tests/e2e/chat-page.chromium.spec.ts and in the step's live run.
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
+import { EventShieldColour, EventShieldReason } from "matrix-js-sdk/lib/crypto-api/index.js";
 import { createClient, MatrixEvent, NotificationCountType, Room } from "matrix-js-sdk/lib/matrix.js";
 import { describe, expect, test } from "vitest";
-import { directRooms, findDirect, otherMembership, toConversation, toMessages, withDirect } from "./conversations.ts";
+import {
+  directRooms,
+  findDirect,
+  otherMembership,
+  toConversation,
+  toMessages,
+  unconfirmedDevice,
+  withDirect,
+} from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -228,6 +237,36 @@ describe("toMessages", () => {
     expect(toMessages([sealed, pending], ME).map((m) => [m.mine, m.kind])).toEqual([[false, "unreadable"]]);
     reader.stopClient();
   }, 20_000);
+
+  test("chat.unconfirmed_device_marked: a message from a device its owner has not confirmed carries the mark", () => {
+    const from = (body: string) =>
+      event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body } });
+    const [confirmed, unconfirmed] = [from("a"), from("b")];
+    const marks = toMessages([confirmed, unconfirmed], ME, new Set([unconfirmed.getId() as string])).map((m) => [
+      m.kind,
+      m.unconfirmed,
+    ]);
+    expect(marks).toEqual([
+      ["text", false],
+      ["text", true],
+    ]);
+  });
+});
+
+// matrix-js-sdk 43.0.0 maps the Rust crypto's lax shield (matrix-sdk-common 0.19.0 deserialized_responses.rs:139-184)
+// to a colour (src/rust-crypto/rust-crypto.ts:2521-2575); Element shows its warning for red, a plain padlock for grey
+// (element-web v1.12.35 apps/web/src/viewmodels/room/timeline/event-tile/EventTileE2eState.ts:204-209).
+describe("unconfirmedDevice", () => {
+  test.each([
+    [{ shieldColour: EventShieldColour.RED, shieldReason: EventShieldReason.UNSIGNED_DEVICE }, true],
+    [{ shieldColour: EventShieldColour.RED, shieldReason: EventShieldReason.UNKNOWN_DEVICE }, true],
+    [{ shieldColour: EventShieldColour.RED, shieldReason: EventShieldReason.MISMATCHED_SENDER }, true],
+    [{ shieldColour: EventShieldColour.GREY, shieldReason: EventShieldReason.AUTHENTICITY_NOT_GUARANTEED }, false],
+    [{ shieldColour: EventShieldColour.NONE, shieldReason: null }, false],
+    [null, false],
+  ])("chat.unconfirmed_is_red_shield: %o gives %s", (info, marked) => {
+    expect(unconfirmedDevice(info)).toBe(marked);
+  });
 });
 
 describe("withDirect", () => {

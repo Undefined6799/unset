@@ -1,6 +1,7 @@
 <!--
   One conversation, part of the chat page's shell (ADR 0088; ADR 0055 point 2). The live timeline as the adapter maps
-  it (matrix/conversations.ts toMessages): text, and a plain line for a message this browser cannot decrypt. Older
+  it (matrix/conversations.ts toMessages): text, and a plain line for a message this browser cannot decrypt; a message
+  from a device its owner has not confirmed carries a warning, where Element shows its red padlock (ADR 0093). Older
   messages load on request; the newest is marked read as it is shown. The composer is text only and stays off until
   encryption is on for the conversation in this browser (core/conversations.ts composerOf); while the other person has
   not accepted it is pending and still sends, for them to read once they do. A conversation that is not encrypted is
@@ -98,6 +99,11 @@ const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digi
             <p class="bg-muted rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap">{message.text}</p>
           {:else}
             <p class="text-muted-foreground text-sm italic" data-unreadable>This message can't be read on this browser</p>
+          {/if}
+          {#if message.unconfirmed}
+            <p class="text-muted-foreground flex items-center gap-1 text-xs" data-mark="unconfirmed">
+              <Icon name="warning" size={16} />Sent from a device that hasn't been confirmed
+            </p>
           {/if}
           <time class="text-muted-foreground text-xs" datetime={new Date(message.at).toISOString()}>{time(message.at)}</time>
         </li>
