@@ -3,5 +3,5 @@
   "caddy": "edge",
   "postgres": "postgres",
   "seaweedfs": "objects",
-  "python": "synapse"
+  "python3-debian13": "synapse"
 }

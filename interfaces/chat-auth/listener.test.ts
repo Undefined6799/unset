@@ -4,7 +4,7 @@
 import { createServer, request as send } from "node:http"; // guard-allow: egress test client to its own loopback listener
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createListener } from "./listener.ts";
+import { createListener, listenOn } from "./listener.ts";
 
 const seen: { url: string; method: string; body: string; peer: string | undefined }[] = [];
 const server = createServer(
@@ -65,5 +65,27 @@ describe("door listener", () => {
     const res = await call("POST", "/sign-in/redeem", "x", { "transfer-encoding": "chunked" });
     expect(res.status).toBe(411);
     expect(seen.length).toBe(before);
+  });
+});
+
+describe("listenOn", () => {
+  test("listener.binds_one_address: answers on its address and refuses the same port on another", async () => {
+    // Linux routes all of 127.0.0.0/8 to loopback, so two addresses stand in for two networks.
+    const bound = createServer((_req, res) => res.end("ok"));
+    await listenOn(bound, 0, "127.0.0.2");
+    const { address, port: at } = bound.address() as AddressInfo;
+    try {
+      expect(address).toBe("127.0.0.2");
+      const reach = (host: string) =>
+        new Promise<string>((resolve) => {
+          const req = send({ host, port: at, path: "/" }, (res) => resolve(String(res.statusCode)));
+          req.on("error", (error: NodeJS.ErrnoException) => resolve(error.code ?? "error"));
+          req.end();
+        });
+      expect(await reach("127.0.0.2")).toBe("200");
+      expect(await reach("127.0.0.1")).toBe("ECONNREFUSED");
+    } finally {
+      await new Promise<void>((resolve) => bound.close(() => resolve()));
+    }
   });
 });

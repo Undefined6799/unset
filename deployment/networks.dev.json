@@ -1,5 +1,5 @@
 {
-  "db": { "internal": true, "members": ["postgres", "migrate", "web", "indexer"] },
+  "db": { "internal": true, "members": ["postgres", "migrate", "web", "indexer", "chat-auth"] },
   "app": { "internal": true, "members": ["edge", "web"] },
   "edge": { "internal": false, "members": ["pds", "edge"] },
   "newt_edge": { "internal": true, "members": ["newt", "edge"] },
@@ -13,5 +13,14 @@
   "pds_admin_pds": { "internal": true, "members": ["pds", "pds-admin"] },
   "indexer_pds": { "internal": true, "members": ["pds", "indexer"] },
   "indexer_egress": { "internal": false, "members": ["indexer"] },
-  "review_web": { "internal": true, "members": ["web", "review"] }
+  "review_web": { "internal": true, "members": ["web", "review"] },
+  "chat_db": { "internal": true, "members": ["postgres", "mas"] },
+  "chat_synapse_db": { "internal": true, "members": ["postgres", "synapse"] },
+  "chat_mas": { "internal": true, "members": ["synapse", "mas"] },
+  "chat_admin_mas": { "internal": true, "members": ["mas", "chat-admin"] },
+  "chat_count": { "internal": true, "members": ["synapse", "web", "chat-auth"] },
+  "chat_admin": { "internal": true, "members": ["web", "chat-auth", "chat-admin"] },
+  "chat_admin_synapse": { "internal": true, "members": ["synapse", "chat-admin"] },
+  "chat_edge": { "internal": true, "members": ["edge", "chat-auth"] },
+  "chat_edge_synapse": { "internal": true, "members": ["edge", "synapse"] }
 }

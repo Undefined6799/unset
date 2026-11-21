@@ -98,3 +98,7 @@ and "new browser signed in" notices.
 - dependency-cruiser's admin-service rows and the workspace check cover `chat-admin` as they cover `pds-admin`; the
   egress guard's exemption names its one outbound file.
 - The edge refuses MAS, `/_synapse/admin` and `chat-admin` from the internet (P6.02a).
+
+## Follow-up
+
+2026-11-21: MAS pinned at 1.29.0 (Alex, 2026-11-21, 'use the latest version'), re-checked: `docs/api/spec.json`, `crates/handlers/src/admin/v1/personal_sessions/add.rs` and `revoke.rs`, and `docs/reference/scopes.md` (device ID rule) are identical to 1.26.0, so the minting, `expires_in`, the constant scope and the device ID format hold as written; `oauth2_sessions/list.rs` and `token.rs` changed only in tests or a refactor, and `policies/authorization_grant.rego` only in how it formats messages. Read from the v1.26.0 and v1.29.0 source trees on 2026-11-21; no live run of 1.29.0 was possible here (the image pull and the release binary download were both refused), so the 1.29.0 behaviour is unverified until the image test runs it.

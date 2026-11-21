@@ -19,6 +19,8 @@ export type Config = {
   readonly sessionTtl: number;
   readonly stateDir: string;
   readonly port: number;
+  /** The one address its listener binds: its own on the network web and the door share with it. */
+  readonly listenAddress: string;
   readonly commit: string;
   readonly keys: readonly ServiceKey[];
 };
@@ -26,6 +28,15 @@ export type Config = {
 export class BootError extends Error {}
 
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+/** A dotted-quad IPv4 address with no leading zeros (kept here: chat-admin imports nothing outside its folder). */
+const IPV4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/** One IPv4 address, never 0.0.0.0, which would bind every network chat-admin joins (Node 26 net.Server.listen). */
+function listenAddress(env: NodeJS.ProcessEnv): string {
+  const raw = required(env, "LISTEN_ADDRESS");
+  if (!IPV4.test(raw) || raw === "0.0.0.0") throw new BootError("LISTEN_ADDRESS must be one IPv4 address");
+  return raw;
+}
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
@@ -99,6 +110,7 @@ export function readConfig(env: NodeJS.ProcessEnv): Config {
     sessionTtl: integer(env, "SESSION_TTL_SECONDS", 86_400, 30 * 86_400),
     stateDir: required(env, "STATE_DIR"),
     port: integer(env, "PORT", 8080, 65_535),
+    listenAddress: listenAddress(env),
     commit: env.COMMIT ?? "unknown",
     keys: serviceKeys(secret(secrets, "chat_admin_keys")),
   };

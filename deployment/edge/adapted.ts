@@ -22,6 +22,9 @@ export const SENTINELS = {
   APP_HOST: "app-host.invalid",
   APP_UPSTREAM: "app-upstream.invalid:2",
   DOCS_HOST: "docs-host.invalid",
+  CHAT_HOST: "chat-host.invalid",
+  CHAT_UPSTREAM: "chat-upstream.invalid:3",
+  MATRIX_UPSTREAM: "matrix-upstream.invalid:4",
 } as const;
 type EnvName = keyof typeof SENTINELS;
 /** The values a config was adapted with; a name the env does not set is absent. */
@@ -56,8 +59,8 @@ export const ADAPT_RUN_FLAGS = [
 /** The command after the image: adapt the image's own Caddyfile. */
 export const ADAPT_COMMAND = ["adapt", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"] as const;
 
-/** The envs with a reviewed config, by file name in adapted/. */
-export const ADAPTED_ENVS = ["prod", "dev", "local"] as const;
+/** The envs with a reviewed config, by file name in adapted/; dev-chat is the source stack's dev edge (P6.02). */
+export const ADAPTED_ENVS = ["prod", "dev", "dev-chat", "local"] as const;
 export type AdaptedEnvName = (typeof ADAPTED_ENVS)[number];
 
 const obj = (value: Json | undefined): Obj =>

@@ -20,6 +20,7 @@ function setup(keys: unknown, env: Record<string, string> = {}) {
     SYNAPSE_ADMIN_URL: "http://synapse-sweep:8008",
     MAS_CLIENT_ID: CLIENT_ID,
     STATE_DIR: dir,
+    LISTEN_ADDRESS: "10.250.38.27",
     CHAT_ADMIN_SECRETS_DIR: dir,
     ...env,
   };
@@ -40,6 +41,7 @@ describe("config", () => {
     expect(config.sessionTtl).toBe(86_400);
     // ADR 0091 decision 8: Synapse's listener on the network only chat-admin shares.
     expect(config.synapseUrl.href).toBe("http://synapse-sweep:8008/");
+    expect(config.listenAddress).toBe("10.250.38.27");
   });
 
   test.each([
@@ -60,6 +62,12 @@ describe("config", () => {
     ["MAS_CLIENT_ID", "not-a-ulid"],
     ["SESSION_TTL_SECONDS", "0"],
     ["CHAT_ADMIN_ENV", "staging"],
+    // Its listener binds its one address on the network web and the door share with it, never every address.
+    ["LISTEN_ADDRESS", ""],
+    ["LISTEN_ADDRESS", "0.0.0.0"],
+    ["LISTEN_ADDRESS", "::"],
+    ["LISTEN_ADDRESS", "chat-admin"],
+    ["LISTEN_ADDRESS", "10.250.38.256"],
   ])("config.refused: %s", (name, value) => {
     expect(() => readConfig(setup(good(), { [name]: value }))).toThrow(BootError);
   });

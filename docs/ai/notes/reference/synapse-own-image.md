@@ -3,7 +3,7 @@ id: synapse-own-image
 type: reference
 status: current
 areas: ["[[matrix]]", "[[deployment]]"]
-summary: "Our Synapse image: hash-pinned wheels on the Python base, no manhole, and a 0400 passfile owned by 991."
+summary: "Our Synapse image: hash-pinned wheels built on python:3.13-slim, run on distroless Python, no manhole, 0400 passfile."
 code: [deployment/images/synapse.Dockerfile, deployment/images/synapse-requirements.txt, deployment/images/synapse.image.test.ts]
 sources: [https://github.com/element-hq/synapse/blob/v1.165.0/synapse/app/_base.py, https://www.postgresql.org/docs/18/libpq-pgpass.html]
 importance: high
@@ -28,7 +28,18 @@ obvious, each found by building and running it on 2026-11-21 with Synapse 1.165.
 - **libpq is inside psycopg2-binary.** The final stage may not install OS packages, so `libpq5` from Debian is not an
   option; the wheel's libpq and OpenSSL are invisible to the image scan. Watch psycopg2 releases for libpq fixes.
 
+- **No python image can ship.** Every `python:*` image carries pip, whose vendored SBOM
+  (`pip/_vendor/bom.cdx.json`) fails Trivy on setuptools 70.3.0, msgpack and urllib3; pip 26.3 (2026-11-02) still
+  vendors setuptools 70.3.0. So the python image is a build-only base and the runtime is
+  `gcr.io/distroless/python3-debian13` (Alex's card "Yes, use distroless", 2026-11-21), which scanned 0 HIGH/CRITICAL
+  with zlib1g already at deb13u1.
+- **The venv must point at `/usr/bin/python3.13`.** Build it with that path linked to `/usr/local/bin/python3.13`
+  (distroless python3/README.md, "Compatibility"); a venv made by `/usr/local/bin/python` keeps a dangling link in
+  distroless and the entrypoint fails with "no such file or directory".
+- **The final stage has no shell.** Nothing can RUN there, and tests that need to chown or poke the image use
+  `/opt/synapse/bin/python` as the entrypoint, never `sh`.
+
 Startup needs no MAS: Synapse 1.165.0 serves `/health` with `matrix_authentication_service.endpoint` unreachable.
-Locally, `deb.debian.org` is blocked by the agent proxy, so the zlib upgrade line can only be checked in CI; build a
-throwaway copy without that line (and with `mirror.gcr.io/library/python@<digest>` as FROM and the proxy CA in the
-build stage only) to test everything else.
+Locally, GHCR is blocked by the agent proxy, so build a throwaway copy with `mirror.gcr.io/library/python@<digest>`
+and `gcr.io/distroless/python3-debian13@<digest>` as the FROMs, and the proxy CA as `PIP_CERT` in the build stage
+only.

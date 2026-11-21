@@ -32,8 +32,9 @@ describe("synapse image", () => {
   test("synapse_installs_only_the_hash_pinned_lock", () => {
     const pips = instructions.filter((line) => line.startsWith("RUN ") && /\bpip\b.*\binstall\b/.test(line));
     expect(pips).toEqual([
-      "RUN python -m venv --without-pip /opt/synapse && pip --python /opt/synapse/bin/python install --no-cache-dir " +
-        "--require-hashes --no-deps --only-binary :all: -r /tmp/synapse-requirements.txt",
+      "RUN ln -s /usr/local/bin/python3.13 /usr/bin/python3.13 && /usr/bin/python3.13 -m venv --without-pip " +
+        "/opt/synapse && pip --python /opt/synapse/bin/python install --no-cache-dir --require-hashes --no-deps " +
+        "--only-binary :all: -r /tmp/synapse-requirements.txt",
     ]);
     expect(requirements.length).toBeGreaterThan(0);
     for (const { pin, rest } of requirements) {
@@ -51,6 +52,19 @@ describe("synapse image", () => {
     for (const extra of ["authlib", "pysaml2", "pyjwt", "matrix-synapse-ldap3", "sentry-sdk", "txredisapi", "lxml"]) {
       expect(names, extra).not.toContain(extra);
     }
+  });
+
+  test("synapse_runs_on_distroless_python_and_runs_nothing_there", () => {
+    // ADR 0086 Decision 1 (Alex's card "Yes, use distroless", 2026-11-21): the venv is built on the official Python
+    // image and runs on Debian's python3.13 in distroless, which has no pip, shell, apt or dpkg. The venv's interpreter
+    // link is made at /usr/bin/python3.13, the distroless path (distroless python3/README.md, "Compatibility").
+    const froms = instructions.filter((line) => line.startsWith("FROM "));
+    expect(froms).toEqual([
+      expect.stringMatching(/^FROM ghcr\.io\/undefined6799\/mirror\/python@sha256:[0-9a-f]{64} AS build$/),
+      expect.stringMatching(/^FROM ghcr\.io\/undefined6799\/mirror\/python3-debian13@sha256:[0-9a-f]{64} AS runtime$/),
+    ]);
+    const runtime = instructions.slice(instructions.indexOf(froms[1] ?? ""));
+    expect(runtime.filter((line) => line.startsWith("RUN "))).toEqual([]);
   });
 
   test("synapse_start_line_pinned", () => {

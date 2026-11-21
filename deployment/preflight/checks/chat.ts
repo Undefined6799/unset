@@ -2,7 +2,7 @@
 // synapse or mas reads exactly one config file, mounted read-only, with no setting beside it in its environment. Our
 // Synapse image starts `synapse.app.homeserver -c /config/homeserver.yaml` (deployment/images/synapse.Dockerfile), so
 // the synapse service sets no variable at all; MAS merges every MAS_* variable into its config and splits MAS_CONFIG
-// on ":" into several files (crates/cli/src/commands/mod.rs:90-109 at v1.26.0), so mas sets MAS_CONFIG alone. The
+// on ":" into several files (crates/cli/src/commands/mod.rs:90-109 at v1.26.0, unchanged at v1.29.0), so mas sets MAS_CONFIG alone. The
 // file's top-level keys are exactly the reviewed ones, so no other module, provider or inline secret rides in, and
 // every security setting is its reviewed value. A stack with neither service passes. A reason names a setting from
 // the lists below, never a value (P1.30m).
@@ -72,7 +72,7 @@ function synapseSettings(serverName: string): Doc {
 const SYNAPSE_SECRET_PATHS = ["signing_key_path", "macaroon_secret_key_path", "form_secret_path"];
 const SYNAPSE_OTHER = ["database", "media_store_path", ...SYNAPSE_SECRET_PATHS];
 
-/** MAS 1.26.0's settings that must be exactly these (build plan step 1, MAS table; ADR 0086 for the binds). */
+/** MAS 1.29.0's settings that must be exactly these (build plan step 1, MAS table; ADR 0086 for the binds). */
 function masSettings(serverName: string): Doc {
   return {
     http: {
@@ -176,7 +176,7 @@ export const c36: Check = {
       if (outcome !== null) return outcome;
     }
     const mas = inputs.compose.services.find((s) => s.name === "mas");
-    return (mas === undefined ? null : masNetworkProblem(inputs, mas)) ?? pass();
+    return (mas === undefined ? null : masNetworkProblem(inputs, mas)) ?? listenerProblem(inputs) ?? pass();
   },
 };
 
@@ -243,6 +243,72 @@ function masNetworkProblem(inputs: Inputs, mas: Service): Outcome | null {
     );
     if (stranger !== undefined) return fail(`${stranger.name} is on ${name}, which only mas and ${peer} share`);
   }
+  return null;
+}
+
+/**
+ * The door's two listeners and chat-admin's bind one address each (their configs refuse 0.0.0.0), so each is reached
+ * only from the network that holds that address: the count port, which answers GET /count?did= with no
+ * authentication, only from the network Synapse and web share with the door (ADR 0090 decision 2), and Synapse's push
+ * whitelist holds that one address. Each listener's variable is its reviewed address, the process holds that address
+ * on its network, the network is internal on its reviewed subnet, and only the listed peers join it. The door's
+ * COUNT_ORIGIN, the pusher URL Synapse is given, names the count listener itself.
+ */
+const LISTENERS = [
+  {
+    service: "chat-auth",
+    variable: "COUNT_LISTEN_ADDRESS",
+    network: "chat_count",
+    subnet: "10.250.38.16/29",
+    address: DOOR_COUNT_ADDRESS,
+    peers: ["synapse", "web"],
+  },
+  {
+    service: "chat-auth",
+    variable: "LISTEN_ADDRESS",
+    network: "chat_edge",
+    subnet: "10.250.38.40/29",
+    address: "10.250.38.43",
+    peers: ["edge"],
+  },
+  {
+    service: "chat-admin",
+    variable: "LISTEN_ADDRESS",
+    network: "chat_admin",
+    subnet: "10.250.38.24/29",
+    address: "10.250.38.27",
+    peers: ["web", "chat-auth"],
+  },
+] as const;
+
+const literal = (service: Service, name: string): string | null => {
+  const value = service.environment.find(([key]) => key === name)?.[1];
+  return value !== undefined && "literal" in value ? value.literal : null;
+};
+
+function listenerProblem(inputs: Inputs): Outcome | null {
+  for (const { service: name, variable, network: net, subnet, address, peers } of LISTENERS) {
+    const service = inputs.compose.services.find((s) => s.name === name);
+    if (service === undefined) continue;
+    if (literal(service, variable) !== address) return fail(`${name}'s ${variable} is not its reviewed address`);
+    const held = service.addresses.filter(([network]) => network === net);
+    if (held.length !== 1 || held[0]?.[1] !== address)
+      return fail(`${name}'s address on ${net} is not its ${variable}`);
+    const network = inputs.compose.networks.find((n) => n.name === net);
+    if (network === undefined || !network.internal) return fail(`${net} is not internal`);
+    if (network.subnet !== subnet) return fail(`${net} is not on its reviewed subnet`);
+    const members: readonly string[] = [name, ...peers];
+    const stranger = inputs.compose.services.find((s) => s.networks.includes(net) && !members.includes(s.name));
+    if (stranger !== undefined) {
+      const named = [name, ...peers].sort();
+      const list = named.length === 2 ? named.join(" and ") : `${named.slice(0, -1).join(", ")} and ${named.at(-1)}`;
+      return fail(`${stranger.name} is on ${net}, which only ${list} share`);
+    }
+  }
+  const door = inputs.compose.services.find((s) => s.name === "chat-auth");
+  const port = door === undefined ? null : literal(door, "COUNT_LISTEN_PORT");
+  if (door !== undefined && literal(door, "COUNT_ORIGIN") !== `http://${DOOR_COUNT_ADDRESS}:${port}`)
+    return fail("chat-auth's COUNT_ORIGIN is not its count listener");
   return null;
 }
 

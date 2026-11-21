@@ -42,8 +42,13 @@ const BY_DIGEST = /^[a-z0-9][a-z0-9./-]*(?::[\w.-]+)?@sha256:[0-9a-f]{64}$/;
 /** What `docker build -q` prints: the image's id. */
 const IMAGE_ID = /^sha256:[0-9a-f]{64}$/;
 
-/** The reviewed config each mode is held to, by its file in deployment/edge/adapted/. */
+/**
+ * The reviewed config each mode is held to, by its file in deployment/edge/adapted/; under dev, the source stack's
+ * edge, which names the chat site's host, is held to dev-chat (P6.02).
+ */
 const REVIEWED: Record<EdgeMode, string> = { shipped: "prod", dev: "dev", local: "local" };
+const reviewedFor = (mode: EdgeMode, values: AdaptedEnv): string =>
+  mode === "dev" && values.CHAT_HOST !== undefined ? "dev-chat" : REVIEWED[mode];
 
 const NO_DOCKER = "docker is not installed, so the edge config could not be adapted";
 
@@ -109,16 +114,16 @@ export async function adaptedEdge(
 ): Promise<Outcome> {
   const mounts = bindArgs(binds);
   if (mounts === null) return fail("an edge mount cannot be given to caddy adapt");
-  const reviewedPath = join(inputs.edgeDir, "adapted", `${REVIEWED[mode]}.generated.json`);
-  const reviewedText = inputs.readText(reviewedPath);
-  if (reviewedText === null) return missing(`deployment/edge/adapted/${REVIEWED[mode]}.generated.json`);
-  const reviewed = parsed(reviewedText);
-  if (reviewed === null) return fail("the reviewed adapted config is not JSON");
   // The values are judged before any container sees them: a missing or misshapen one, an app value equal to the
   // PDS's, or a dev app value other than the ruled one fails here, in placeholder names (P1.39e).
   const values = valuesOf(env);
   const misfit = envProblems(mode, values);
   if (misfit.length > 0) return fail(misfit.join("; "));
+  const file = reviewedFor(mode, values);
+  const reviewedText = inputs.readText(join(inputs.edgeDir, "adapted", `${file}.generated.json`));
+  if (reviewedText === null) return missing(`deployment/edge/adapted/${file}.generated.json`);
+  const reviewed = parsed(reviewedText);
+  if (reviewed === null) return fail("the reviewed adapted config is not JSON");
   const runnable = await imageToRun(inputs, image, signal);
   if (typeof runnable !== "string") return runnable;
   const names = Object.keys(values).flatMap((name) => ["-e", name]);

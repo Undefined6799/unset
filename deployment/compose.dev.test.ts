@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import { DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/adapted-rules.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
+import { c36 } from "./preflight/checks/chat.ts";
 import { c18, edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import {
@@ -30,6 +31,7 @@ import {
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
+import { CHAT_SERVICES } from "./preflight/local-only.ts";
 import { SecretMap } from "./preflight/secret-map.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -171,6 +173,15 @@ describe("compose.dev.yaml (P1.29)", () => {
     const devImages = new Map(dev().services.map((s) => [s.name, s.image]));
     for (const file of files.filter((f) => f !== FILE)) {
       for (const s of parseCompose(read(file), file).services) {
+        if (file === SOURCE && s.build === null && CHAT_SERVICES.has(s.name)) {
+          // MAS (P6.02 part 4; ADR 0086 Decision 1): the mirror's copy of its run-only base entry, by that digest.
+          const mas = readLock().mas;
+          expect(runOnly.has(`${mas?.ref}:${mas?.tag}@${mas?.digest}`), `${file} ${s.name}`).toBe(true);
+          expect(s.image, `${file} ${s.name}`).toBe(
+            `ghcr.io/undefined6799/mirror/matrix-authentication-service@${mas?.digest}`,
+          );
+          continue;
+        }
         if (file === SOURCE && s.build === null) {
           expect(s.image, `${file} ${s.name}`).toBe(devImages.get(s.name));
           continue;
@@ -400,7 +411,8 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(limitsDrift(table, dev()), FILE).toEqual([]);
     expect(limitsDrift(table, local()), LOCAL).toEqual([]);
     expect(limitsDrift(table, parseCompose(read(SOURCE_FILE), SOURCE_FILE)), SOURCE_FILE).toEqual([]);
-    const services = new Set([...dev().services, ...local().services].map((s) => s.name));
+    const source = parseCompose(read(SOURCE_FILE), SOURCE_FILE);
+    const services = new Set([...dev().services, ...local().services, ...source.services].map((s) => s.name));
     expect(Object.keys(table).filter((name) => !services.has(name))).toEqual([]);
   });
 
@@ -943,6 +955,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     pg_web_password: 65532,
     pg_api_password: 65532,
     pg_indexer_password: 65532,
+    pg_chat_auth_password: 65532,
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
     web_pds_admin_key: 65532,
@@ -1060,8 +1073,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect(pdsNeighbours(inputs)).toEqual([]);
     const webOnEdge = (text: string) =>
       text.replace(
-        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web]\n",
-        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, edge]\n",
+        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, chat_count, chat_admin]\n",
+        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, chat_count, chat_admin, edge]\n",
       );
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
@@ -1109,9 +1122,20 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect((await c32.run(devInputs(token), signal)).pass).toBe(false);
   });
 
+  test("c36_passes_on_the_source_stack", async () => {
+    // P6.02 part 4: staging's chat services read their reviewed files and bind their listeners on their one network
+    // each (C36); with the count listener unbound the stack never starts.
+    const signal = new AbortController().signal;
+    expect(await c36.run(sourceInputs(), signal)).toEqual({ pass: true, reason: "ok" });
+    const unbound = (text: string) => text.replace("      COUNT_LISTEN_ADDRESS: 10.250.38.19\n", "");
+    expect((await c36.run(sourceInputs(unbound), signal)).reason).toBe(
+      "chat-auth's COUNT_LISTEN_ADDRESS is not its reviewed address",
+    );
+  });
+
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 16 mounted secrets" },
+      { pass: true, reason: "3 files, 17 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

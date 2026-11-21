@@ -139,6 +139,7 @@ export function generate() {
     web: password(),
     api: password(),
     indexer: password(),
+    chatAuth: password(),
     keyring: JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }),
     oauthKeys: JSON.stringify([{ ...oauth, kid: "web-ci", alg: "ES256" }]),
     jwtSecret: randomBytes(32).toString("hex"),
@@ -212,6 +213,8 @@ function folders(): void {
   secret(65532, "pg_web_password", v.web);
   secret(65532, "pg_api_password", v.api);
   secret(65532, "pg_indexer_password", v.indexer);
+  // The door's role password (roles.json): migrate sets it in every stack, though no door runs locally.
+  secret(65532, "pg_chat_auth_password", v.chatAuth);
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
   const webStoreSecret = randomBytes(32).toString("hex");
