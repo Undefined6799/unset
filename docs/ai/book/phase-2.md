@@ -2622,6 +2622,18 @@ counts entries newer than the mark; seen ones stay listed until dismissed.
 another member's id), the page clearing its own browser's count only, a newer entry counting again, the `seen` form
 refused cross-site and harmless from the alert's new browser.
 
+### P2.27f — Count a notification seen on one browser as seen on all
+Tags: [SEC]            Depends on: P2.27e
+Staging bug hunt 2026-11-21: the bell's count cleared per browser, so an entry seen on one device still counted on
+another. Alex 2026-11-21 19:36Z: seen once should count across the whole account. ADR 0090, Proposed; migration 0041.
+
+**What:** a seen mark on the account (`app.account.notifications_seen_at`), moved with the browser's own mark by the
+same look. `app.inbox.seen` takes either mark, except that a sign-in alert (sent `older_sessions_only`) is covered only
+by the mark of a browser that showed it, so the browser a sign-in is about cannot clear it anywhere.
+**Tests:** against real Postgres as `web` (a look counts on every browser, never back; the new browser's look never
+covers the alert; an alert seen on one browser still counts on another), the page clearing every browser's count, and
+the alert still counting on the member's other browsers.
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit
