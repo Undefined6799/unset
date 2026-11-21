@@ -3304,10 +3304,13 @@ Threats:
 - The entry leaks a visitor's address. Answered: it has no topic, and its dedupe key is only the day
   (`invite_request.mail_fails`).
 - Many failures flood the owner's inbox. Answered: one entry a day, however many fail (`invite_request.mail_fails`).
+- A dismissed entry comes back the same day (dismissing deletes the row, so the dedupe key no longer holds; Codex
+  on #1894). Answered: web remembers the day it sent one; accepted: a restart may send it once more that day
+  (`invite_request.mail_fails`).
 - The entry's insert fails too. Accepted: it is logged (`invite.request_notice_failed`), and nothing more; the
   visitor was answered before the mail was tried.
 
-Done when the red is shown, and check is green once migrations 0037 and 0038 are on main.
+Done when the red is shown and check is green.
 
 ### P2.10t — Offer Sign up on the limited page
 Tags: —            Depends on: P2.10r, P1.22a            Plan: §5.3 "Login and signup"; ADR 0078, ADR 0080

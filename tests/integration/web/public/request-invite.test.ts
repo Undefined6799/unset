@@ -245,5 +245,12 @@ describe("the invite-request page", () => {
       await new Promise((wake) => setTimeout(wake, 20));
     }
     expect(inbox).toEqual([{ reason: "invite_mail_failed", dedupe_key: `invite_mail_failed:${today}` }]);
+    // The owner dismisses it, which deletes the row (P2.27b), and another mail fails the same day: dismissed stays
+    // dismissed. Web decides before the failure's log line returns, so the inbox is final once the third is logged.
+    await withClient(pool, null, (db) => db.query("DELETE FROM app.notification WHERE did = $1", [OWNER_DID]));
+    await post(form({ ...ASK, email: "pat@example.ca" }));
+    await until(() => failures() === 3);
+    await new Promise((wake) => setTimeout(wake, 200));
+    expect(await ownerInbox()).toEqual([]);
   });
 });
