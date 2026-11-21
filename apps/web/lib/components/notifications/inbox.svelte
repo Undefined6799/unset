@@ -99,7 +99,13 @@ function startDrag(event: PointerEvent) {
   const bar = event.currentTarget as HTMLElement;
   bar.setPointerCapture(event.pointerId);
   const box = split.getBoundingClientRect();
-  const move = (e: PointerEvent) => setShare(((e.clientX - box.left) / box.width) * 100);
+  // A move with the button up ends the drag: the release happened where this page could not see it. Firefox 157
+  // (Playwright 1.64.1) reports a pointer released outside the window that way, with clientX 0, and sends no
+  // pointerup (`buttons`, https://w3c.github.io/pointerevents/#the-buttons-property).
+  const move = (e: PointerEvent) => {
+    if ((e.buttons & 1) === 0) stop();
+    else setShare(((e.clientX - box.left) / box.width) * 100);
+  };
   const stop = () => {
     dragging = false;
     bar.removeEventListener("pointermove", move);
