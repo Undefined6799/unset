@@ -2549,6 +2549,25 @@ in-place editing), email, push, live updates.
 Tags: [SEC]            Depends on: P2.27
 **What:** ADR 0079 point 5: the Settings › Privacy choice to keep opened notifications for 30 days instead of deleting
 them on open (a read time on the row, shown as read), inside the same 30-day ceiling.
+Overtaken by P2.27b (2026-11-21): under ADR 0081 opening deletes nothing, so every entry already stays until it is
+dismissed or 30 days old, and there is no choice left to offer. Not to be built unless Alex asks again.
+
+### P2.27b — Notifications: stay until dismissed, the full-window page
+Tags: [SEC]            Depends on: P2.27
+Alex 2026-11-21 00:15Z to 00:36Z, on the mock-up (https://claude.ai/artifact/QS2ByLohscteWE1HG4psPV): "perfect implement
+that". ADR 0081, Proposed; carries ADR 0079's acceptance record.
+
+**What:** opening a notification deletes nothing. `/notifications` fills the window below the header (the footer
+only on scrolling): dense rows with checkboxes beside the chosen entry's detail (when, kind, what to do, the reason's
+button, Dismiss). Dismiss selected and Dismiss all; `?/open` and `?/readAll` become `?/dismiss` (one or the ticked,
+at most 50) and `?/dismissAll`; the page's form limit 4 KB. With script: showing a row without a round trip, a split
+dragged or moved by arrow keys between 2/5 and 3/5 and kept on the device, a cut-off row lifted over the detail after
+0.4 s, never within 40 px of the split. Phone: the detail is its own screen at `?n=`. The bell's rows link to the
+detail; its count is what is waiting.
+**Tests:** the store and route tests rewritten for dismissing (denial, the new browser, the largest form, double and
+stale posts, the notice seen on dismiss), the domain's id parsing, tests/e2e/notifications.spec.ts (a seeded
+"inbox" member), the no-script page.
+**Not in this step:** the Sign-in history tab (P2.27c).
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
@@ -4010,6 +4029,28 @@ P2.19b, review follow-ups, built 2026-11-20 (#1844): the upload's deadline resta
 `bodyWindowMs` 120 s, then 100 s for review and the store); web sends review at most `REVIEW_LANES` (2) pictures at
 once; a timed-out upload keeps its slot until its review call ends. Four uploads per process stays (eight measured at
 about 910 MiB above web's base).
+P2.19b, picture cards on the server, built 2026-11-20: the card forms take kind `image` (`image` a draft id or empty to
+keep the picture, `alt`, `caption`, `fit`), and every card write publishes a new picture after its own checks and
+before the write: the use first (`addUse`, under a key web picks with `newCardKey` for a new card), then the main
+version from `drafts/<did>/i/<id>/main.jpeg`, then `com.atproto.repo.uploadBlob`; a Save publishes once across its one
+retry. After the write (Codex review): every `addUse` adds the save's own token to `app.image_use.holds`; a write
+that surely did not land removes its token, and the use goes only when no save holds it and no write settled it; one
+the PDS did not answer keeps its token, since it may have landed. One that landed settles the record's uses under its
+commit revision (migration 0037; a TID sorts by time). `app.image_record` keeps each record's last settled revision
+and whether it was deleted: a revision not newer than that, or any after a delete, only takes back its own uses; a
+newer one becomes the last and leaves exactly the use of the picture the record shows (found by the CID web notes on
+`app.image.blob_cid`), so two tabs' saves end right in either settling order, also when the newer one left no picture.
+A delete marks the record and drops every use of it. Taking a use back runs under its own 5 s deadline
+(`SETTLE_MS`), not the request's. Left: a use whose write went unanswered and did not land, or whose request died
+mid-save, keeps its image from the sweep. Pages still hide picture cards until P2.19c.
+P2.19b, orphan-object sweep, built 2026-11-20: web's sweeps also run `sweep.image_orphan`
+(`interfaces/web/src/lib/server/image-orphans.ts`). It lists `drafts/`, then reads which of the listed ids still have
+a row (`ImageStore.named`), and deletes each `drafts/<did>/i/<id>/` folder no row of that member names, all or nothing
+under the image sweep's governor. No age check: rows are written before objects and deleted before them, and ids are
+never reused, so a folder with no row at that read can never gain one. Keys of any other shape are left alone.
+P2.19b, booked follow-up (reviewer, #1860): a card write the PDS answers without a commit revision, or never
+answers, keeps its saves' holds on `app.image_use` for good, so that image is never swept and stays in the quota. Fix
+in a later step: a reconciliation that reads the record from the member's PDS and settles or releases those holds.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)

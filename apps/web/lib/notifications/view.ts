@@ -6,12 +6,12 @@ export type NotificationView = {
   readonly sentAt: string;
 };
 
-/** The bell's and the page's data: the entries, the capped unread count, and whether older ones exist. */
+/** The bell's and the page's data: the entries, the capped count, and whether older ones exist. */
 export type NotificationsView =
   | {
       readonly state: "ready";
       readonly entries: readonly NotificationView[];
-      readonly unread: number;
+      readonly count: number;
       readonly more: boolean;
     }
   | { readonly state: "failed" };
@@ -30,4 +30,18 @@ const OWN = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "
 export function timeText(at: string, local: boolean): string {
   const date = new Date(at);
   return local ? OWN.format(date) : `${UTC.format(date)} UTC`;
+}
+
+const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const OWN_DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+const OWN_TIME = new Intl.DateTimeFormat("en-US", { timeStyle: "short" });
+
+/**
+ * A row's short time: the time of day for today, else the day ("Nov 17"). The server has no zone, so its page shows
+ * the UTC day; with script, `now` is set and the device's zone decides what "today" is.
+ */
+export function shortTime(at: string, now: Date | undefined): string {
+  const date = new Date(at);
+  if (now === undefined) return DAY.format(date);
+  return OWN_DAY.format(date) === OWN_DAY.format(now) ? OWN_TIME.format(date) : OWN_DAY.format(date);
 }

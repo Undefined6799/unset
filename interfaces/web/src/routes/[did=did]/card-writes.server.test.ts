@@ -50,6 +50,7 @@ function store(
         overflow: false,
       }),
     head: async () => ok(HEAD),
+    newKey: () => "3knewkey2aaaa" as CardKey,
     create: async (record, swapCommit) => {
       calls.created.push(record);
       calls.swaps.push(swapCommit);
@@ -74,7 +75,17 @@ function store(
       return ok(built.ok ? { kind: "saved" } : { kind: "refused", code: built.code });
     },
   };
-  return { writes: cardWrites({ ...base, ...over }, () => NOW), calls };
+  // No picture card here (card-pictures.server.test.ts): a delete's use cleanup is the one call that reaches these.
+  const pictures = {
+    use: async () => null,
+    release: async () => undefined,
+    main: async () => ({ kind: "missing" }) as const,
+    upload: async () => ({ kind: "transient", code: "pds_unavailable" }) as const,
+    published: async () => undefined,
+    settle: async () => undefined,
+    drop: async () => undefined,
+  };
+  return { writes: cardWrites({ ...base, ...over }, () => NOW, pictures), calls };
 }
 
 describe("cardWrites", () => {
