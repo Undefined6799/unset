@@ -93,9 +93,14 @@ describe("toConversation", () => {
     expect(toConversation(other, direct)?.kind).toBe("not_encrypted");
   });
 
-  test("chat.conversation_name_fallback: without a display name the chat ID is the name", () => {
-    const r = room("!a:unset.cc", [member(ME, "join"), member(THEM, "join")]);
-    expect(toConversation(r, directRooms({ [THEM]: ["!a:unset.cc"] }))?.with).toEqual({ id: THEM, name: THEM });
+  test("chat.conversation_name_fallback: without a display name, or once erased, the other person is a Former member", () => {
+    const direct = directRooms({ [THEM]: ["!a:unset.cc"] });
+    const unnamed = room("!a:unset.cc", [member(ME, "join"), member(THEM, "join")]);
+    expect(toConversation(unnamed, direct)?.with).toEqual({ id: THEM, name: "Former member" });
+    const erased = room("!a:unset.cc", [member(ME, "join"), member(THEM, "leave", { displayname: "" })]);
+    expect(toConversation(erased, direct)?.with).toEqual({ id: THEM, name: "Former member" });
+    const noEvent = room("!a:unset.cc", [member(ME, "join")]);
+    expect(toConversation(noEvent, direct)?.with).toEqual({ id: THEM, name: "Former member" });
   });
 
   test("chat.conversation_direct_only: a room that is not direct, or one this member left, is not listed", () => {

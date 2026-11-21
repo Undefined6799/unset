@@ -195,3 +195,25 @@ export async function unlock(keys: Keys, userId: string, typed: string): Promise
   }
   return "unlocked";
 }
+
+/**
+ * How long after an unlock the backup is read again. Another browser of the account uploads a new key up to 10 s after
+ * it gets one (matrix-js-sdk 43.0.0 src/rust-crypto/backup.ts:64-70), while the SDK asks the backup for a missing key
+ * once, when a message fails to decrypt, and not again by itself (PerSessionKeyBackupDownloader.ts:29, 158-184).
+ */
+export const RESTORE_AGAIN_MS = 15_000;
+
+/**
+ * Reads the whole backup into this browser with the SDK's CryptoApi.restoreKeyBackup (src/crypto-api/index.ts:
+ * 650-667), as Element does after an unlock (element-web v1.12.35 apps/web/src/stores/SetupEncryptionStore.ts:143-146).
+ * Each key it imports retries the messages waiting for it (src/rust-crypto/rust-crypto.ts:1986-2010). False when the
+ * backup could not be read; those messages then stay unreadable until the page is loaded again, as before.
+ */
+export async function restoreBackup(crypto: CryptoApi): Promise<boolean> {
+  try {
+    await crypto.restoreKeyBackup();
+    return true;
+  } catch {
+    return false;
+  }
+}
