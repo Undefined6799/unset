@@ -22,7 +22,7 @@ let {
   message?: string;
   /** Whether that message is a refusal. */
   refused: boolean;
-  onsave: () => void;
+  onsave: (event: MouseEvent) => void;
   ondiscard: () => void;
 } = $props();
 

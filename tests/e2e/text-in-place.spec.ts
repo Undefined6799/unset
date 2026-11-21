@@ -374,6 +374,48 @@ test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }
   await removeCard(page, word);
 });
 
+// Staging, 2026-11-21 (cold load): a click on the words before the page's own script has run reached no listener,
+// so the editor opened with no caret and the letters typed then were lost (WebKit once put them in the first list
+// item). The browser keeps that click as a caret in the words; the card carries it into the editor.
+test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_opens", async ({ page }) => {
+  const word = `cold${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `- first item\n\n${word} start` });
+  // Every script of the page held, as a cold load on a slow line: the words are drawn and nothing listens yet. A
+  // new page, as WebKit serves this page's own scripts again from its memory cache without asking the route.
+  // Held until the click is made, then all let go: held by a fixed time instead, three waves of it (the page, its
+  // parts, the editor) brought the editor 4.6 to 5.2 s after the click in Firefox, past the wait (CI, #1951).
+  const cold = await page.context().newPage();
+  const clicked = Promise.withResolvers<void>();
+  await cold.route("**/_app/immutable/**/*.js", async (route) => {
+    await clicked.promise;
+    return route.continue();
+  });
+  await cold.goto(page.url(), { waitUntil: "commit" });
+  const card = cold.locator('[data-slot="card"]', { hasText: word });
+  const line = card.getByText(`${word} start`);
+  await expect(line).toBeVisible();
+  await expect(cold.locator("[data-text-in-place][data-listening]")).toHaveCount(0);
+  const box = await line.boundingBox();
+  if (box === null) throw new Error("no line");
+  // At the end of the line, as the tester clicked at the end of a sentence.
+  await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  clicked.resolve();
+  const { editor } = await editorHolding(cold, word);
+  await expect(editor).toBeFocused();
+  // The editor draws the words where they were (the list's items and the space between blocks as the page draws
+  // them), so nothing moves when it takes their place and the click's point is the same words in both. Within a
+  // pixel: Firefox puts one of the two lines on a half pixel (331.5 against 331).
+  const drawn = (await editor.locator(":scope > p").boundingBox())?.y ?? Number.NaN;
+  expect(Math.abs(drawn - box.y)).toBeLessThanOrEqual(1);
+  await cold.keyboard.type("Q");
+  await expect(editor.locator(":scope > p")).toHaveText(`${word} startQ`);
+  await expect(editor.locator("li")).toHaveText("first item");
+  await bar(cold).getByRole("button", { name: "Discard" }).click();
+  await removeCard(cold, word);
+  await cold.close();
+});
+
 /**
  * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
  * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
@@ -489,6 +531,68 @@ test("after_a_save_typing_goes_on_where_it_was", async ({ page }) => {
   await expect(editor).toHaveText(`${word} start one two`);
   await expect(bar(page)).toContainText("1 card has unsaved changes.");
   await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Staging, 2026-11-21: letters typed in the instant after pressing Save went to the button and were lost; focus came
+// back only once the Save had answered. The press hands the keys straight back to the words.
+test("letters_typed_straight_after_pressing_save_stay_in_the_words", async ({ page }) => {
+  const word = `quick${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(" one");
+  // A Save that takes a moment to answer, as on a phone line.
+  await page.route(/\?\/saveAll$/, async (route) => {
+    await new Promise((done) => setTimeout(done, 1000));
+    return route.continue();
+  });
+  const saved = page.waitForResponse(/\?\/saveAll$/);
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await page.keyboard.type(" two");
+  await expect(editor).toHaveText(`${word} start one two`);
+  // Once the Save has answered (a Discard while it is out would cancel it), " two" is what is left unsaved.
+  await saved;
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await page.unroute(/\?\/saveAll$/);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Review of c753f37: only a pointer press hands the keys back to the words. A member who reached Save by Tab is not
+// in the middle of a word, so Enter or Space pressed twice there saves once and puts nothing in the card.
+test("enter_or_space_pressed_twice_on_save_saves_once_and_leaves_the_words", async ({ page }) => {
+  const word = `keysave${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  let saves = 0;
+  page.on("request", (request) => {
+    if (/\?\/saveAll$/.test(request.url())) saves += 1;
+  });
+  for (const [key, typed] of [
+    ["Enter", " one"],
+    ["Space", " two"],
+  ] as const) {
+    await editor.click();
+    await editor.press("End");
+    await page.keyboard.type(typed);
+    const before = saves;
+    const saved = page.waitForResponse(/\?\/saveAll$/);
+    await bar(page).getByRole("button", { name: "Save" }).focus();
+    await page.keyboard.press(key);
+    await page.keyboard.press(key);
+    await saved;
+    await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+    await expect(bar(page)).not.toContainText("unsaved");
+    expect(saves - before).toBe(1);
+  }
+  await expect(editor).toHaveText(`${word} start one two`);
+  await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(0);
   await removeCard(page, word);
 });
 
