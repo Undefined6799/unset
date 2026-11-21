@@ -73,3 +73,12 @@ export {
   withAvatarShape,
   withCardOrder,
 } from "./profile.ts";
+export {
+  type PageShown,
+  PROFILE_VISIBILITIES,
+  type ProfileVisibility,
+  pageShownTo,
+  parseProfileVisibility,
+  readProfileVisibility,
+  type Viewer,
+} from "./visibility.ts";

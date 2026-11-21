@@ -1,0 +1,13 @@
+{
+  "name": "@unset/infrastructure-email",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "nodemailer": "10.5.0"
+  }
+}

@@ -26,6 +26,7 @@
     "@unset/domains-notifications": "*",
     "@unset/domains-profile": "*",
     "@unset/infrastructure-audit": "*",
+    "@unset/infrastructure-email": "*",
     "@unset/infrastructure-image": "*",
     "@unset/infrastructure-net-guard": "*",
     "@unset/infrastructure-pds": "*",

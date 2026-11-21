@@ -40,6 +40,7 @@ COPY --from=deps /app/domains/identity /app/domains/identity
 COPY --from=deps /app/domains/notifications /app/domains/notifications
 COPY --from=deps /app/domains/profile /app/domains/profile
 COPY --from=deps /app/infrastructure/audit /app/infrastructure/audit
+COPY --from=deps /app/infrastructure/email /app/infrastructure/email
 COPY --from=deps /app/infrastructure/image /app/infrastructure/image
 COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard
 COPY --from=deps /app/infrastructure/pds /app/infrastructure/pds

@@ -27,6 +27,7 @@ let { data } = $props();
       <p>{T.malformed}</p>
     {:else}
       <p>{T.noCode}</p>
+      <p>{T.noInvite} <a href="/request-invite">{T.request}</a></p>
     {/if}
     {#if data.signedIn}
       <p>{T.signedIn}</p>

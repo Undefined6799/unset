@@ -156,6 +156,23 @@ describe("public profile store", () => {
     expect(await store().listed("searchEngines", 1, null)).toHaveLength(1);
   });
 
+  // ADR 0078: a page shown to fewer than everyone is never listed, whatever its switches say; unknown fails closed.
+  test("a_page_that_is_not_public_is_never_listed", async () => {
+    const setVisibility = (value: string) =>
+      postgres.sql(
+        "unset",
+        `UPDATE idx.profile SET record = record || '{"visibility":${value}}' WHERE did = '${SHOWN}'`,
+      );
+    for (const value of ['"signedIn"', '"ownerOnly"', '"friends"', "null"]) {
+      setVisibility(value);
+      expect(await store().listed("searchEngines", 10, null), value).toEqual([{ did: UNVERIFIED, handle: null }]);
+      expect(await store().listed("aiSearch", 10, null), value).toEqual([]);
+    }
+    setVisibility('"public"');
+    expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
+    postgres.sql("unset", `UPDATE idx.profile SET record = record - 'visibility' WHERE did = '${SHOWN}'`);
+  });
+
   test("all_off_keeps_no_row", async () => {
     const own = createDiscoverabilityStore(web);
     await own.save(UNVERIFIED, { searchEngines: false, aiSearch: false, title: "", description: "" }, null);
