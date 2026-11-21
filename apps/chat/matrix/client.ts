@@ -52,7 +52,14 @@ const FIRST_SYNC_MS = 30_000;
  */
 export const storePrefix = (userId: string): string => `unset-chat:${userId}`;
 
-export type Chat = { readonly stop: () => void };
+export type Chat = {
+  readonly stop: () => void;
+  /**
+   * Log out of this browser (logOut below): the backup catches up, the door ends the device, the stores go. Callable on
+   * its own, by whatever ends chat for the member, not only from a screen.
+   */
+  readonly logOut: () => Promise<void>;
+};
 export type ChatOptions = {
   /** The page's own origin: the edge sends /_matrix/client/* to the homeserver (ADR 0081 decision 6). */
   readonly baseUrl: string;
@@ -98,12 +105,13 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
   let restoreAgain: ReturnType<typeof setTimeout> | undefined;
-  const chat = {
+  const chat: Chat = {
     stop: () => {
       stopped = true;
       clearTimeout(restoreAgain);
       client.stopClient();
     },
+    logOut: () => logOut(),
   };
   options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
   const tell = (state: ChatState) => stopped || options.onState(state);
