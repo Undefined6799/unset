@@ -69,7 +69,7 @@ async function endEverySession(session: Session, deadline: AbortSignal): Promise
     if (attempt > 1) await pause(END_ALL_PAUSE_MS);
     try {
       // P2.08j: the definer (migration 0014) ends every session of the DID and deletes its token set; every chat
-      // device the member signed in is queued to end with it (ADR 0083 decision 5, migration 0045).
+      // device the member signed in is queued to end with it (ADR 0083 decision 5, migration 0044).
       await withTransaction(pool, deadline, async (tx) => {
         await chat.endFor.queueForDid(tx, session.did);
         await sessions.destroyAllForDid(tx, session.did, "user_signout_all");
@@ -118,7 +118,7 @@ export async function signOut(session: Session | undefined, cookies: Cookies, de
   const issuer = await recordedIssuer(session);
   const { pool, sessions, chat, log } = services();
   // A failed delete is a retryable 503 (book P2.08 step 3), and the cookie stays so the retry finds it. The chat
-  // devices this session signed in are queued to end in the same commit (ADR 0083 decision 5, migration 0045).
+  // devices this session signed in are queued to end in the same commit (ADR 0083 decision 5, migration 0044).
   const remaining = await withTransaction(pool, deadline, async (tx) => {
     await chat.endFor.queueForSession(tx, session.idHash);
     await sessions.destroy(tx, session.idHash);
