@@ -1,6 +1,11 @@
 ---
-status: Proposed
+status: Accepted
 date: "2026-11-21"
+accepted:
+  at: "2026-11-21T06:12Z"
+  head: 626ac89c84ed4aab93d1934d53478398059ba128
+  line: "Merge 1910 at 626ac89"
+  merged: 875dda7c501a429d7896da587c808fb13fb9f594
 step: P2.27e
 amends:
   - adr: "0081"
