@@ -2,5 +2,6 @@
   "node": "node",
   "caddy": "edge",
   "postgres": "postgres",
-  "seaweedfs": "objects"
+  "seaweedfs": "objects",
+  "python": "synapse"
 }

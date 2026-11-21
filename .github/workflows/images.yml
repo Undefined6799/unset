@@ -596,6 +596,10 @@ jobs:
               docker.io/fosrl/newt:*|docker.io/fosrl/newt@*)
                 ignorefile=.github/trivyignore.newt.yaml
                 ;;
+              # P6.02: only docker.io/library/python reads its own file (zlib1g, which the Synapse image upgrades).
+              docker.io/library/python:*|docker.io/library/python@*)
+                ignorefile=.github/trivyignore.python.yaml
+                ;;
             esac
             status=0
             docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \

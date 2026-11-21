@@ -61,5 +61,26 @@
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false
+  },
+  "python": {
+    "ref": "docker.io/library/python",
+    "tag": "3.13-slim-trixie",
+    "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": true,
+    "stripped": [
+      "/usr/local/lib/python3.13/site-packages/pip",
+      "/usr/local/lib/python3.13/site-packages/pip-26.2.2.dist-info",
+      "/usr/local/lib/python3.13/ensurepip"
+    ]
+  },
+  "mas": {
+    "ref": "ghcr.io/element-hq/matrix-authentication-service",
+    "tag": "1.26.0",
+    "digest": "sha256:e089f1048a1d4a9a492ed17b9fe759100f1bd619407b001f5927928d88b780c4",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": false
   }
 }
