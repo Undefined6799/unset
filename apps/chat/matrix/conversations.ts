@@ -30,6 +30,19 @@ export function directRooms(content: unknown): Map<string, string> {
   return map;
 }
 
+/**
+ * m.direct with `roomId` recorded for `userId` alone, as Element's setDMRoom writes it (apps/web/src/Rooms.ts:52-73):
+ * dropped from every other person's list first, since a room is direct with one person.
+ */
+export function withDirect(content: unknown, roomId: string, userId: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [id, other] of directRooms(content)) {
+    if (id !== roomId) out[other] = [...(out[other] ?? []), id];
+  }
+  out[userId] = [...(out[userId] ?? []), roomId];
+  return out;
+}
+
 /** The other person of a direct room, or undefined when the room is not direct. */
 export const otherPerson = (room: Room, direct: ReadonlyMap<string, string>): string | undefined =>
   direct.get(room.roomId) ?? room.getDMInviter();
