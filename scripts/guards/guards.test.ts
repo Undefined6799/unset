@@ -109,14 +109,15 @@ describe("egress", () => {
   test("egress_file_exemption_exact", () => {
     // guard.pds_admin_single_file (P2.09): pds-admin's one egress file, and no other file in that folder; chat-admin's
     // likewise (ADR 0081 Compliance).
-    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.ts", "interfaces/chat-admin/mas.ts"]);
+    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.ts", "interfaces/chat-admin/outbound.ts"]);
     const line = 'import http from "node:http";';
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.ts": line }))).toEqual([]);
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/other.ts": line }))).toHaveLength(1);
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.mjs": line }))).toHaveLength(1);
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/issue.ts": "await fetch(url);" }))).toHaveLength(1);
-    expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/mas.ts": line }))).toEqual([]);
+    expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/outbound.ts": line }))).toEqual([]);
     expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/commands.ts": line }))).toHaveLength(1);
+    expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/mas.ts": line }))).toHaveLength(1);
   });
 });
 

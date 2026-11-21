@@ -9,11 +9,11 @@ const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "egress";
 const EXEMPT_PREFIX = "infrastructure/net-guard/";
 
-/** pds-admin calls the one internal origin PDS_INTERNAL_URL from this file only (P2.09, phase-2 E10); chat-admin calls
- * MAS's two internal origins from this file only (ADR 0081 Compliance). */
+/** pds-admin calls the one internal origin PDS_INTERNAL_URL from this file only (P2.09, phase-2 E10); chat-admin opens
+ * every connection from this file only (ADR 0081 Compliance; ADR 0091). */
 export const EGRESS_FILE_EXEMPTIONS: readonly string[] = [
   "interfaces/pds-admin/pds.ts",
-  "interfaces/chat-admin/mas.ts",
+  "interfaces/chat-admin/outbound.ts",
 ];
 
 // fetch( whose first argument is not a plain string literal on the same line (template literals count as dynamic).
