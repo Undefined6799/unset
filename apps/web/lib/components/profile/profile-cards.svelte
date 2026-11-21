@@ -73,7 +73,8 @@ const label = "shrink-0 font-mono text-xs leading-6 tracking-wider text-muted-fo
 /** A link's host hides on a phone, where the row has no room for it; an entry's tag is its own text and stays. */
 const site = `${label} max-sm:hidden`;
 /** A card the owner drags another onto is ringed (card-controls.svelte sets data-drop). */
-const card = "min-w-0 gap-0 rounded-sm py-0 [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring";
+const card =
+  "min-w-0 gap-0 rounded-sm py-0 [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring data-moving:opacity-60 data-moving:transition-opacity";
 /** Surface changes only the outer card; nested tiles and dividers keep their own structure. */
 const SURFACE: Record<CardSurface, string> = {
   filled: "border-0 bg-card shadow-md",
@@ -130,11 +131,13 @@ const count = "font-mono text-xs text-muted-foreground";
       {#if shown.shown.kind === "readme"}
         <!-- No bar and no automatic heading (P1.21p): the member's own text leads, its headings are the card's. -->
         <Card.Root class="group/card {card} {span} {outer(shown)} {TEXT_INSET[shown.surface]}" data-surface={shown.surface}>
-          <div class="flex items-start gap-3">
+          <!-- On a phone the owner's controls sit in a row above the text, so the text keeps the card's whole width
+               (staging test 2026-11-21, u5); from sm up they stand beside it. -->
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
+            {#if controls !== undefined}<div class="flex justify-end sm:order-last">{@render controls(index)}</div>{/if}
             <div class="min-w-0 flex-1">
               {#if text === undefined}<Readme blocks={shown.shown.blocks} />{:else}{@render text(index)}{/if}
             </div>
-            {@render controls?.(index)}
           </div>
         </Card.Root>
       {:else if shown.shown.kind === "links"}
