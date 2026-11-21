@@ -81,7 +81,10 @@ export const actions: Actions = {
         },
         email,
       ).then(
-        (outcome) => (outcome === "failed" ? mailFailed(requests.owner) : undefined),
+        (outcome) => {
+          if (outcome !== "failed") return undefined;
+          return mailFailed(requests.owner);
+        },
         () => mailFailed(requests.owner),
       ),
     );
