@@ -268,6 +268,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21w | Serve the docs site at docs.unset.sh from the staging edge, ADR 0075 (added 2026-11-20) | [SEC], trusted | — | `phase-1.md` |
 | P1.21x | Keep one profile layout, sticky site header, View as public, ADR 0077 (added 2026-11-20) | trusted | P1.21o | `phase-1.md` |
 | P1.21v | Edit Text cards in place, one Save for all through applyWrites, ADR 0074 (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
+| P1.21r | Fix the in-place editor's first press and the way back; owner's link from the public page (added 2026-11-21) | — | P1.21v | `phase-1.md` |
 | P1.21y | Settings › Privacy with Search and AI and a search result preview (added 2026-11-20) | trusted | P1.21b | `phase-1.md` |
 | P1.21z | Make the Text editor's buttons toggle and show state; heading sizes in a menu (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
 | P1.22a | Who sees your page: Public, Signed-in members only, Only me; the limited page, ADR 0078 (added 2026-11-20) | trusted | P1.21y | `phase-1.md` |
