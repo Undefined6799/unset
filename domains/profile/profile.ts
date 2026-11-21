@@ -4,6 +4,7 @@
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import type { CardKey } from "./cards.ts";
+import { isPlainName, isPlainText } from "./member-text.ts";
 import type { ProfileVisibility } from "./visibility.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
@@ -61,7 +62,10 @@ function checkField(field: ProfileField, raw: unknown, limits: FieldLimits = APP
   if (typeof raw !== "string") return { ok: false, code: "profile.invalid" };
   const trimmed = raw.trim();
   const value = field === "website" && trimmed !== "" ? withScheme(trimmed) : trimmed;
-  if (/[\r\n]/.test(value)) return { ok: false, code: "profile.invalid" };
+  // One line of printable text; the name also has no bidi control or invisible character (member-text.ts).
+  if (!(field === "displayName" ? isPlainName(value) : isPlainText(value, false))) {
+    return { ok: false, code: "profile.invalid" };
+  }
   const tooLong =
     field === "website" ? bytes(value) > LIMITS.profile.websiteBytes : graphemes(value, limits[field]) > limits[field];
   if (tooLong) return { ok: false, code: "profile.too_long" };
