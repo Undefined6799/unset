@@ -779,3 +779,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   room with no event for 30 days (purge, no block), never touch an encrypted room, and revoke the session at the end;
   chat-admin gains a network path to Synapse. Amends ADR 0081 decisions 1, 5 and 6 and ADR 0086 decision 4. Accepted
   by Alex 2026-11-21.
+- **Chat trusts devices the way Element does (P6.10, 2026-11-21; own record:
+  [0093](0093-chat-trusts-devices-as-element-does.md)):** the chat page sets Element's default
+  `AllDevicesIsolationMode(false)` instead of `OnlySignedDevicesIsolationMode`, so a first message read before its
+  sender's device list still decrypts, and a message from a device its owner has not confirmed shows a warning.
+  Device proofs (a second factor) come later. Amends decision 13 above, ADR 0083 decision 1 and ADR 0088 decision 3.
+  Accepted by Alex 2026-11-21 19:12Z.

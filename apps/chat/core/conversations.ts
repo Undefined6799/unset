@@ -31,6 +31,8 @@ export type Message = {
   readonly id: string;
   readonly mine: boolean;
   readonly at: number;
+  /** Sent from a device its owner has not confirmed: shown with a warning (ADR 0093). */
+  readonly unconfirmed: boolean;
 } & ({ readonly kind: "text"; readonly text: string } | { readonly kind: "unreadable" });
 
 /**

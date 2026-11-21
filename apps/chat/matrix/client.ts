@@ -2,18 +2,14 @@
 // ADR 0088 decision 3). It starts a client on the session the door handed over, used as the SDK ships it:
 //   createClient({ baseUrl, accessToken, userId, deviceId, cryptoCallbacks, localTimeoutMs }) src/matrix.ts:149
 //   initRustCrypto({ storageKey, cryptoDatabasePrefix })                              src/client.ts:2014-2063
-//   getCrypto().setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())          src/crypto-api/index.ts:91,840
+//   getCrypto().setDeviceIsolationMode(new AllDevicesIsolationMode(false))            src/crypto-api/index.ts:91,811
 //   startClient({ lazyLoadMembers: true }), the default in-memory store               src/client.ts:1479
 // in Element's order: crypto, then the isolation mode, then startClient (element-web v1.12.35
 // apps/web/src/MatrixClientPeg.ts:321-331, 357). The import is lib/matrix.js, not the package's browser entry, which
 // would also open a legacy crypto store named "matrix-js-sdk:crypto" for every account (src/browser-index.ts:36-41);
 // Element imports matrix-js-sdk/src/matrix for the same reason (apps/web/src/utils/createMatrixClient.ts:9-19).
 // Screens get our ChatState only, never an SDK object.
-import {
-  type CryptoCallbacks,
-  CryptoEvent,
-  OnlySignedDevicesIsolationMode,
-} from "matrix-js-sdk/lib/crypto-api/index.js";
+import { AllDevicesIsolationMode, type CryptoCallbacks, CryptoEvent } from "matrix-js-sdk/lib/crypto-api/index.js";
 import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState } from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
@@ -117,7 +113,13 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   }
   const crypto = client.getCrypto();
   if (crypto === undefined) return fail("chat.keys_unavailable");
-  crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode());
+  // Element's default (ADR 0093): feature_exclude_insecure_devices off (element-web v1.12.35
+  // apps/web/src/settings/Settings.tsx:508-517) sets this mode (settings/controllers/DeviceIsolationModeController.ts:
+  // 32-39), so a message decrypts whichever of the sender's devices sent it, and one from a device its owner has not
+  // signed shows a warning (matrix/conversations.ts unconfirmedDevice). Keys go to every device of the members, as the
+  // SDK's globalBlacklistUnverifiedDevices default false (src/rust-crypto/rust-crypto.ts:428) and Element's
+  // blacklistUnverifiedDevices default false (Settings.tsx:1144-1153) leave it.
+  crypto.setDeviceIsolationMode(new AllDevicesIsolationMode(false));
   await client.startClient({ lazyLoadMembers: true });
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
   const keys: Keys = { client, crypto, holder };

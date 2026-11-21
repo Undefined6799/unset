@@ -62,6 +62,7 @@ async function browserFor(browser: Browser, handle: string) {
 const state = (page: Page) => page.locator("main").getAttribute("data-state");
 const conversation = (page: Page) => page.locator("[data-screen=conversation]");
 const messages = (page: Page) => conversation(page).locator("ol");
+const unconfirmed = (page: Page) => messages(page).locator("[data-mark=unconfirmed]");
 
 async function saveKey(page: Page): Promise<string> {
   await expect.poll(() => state(page), { timeout: 60_000 }).not.toBe("signing_in");
@@ -107,10 +108,14 @@ async function talking(browser: Browser) {
   // Sent while Bob was only invited, and readable by him once he joined: the key went to his device as an invitee.
   await b.page.locator(`[data-conversation="${alice.userId}"]`).click();
   await expect(messages(b.page)).toContainText("hello before you accept", { timeout: 60_000 });
+  // Alice's device is signed by her own keys, so no message carries the unconfirmed-device warning (ADR 0093). Bob's
+  // browser may read the message before it knows her device; the mark goes once his device list has it.
+  await expect(unconfirmed(b.page)).toHaveCount(0, { timeout: 30_000 });
   await send(a.page, "hello from alice");
   await expect(messages(b.page)).toContainText("hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
   return { alice, bob, a, b, aliceKey };
 }
 
@@ -151,6 +156,8 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   await a2.page.locator("[data-conversation]").first().click();
   await expect(messages(a2.page)).toContainText("hello from bob", { timeout: 90_000 });
   await expect(messages(a2.page)).toContainText("hello from alice", { timeout: 90_000 });
+  // Keys from the backup give a grey shield, which Element shows as a plain padlock: no warning either.
+  await expect(unconfirmed(a2.page)).toHaveCount(0, { timeout: 30_000 });
   // Log out on the first browser: its device ends at the homeserver, nothing of the account is left in that browser,
   // and the other browser is untouched.
   const device = a.redeems[0]?.deviceId ?? "";
