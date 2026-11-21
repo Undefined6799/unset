@@ -12,7 +12,10 @@ import {
   type CardVersion,
   type CardWidth,
   type DraftImageId,
+  fitsPage,
+  inSizeOrder,
   type ProfileError,
+  parseCardVersion,
   pictureLink,
   reorderCards,
   shownCards,
@@ -115,11 +118,15 @@ export type CardFailure =
   | "card.image_unavailable"
   | "profile.conflict"
   | "profile.pds_unavailable";
+/** A card a Save of several wrote, and the version (record CID) the PDS gave it. */
+export type CardWritten = { readonly key: CardKey; readonly version: CardVersion };
 export type CardWrite =
-  | { readonly kind: "saved" }
+  /** `versions`, in a Save of several, are the written cards whose new version the PDS named. */
+  | { readonly kind: "saved"; readonly versions?: readonly CardWritten[] }
   /**
    * `field`, when given, is the form field to blame (the card editor shows the refusal beside it); `card`, in a save
-   * of several cards, is the card it is about; `saved`, in a Save written only in part, are the cards that were.
+   * of several cards, is the card it is about; `saved`, in a Save written only in part, are the cards that were, and
+   * `versions` the new versions of those the PDS named.
    */
   | {
       readonly kind: "failed";
@@ -127,6 +134,7 @@ export type CardWrite =
       readonly field?: string;
       readonly card?: CardKey;
       readonly saved?: readonly CardKey[];
+      readonly versions?: readonly CardWritten[];
     }
   /** The PDS grant is gone or lacks a scope; the sign-in pages take over. */
   | { readonly kind: "redirect"; readonly location: string };
@@ -319,6 +327,8 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
           if (!built.ok) return done(failed(built.code, built.field));
           record = built.record;
         }
+        // All the member's cards must still fit one page (domains/profile MAX_PAGE_BYTES), counted on this same list.
+        if (!fitsPage(listed.value.cards, [{ key: null, record }])) return done(failed("card.page_full"));
         const created = await store.create(record, head.value, held?.key);
         if (created.kind !== "ok") return done(pdsFailure(created), unanswered(created));
         // A new record had no uses before; one with a picture settles its held use under the create's revision.
@@ -329,12 +339,21 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
       }
       return done(failed("card.cards_changed"));
     },
+    // The page's size is counted on the member's cards as listed just before the write. The write swaps on this card
+    // alone, so a card another tab grows meanwhile can still pass the size; the index then skips the one that does not
+    // fit and counts it (indexStore.ts), so the page itself never passes MAX_PAGE_BYTES.
     save: async (key, content, width, surface) => {
+      const listed = await store.list();
+      if (listed.kind !== "ok") return pdsFailure(listed);
+      if (!listed.value.complete) return failed("card.list_incomplete");
       const published = await publish(content, key);
       if (!published.ok) return published.failed;
       let written: unknown = null;
       const saved = await store.save(key, (existing) => {
         const built = toCardRecord(published.content, width, existing, now(), surface);
+        if (built.ok && !fitsPage(listed.value.cards, [{ key, record: built.record }])) {
+          return { ok: false, code: "card.page_full" };
+        }
         written = built.ok ? built.record : null;
         return built;
       });
@@ -371,6 +390,8 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
         if (head.kind !== "ok") return done(pdsFailure(head), []);
         const listed = await store.list();
         if (listed.kind !== "ok") return done(pdsFailure(listed), []);
+        // The page budget counts every card, so a list cut short cannot judge one (Codex review of #1911).
+        if (!listed.value.complete) return done(failed("card.list_incomplete"), []);
         const checked = checkEdits(edits, listed.value);
         if (checked !== null) return done(checked, []);
         if (ready === null) {
@@ -380,14 +401,25 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
         }
         const built = buildEdits(ready, listed.value, now());
         if (!built.ok) return done(built.failed, []);
-        cards = built.updates;
-        const saved = await store.saveMany(built.updates, head.value);
+        if (!fitsPage(listed.value.cards, built.updates)) return done(failed("card.page_full"), []);
+        // Cards that shrink go first: a Save past one write's size lands in several commits, and the page must fit
+        // after each of them, as the index judges it.
+        const updates = inSizeOrder(listed.value.cards, built.updates);
+        cards = updates;
+        const saved = await store.saveMany(updates, head.value);
         if (saved.kind !== "ok") return done(pdsFailure(saved), [], unanswered(saved));
-        if (saved.value.kind === "saved") return done(SAVED, all, false, saved.value.rev);
+        if (saved.value.kind === "saved") {
+          const versions = writtenVersions(edits, saved.value.versions);
+          return done(versions.length === 0 ? SAVED : { kind: "saved", versions }, all, false, saved.value.rev);
+        }
         if (saved.value.kind === "too_large") return done(tooLarge(edits, saved.value.key), []);
         // The call that failed may still have landed, so the cards it carried keep their uses.
-        if (saved.value.kind === "partial")
-          return done(partly(edits, saved.value.saved), ofEdits(edits, saved.value.saved), true, saved.value.rev);
+        if (saved.value.kind === "partial") {
+          const versions = writtenVersions(edits, saved.value.versions);
+          const result = partly(edits, saved.value.saved);
+          const answer = versions.length === 0 ? result : { ...result, versions };
+          return done(answer, ofEdits(edits, saved.value.saved), true, saved.value.rev);
+        }
       }
       return done(failed("card.cards_changed"), []);
     },
@@ -478,6 +510,16 @@ const tooLarge = (edits: readonly CardEdit[], key: string): CardWrite => {
   const [card] = ofEdits(edits, [key]);
   return card === undefined ? failed("card.save_too_large") : named("card.save_too_large", card);
 };
+
+/** The versions the PDS gave the Save's cards, each a CID; any other answer is left out, so its card settles nothing. */
+function writtenVersions(edits: readonly CardEdit[], given: SaveManyOutcomeVersions): CardWritten[] {
+  return (given ?? []).flatMap(({ key, cid }) => {
+    const card = edits.find((edit) => edit.key === key)?.key;
+    const version = parseCardVersion(cid);
+    return card === undefined || version === null ? [] : [{ key: card, version }];
+  });
+}
+type SaveManyOutcomeVersions = Extract<SaveManyOutcome, { kind: "saved" }>["versions"];
 
 const partly = (edits: readonly CardEdit[], keys: readonly string[]): CardWrite => ({
   kind: "failed",

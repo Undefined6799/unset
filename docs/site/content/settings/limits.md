@@ -148,7 +148,8 @@ Configurable per stack in the compose files.
 | `DISCOVERABILITY_LIMITS.description` | `200` | Search and AI text | `domains/profile/discoverability.ts` |
 | `MAX_AI_SEARCH_PAGES` | `10000` | robots and sitemap | `domains/profile/crawlers.ts` |
 | `MAX_SITEMAP_PAGES` | `50000` | robots and sitemap | `domains/profile/crawlers.ts` |
-| `MAX_RECORD_BYTES` | `65536` | indexer | `domains/profile/index-plan.ts` |
+| `MAX_PAGE_BYTES` | `4194304` | indexer | `domains/profile/index-plan.ts` |
+| `MAX_RECORD_BYTES` | `1000000` | indexer | `domains/profile/index-plan.ts` |
 | `MAX_SECTIONS_PER_ACCOUNT` | `200` | indexer | `domains/profile/index-plan.ts` |
 | `MAX_CONFIRM_DAYS` | `7` | account status retries | `infrastructure/postgres/accountStore.ts` |
 | `MAX_PLAINTEXT` | `1048576` | sealed storage | `infrastructure/seal/seal.ts` |

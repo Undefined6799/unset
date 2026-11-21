@@ -103,7 +103,7 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
           { text: [{ kind: "text", text: "second" }], lists: [] },
         ],
       },
-      { kind: "quote", children: [{ kind: "text", text: "quoted" }] },
+      { kind: "quote", paragraphs: [[{ kind: "text", text: "quoted" }]] },
       { kind: "code", text: "<b>raw</b>" },
       { kind: "rule" },
     ]);
@@ -239,5 +239,32 @@ describe("backslash escapes", () => {
 
   test("an escaped hash at the start of a line is a paragraph, not a heading", () => {
     expect(parseReadme("\\# not a heading")).toEqual([{ kind: "paragraph", children: [text("# not a heading")] }]);
+  });
+});
+
+describe("what the in-place editor writes (P1.21s)", () => {
+  test("a line ended with a backslash or two spaces breaks the line, and a plain line end is a space", () => {
+    expect(parseReadme("one\\\ntwo  \nthree\nfour")).toEqual([
+      {
+        kind: "paragraph",
+        children: [text("one"), { kind: "break" }, text("two"), { kind: "break" }, text("three four")],
+      },
+    ]);
+  });
+
+  test("a quote keeps its paragraphs and its line breaks", () => {
+    expect(parseReadme("> first\n> line\\\n> next\n>\n> second")).toEqual([
+      {
+        kind: "quote",
+        paragraphs: [[text("first line"), { kind: "break" }, text("next")], [text("second")]],
+      },
+    ]);
+  });
+
+  test("the empty line marker an earlier editor wrote shows nothing", () => {
+    expect(parseReadme("one\n\n<br />\n\ntwo\n\n<br>\n\n> <br />")).toEqual([
+      { kind: "paragraph", children: [text("one")] },
+      { kind: "paragraph", children: [text("two")] },
+    ]);
   });
 });

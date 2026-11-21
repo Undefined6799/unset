@@ -25,6 +25,7 @@ let {
   visibility,
   search,
   saved,
+  catchingUp = false,
 }: {
   /** The stored choice; `noProfile` when there is no page yet, `unreadable` when the PDS did not answer. */
   visibility: ProfileVisibility | "noProfile" | "unreadable";
@@ -42,6 +43,8 @@ let {
   };
   /** The page is a save's 303 back here. */
   saved: boolean;
+  /** The save answered before the public page followed the new choice (it follows within seconds). */
+  catchingUp?: boolean;
 } = $props();
 
 const id = $props.id();
@@ -63,6 +66,7 @@ const known = $derived(visibility !== "noProfile" && visibility !== "unreadable"
       {#if saved}
         <Alert.Root>
           <Alert.Title>{T.saved}</Alert.Title>
+          {#if catchingUp}<Alert.Description>{T.catchingUp}</Alert.Description>{/if}
         </Alert.Root>
       {/if}
       {#if !known}

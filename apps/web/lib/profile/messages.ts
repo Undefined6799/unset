@@ -84,11 +84,16 @@ export const CARD_EDIT = {
   more: (name: string) => `More for ${name} card`,
   down: "Move down",
   remove: "Delete",
+  removing: "Deleting…",
   /** Names the card, so a page of similar cards says which one goes (staging audit 2026-11-19). */
   removeTitle: (name: string) => `Delete ${name} card?`,
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
   width: "Width",
   surface: "Surface",
+  /** The card menu's name for Surface (Alex 2026-11-20: "Style"). */
+  style: "Style",
+  /** Swaps a Text card's editor on the owner's page for its plain Markdown field (ADR 0074 item 4). */
+  showMarkdown: "Show Markdown",
   filled: "Filled",
   outlined: "Outlined",
   plain: "Plain",
@@ -101,10 +106,10 @@ export const CARD_EDIT = {
   /** A refusal shown beside the field it blames, by its code; any other code shows the catalog message there. */
   fieldError: {
     "card.required": "Fill this in.",
-    "card.url_invalid": "Use an http or https address, such as https://example.com.",
+    "card.url_invalid": "Use a public http or https address, such as https://example.com.",
     "card.email_invalid": "That email address does not look right.",
     "card.too_long": "This is too long. Shorten it and save again.",
-    "card.invalid": "This could not be read. Check it and save again.",
+    "card.invalid": "This could not be read. Remove any hidden characters, check it and save again.",
   } as Readonly<Record<string, string>>,
 } as const;
 
@@ -203,6 +208,67 @@ export const TEXT_EDITOR = {
   redo: "Redo",
 } as const;
 
+/** A Text card edited where it stands on the owner's page (ADR 0074 item 4). */
+export const TEXT_IN_PLACE = {
+  label: (name: string) => `Text of the ${name} card`,
+  failed: "The editor could not load. Reload the page to edit here.",
+} as const;
+
+/** The in-place editor's side handle, block menu and floating bar (P1.21v slice 3), named as Crepe 7.23.0 names them. */
+export const TEXT_MENUS = {
+  add: "Add a block below",
+  drag: "Drag to move this block",
+  blocks: "Blocks",
+  groups: { text: "Text", list: "List", advanced: "Advanced" },
+  bar: "Format the selected words",
+  items: {
+    text: "Text",
+    heading1: "Heading 1",
+    heading2: "Heading 2",
+    heading3: "Heading 3",
+    quote: "Quote",
+    divider: "Divider",
+    bullets: "Bullet list",
+    numbers: "Ordered list",
+    codeBlock: "Code",
+  },
+  format: { strong: "Bold", emphasis: "Italic", code: "Inline code", link: "Link" },
+  /** What an empty line with the caret says. */
+  hint: "Type / to choose a block",
+  link: {
+    editor: "Link for the selected words",
+    address: "Link address",
+    placeholder: "Paste a link…",
+    apply: "Apply link",
+    refused: "Use an address that starts with https:// or http://",
+    preview: "Link",
+    copy: "Copy link",
+    edit: "Edit link",
+    remove: "Remove link",
+  },
+} as const;
+
+/** The bar that holds the owner's unsaved changes (ADR 0074 item 4), and the drafts offered back when the page opens. */
+export const UNSAVED_BAR = {
+  label: "Unsaved changes",
+  count: (cards: number) => (cards === 1 ? "1 card has unsaved changes." : `${cards} cards have unsaved changes.`),
+  save: "Save",
+  saving: "Saving…",
+  discard: "Discard",
+  saved: "Saved.",
+  /** The Save did not reach the server, or its answer could not be read. */
+  failed: "Your changes could not be saved just now. Check your connection and save again.",
+  /** Bigger than the page's form can send at once. */
+  tooLarge: "These changes are too large to save at once. Save fewer cards at a time.",
+  drafts: (cards: number) =>
+    cards === 1
+      ? "This device kept unsaved words for 1 card from an earlier visit."
+      : `This device kept unsaved words for ${cards} cards from an earlier visit.`,
+  draftsLabel: "Unsaved words from an earlier visit",
+  restore: "Bring them back",
+  dropDrafts: "Throw them away",
+} as const;
+
 /** The small page anyone but the owner sees when a page is not shown to them (ADR 0078; Alex, 2026-11-20 19:46Z). */
 export const LIMITED_PAGE = {
   signedIn: "This member shows their page to signed-in members only.",
@@ -212,6 +278,12 @@ export const LIMITED_PAGE = {
 } as const;
 
 /** Above the whole page when it is not public, so the viewer knows who else sees it (ADR 0078). */
+/** Above the member's own public page, seen by the member (own-public-view.svelte). */
+export const OWN_PUBLIC_VIEW = {
+  title: "This is how others see your page.",
+  edit: "Edit your page",
+} as const;
+
 export const PAGE_AUDIENCE = {
   signedIn: "Only signed-in members see this page.",
   ownerOnly: "Only you see this page.",

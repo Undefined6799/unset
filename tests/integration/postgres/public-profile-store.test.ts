@@ -2,6 +2,7 @@
 // index is written as the superuser here, as idx-schema.test.ts writes moderator state: the indexer's own paths have
 // their tests. One database of its own container; the tests run in order.
 import { join } from "node:path";
+import { MAX_PAGE_BYTES } from "@unset/domains-profile";
 import {
   createDiscoverabilityStore,
   createPublicProfileStore,
@@ -191,6 +192,22 @@ describe("public profile store", () => {
     await expect(
       own.save(SHOWN, { searchEngines: true, aiSearch: false, title: "x".repeat(71), description: "" }, null),
     ).rejects.toMatchObject({ code: "23514" });
+  });
+
+  // Review of #1911: web reads the cards in page order and stops at MAX_PAGE_BYTES, whatever the index holds.
+  test("cards_come_in_page_order_and_stop_at_the_page_budget", async () => {
+    const card = (rkey: string, position: number | null, bytes: number) =>
+      `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, bytes, indexed_at)
+         VALUES ('at://${UNVERIFIED}/sh.unset.section/${rkey}', '${UNVERIFIED}', '${rkey}', 'cid-${rkey}', '3l',
+                 '{"type":"${rkey}"}', ${position}, ${bytes}, now());`;
+    postgres.sql(
+      "unset",
+      [card("3a", null, 200), card("3n", 1, MAX_PAGE_BYTES - 100), card("3m", null, 5), card("3z", null, 1)].join("\n"),
+    );
+    // 3k (position 0, its size counted from its jsonb), then 3n; then the unlisted ones by key, but 3a would pass the
+    // budget, so neither it nor the smaller ones after it are read.
+    const sections = (await store().find({ did: UNVERIFIED }, null))?.sections ?? [];
+    expect(sections.map((s) => s.key)).toEqual(["3k", "3n"]);
   });
 
   test("erased_account_reads_as_missing", async () => {
