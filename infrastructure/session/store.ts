@@ -136,13 +136,14 @@ type SessionRow = {
   inbox: InboxRow[];
 };
 /** One of app.inbox's rows as the lookup's json_agg writes it; `sent_ms` is milliseconds since the epoch. */
-type InboxRow = { id: string; reason: string; topic: string | null; sent_ms: number };
+type InboxRow = { id: string; reason: string; topic: string | null; sent_ms: number; seen: boolean };
 
 const entryOf = (row: InboxRow): Entry => ({
   id: row.id as NotificationId,
   reason: row.reason as Reason, // app.notification's CHECK holds the same closed list as REASONS
   topic: row.topic,
   sentAt: new Date(row.sent_ms),
+  seen: row.seen,
 });
 
 export function createSessionStore(options: {
@@ -225,8 +226,8 @@ export function createSessionStore(options: {
         "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
         "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set, " +
         "(SELECT coalesce(json_agg(json_build_object('id', i.id, 'reason', i.reason, 'topic', i.topic, " +
-        "'sent_ms', floor(extract(epoch FROM i.created_at) * 1000)) ORDER BY i.created_at DESC, i.id), '[]') " +
-        "FROM (SELECT i.id, i.reason, i.topic, i.created_at FROM app.inbox i WHERE i.viewer = s.id_hash " +
+        "'sent_ms', floor(extract(epoch FROM i.created_at) * 1000), 'seen', i.seen) ORDER BY i.created_at DESC, i.id), " +
+        "'[]') FROM (SELECT i.id, i.reason, i.topic, i.created_at, i.seen FROM app.inbox i WHERE i.viewer = s.id_hash " +
         "AND i.did = s.did ORDER BY i.created_at DESC, i.id LIMIT $4) i) AS inbox " +
         "FROM app.session s WHERE s.id_hash = $1",
       [idHash, limits.idleS, limits.touchIntervalS, BELL_READ],
