@@ -1,0 +1,59 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.block.links",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["items"],
+      "description": "A set of links, such as accounts on other sites. Readers take each link's icon and site name from their own list of known sites; they never fetch the linked site to find them.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000,
+          "description": "Heading shown above the links."
+        },
+        "layout": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["list", "carousel", "grid"],
+          "description": "How readers arrange the links. Absent or unknown means list."
+        },
+        "items": {
+          "type": "array",
+          "maxLength": 50,
+          "items": {
+            "type": "ref",
+            "ref": "#link"
+          },
+          "description": "In display order."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["uri"],
+      "description": "One link.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL. Readers ignore any other scheme."
+        },
+        "label": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000,
+          "description": "Text shown for the link. When present it is shown, even if the URL names an account; when absent, readers show the account or site name."
+        },
+        "description": {
+          "type": "string",
+          "maxGraphemes": 200,
+          "maxLength": 2000,
+          "description": "One line about the link."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.block.showcase",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["items"],
+      "description": "A showcase of titled items such as projects, writing or talks.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000,
+          "description": "Heading shown above the items."
+        },
+        "layout": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["list", "carousel", "grid"],
+          "description": "How readers arrange the items. Absent or unknown means carousel."
+        },
+        "items": {
+          "type": "array",
+          "maxLength": 50,
+          "items": {
+            "type": "ref",
+            "ref": "#item"
+          },
+          "description": "In display order."
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["title"],
+      "description": "One item.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 120,
+          "maxLength": 1200,
+          "description": "The item's title."
+        },
+        "tag": {
+          "type": "string",
+          "maxGraphemes": 40,
+          "maxLength": 400,
+          "description": "Short label shown above the title, such as a year or a kind."
+        },
+        "description": {
+          "type": "string",
+          "maxGraphemes": 300,
+          "maxLength": 3000,
+          "description": "A few lines about the item."
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "Where the item leads. An http or https URL; readers ignore any other scheme."
+        },
+        "image": {
+          "type": "ref",
+          "ref": "sh.unset.block.defs#image",
+          "description": "A picture shown with the item, in its own proportions."
+        }
+      }
+    }
+  }
+}

@@ -4,37 +4,29 @@
 
 import { l } from "@atproto/lex-schema";
 
-const $nsid = "sh.unset.follow";
+const $nsid = "sh.unset.block.text";
 
 type $nsid = typeof $nsid;
 
 export { $nsid };
 
-/** The account follows the subject. Same shape as app.bsky.graph.follow. */
+/** Formatted text, shown like a README. */
 type Main = {
-  $type: "sh.unset.follow";
+  $type?: "sh.unset.block.text";
 
   /**
-   * DID of the followed account.
+   * CommonMark Markdown. Readers never render raw HTML, keep only http and https links, and never load pictures from the Markdown: they show them as links.
    */
-  subject: l.DidString;
-
-  /**
-   * When the follow was made.
-   */
-  createdAt: l.DatetimeString;
+  text: string;
 };
 
 export type { Main };
 
-/** The account follows the subject. Same shape as app.bsky.graph.follow. */
-const main = /*#__PURE__*/ l.record<"tid", Main>(
-  "tid",
+/** Formatted text, shown like a README. */
+const main = /*#__PURE__*/ l.typedObject<Main>(
   $nsid,
-  /*#__PURE__*/ l.object({
-    subject: /*#__PURE__*/ l.string({ format: "did" }),
-    createdAt: /*#__PURE__*/ l.string({ format: "datetime" }),
-  }),
+  "main",
+  /*#__PURE__*/ l.object({ text: /*#__PURE__*/ l.string({ maxLength: 20000 }) }),
 );
 
 export { main };

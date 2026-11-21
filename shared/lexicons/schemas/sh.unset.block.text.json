@@ -1,0 +1,18 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.block.text",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["text"],
+      "description": "Formatted text, shown like a README.",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 20000,
+          "description": "CommonMark Markdown. Readers never render raw HTML, keep only http and https links, and never load pictures from the Markdown: they show them as links."
+        }
+      }
+    }
+  }
+}
