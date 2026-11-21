@@ -90,6 +90,9 @@ const keep = (event: Event) => event.preventDefault();
 // Hidden by visibility, not display (Crepe's CSS does the same with opacity): floating-ui measures the element before
 // it is shown, which it cannot do with no box.
 const floating = "absolute z-20 flex invisible data-[show=true]:visible";
+// The link editor and preview are shown only by an explicit show(), which marks them shown before placing them, so
+// they take no room while hidden: an invisible one beside a narrow card would scroll a phone's page sideways.
+const placedOnShow = "absolute z-20 hidden data-[show=true]:flex max-w-[calc(100vw-2rem)]";
 const control =
   "inline-flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 </script>
@@ -134,7 +137,7 @@ const control =
   {/each}
 </div>
 
-<div bind:this={linkEdit} data-show="false" data-text-popover role="dialog" aria-label={TEXT_MENUS.link.editor} class="{floating} w-72 flex-col gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+<div bind:this={linkEdit} data-show="false" data-text-popover role="dialog" aria-label={TEXT_MENUS.link.editor} class="{placedOnShow} w-72 flex-col gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
   <div class="flex items-center gap-1">
     <input
       bind:value={address}
@@ -155,7 +158,7 @@ const control =
   {/if}
 </div>
 
-<div bind:this={linkPreview} data-show="false" data-text-popover role="group" aria-label={TEXT_MENUS.link.preview} class="{floating} max-w-80 items-center gap-0.5 rounded-md border bg-popover p-0.5 text-sm text-popover-foreground shadow-md" onpointerdown={keep}>
+<div bind:this={linkPreview} data-show="false" data-text-popover role="group" aria-label={TEXT_MENUS.link.preview} class="{placedOnShow} items-center gap-0.5 rounded-md border bg-popover p-0.5 text-sm text-popover-foreground shadow-md" onpointerdown={keep}>
   {#if shown.link?.mode === "preview"}
     <button type="button" class={control} aria-label={TEXT_MENUS.link.copy} onclick={copy}><Icon name="copy" /></button>
     {#if shown.link.safe !== null}
