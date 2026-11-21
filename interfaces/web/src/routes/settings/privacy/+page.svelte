@@ -17,6 +17,7 @@ let {
     limits: { title: number; description: number };
     page: { url: string; name: string; headline: string; letter: string };
     saved: boolean;
+    catchingUp: boolean;
     searchListingOff: boolean;
   };
 } = $props();
@@ -31,4 +32,5 @@ let {
   visibility={data.visibility}
   search={{ values: data.discoverability, limits: data.limits, siteOff: data.searchListingOff, page: data.page }}
   saved={data.saved}
+  catchingUp={data.catchingUp}
 />
