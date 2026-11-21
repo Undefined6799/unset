@@ -1092,7 +1092,16 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt", "seaweedfs", "seaweedfs-next"]);
+    expect(Object.keys(lock)).toEqual([
+      "node",
+      "caddy-builder",
+      "caddy",
+      "postgres",
+      "pds",
+      "newt",
+      "seaweedfs",
+      "seaweedfs-next",
+    ]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1188,7 +1197,9 @@ describe("base images", () => {
       { source, mirror: "ghcr.io/undefined6799/mirror/seaweedfs", stage: "runtime" },
     ]);
     const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
-    const built = Object.values(files).flatMap((text) => fromImages(text).flatMap((image) => lockEntriesOf(image, lock)));
+    const built = Object.values(files).flatMap((text) =>
+      fromImages(text).flatMap((image) => lockEntriesOf(image, lock)),
+    );
     expect(built.map(([name]) => name)).not.toContain("seaweedfs-next");
     expect(KIND_BY_FINAL_ENTRY.has("seaweedfs-next")).toBe(false);
   });
