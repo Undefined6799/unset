@@ -24,8 +24,11 @@ export type ChatAdminVerb = "account.create" | "session.mint" | "session.end";
 
 /**
  * One chat-admin request. `user` is the chat account's username (the MAS localpart web's mapping holds, never a DID).
- * `name` is the display name for `account.create` and `device` the device to end for `session.end`; each is "" for the
- * other verbs, so every payload has the same keys and the verifier refuses any other.
+ * `name` is the display name for `account.create` and `device` the device to end for `session.end`. A `session.mint`
+ * is web's sign-in ticket (ADR 0081 decision 3): `did` is the member, `sid` names the web session it came from (a
+ * one-way reference, never the session's key) and `state` is the one-time value the door set in the browser before
+ * the hop, which the door matches before it redeems. Each field is "" for the verbs that do not use it, so every
+ * payload has the same keys and the verifier refuses any other.
  */
 export type ChatAdminPayload = {
   readonly v: 1;
@@ -35,6 +38,9 @@ export type ChatAdminPayload = {
   readonly user: string;
   readonly name: string;
   readonly device: string;
+  readonly did: string;
+  readonly sid: string;
+  readonly state: string;
   readonly jti: string;
   readonly iat: number;
   readonly exp: number;
@@ -65,6 +71,9 @@ export const CHAT_PAYLOAD_KEYS: readonly (keyof ChatAdminPayload)[] = [
   "user",
   "name",
   "device",
+  "did",
+  "sid",
+  "state",
   "jti",
   "iat",
   "exp",

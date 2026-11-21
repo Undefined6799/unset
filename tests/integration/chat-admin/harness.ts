@@ -165,8 +165,17 @@ export function callerKey(kid: string, iss: "web" | "door", verbs: ServiceKey["v
 
 export const nowSeconds = () => Math.floor(Date.now() / 1000);
 
+/** web's ticket fields (ADR 0081 decision 3): a test DID, a session reference and the door's one-time value. */
+export const TICKET = {
+  did: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa",
+  sid: "s".repeat(43),
+  state: "t".repeat(43),
+} as const;
+
+/** A payload for `verb` (default a mint, which carries the ticket fields; every other verb leaves them ""). */
 export function payloadFor(overrides: Partial<Record<keyof ChatAdminPayload, unknown>> = {}): ChatAdminPayload {
   const iat = nowSeconds();
+  const mint = (overrides.verb ?? "session.mint") === "session.mint";
   return {
     v: 1,
     env: "dev",
@@ -175,6 +184,7 @@ export function payloadFor(overrides: Partial<Record<keyof ChatAdminPayload, unk
     user: ALICE,
     name: "",
     device: "",
+    ...(mint ? TICKET : { did: "", sid: "", state: "" }),
     jti: randomBytes(16).toString("base64url"),
     iat,
     exp: iat + 60,

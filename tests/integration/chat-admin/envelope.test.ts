@@ -2,7 +2,7 @@
 // verb's fields, in that order, with nothing read from a payload before its signature holds.
 import { describe, expect, test } from "vitest";
 import { checkEnvelope, checkShape, isRefusal } from "../../../interfaces/chat-admin/envelope.ts";
-import { ALICE, callerKey, nowSeconds, payloadFor, signed } from "./harness.ts";
+import { ALICE, callerKey, nowSeconds, payloadFor, signed, TICKET } from "./harness.ts";
 
 const web = callerKey("web-1", "web", ["account.create", "session.mint", "session.end"]);
 const door = callerKey("door-1", "door", ["session.end"]);
@@ -38,7 +38,7 @@ describe("envelope", () => {
       status: 400,
       reason: "shape",
     });
-    const { device: _, ...missing } = envelope.payload;
+    const { state: _, ...missing } = envelope.payload;
     expect(checkShape({ ...envelope, payload: missing })).toEqual({ status: 400, reason: "shape" });
     expect(checkShape({ ...envelope, extra: 1 })).toEqual({ status: 400, reason: "shape" });
   });
@@ -65,6 +65,16 @@ describe("envelope", () => {
     ["end with lowercase device", { verb: "session.end", device: "abcdefghjk" }],
     ["end with short device", { verb: "session.end", device: "ABCDEFGHJ" }],
     ["bad jti", { jti: "short" }],
+    // ADR 0081 decision 3: a ticket names the member, the web session and the door's one-time value, each well formed.
+    ["mint without did", { did: "" }],
+    ["mint with a handle for did", { did: "alice.unset.sh" }],
+    ["mint without sid", { sid: "" }],
+    ["mint with short sid", { sid: "s".repeat(42) }],
+    ["mint without state", { state: "" }],
+    ["mint with a bad state", { state: `${"t".repeat(42)}!` }],
+    ["create with did", { verb: "account.create", name: "alice.unset.sh", did: TICKET.did }],
+    ["create with state", { verb: "account.create", name: "alice.unset.sh", state: TICKET.state }],
+    ["end with sid", { verb: "session.end", device: "ABCDEFGHJK", sid: TICKET.sid }],
   ])("envelope.fields_%s", (_name, overrides) => {
     expect(check(web, overrides)).toMatchObject({ status: 400 });
   });
