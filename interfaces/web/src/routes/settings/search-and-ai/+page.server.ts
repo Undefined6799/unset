@@ -37,8 +37,11 @@ export const actions: Actions = {
       form.append(name, value);
     }
     const visibility = readVisibility(form);
-    const parsed = parseDiscoverabilityForm(form);
-    if (!parsed.ok) refuse(parsed.code, "field" in parsed ? parsed.field : undefined);
+    // The Search and AI fields count only while the page is public; otherwise they are hidden and not saved, so a
+    // value there never blocks restricting who sees the page.
+    const listed = visibility === undefined || visibility === "public";
+    const parsed = listed ? parseDiscoverabilityForm(form) : null;
+    if (parsed !== null && !parsed.ok) refuse(parsed.code, "field" in parsed ? parsed.field : undefined);
     if (visibility !== undefined) {
       const saved = await saveToPds(locals.deadline, locals.deadlineAt)(did, { visibility });
       if (saved.kind === "redirect") redirect(303, saved.location);
@@ -46,8 +49,7 @@ export const actions: Actions = {
       if (saved.kind === "refused") refuse(saved.code);
       if (saved.kind === "unavailable") refuse("profile.pds_unavailable");
     }
-    if (visibility === undefined || visibility === "public")
-      await services().discoverability.save(did, parsed.value, locals.deadline);
+    if (parsed?.ok) await services().discoverability.save(did, parsed.value, locals.deadline);
     redirect(303, "/settings/privacy?saved#privacy");
   },
 };

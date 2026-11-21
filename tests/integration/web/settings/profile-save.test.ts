@@ -416,6 +416,15 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     expect(attr(elements(after, "input", { name: "searchEngines" })[0], "checked")).toBeUndefined();
   });
 
+  // A hidden Search and AI field the save would ignore never blocks restricting who sees the page (Codex on #1851).
+  test("a_hidden_overlong_search_field_does_not_block_a_non_public_choice", async () => {
+    const before = up.writes().length;
+    const response = await saveChoices(up, `visibility=ownerOnly&title=${"x".repeat(71)}&description=`);
+    expect(response.status).toBe(303);
+    expect(up.writes().slice(before)[0]?.record).toMatchObject({ visibility: "ownerOnly" });
+    await saveChoices(up, "visibility=public&title=&description=");
+  });
+
   test.each([
     ["an unknown choice", "visibility=friends&title=&description="],
     ["two choices", "visibility=public&visibility=ownerOnly&title=&description="],
