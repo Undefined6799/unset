@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@atproto/repo": "0.11.5",
-    "@atproto/sync": "0.4.24",
-    "@atproto/xrpc-server": "0.13.10",
+    "@atproto/sync": "0.4.26",
+    "@atproto/xrpc-server": "0.13.12",
     "@unset/infrastructure-net-guard": "*",
     "@unset/shared-lexicons": "*"
   },

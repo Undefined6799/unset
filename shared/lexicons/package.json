@@ -12,7 +12,7 @@
     "@atproto/lex-schema": "0.2.11"
   },
   "devDependencies": {
-    "@atproto/lex": "0.4.7",
+    "@atproto/lex": "0.4.8",
     "@atproto/lex-document": "0.1.16"
   }
 }
