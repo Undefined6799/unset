@@ -16,6 +16,9 @@ const SERVER_NAME: Readonly<Record<Env, string | null>> = { dev: "staging.unset.
 const SECRET = /^\/run\/secrets\/[a-z0-9_]+$/;
 type Doc = Record<string, unknown>;
 
+/** The door's fixed address on the count network it shares with Synapse and web only (ADR 0090 decision 2). */
+export const DOOR_COUNT_ADDRESS = "10.250.38.19";
+
 /** Synapse 1.165.0's settings that must be exactly these (build plan step 1, Synapse table). */
 function synapseSettings(serverName: string): Doc {
   return {
@@ -52,6 +55,10 @@ function synapseSettings(serverName: string): Doc {
     user_directory: { enabled: false },
     url_preview_enabled: false,
     user_ips_max_age: "1d",
+    // Build step 10 (ADR 0090 decision 2): the door's count port is the one private address a pusher may reach, and a
+    // push names no body or sender; its count is of rooms (config_documentation.md `ip_range_whitelist`, `push`).
+    ip_range_whitelist: [DOOR_COUNT_ADDRESS],
+    push: { enabled: true, include_content: false, group_unread_count_by_room: true },
     matrix_authentication_service: {
       enabled: true,
       endpoint: "http://mas:8080/",
