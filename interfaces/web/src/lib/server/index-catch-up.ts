@@ -37,14 +37,23 @@ export async function publicPageShows(wanted: ProfileVisibility, deps: CatchUpDe
     // otherwise: https://nodejs.org/api/globals.html#static-method-abortsignaltimeoutdelay, Node 26).
     const left = Math.floor(until - deps.now());
     if (deps.signal.aborted || left <= 0) return false;
-    // A read that hangs ends with the wait, not with the request.
+    // A read that hangs ends with the wait, not with the request: the read is told to stop (the store ends its
+    // query), and the wait stops listening at once whether or not it does (Codex review of #1906).
     const signal = AbortSignal.any([deps.signal, AbortSignal.timeout(left)]);
-    const record = await deps.read(signal).catch(() => undefined);
+    const record = await Promise.race([deps.read(signal), aborted(signal)]).catch(() => undefined);
     if (record === null) return true;
     if (record !== undefined && readProfileVisibility(record) === wanted) return true;
     if (deps.now() + STEP_MS > until) return false;
     await deps.sleep(STEP_MS, deps.signal);
   }
+}
+
+/** Rejects once `signal` aborts. */
+function aborted(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    if (signal.aborted) reject(signal.reason);
+    else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
 }
 
 /** A sleep that ends early, without throwing, when `signal` aborts. */

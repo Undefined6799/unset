@@ -88,3 +88,13 @@ test("a fractional clock, as performance.now() reads, still waits and answers", 
   const deps = { ...w.deps, now: () => at, sleep, deadlineAt: 9_999.5 };
   expect(await publicPageShows("ownerOnly", deps)).toBe(true);
 });
+
+test("a read still in flight at the cutoff is not waited for", async () => {
+  // Codex review of #1906: the store's query may outlive its signal, so the wait must not hang on it.
+  const w = world([]);
+  const start = performance.now();
+  const deps = { ...w.deps, now: () => performance.now() - start, deadlineAt: ANSWER_MS + 50 };
+  const hanging = { ...deps, read: () => new Promise<unknown>(() => undefined) };
+  expect(await publicPageShows("ownerOnly", hanging)).toBe(false);
+  expect(performance.now() - start).toBeLessThan(1_000);
+});

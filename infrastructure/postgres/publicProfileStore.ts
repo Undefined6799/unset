@@ -3,7 +3,7 @@
 // suspended) reads here as no row. The profile and its cards come back in one statement, so the page never shows
 // cards from a different moment than the profile. The member's Search and AI choices (migration 0034) come with it. Records come back as stored; domains/profile reads them again.
 import { type Discoverability, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
-import { type Pool, withClient } from "./pool.ts";
+import { type Pool, readUntilAbort, withClient } from "./pool.ts";
 
 /** Who the page asks for: a DID from the path, or a handle the indexer verified (P3.08s). */
 export type PublicActor = { readonly did: string } | { readonly handle: string };
@@ -77,7 +77,12 @@ export function createPublicProfileStore(pool: Pool): PublicProfileStore {
     find: (actor, deadline) =>
       withClient(pool, deadline, async (client) => {
         const [sql, key] = "did" in actor ? [BY_DID, actor.did] : [BY_HANDLE, actor.handle];
-        const { rows } = await client.query<Row>(sql, [key, MAX_SECTIONS_PER_ACCOUNT]);
+        // The query itself stops at the deadline, not only the wait for a connection (pool.ts readUntilAbort).
+        const { rows } = await readUntilAbort(
+          client,
+          deadline ?? undefined,
+          client.query<Row>(sql, [key, MAX_SECTIONS_PER_ACCOUNT]),
+        );
         const row = rows.length === 1 ? rows[0] : undefined;
         if (row === undefined) return null;
         return {
