@@ -121,7 +121,7 @@ describe("chat lock store", () => {
   test.each([
     ["no status", null],
     ["a status we do not know", "throttled"],
-  ])("chat.lock_kept_%s: a locked account whose member is still inactive is not due for an unlock", async (_why, status) => {
+  ])("chat.lock_kept_%s: a locked account whose member stays inactive is not unlocked", async (_why, status) => {
     const { did, user } = member({ active: false, status: "suspended" });
     const lock = await dueFor(user);
     await locks.settle(lock as NonNullable<typeof lock>);
