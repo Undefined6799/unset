@@ -253,20 +253,32 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       new Plugin({
         // The bar's state is read in the same step as the change, not a frame later: a press right after the editor
         // opens or right after typing must find its button available.
-        view: (first) => {
-          options.onToolbar(toolbarState(first.state));
+        view: (mounted) => {
+          options.onToolbar(toolbarState(mounted.state));
+          const report = () => {
+            frame = 0;
+            options.onChange(withoutFinalNewline(ctx.get(serializerCtx)(mounted.state.doc)));
+          };
+          // The last change is reported at once when the page goes away before the next frame (a reload right after
+          // typing; WebKit may draw none first), so the words reach the page's drafts.
+          const flush = () => {
+            if (frame === 0) return;
+            cancelAnimationFrame(frame);
+            report();
+          };
+          addEventListener("pagehide", flush);
           return {
             update: (view, previous) => {
               if (previous !== view.state) options.onToolbar(toolbarState(view.state));
               if (previous.doc.eq(view.state.doc)) return;
               options.onEdit();
               if (frame !== 0) return;
-              frame = requestAnimationFrame(() => {
-                frame = 0;
-                options.onChange(withoutFinalNewline(ctx.get(serializerCtx)(view.state.doc)));
-              });
+              frame = requestAnimationFrame(report);
             },
-            destroy: () => cancelAnimationFrame(frame),
+            destroy: () => {
+              cancelAnimationFrame(frame);
+              removeEventListener("pagehide", flush);
+            },
           };
         },
       }),

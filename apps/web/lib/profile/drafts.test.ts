@@ -32,6 +32,19 @@ describe("device drafts", () => {
     expect(key).not.toContain(DID);
   });
 
+  // CI webkit on 402dfe8: a reload right after typing kept older words, as each write waited for its key's digest.
+  // Once a card's key is known (the page reads every draft when it opens), a write lands before writeDraft returns,
+  // so a page that goes away right after it still keeps the words.
+  test("a draft written after its card was read is stored at once", async () => {
+    const storage = memory();
+    await readDraft(storage, DID, "k3");
+    void writeDraft(storage, DID, "k3", { version: V1, text: "first" });
+    void writeDraft(storage, DID, "k3", { version: V1, text: "last" });
+    expect([...storage.items.values()].map((raw) => JSON.parse(raw).text)).toEqual(["last"]);
+    void clearDraft(storage, DID, "k3");
+    expect(storage.items.size).toBe(0);
+  });
+
   test("a cleared draft is gone", async () => {
     const storage = memory();
     await writeDraft(storage, DID, "k1", { version: V1, text: "x" });
