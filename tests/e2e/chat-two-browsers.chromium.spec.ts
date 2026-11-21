@@ -68,6 +68,7 @@ async function saveKey(page: Page): Promise<string> {
   if ((await state(page)) === "error") throw new Error(`chat page error: ${await page.locator("main").textContent()}`);
   await expect.poll(() => state(page), { timeout: 60_000 }).toBe("save_key");
   const key = await page.locator("#recovery-key").inputValue();
+  await page.getByRole("button", { name: "I have saved my key" }).click();
   await page.locator("#key-end").fill(key.replaceAll(" ", "").slice(-4));
   await page.getByRole("button", { name: "Continue" }).click();
   await expect.poll(() => state(page), { timeout: 60_000 }).toBe("ready");

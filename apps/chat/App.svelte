@@ -3,6 +3,10 @@
   servers or the protocol behind it. A new account saves its recovery key here before anything else (ADR 0083
   decision 2, ADR 0089), and a new browser unlocks with it (decision 3); then the conversations (build step 9, Conversations.svelte). An error
   shows only its fixed code.
+  Saving the key takes two cards (Alex, 2026-11-21, from the mock-up thread): the first shows the key to save or
+  download; on the second the key is hidden and the member types its last characters, the check Element makes before
+  it writes the vault (ADR 0089 decision 3); "Show my key again" goes back. The page is still in save_key throughout,
+  so nothing is stored until the check passes.
   The key fields follow Chromium's documented form shape, a username field (hidden) and a password field marked
   new-password to save and current-password to fill
   (https://www.chromium.org/developers/design-documents/form-styles-that-chromium-understands/, read 2026-11-21;
@@ -27,6 +31,13 @@ let endWrong = $state(false);
 let typedKey = $state("");
 let unlockProblem: Exclude<UnlockOutcome, "unlocked"> | null = $state(null);
 let unlocking = $state(false);
+/** The key whose last characters are being asked (the second card); any other key, or none, shows the first. */
+let checkingKey: string | null = $state(null);
+// `view as ChatState`: read at the top level, TypeScript would narrow it to its first value.
+const checking = $derived.by(() => {
+  const now = view as ChatState;
+  return now.kind === "save_key" && checkingKey === now.key;
+});
 
 /** What a password manager files the key under. */
 const KEY_NAME = "Messages recovery key";
@@ -58,7 +69,11 @@ const WORDS = {
   signed_out: { title: "Signing you in again", text: "One moment." },
   error: { title: "Messages could not open", text: "Try again in a moment." },
 } as const;
-const words = $derived(WORDS[view.kind]);
+const CHECK_WORDS = {
+  title: "Check your recovery key",
+  text: `To check you have saved it, type the last ${CHECK_LENGTH} characters of your recovery key.`,
+} as const;
+const words = $derived(checking ? CHECK_WORDS : WORDS[view.kind]);
 
 const UNLOCK_PROBLEMS = {
   wrong_key: "That is not your recovery key. Check it and try again.",
@@ -76,12 +91,22 @@ function download(key: string) {
   URL.revokeObjectURL(url);
 }
 
+/** The first card's submit: the key is saved, so the second card asks for its end. */
+function saved(event: SubmitEvent) {
+  event.preventDefault();
+  if (view.kind !== "save_key") return;
+  ending = "";
+  endWrong = false;
+  checkingKey = view.key;
+}
+
 function checkEnd(event: SubmitEvent) {
   event.preventDefault();
   if (view.kind !== "save_key") return;
   endWrong = !matchesEnd(ending, view.key);
   if (endWrong) return;
   ending = "";
+  checkingKey = null;
   view.save();
 }
 
@@ -106,9 +131,9 @@ onMount(() => {
       <Card.Title><h1>{words.title}</h1></Card.Title>
       {#if view.kind !== "ready"}<Card.Description>{words.text}</Card.Description>{/if}
     </Card.Header>
-    {#if view.kind === "save_key"}
+    {#if view.kind === "save_key" && !checking}
       <Card.Content>
-        <form class="flex flex-col gap-4" onsubmit={checkEnd}>
+        <form class="flex flex-col gap-4" onsubmit={saved}>
           <input class="hidden" name="username" autocomplete="username" value={KEY_NAME} readonly tabindex="-1" />
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium" for="recovery-key">Your recovery key</label>
@@ -125,10 +150,14 @@ onMount(() => {
               Download
             </Button>
           </div>
+          <Button type="submit">I have saved my key</Button>
+        </form>
+      </Card.Content>
+    {:else if view.kind === "save_key"}
+      <Card.Content>
+        <form class="flex flex-col gap-4" onsubmit={checkEnd}>
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-medium" for="key-end">
-              To check you have saved it, type the last {CHECK_LENGTH} characters of your key
-            </label>
+            <label class="text-sm font-medium" for="key-end">Last {CHECK_LENGTH} characters of your key</label>
             <Input
               id="key-end"
               class="font-mono"
@@ -145,6 +174,7 @@ onMount(() => {
             {/if}
           </div>
           <Button type="submit">Continue</Button>
+          <Button type="button" variant="outline" onclick={() => (checkingKey = null)}>Show my key again</Button>
         </form>
       </Card.Content>
     {:else if view.kind === "locked"}
