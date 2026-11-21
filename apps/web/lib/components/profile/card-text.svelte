@@ -101,8 +101,8 @@ function whenIdle(run: () => void): () => void {
 async function mount() {
   try {
     const { mountMarkdownEditor } = await import("../../editor/milkdown.ts");
-    const drawn = [host, handle, add, menu, bar, linkEdit, linkPreview];
-    if (closed || drawn.some((element) => element === undefined)) return;
+    if (closed || host === undefined || handle === undefined || add === undefined || menu === undefined) return;
+    if (bar === undefined || linkEdit === undefined || linkPreview === undefined) return;
     const mounted = await mountMarkdownEditor(host, {
       value,
       labelledBy: labelId,
