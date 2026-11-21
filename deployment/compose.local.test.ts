@@ -84,7 +84,13 @@ const DEV_ONLY: Record<string, string[]> = {
   pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"],
   // The docs site is served by the dev stack alone (P1.21w; ADR 0075).
   edge: ["DOCS_HOST"],
-  web: ["INVITE_REQUESTS", "INVITE_REQUEST_SMTP_URL_FILE", "INVITE_REQUEST_TO_FILE", "INVITE_REQUEST_FROM", "INVITE_REQUEST_OWNER_DID"],
+  web: [
+    "INVITE_REQUESTS",
+    "INVITE_REQUEST_SMTP_URL_FILE",
+    "INVITE_REQUEST_TO_FILE",
+    "INVITE_REQUEST_FROM",
+    "INVITE_REQUEST_OWNER_DID",
+  ],
 };
 /**
  * The keys only the local file sets, by service, with their one value: web's internal host for net-guard, which the
