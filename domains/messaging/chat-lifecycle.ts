@@ -5,7 +5,9 @@
 // chat account is locked while its member is not active and unlocked when they are again (decisions 1 and 2). The
 // ports are I/O only (rule AB-2).
 import type { Did } from "@unset/domains-identity";
+import type { DeviceId } from "./browser.ts";
 import { type ChatUser, retryDelayS } from "./chat-account.ts";
+import type { EndOutcome } from "./door.ts";
 
 /** chat-admin's answer to a lock, unlock or deactivate: done, an account it never made, refused, or no answer. */
 export type ChatAccountChange =
@@ -92,6 +94,50 @@ export async function followAccountStates(ports: ChatLockPorts, limit: number): 
     if (!kept) counts.lost += 1;
     else if (done) counts.changed += 1;
     else counts.retry += 1;
+  }
+  return counts;
+}
+
+/** One claimed device to end: whose, which, the attempts already failed, and the lease that fences its writes. */
+export type ChatSessionEndJob = {
+  readonly user: ChatUser;
+  readonly device: DeviceId;
+  readonly attempts: number;
+  readonly lease: string;
+};
+
+export type ChatSessionEndPorts = {
+  /** Claims one due device under a fresh lease; null when none is due. */
+  readonly claim: () => Promise<ChatSessionEndJob | null>;
+  /** chat-admin's session.end for the device, signed with web's key. */
+  readonly end: (user: ChatUser, device: DeviceId) => Promise<EndOutcome>;
+  /** Deletes the queued row and the door's entry, with its lock key, if the job still holds its lease. */
+  readonly finish: (job: ChatSessionEndJob) => Promise<boolean>;
+  readonly retry: (job: ChatSessionEndJob, inS: number) => Promise<boolean>;
+};
+
+/** After this many failed attempts (about a day at the hourly step) a device counts as stuck, and still retries. */
+export const END_STUCK_ATTEMPTS = 24;
+
+export type EndCounts = { ended: number; retry: number; lost: number; stuck: number };
+
+/**
+ * Ends up to `limit` devices queued when web ended a session (ADR 0083 decision 5) or a grant was revoked (ADR 0084
+ * decision 7), one at a time, each claimed just before its call and settled only if its lease still holds (rule
+ * DA-4). The lock key goes only once the device has ended, so a failure leaves both for the next try; nothing gives
+ * up, since a session left running is a member still signed in after logging out.
+ */
+export async function endDueSessions(ports: ChatSessionEndPorts, limit: number): Promise<EndCounts> {
+  const counts: EndCounts = { ended: 0, retry: 0, lost: 0, stuck: 0 };
+  for (let n = 0; n < limit; n++) {
+    const job = await ports.claim();
+    if (job === null) break;
+    const done = (await ports.end(job.user, job.device)).kind === "ended";
+    const kept = done ? await ports.finish(job) : await ports.retry(job, retryDelayS(job.attempts + 1));
+    if (!kept) counts.lost += 1;
+    else if (done) counts.ended += 1;
+    else counts.retry += 1;
+    if (!done && job.attempts >= END_STUCK_ATTEMPTS) counts.stuck += 1;
   }
   return counts;
 }

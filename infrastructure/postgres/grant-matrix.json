@@ -544,6 +544,26 @@
         },
         "rowPrivileges": ["DELETE"]
       }
+    },
+    "app.chat_session_end": {
+      "web": {
+        "columns": {
+          "chat_user": ["SELECT"],
+          "device_id": ["SELECT"],
+          "due_at": ["UPDATE"],
+          "attempts": ["SELECT", "UPDATE"],
+          "lease_token": ["SELECT", "UPDATE"]
+        }
+      }
+    },
+    "app.end_chat_sessions": {
+      "web": ["EXECUTE"]
+    },
+    "app.claim_chat_session_end": {
+      "web": ["EXECUTE"]
+    },
+    "app.finish_chat_session_end": {
+      "web": ["EXECUTE"]
     }
   }
 }
