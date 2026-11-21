@@ -313,6 +313,17 @@
         }
       }
     },
+    "app.chat_erasure": {
+      "web": {
+        "columns": {
+          "chat_user": ["SELECT"],
+          "due_at": ["SELECT", "UPDATE"],
+          "attempts": ["SELECT", "UPDATE"],
+          "lease_token": ["SELECT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {

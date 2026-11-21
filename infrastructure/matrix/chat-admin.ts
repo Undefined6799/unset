@@ -4,7 +4,7 @@
 // second create for an account MAS already holds as created, so a lost reply is harmless. Retries are the queued
 // job's (domains/messaging createDueAccounts), never here (rule RE-1: one layer).
 import type { Handle } from "@unset/domains-identity";
-import type { ChatAccountCreation, ChatUser, SignInTicket } from "@unset/domains-messaging";
+import type { ChatAccountChange, ChatAccountCreation, ChatUser, SignInTicket } from "@unset/domains-messaging";
 import type { NetGuard } from "@unset/infrastructure-net-guard";
 import { type ChatAdminSettings, type Fields, postChatAdmin, signChat } from "./chat-admin-call.ts";
 
@@ -19,6 +19,21 @@ function creationOf(status: number, body: Record<string, unknown> | null): ChatA
   if (status === 409 && body?.error === "username_taken") return { kind: "taken" };
   if (status === 400) return { kind: "rejected" };
   return { kind: "unavailable" };
+}
+
+type AccountVerb = "account.lock" | "account.unlock" | "account.deactivate";
+
+/** chat-admin's account answers (interfaces/chat-admin/commands.ts changeAccount); any other shape is unavailable. */
+function changeOf(verb: AccountVerb, status: number, body: Record<string, unknown> | null): ChatAccountChange {
+  if (status === 409 && body?.error === "no_account") return { kind: "no_account" };
+  if (status === 400) return { kind: "rejected" };
+  if (status !== 200) return { kind: "unavailable" };
+  if (verb === "account.deactivate" && typeof body?.deactivated === "boolean") {
+    return body.deactivated ? { kind: "done" } : { kind: "no_account" };
+  }
+  return verb !== "account.deactivate" && body?.locked === (verb === "account.lock")
+    ? { kind: "done" }
+    : { kind: "unavailable" };
 }
 
 export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettings, now = () => Date.now()) {
@@ -41,7 +56,18 @@ export function createChatAdminClient(guard: NetGuard, settings: ChatAdminSettin
     return Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
   }
 
-  return { createAccount, signTicket };
+  /** Locks, unlocks or deactivates `user` (ADR 0084); retries are the queued job's, never here (RE-1). */
+  async function changeAccount(user: ChatUser, verb: AccountVerb, deadline?: AbortSignal): Promise<ChatAccountChange> {
+    const envelope = sign({ verb, user, name: "", device: "", did: "", sid: "", state: "" });
+    const answer = await postChatAdmin(guard, settings, `/v1/${verb}`, envelope, TIMEOUT_MS, deadline);
+    return answer === "unavailable" ? { kind: "unavailable" } : changeOf(verb, answer.status, answer.body);
+  }
+
+  /** An erased member's chat account: deactivate, which asks the homeserver to erase it (ADR 0084 decision 3). */
+  const deactivateAccount = (user: ChatUser, deadline?: AbortSignal) =>
+    changeAccount(user, "account.deactivate", deadline);
+
+  return { createAccount, changeAccount, deactivateAccount, signTicket };
 }
 
 export type ChatAdminClient = ReturnType<typeof createChatAdminClient>;
