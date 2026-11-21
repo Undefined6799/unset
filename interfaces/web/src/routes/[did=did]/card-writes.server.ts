@@ -390,6 +390,8 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
         if (head.kind !== "ok") return done(pdsFailure(head), []);
         const listed = await store.list();
         if (listed.kind !== "ok") return done(pdsFailure(listed), []);
+        // The page budget counts every card, so a list cut short cannot judge one (Codex review of #1911).
+        if (!listed.value.complete) return done(failed("card.list_incomplete"), []);
         const checked = checkEdits(edits, listed.value);
         if (checked !== null) return done(checked, []);
         if (ready === null) {

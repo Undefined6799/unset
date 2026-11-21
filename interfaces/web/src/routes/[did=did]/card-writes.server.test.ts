@@ -405,7 +405,7 @@ describe("saveAll", () => {
     expect(calls.many).toEqual([]);
   });
 
-  test("a card that is gone is refused by name; one a cut-short list may not hold is not a guess", async () => {
+  test("a card that is gone is refused by name; a cut-short list refuses the Save", async () => {
     const gone = store({ list: async () => listing([{ key: "a", cid: V }]) });
     expect(await gone.writes.saveAll([edit("a", "New A"), edit("z", "Z")])).toEqual({
       kind: "failed",
@@ -414,8 +414,10 @@ describe("saveAll", () => {
     });
     const cut = store({ list: async () => listing([{ key: "a", cid: V }], false) });
     expect(await cut.writes.saveAll([edit("z", "Z")])).toEqual({ kind: "failed", code: "card.list_incomplete" });
-    expect(await cut.writes.saveAll([edit("a", "New A")])).toEqual({ kind: "saved" });
+    // The page budget counts every card, so a list cut short refuses even a card it holds (Codex review of #1911).
+    expect(await cut.writes.saveAll([edit("a", "New A")])).toEqual({ kind: "failed", code: "card.list_incomplete" });
     expect(gone.calls.many).toEqual([]);
+    expect(cut.calls.many).toEqual([]);
   });
 
   test("a card the domain refuses is named and nothing is written", async () => {
