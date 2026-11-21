@@ -1,7 +1,10 @@
 # 0078 — The member chooses who sees their page
 
-Status: Proposed (awaiting Alex). Step P1.22a. Partly supersedes ADR 0004 (decision 37) and decision 35 D7 (ADR 0002)
-for the profile page, as Decision 6 says.
+Status: Accepted by Alex, 2026-11-21 01:32Z, against 7a73c61 (his line naming that head, given after it was reviewed;
+merged as 0f5901a). This status paragraph, the index rows and the ADR 0001 acceptance line were added afterwards. ADR
+0004's and ADR 0002's own status lines are left as they were: an accepted ADR may change only to "Superseded by NNNN",
+which would overstate a partial supersession, so the index and the ADR 0001 log record it. Step P1.22a. Partly
+supersedes ADR 0004 (decision 37) and decision 35 D7 (ADR 0002) for the profile page, as Decision 6 says.
 
 ## Context
 
