@@ -149,6 +149,14 @@ export function parseCardKey(raw: unknown): CardKey | null {
   return /^[A-Za-z0-9._:~-]{1,512}$/.test(raw) ? (raw as CardKey) : null;
 }
 
+/** atproto.com/specs/tid: 13 characters of base32-sortable, the first in 2-7 or a-j. */
+const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
+
+/** A key the card lexicon accepts (sh.unset.card `"key": "tid"`), so a card under it is valid and indexed. */
+export function parseNewCardKey(raw: unknown): CardKey | null {
+  return typeof raw === "string" && TID.test(raw) ? parseCardKey(raw) : null;
+}
+
 /** A library row id as Postgres writes a UUID: lowercase, hyphenated (RFC 9562 section 4). */
 export function parseDraftImageId(raw: unknown): DraftImageId | null {
   return typeof raw === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(raw)

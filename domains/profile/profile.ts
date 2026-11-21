@@ -188,6 +188,8 @@ function withList(
   const { cards: _old, ...rest } = record;
   const next: ProfileRecord = list.length === 0 ? rest : { ...rest, cards: list };
   if (!validateRecord("sh.unset.profile", next, "read").ok) return { ok: false, code: "profile.invalid" };
+  // An added entry can take a profile near the ceiling past what the index keeps, as toProfileRecord checks.
+  if (!fitsIndex(next)) return { ok: false, code: "profile.too_long" };
   return { ok: true, record: next };
 }
 

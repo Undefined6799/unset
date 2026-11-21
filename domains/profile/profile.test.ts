@@ -3,7 +3,7 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import type { CardKey, RepoDid } from "./cards.ts";
-import { MAX_RECORD_BYTES } from "./index-plan.ts";
+import { MAX_RECORD_BYTES, recordBytes } from "./index-plan.ts";
 import {
   APP_LIMITS,
   EMPTY_PROFILE,
@@ -308,6 +308,15 @@ describe("withCardListed and withCardUnlisted (ADR 0086: a card shows only when 
     expect(withCardListed(OWNER, "a" as CardKey, null, T)).toEqual({ ok: false, code: "profile.name_required" });
     const full = { ...stored, cards: Array.from({ length: LIMITS.profile.cardsMax }, (_, i) => uri(`k${i}`)) };
     expect(withCardListed(OWNER, "new" as CardKey, full, T)).toEqual({ ok: false, code: "profile.too_long" });
+  });
+
+  test("an entry that would take the profile past what the index keeps is refused", () => {
+    // Within an entry's bytes of the index's ceiling, the stored profile still fits; with one more entry it would not,
+    // and the public page would lose it (index-plan.ts fitsIndex).
+    const room = MAX_RECORD_BYTES - recordBytes({ ...stored, note: "" }) - 20;
+    const near = { ...stored, note: "x".repeat(room) };
+    expect(withCardListed(OWNER, "a" as CardKey, near, T)).toEqual({ ok: true, record: near });
+    expect(withCardListed(OWNER, "b" as CardKey, near, T)).toEqual({ ok: false, code: "profile.too_long" });
   });
 
   test("a removed card leaves the list, every other entry stays", () => {

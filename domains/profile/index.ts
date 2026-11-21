@@ -33,6 +33,7 @@ export {
   parseCardKey,
   parseCardVersion,
   parseDraftImageId,
+  parseNewCardKey,
   parseRepoDid,
   type RepoDid,
   readCard,
