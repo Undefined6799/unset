@@ -165,3 +165,20 @@ test("a_save_sent_to_sign_in_again_keeps_the_words_as_drafts", async ({ page }) 
   await page.getByRole("button", { name: "Throw them away" }).click();
   await removeCard(page, word);
 });
+
+// Codex on 1bdb437: a card deleted from its menu with unsaved words leaves no count in the bar and no draft behind.
+test("a_card_deleted_with_unsaved_words_leaves_nothing_unsaved", async ({ page }) => {
+  const word = `gone${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} here` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" typed");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await removeCard(page, word);
+  await expect(bar(page)).toHaveCount(0);
+  await openOwnPage(page);
+  await expect(page.getByText(/This device kept unsaved words/)).toHaveCount(0);
+});

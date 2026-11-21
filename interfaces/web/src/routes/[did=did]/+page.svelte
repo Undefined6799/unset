@@ -31,6 +31,7 @@ import {
   edit,
   editsToSave,
   NO_EDITS,
+  onPage,
   type UnsavedCards,
 } from "@unset/apps-web/lib/profile/unsaved.ts";
 import { onMount, untrack } from "svelte";
@@ -71,6 +72,16 @@ $effect(() => {
       remounts = new Map(remounts).set(card.key, (remounts.get(card.key) ?? 0) + 1);
     });
   }
+});
+// A card deleted from its menu (or gone after a refresh) leaves no unsaved edit or draft behind it.
+$effect(() => {
+  const kept = onPage(
+    untrack(() => edits),
+    data.cards,
+  );
+  if (kept === untrack(() => edits)) return;
+  forget([...untrack(() => edits).keys()].filter((key) => !kept.has(key)));
+  edits = kept;
 });
 /** The Text cards showing their plain Markdown field instead of the editor. */
 let plain: ReadonlySet<string> = $state(new Set());
@@ -147,10 +158,11 @@ async function save() {
     return;
   }
   if (answer.kind !== "failed") await refreshAll();
-  const written = answer.kind === "saved" ? sent : answer.kind === "refused" ? (answer.saved ?? []) : [];
+  const keys = answer.kind === "saved" ? sent : answer.kind === "refused" ? (answer.saved ?? []) : [];
+  const written = toSend.filter((card) => keys.includes(card.key));
   const before = edits;
   edits = afterSave(edits, written, data.cards);
-  keepDrafts(written, before);
+  keepDrafts(keys, before);
   if (answer.kind === "saved") said = { text: UNSAVED_BAR.saved, refused: false };
   else if (answer.kind === "refused") said = { text: answer.message, refused: true };
   else said = { text: UNSAVED_BAR.failed, refused: true };

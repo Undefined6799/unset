@@ -1,7 +1,7 @@
 // The owner's unsaved Text cards (ADR 0074 item 4): what the bar counts, what Save posts and what a Save leaves.
 import { describe, expect, test } from "vitest";
 import type { CardView } from "./types.ts";
-import { afterSave, edit, editsToSave, NO_EDITS } from "./unsaved.ts";
+import { afterSave, edit, editsToSave, NO_EDITS, onPage } from "./unsaved.ts";
 
 const text = (key: string, words: string, version: string | null = `v-${key}`): CardView => ({
   key,
@@ -80,8 +80,8 @@ describe("unsaved cards", () => {
     let edits = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
     edits = edit(edits, page, "b", { fields: { text: "World" } });
     const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2")];
-    expect([...afterSave(edits, ["a"], stored).keys()]).toEqual(["b"]);
-    expect(afterSave(edits, ["a", "b"], stored).size).toBe(0);
+    expect([...afterSave(edits, editsToSave(edits, page).slice(0, 1), stored).keys()]).toEqual(["b"]);
+    expect(afterSave(edits, editsToSave(edits, page), stored).size).toBe(0);
   });
 
   // Review of f6c6a2f: words typed while a Save is on its way must not be lost when its answer comes.
@@ -91,7 +91,7 @@ describe("unsaved cards", () => {
     });
     const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
     const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2"), text("c", "Again")];
-    const left = afterSave(typed, ["a", "b"], stored);
+    const left = afterSave(typed, editsToSave(sent, page), stored);
     expect([...left.keys()]).toEqual(["a"]);
     expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hello there" } });
   });
@@ -101,7 +101,7 @@ describe("unsaved cards", () => {
       fields: { text: "World" },
     });
     const stored = [text("a", "Hello", "v-a2"), text("b", "There"), text("c", "Again")];
-    const left = afterSave(sent, ["a"], stored);
+    const left = afterSave(sent, editsToSave(sent, page).slice(0, 1), stored);
     expect([...left]).toEqual([["b", sent.get("b")]]);
   });
 
@@ -110,6 +110,22 @@ describe("unsaved cards", () => {
     const retyped = edit(edit(sent, page, "a", { fields: { text: "Hello!" } }), page, "a", {
       fields: { text: "Hello" },
     });
-    expect(afterSave(retyped, ["a"], [text("a", "Hello", "v-a2")]).size).toBe(0);
+    expect(afterSave(retyped, editsToSave(sent, page), [text("a", "Hello", "v-a2")]).size).toBe(0);
+  });
+
+  // Codex on 1bdb437: the server trims the words and turns CRLF into LF before storing them (domains/profile
+  // card-edit.ts field()), so what is stored can differ from what was sent while nothing new was typed.
+  test("after_a_save_a_card_the_server_tidied_is_saved", () => {
+    const sent = edit(NO_EDITS, page, "a", { fields: { text: "  Hello\r\nthere  " } });
+    expect(afterSave(sent, editsToSave(sent, page), [text("a", "Hello\nthere", "v-a2")]).size).toBe(0);
+  });
+
+  // Codex on 1bdb437: a card deleted from its menu leaves nothing unsaved behind.
+  test("a_card_no_longer_on_the_page_is_no_longer_unsaved", () => {
+    const edits = edit(edit(NO_EDITS, page, "a", { fields: { text: "Hello" } }), page, "b", {
+      fields: { text: "World" },
+    });
+    expect([...onPage(edits, [text("a", "Hi"), text("c", "Again")]).keys()]).toEqual(["a"]);
+    expect(onPage(edits, page)).toBe(edits);
   });
 });
