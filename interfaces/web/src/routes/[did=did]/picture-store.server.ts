@@ -19,11 +19,18 @@ type ImageUses = {
     did: Did,
     id: string,
     recordUri: string,
+    at: Date,
     deadline: AbortSignal,
   ) => Promise<{ readonly width: number; readonly height: number; readonly created: boolean } | null>;
-  readonly removeUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal) => Promise<void>;
+  readonly removeUse: (did: Did, id: string, recordUri: string, at: Date, deadline: AbortSignal) => Promise<void>;
   readonly notePublished: (did: Did, id: string, blobCid: string, deadline: AbortSignal) => Promise<void>;
-  readonly dropUse: (did: Did, recordUri: string, blobCid: string | null, deadline: AbortSignal) => Promise<void>;
+  readonly dropUse: (
+    did: Did,
+    recordUri: string,
+    blobCid: string | null,
+    before: Date,
+    deadline: AbortSignal,
+  ) => Promise<void>;
 };
 
 export type PictureDeps = {
@@ -36,13 +43,17 @@ export type PictureDeps = {
   readonly upload: (bytes: Uint8Array) => Promise<PdsResult<UploadedBlob>>;
 };
 
-export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal): PictureStore {
+/**
+ * `startedAt` is when this request began, before any write: each use it makes is stamped with it, and it takes back
+ * only uses no later request has stamped since, so saves of one card settle correctly whichever finishes first.
+ */
+export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal, startedAt: Date): PictureStore {
   const { images, drafts } = deps;
   const uri = (key: string) => `at://${did}/${CARD_COLLECTION}/${key}`;
   const settling = () => AbortSignal.timeout(SETTLE_MS);
   return {
-    use: async (id, key) => (images.open ? images.store.addUse(did, id, uri(key), deadline) : null),
-    release: (id, key) => images.store.removeUse(did, id, uri(key), settling()),
+    use: async (id, key) => (images.open ? images.store.addUse(did, id, uri(key), startedAt, deadline) : null),
+    release: (id, key) => images.store.removeUse(did, id, uri(key), startedAt, settling()),
     main: async (id) => {
       const read = await drafts.get(`drafts/${did}/i/${id}/main.jpeg`);
       if (!read.ok) return { kind: "unavailable" };
@@ -50,6 +61,6 @@ export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal):
     },
     upload: deps.upload,
     published: (id, link) => images.store.notePublished(did, id, link, deadline),
-    drop: (key, link) => images.store.dropUse(did, uri(key), link, settling()),
+    drop: (key, link) => images.store.dropUse(did, uri(key), link, startedAt, settling()),
   };
 }

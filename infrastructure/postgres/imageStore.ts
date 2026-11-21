@@ -127,9 +127,16 @@ export function createImageStore(pool: Pool) {
 
     /**
      * A save's record uses the image, once however often it is asked; its pixel size, which the record's aspect ratio
-     * gives, or null when it is not the member's, gone, held or blocked.
+     * gives, or null when it is not the member's, gone, held or blocked. `at` is when the save began: the use is
+     * stamped with the latest such time, so a save that began earlier cannot take it back (dropUse, removeUse).
      */
-    addUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<ImageUse | null> =>
+    addUse: (
+      did: Did,
+      id: string,
+      recordUri: string,
+      at: Date,
+      deadline: AbortSignal | null,
+    ): Promise<ImageUse | null> =>
       withTransaction(pool, deadline, async (tx) => {
         if (!ownRecord(did, recordUri) || !(await lockImage(tx, did, id))) return null;
         const { rows } = await tx.query<{ width: number; height: number }>(
@@ -141,20 +148,31 @@ export function createImageStore(pool: Pool) {
         const [size] = rows;
         if (size === undefined) return null;
         const { rowCount } = await tx.query(
-          "INSERT INTO app.image_use (image_id, record_uri) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-          [id, recordUri],
+          "INSERT INTO app.image_use (image_id, record_uri, acquired_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+          [id, recordUri, at],
         );
-        return { width: Number(size.width), height: Number(size.height), created: (rowCount ?? 0) === 1 };
+        const created = (rowCount ?? 0) === 1;
+        if (!created) {
+          await tx.query(
+            `UPDATE app.image_use SET acquired_at = GREATEST(acquired_at, $3)
+              WHERE image_id = $1 AND record_uri = $2`,
+            [id, recordUri, at],
+          );
+        }
+        return { width: Number(size.width), height: Number(size.height), created };
       }),
 
-    /** A save dropped the image from the record; when no use is left its copies go 7 days later. */
-    removeUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<void> =>
+    /**
+     * A save that began at `at` takes back the use it made; one a later save has stamped since stays. When no use is
+     * left the copies go 7 days later.
+     */
+    removeUse: (did: Did, id: string, recordUri: string, at: Date, deadline: AbortSignal | null): Promise<void> =>
       withTransaction(pool, deadline, async (tx) => {
         if (!(await lockImage(tx, did, id))) return;
         const { rowCount } = await tx.query(
           `DELETE FROM app.image_use u USING app.image i
-            WHERE u.image_id = i.id AND i.id = $1 AND i.did = $2 AND u.record_uri = $3`,
-          [id, did, recordUri],
+            WHERE u.image_id = i.id AND i.id = $1 AND i.did = $2 AND u.record_uri = $3 AND u.acquired_at <= $4`,
+          [id, did, recordUri, at],
         );
         if ((rowCount ?? 0) === 0) return;
         await tx.query(
@@ -171,24 +189,32 @@ export function createImageStore(pool: Pool) {
       }),
 
     /**
-     * The record no longer shows the member's image published as `blobCid` (null: the record is gone, so none of its
-     * images); those uses go, and an image left with no use has its copies deleted 7 days later. Each image is locked
-     * as removeUse locks it.
+     * A write that began at `before` took the member's image published as `blobCid` off the record (null: the record
+     * is gone, so all of its images); those uses go, unless a save that began later stamped one (it may show that
+     * image again). An image left with no use has its copies deleted 7 days later. Each image is locked as removeUse
+     * locks it.
      */
-    dropUse: (did: Did, recordUri: string, blobCid: string | null, deadline: AbortSignal | null): Promise<void> =>
+    dropUse: (
+      did: Did,
+      recordUri: string,
+      blobCid: string | null,
+      before: Date,
+      deadline: AbortSignal | null,
+    ): Promise<void> =>
       withTransaction(pool, deadline, async (tx) => {
         const { rows } = await tx.query<{ id: string }>(
           `SELECT i.id::text AS id FROM app.image i JOIN app.image_use u ON u.image_id = i.id
             WHERE i.did = $1 AND u.record_uri = $2 AND ($3::text IS NULL OR i.blob_cid = $3::text)
+              AND u.acquired_at < $4
             ORDER BY i.id FOR UPDATE OF i`,
-          [did, recordUri, blobCid],
+          [did, recordUri, blobCid, before],
         );
         const ids = rows.map((row) => row.id);
         if (ids.length === 0) return;
-        await tx.query("DELETE FROM app.image_use WHERE record_uri = $1 AND image_id = ANY($2::uuid[])", [
-          recordUri,
-          ids,
-        ]);
+        await tx.query(
+          "DELETE FROM app.image_use WHERE record_uri = $1 AND image_id = ANY($2::uuid[]) AND acquired_at < $3",
+          [recordUri, ids, before],
+        );
         await tx.query(
           `UPDATE app.image SET unused_since = now()
             WHERE did = $1 AND id = ANY($2::uuid[])

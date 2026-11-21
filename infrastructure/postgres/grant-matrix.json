@@ -260,7 +260,8 @@
       "web": {
         "columns": {
           "image_id": ["SELECT", "INSERT"],
-          "record_uri": ["SELECT", "INSERT"]
+          "record_uri": ["SELECT", "INSERT"],
+          "acquired_at": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }

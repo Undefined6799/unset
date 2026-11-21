@@ -8,3 +8,10 @@
 ALTER TABLE app.image ADD COLUMN blob_cid text CHECK (blob_cid ~ '^b[a-z2-7]{20,200}$');
 
 GRANT SELECT (blob_cid), UPDATE (blob_cid) ON app.image TO web;
+
+-- When the save that last asked for a use began (web's clock, the request's start). A save takes back only a use no
+-- later save has stamped since it began, so a slow save that replaced a picture cannot take its use from a later save
+-- that shows that picture again (Codex review of #1860). Rows written before this column get the migration's time.
+ALTER TABLE app.image_use ADD COLUMN acquired_at timestamptz NOT NULL DEFAULT now();
+
+GRANT SELECT (acquired_at), INSERT (acquired_at), UPDATE (acquired_at) ON app.image_use TO web;
