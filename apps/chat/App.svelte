@@ -175,7 +175,7 @@ onMount(() => {
       </Card.Content>
     {:else if view.kind === "ready"}
       <Card.Content>
-        <Conversations conversations={view.conversations} me={view.me} />
+        <Conversations conversations={view.conversations} names={view.names} me={view.me} />
       </Card.Content>
     {:else if view.kind === "logged_out"}
       <Card.Content>

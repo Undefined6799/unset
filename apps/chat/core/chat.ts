@@ -43,6 +43,8 @@ export type ChatState =
   | {
       readonly kind: "ready";
       readonly conversations: Conversations;
+      /** A chat partner's public name, or null to show the handle alone (core/public-name.ts, ADR 0096). */
+      readonly names: (chatId: string) => Promise<string | null>;
       readonly me: string;
       readonly logOut: () => void;
     }
