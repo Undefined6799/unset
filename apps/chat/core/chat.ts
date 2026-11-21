@@ -28,6 +28,7 @@ export type UnlockOutcome = "unlocked" | "wrong_key" | "unfinished" | "failed";
  * - logging_out: Log out runs: the key backup catches up, then the door ends this device (ADR 0083 decision 5).
  * - logged_out: the device is ended and this account's stores are gone from this browser.
  * - signed_out: the server no longer takes the token.
+ * - open_elsewhere: another tab of this browser holds chat (core/tab-lock.ts); `useHere` takes it over.
  * - error: a fixed catalog code, never a message from elsewhere.
  */
 export type ChatState =
@@ -49,4 +50,5 @@ export type ChatState =
   | { readonly kind: "logging_out" }
   | { readonly kind: "logged_out" }
   | { readonly kind: "signed_out" }
+  | { readonly kind: "open_elsewhere"; readonly useHere: () => void }
   | { readonly kind: "error"; readonly code: string };

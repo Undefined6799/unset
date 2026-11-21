@@ -87,6 +87,26 @@ async function open(browser: Browser, colorScheme: "light" | "dark" = "light") {
 
 const state = (page: Page) => page.locator("main").getAttribute("data-state");
 
+/** Records every state the page passes through from now on; the returned call reads them. */
+async function statesOf(page: Page): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    type Main = { getAttribute(name: string): string | null };
+    const view = globalThis as unknown as {
+      document: { querySelector(s: string): Main | null };
+      MutationObserver: new (cb: () => void) => { observe(target: Main, options: object): void };
+      seenStates: string[];
+    };
+    const main = view.document.querySelector("main");
+    view.seenStates = [];
+    if (main === null) return;
+    new view.MutationObserver(() => view.seenStates.push(main.getAttribute("data-state") ?? "")).observe(main, {
+      attributes: true,
+      attributeFilter: ["data-state"],
+    });
+  });
+  return () => page.evaluate(() => (globalThis as unknown as { seenStates: string[] }).seenStates);
+}
+
 /** Everything this origin keeps in the browser, as text: web storage, readable cookies, and every IndexedDB value. */
 const kept = (page: Page) =>
   page.evaluate(async () => {
@@ -298,6 +318,39 @@ test("chat_page.second_browser_unlocks: another browser is locked, refuses a wro
   expect(second.problems).toEqual([]);
 });
 
+test("chat_page.one_tab: a second tab waits without signing in; Use here moves chat to it and stops the first", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const first = await open(browser);
+  await first.page.goto("https://unset.cc/");
+  await saveKey(first.page);
+  // A second tab of the same browser: same cookies, same key store.
+  const second = await first.context.newPage();
+  const hops: string[] = [];
+  second.on(
+    "request",
+    (r) => ["/sign-in", "/sign-in/redeem"].includes(new URL(r.url()).pathname) && hops.push(r.url()),
+  );
+
+  await second.goto("https://unset.cc/");
+  await expect.poll(() => state(second), { timeout: 30_000 }).toBe("open_elsewhere");
+  expect(await second.locator("h1").textContent()).toBe("Your messages are open in another tab");
+  // It neither hopped nor redeemed, so it never held a token or the lock key its store opens with.
+  expect(hops).toEqual([]);
+  expect(first.redeems).toHaveLength(1);
+  expect(await state(first.page)).toBe("ready");
+  await second.getByRole("button", { name: "Use here" }).click();
+  await expect.poll(() => state(first.page), { timeout: 30_000 }).toBe("open_elsewhere");
+  await expect.poll(() => state(second), { timeout: 30_000 }).toBe("ready");
+  expect(hops.some((u) => u.includes("/sign-in?return="))).toBe(true);
+  // The first tab stays stopped: it does not hop back, so the two never take turns.
+  const before = first.redeems.length;
+  await second.waitForTimeout(2_000);
+  expect(first.redeems.length).toBe(before);
+  expect(await state(first.page)).toBe("open_elsewhere");
+});
+
 /** The IndexedDB databases this origin holds for chat accounts (the SDK's two per account, client.ts storePrefix). */
 const chatStores = async (page: Page) => (await kept(page)).names.filter((n) => n.startsWith("unset-chat:"));
 
@@ -311,9 +364,10 @@ test("chat_page.log_out: Log out waits for the backup, ends the device at the do
   expect(await chatStores(page)).toHaveLength(2);
   const signOuts: string[] = [];
   page.on("request", (r) => r.url().endsWith("/sign-out") && signOuts.push(r.postData() ?? ""));
+  const seen = await statesOf(page);
   await page.getByRole("button", { name: "Log out" }).click();
-  expect(await state(page)).toBe("logging_out");
   await expect.poll(() => state(page), { timeout: 30_000 }).toBe("logged_out");
+  expect(await seen()).toContain("logging_out");
   expect(signOuts).toEqual([JSON.stringify({ deviceId: redeems[0]?.deviceId })]);
   // ADR 0083 decision 5 and build plan unverified item 3: clearStores with the account's prefix removes both of the
   // Rust crypto store's databases.
