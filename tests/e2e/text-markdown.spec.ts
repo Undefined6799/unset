@@ -215,6 +215,55 @@ test("gfm_in_the_text_opens_as_itself_and_an_edit_elsewhere_keeps_it", async ({ 
   await giveBackWrites(page, 3);
 });
 
+// Alex 2026-11-21: "bare addresses become https". A bare address in the text is a link on the page and in the editor,
+// a www name over https in both; a bare address pasted is a link; one typed in the link editor without https:// gets it.
+test("bare_addresses_are_links_and_a_www_name_opens_over_https", async ({ page }) => {
+  const watched = watch(page);
+  const word = `bare${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, {
+    kind: "readme",
+    width: "full",
+    surface: "filled",
+    text: `${word} start\n\nsee https://example.com/a and www.example.org.`,
+  });
+  const html = await (await page.request.get(page.url())).text();
+  expect(html).toContain('href="https://example.com/a"');
+  expect(html).toContain('href="https://www.example.org/"');
+  const { editor } = await caretAtEnd(page, word);
+  const links = editor.locator("a");
+  await expect(links).toHaveText(["https://example.com/a", "www.example.org"]);
+  await expect(links.last()).toHaveAttribute("href", "https://www.example.org");
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("these and ");
+  await paste(page, { "text/plain": "https://example.net/x" });
+  await expect(editor.locator("a[href='https://example.net/x']")).toHaveText("https://example.net/x");
+  await page.keyboard.press("Home");
+  for (const _ of "these") await page.keyboard.press("Shift+ArrowRight");
+  const floating = page.getByRole("toolbar", { name: "Format the selected words" }).filter({ visible: true });
+  await floating.getByRole("button", { name: "Link" }).click();
+  await page.getByRole("textbox", { name: "Link address" }).fill("example.com/b");
+  await page.keyboard.press("Enter");
+  await expect(editor.getByRole("link", { name: "these" })).toHaveAttribute("href", "https://example.com/b");
+  const { card } = await saveAndReopen(page, word);
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await expect(field).toHaveValue(
+    `${word} start\n\n[these](https://example.com/b) and <https://example.net/x>\n\nsee <https://example.com/a> and [www.example.org](https://www.example.org).`,
+  );
+  const shown = page.locator('[data-slot="card"]', { has: field });
+  await shown.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await removeCard(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await giveBackWrites(page, 3);
+});
+
 // The page reads no footnotes and no line break inside a table cell (GFM cells hold one line), so the editor takes
 // neither: a pasted footnote is refused whole, and Shift+Enter in a cell does nothing. A pasted table is a table.
 test("a_pasted_table_is_a_table_and_what_the_page_cannot_show_is_refused", async ({ page }) => {

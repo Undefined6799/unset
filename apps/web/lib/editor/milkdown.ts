@@ -29,7 +29,7 @@ import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model"
 import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
-import { $prose, getMarkdown } from "@milkdown/utils";
+import { $prose, $remark, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -297,6 +297,25 @@ const taskBox = $prose(
     }),
 );
 
+/** The parts of a Markdown tree (mdast) the www rewrite reads. */
+type MdNode = { type: string; url?: string; value?: string; children?: MdNode[] };
+
+/**
+ * A bare `www.` name opens over https, as the page reads it (parse.ts; Alex 2026-11-21: "bare addresses become
+ * https"): remark-gfm 4.0.1 gives one a link to `http://` and its name (mdast-util-gfm-autolink-literal), so that link
+ * is pointed at https before the editor draws it.
+ */
+const wwwOverHttps = $remark("wwwOverHttps", () => () => (tree: MdNode) => {
+  const walk = (node: MdNode) => {
+    const name = node.children?.length === 1 ? node.children[0]?.value : undefined;
+    if (node.type === "link" && name !== undefined && /^www\./i.test(name) && node.url === `http://${name}`) {
+      node.url = `https://${name}`;
+    }
+    node.children?.forEach(walk);
+  };
+  walk(tree);
+});
+
 const pageShapes = $prose(
   () =>
     new Plugin({
@@ -478,6 +497,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     })
     .use(commonmark)
     .use(gfm)
+    .use(wwwOverHttps)
     .use(taskBox)
     .use(clipboard)
     .use(pageShapes)
