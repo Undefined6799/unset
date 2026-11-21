@@ -186,7 +186,8 @@ describe("index store", () => {
     // later tests expect.
     const C = "did:plc:cccccccccccccccccccccccc";
     track(C, true);
-    await commit(C, rev(3), [page([])]);
+    await commit(C, rev(3), [section(CARD_1), page([{ uri: `at://${C}/sh.unset.card/${CARD_1}` }])]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position = 0`)).toEqual(["1"]);
     const before = stat("ingest_invalid");
     const broken: IndexChange = {
       kind: "put",
@@ -199,6 +200,7 @@ describe("index store", () => {
     expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${C}'`)).toEqual([
       "owner-only|f",
     ]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position IS NOT NULL`)).toEqual(["0"]);
     expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
   });
 
