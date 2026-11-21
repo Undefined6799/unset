@@ -128,8 +128,20 @@ describe("cardWrites", () => {
 
   test("card.create_once: the same form sent again after its card landed is saved, and nothing more is written", async () => {
     const { writes, calls } = store();
-    expect(await writes.create(input().content, "full", undefined, "a" as CardKey)).toEqual({ kind: "saved" });
+    // Card "a" is stored as readme("A"): the same form, with the same words, is the card already there.
+    expect(await writes.create(input("A").content, "full", undefined, "a" as CardKey)).toEqual({ kind: "saved" });
     expect(calls.swaps).toEqual([]);
+  });
+
+  test("card.create_once: a page that kept an old key adds the new card under a fresh key", async () => {
+    // Back to an earlier draw of the page, or a refresh that failed after a save: the key names a card already
+    // stored, but this form says something else, so it is a new card and is never answered saved unwritten.
+    const { writes, calls } = store();
+    expect(await writes.create(input("Other").content, "full", undefined, "a" as CardKey)).toEqual({ kind: "saved" });
+    expect(calls.created).toHaveLength(1);
+    expect(calls.profile).toEqual([
+      { ok: true, exists: true, record: { ...PROFILE, cards: listed("a", "b", NEW_KEY) } },
+    ]);
   });
 
   test("card.create_once: two sends at once write one card; the second finds it on the read after its swap failed", async () => {
@@ -140,7 +152,7 @@ describe("cardWrites", () => {
     ];
     const list = async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false });
     const { writes, calls } = store({ list }, PROFILE, ["changed"]);
-    expect(await writes.create(input().content, "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    expect(await writes.create(input("A").content, "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
     expect(calls.created).toHaveLength(1); // the try the PDS refused, as the first send had landed
   });
 
