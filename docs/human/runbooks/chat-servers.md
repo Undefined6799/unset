@@ -121,9 +121,8 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
    2. **Pangolin.** Add a resource `staging.unset.cc` on the staging site, set up like `staging.unset.sh`
       (`dev-stack-secrets.md`, "Newt's env file"): one target, `https` to `10.250.37.3` port 443, certificate check off
       for the target, **TLS Server Name** `staging.unset.cc`, and the resource's login **on**, with the same users or
-      roles as `staging.unset.sh`. Add no bypass rule until Alex rules on ADR 0094's open point: the chat client sends
-      its Matrix calls without cookies, so until then the page loads behind the login but its `/_matrix/client/`
-      calls are refused.
+      roles as `staging.unset.sh`. Add no bypass rule: the chat page sends its Matrix calls with
+      the login's cookie too (ADR 0094 decision 6), so everything on the name stays behind the login.
    3. **The dev leaf.** Remake the edge's self-signed leaf with `staging.unset.cc` as its fourth name
       (`dev-stack-secrets.md`, "The dev edge's self-signed leaf"); a site name the leaf does not cover would make the
       edge ask a public CA.

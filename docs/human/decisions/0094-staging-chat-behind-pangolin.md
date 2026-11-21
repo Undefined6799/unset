@@ -30,20 +30,19 @@ client listener, `10.250.38.51:8008`).
    certificate check off, TLS Server Name `staging.unset.cc`, as for the other staging names (runbook
    `chat-servers.md`). Public DNS gains the A/AAAA record to Pangolin and, as ADR 0025 foresaw, the
    `CAA 0 issue "letsencrypt.org; validationmethods=http-01"` record for Pangolin's certificate.
-
-## Open: how the Matrix client API passes the login
-matrix-js-sdk 43.0.0 sends every homeserver request with `credentials: "omit"`
-(`node_modules/matrix-js-sdk/src/http-api/fetch.ts:312`, "we send credentials via headers"), so the browser does not
-send Pangolin's session cookie on `/_matrix/client/` and Pangolin refuses those calls while the page and the door's
-routes (`credentials: "same-origin"`, `apps/chat/core/*.ts`) pass. Either:
-- **(a) keep everything behind the login:** the page hands `createClient` a `fetchFn` (a documented option,
-  `src/client.ts:313`) that sends same-origin credentials; Synapse reads only the bearer token, so the cookie adds no
-  authority there; or
-- **(b) a Pangolin bypass for `/_matrix/client/*`:** Synapse's client API is then public on staging, its token the
-  only gate, which ADR 0025 kept the login in front of as a second layer.
-(a) matches Alex's words and keeps staging closed; it is a one-line change in `apps/chat/matrix/client.ts`. Alex picks.
+6. **The Matrix client API rides the same login.** matrix-js-sdk 43.0.0 sends every homeserver request with
+   `credentials: "omit"` (`node_modules/matrix-js-sdk/src/http-api/fetch.ts:312`, "we send credentials via headers"),
+   so on its own the browser would not send Pangolin's session cookie on `/_matrix/client/`, and Pangolin would refuse
+   those calls while the page and the door's routes (`credentials: "same-origin"`, `apps/chat/core/*.ts`) pass. The
+   page therefore hands `createClient` a `fetchFn` (a documented option, `src/client.ts:313`, passed on at `:1358`)
+   that sends same-origin credentials, so every call the chat page makes goes through the login. Synapse reads only
+   the bearer token, so the cookie gives it no authority. This is Alex's card answer, the option "Yes, behind
+   Pangolin", whose consequence was that the chat page's own calls ride that login (as the coordinator relayed it on
+   2026-11-21; the card's exact consequence line is not quoted here). Pangolin gets no bypass rule for the site.
 
 ## Alternatives
+- **A Pangolin bypass for `/_matrix/client/*`.** Rejected: it would make Synapse's client API public on staging, its
+  access token the only gate, where ADR 0025 keeps the login in front of staging as a second layer.
 - **No staging chat site** until production: no way to test the chat page in a browser. Declined.
 - **The chat site in the image stack too:** that edge is on no chat network, so it would dial the two fixed addresses
   through its outside network. Declined; C18 refuses it.
@@ -52,8 +51,13 @@ routes (`credentials: "same-origin"`, `apps/chat/core/*.ts`) pass. Either:
 
 ## Consequences
 - A tester signs in to Pangolin once for `staging.unset.cc` as for the app; the hop from `staging.unset.sh` is a
-  top-level navigation, so the cookie goes with it. If Pangolin first shows its own login there, the ticket in the
-  URL fragment can be lost on the way back; the page then has no ticket and starts the hop again.
+  top-level navigation, so the cookie goes with it.
+- **Known limits on staging.**
+  - The door's own per-address buckets (`interfaces/chat-auth/compose.ts` POLICIES: `default` 60 at once and 1 a
+    second, `sign-in` 10 at once) key on the edge's address, since the door reads the socket
+    (`TRUSTED_PROXY_MODE: socket`), so every tester shares them; the edge's `chat_*` zones are the per-client ones.
+  - If Pangolin shows its own login on the hop's return, the `#ticket` fragment can be lost on the way back; the page
+    then has no ticket and starts the hop again.
 - A new door route needs `CHAT_DOOR_PATH` and `dev/chat.caddy` changed with it, or the edge answers 404.
 - The image stack (`compose.dev.yaml`) has no chat site until the chat servers have published images.
 

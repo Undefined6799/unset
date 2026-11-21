@@ -782,5 +782,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Staging chat behind Pangolin (P6.02, 2026-11-21; own record: [0094](0094-staging-chat-behind-pangolin.md)):**
   `staging.unset.cc` is a fourth site on the source stack's staging edge, behind the same Pangolin login as
   `staging.unset.sh` (Alex, "Yes, behind Pangolin"): `/_matrix/client/` to Synapse's client listener, exactly the
-  door's routes to the door, the edge's 404 for anything else, matched before Caddy cleans the path. Open for Alex:
-  how the Matrix client API, which matrix-js-sdk sends without cookies, passes the login. Proposed.
+  door's routes to the door, the edge's 404 for anything else, matched before Caddy cleans the path. The chat page's
+  Matrix calls, which matrix-js-sdk sends without cookies, ride the same login through a same-origin `fetchFn`; no
+  bypass. Proposed.
