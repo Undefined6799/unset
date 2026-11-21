@@ -29,8 +29,9 @@ import {
   wrapInBlockTypeCommand,
 } from "@milkdown/preset-commonmark";
 import { findParent, posToDOMRect } from "@milkdown/prose";
+import { keymap } from "@milkdown/prose/keymap";
 import type { NodeType } from "@milkdown/prose/model";
-import { type EditorState, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
+import { type Command, type EditorState, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
@@ -181,6 +182,43 @@ function atEndOfBlock(state: EditorState): boolean {
   const { selection } = state;
   return selection instanceof TextSelection && selection.$head.parentOffset === selection.$head.parent.content.size;
 }
+
+/**
+ * Moves the block with the caret past its neighbour, up (-1) or down (1), with the caret kept where it was in it: the
+ * key for what the handle's grip does by pointer (plugin-block has none, nor has Crepe). The block is the list item
+ * the caret is in, which stays in its list, else the top-level block, so a quote moves whole, as the handle drags it.
+ * At either end the key is still taken, and nothing moves.
+ */
+function moveBlock(dir: -1 | 1): Command {
+  return (state, dispatch) => {
+    const { $from, from, to } = state.selection;
+    if ($from.depth === 0) return false;
+    let depth = 1;
+    for (let at = $from.depth; at > 1; at -= 1) {
+      if ($from.node(at).type.name === "list_item") {
+        depth = at;
+        break;
+      }
+    }
+    const holder = $from.node(depth - 1);
+    const index = $from.index(depth - 1);
+    const other = holder.maybeChild(index + dir);
+    if (other === null) return true;
+    const block = holder.child(index);
+    const start = $from.before(depth);
+    const end = start + block.nodeSize;
+    if (to > end) return true;
+    const tr =
+      dir === -1
+        ? state.tr.replaceWith(start - other.nodeSize, end, [block, other])
+        : state.tr.replaceWith(start, end + other.nodeSize, [other, block]);
+    const moved = start + dir * other.nodeSize;
+    tr.setSelection(TextSelection.create(tr.doc, moved + (from - start), moved + (to - start)));
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  };
+}
+const moveKeys = $prose(() => keymap({ "Mod-Shift-ArrowUp": moveBlock(-1), "Mod-Shift-ArrowDown": moveBlock(1) }));
 
 /** Adds the handle, the block menu and the bar to `editor`, drawn in the elements `options` names. */
 export function withMenus(editor: Editor, options: MenusOptions): Menus {
@@ -350,7 +388,8 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     .use(blockMenu)
     .use(formatBar)
     .use(linkTips)
-    .use(placeholder(options.hint));
+    .use(placeholder(options.hint))
+    .use(moveKeys);
 
   // A press outside the link editor closes it, keeping the words as they were (Crepe link-edit).
   function outside(event: PointerEvent) {

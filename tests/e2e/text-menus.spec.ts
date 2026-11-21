@@ -245,3 +245,28 @@ test("an_empty_line_with_the_caret_says_to_type_a_slash", async ({ page }) => {
   await discardAndRemove(page, word, { changed: false });
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
+
+test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `moves${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\n- first item\n- second item`);
+  const lines = editor.locator(":scope > p");
+  // From the second line: up goes above the first line, down twice goes below the list.
+  await editor.getByText("second line").click();
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect(lines).toHaveText(["second line", `${word} one`]);
+  await page.keyboard.type("!");
+  await expect(lines.first()).toContainText("!");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+  await expect(editor.locator(":scope > *").last()).toContainText("second line!");
+  // In a list, an item moves within its list.
+  await editor.getByText("second item").click();
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect(editor.locator("li")).toHaveText(["second item", "first item"]);
+  // At the top there is nowhere to go, and nothing changes.
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect(editor.locator("li")).toHaveText(["second item", "first item"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
