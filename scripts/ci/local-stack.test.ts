@@ -7,6 +7,7 @@ import { parse } from "yaml";
 import {
   CLIENT_ID,
   generate,
+  MEDIA_STORE_KEY_ID,
   maskLines,
   objectsIdentities,
   p256DidKey,
@@ -68,7 +69,9 @@ describe("generated values (D2)", () => {
     expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
     expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);
     const pds = { keyId: v.pdsStoreKeyId, secret: v.pdsStoreSecret };
-    const [identity, web, ...others] = JSON.parse(objectsIdentities(pds, "w".repeat(64))).identities;
+    const [identity, web, media, ...others] = JSON.parse(
+      objectsIdentities(pds, "w".repeat(64), "m".repeat(64)),
+    ).identities;
     expect(others).toEqual([]);
     expect(identity).toEqual({
       name: "pds",
@@ -86,8 +89,15 @@ describe("generated values (D2)", () => {
         "List:unset-private",
       ],
     });
+    // Media's (book P2.19): it may only read members' drafts, and may not list, write or tag.
+    expect(media).toEqual({
+      name: "media",
+      credentials: [{ accessKey: MEDIA_STORE_KEY_ID, secretKey: "m".repeat(64) }],
+      actions: ["Read:unset-private/drafts/*"],
+    });
     const compose = readFileSync(join(import.meta.dirname, "../../deployment/compose.local.yaml"), "utf8");
     expect(compose).toContain(`      OBJECT_STORE_ACCESS_ID: ${WEB_STORE_KEY_ID}\n`);
+    expect(compose).toContain(`      OBJECT_STORE_ACCESS_ID: ${MEDIA_STORE_KEY_ID}\n`);
     expect(isP256DidKey(v.recoveryDidKey)).toBe(true);
     const keyring = JSON.parse(v.keyring);
     expect(keyring.active).toBe("k1");
@@ -172,6 +182,7 @@ describe("the one bounded wait (D4)", () => {
     { Service: "pds-admin", State: "running", Health: "" },
     { Service: "indexer", State: "running", Health: "healthy" },
     { Service: "review", State: "running", Health: "healthy" },
+    { Service: "media", State: "running", Health: "healthy" },
   ];
   const swap = (service: string, row: object) =>
     up.map((r) => (r.Service === service ? { Service: service, ...row } : r));
@@ -187,6 +198,7 @@ describe("the one bounded wait (D4)", () => {
       "pds-admin",
       "indexer",
       "review",
+      "media",
     ]);
     expect(servicesVerdict(up)).toBe("up");
     expect(servicesVerdict(up.filter((r) => r.Service !== "web"))).toBe("failed: web missing");

@@ -72,6 +72,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |
 | `OBJECT_STORE_SECRET` | secretFile | at least 32 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
+| `DRAFT_URL_KEYRING` | secretFile | see source | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `REVIEW_URL` | origin | http: | required | `http://review:8082` | `http://review:8082` | `interfaces/web/src/lib/server/config.ts` |
 | `SEARCH_LISTING` | oneOf | on, off | `off` | `off` | `off` | `interfaces/web/src/lib/server/config.ts` |
 | `PRIVACY_OFFICER_TITLE` | str | text (pattern in source) | required | `[to fill: PRIVACY_OFFICER_TITLE]` | `Privacy Officer` | `interfaces/web/src/lib/server/legal.ts` |
@@ -184,6 +185,21 @@ Services we run as shipped or without a settings schema: the keys each stack set
 | `DOCS_HOST` | not set | `docs.unset.sh` |
 | `PDS_HOST` | from env file: `PDS_HOSTNAME` | from env file: `PDS_HOSTNAME` |
 | `PDS_UPSTREAM` | `pds:3000` | `pds:3000` |
+
+### media
+
+| Key | local | staging |
+| --- | --- | --- |
+| `DRAFT_URL_KEYRING_FILE` | file `/run/secrets/draft_url_keyring` | file `/run/secrets/draft_url_keyring` |
+| `LISTEN_PORT` | `8083` | `8083` |
+| `NODE_OPTIONS` | `--max-old-space-size=192` | `--max-old-space-size=192` |
+| `OBJECT_STORE_ACCESS_ID` | `unset-media` | `unset-media` |
+| `OBJECT_STORE_BUCKET` | `unset-private` | `unset-private` |
+| `OBJECT_STORE_SECRET_FILE` | file `/run/secrets/objects_media` | file `/run/secrets/objects_media` |
+| `OBJECT_STORE_URL` | `http://objects:8333` | `http://objects:8333` |
+| `UNSET_COMMIT` | `0000000000000000000000000000000000000000` | `0000000000000000000000000000000000000000` |
+| `UNSET_ENV` | `dev` | `dev` |
+| `UNSET_SERVICE` | `media` | `media` |
 
 ### newt
 

@@ -13,7 +13,7 @@ import { type ClientIp, createClientIpResolver } from "@unset/shared-http";
 import { building, dev } from "$app/env";
 import { openApp } from "./lib/server/app-gate.ts";
 import { services, startServices } from "./lib/server/compose.ts";
-import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
+import { narrowed, withMediaImages, zeroScriptCsp } from "./lib/server/csp.ts";
 import type { PolicyName } from "./lib/server/limits.ts";
 import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
 import { refusalPage, wantsPage } from "./lib/server/refusal-page.ts";
@@ -274,8 +274,12 @@ function withGroupHeaders(
   }
   const kit = out.headers.get("content-security-policy");
   if (group === "app" && kit !== null) {
-    // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).
-    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN));
+    // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5); the media origin is
+    // added either way, so draft previews show in dev too (book P2.19).
+    const csp = dev
+      ? withMediaImages(kit, config.MEDIA_ORIGIN)
+      : narrowed(kit, config.PUBLIC_ORIGIN, config.MEDIA_ORIGIN);
+    out.headers.set("content-security-policy", csp);
   } else {
     out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
   }

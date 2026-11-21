@@ -87,6 +87,7 @@ Configurable per stack in the compose files.
 | --- | --- | --- |
 | `edge` | 256m memory, 0.5 CPU, 128 processes | 256m memory, 0.5 CPU, 128 processes |
 | `indexer` | 512m memory, 0.5 CPU, 64 processes | 512m memory, 0.5 CPU, 64 processes |
+| `media` | 256m memory, 0.5 CPU, 64 processes | 256m memory, 0.5 CPU, 64 processes |
 | `migrate` | 256m memory, 0.5 CPU, 64 processes | 256m memory, 0.5 CPU, 64 processes |
 | `newt` | not in this stack | 128m memory, 0.5 CPU, 64 processes |
 | `objects` | 512m memory, 0.5 CPU, 256 processes | 512m memory, 0.5 CPU, 256 processes |

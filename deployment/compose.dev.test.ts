@@ -951,6 +951,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     dev_tls_key: 65532,
     objects_s3: 1000,
     objects_web: 65532,
+    draft_url_keyring: 65532,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -1110,7 +1111,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 15 mounted secrets" },
+      { pass: true, reason: "3 files, 16 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
