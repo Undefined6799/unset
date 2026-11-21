@@ -84,3 +84,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0076](0076-image-uploads-up-to-64-mib.md) | Image uploads up to 64 MiB and 110 megapixels; web, net-guard and review caps, memory and the edge's read window rise with it (P2.19e) | Accepted 2026-11-20 |
 | [0077](0077-one-profile-layout.md) | The profile page has one layout, the header above the cards; the unpublished layout field is removed (P1.21x); supersedes 0072 | Accepted 2026-11-21 |
 | [0079](0079-notifications-in-core.md) | Notifications are a core inbox: one send call, one reason table, gone once opened and at 30 days, a sign-in entry only older browsers can clear, and the contract a module will get (P2.27) | Proposed (awaiting Alex) |
+| [0086](0086-chat-servers-layout.md) | The chat servers: upstream Synapse and MAS by digest, one reviewed config file each checked by preflight C36, own databases, MAS listeners bound to one internal network each (P6.02) | Proposed (awaiting Alex) |
