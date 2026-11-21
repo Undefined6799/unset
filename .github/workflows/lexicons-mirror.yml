@@ -1,0 +1,85 @@
+# The public copy of our lexicons (P1.31v; ADR 0089). On a push to main that changes a lexicon, or the text that goes
+# with them, this builds the public file tree (scripts/ci/lexicons-export.ts) and pushes it to
+# github.com/unset-sh/lexicons as one commit that links its source. The app repository stays where lexicons are
+# decided: nothing is ever read back from the public repository into this one.
+#
+# The push uses a deploy key: an SSH key whose public half is on unset-sh/lexicons with write access and opens that
+# one repository only (docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys, read
+# 2026-11-21). Its private half is the secret LEXICONS_DEPLOY_KEY of the `lexicons-mirror` environment, which only
+# main may deploy to, so a workflow on any other branch cannot read it
+# (docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments, "Environment secrets" and
+# "Deployment branches and tags", read 2026-11-21). actions/checkout v7.0.1 takes the key as `ssh-key`, checks
+# github.com's host key (`ssh-strict`, default true), keeps the key for the job's own git commands and removes it in
+# its post-job step (action.yml at 3d3c42e). The job installs no package and runs no third-party action.
+
+name: lexicons-mirror
+
+# A run starts only for a change to something the public tree is built from, or to this file. `**` matches any
+# characters, `/` included (docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax, "Filter
+# pattern cheat sheet", read 2026-11-21).
+on:
+  push:
+    branches: [main]
+    paths:
+      - shared/lexicons/schemas/**
+      - shared/lexicons/public-repo/**
+      - shared/lexicons/LICENSE
+      - scripts/ci/lexicons-export.ts
+      - .github/workflows/lexicons-mirror.yml
+
+permissions: {}
+
+# One copy at a time, in order, and a running push is never cut short.
+concurrency:
+  group: lexicons-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: lexicons-mirror
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Build the public tree
+        run: node scripts/ci/lexicons-export.ts "$RUNNER_TEMP/tree"
+      - name: Check out the public repository with its deploy key
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: unset-sh/lexicons
+          ssh-key: ${{ secrets.LEXICONS_DEPLOY_KEY }}
+          path: public
+      # The whole tracked tree is replaced, so a lexicon removed here is removed there, and a file changed there by
+      # hand does not survive. The commit names its source commit and carries that commit's Co-authored-by trailers,
+      # which is how someone whose proposal was brought across is credited in the public history.
+      - name: Replace the public tree and push one commit
+        shell: bash
+        run: |
+          trailers="$(git log -1 --format='%(trailers:key=Co-authored-by)')"
+          cd public
+          git rm -r --quiet --ignore-unmatch -- .
+          cp -R "$RUNNER_TEMP/tree/." .
+          git add --all
+          if git diff --cached --quiet; then
+            echo "The public repository already holds this tree." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          {
+            echo "Copy the lexicons from ${GITHUB_REPOSITORY}@${GITHUB_SHA:0:7}"
+            echo
+            echo "Source: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+            if [ -n "$trailers" ]; then echo; echo "$trailers"; fi
+          } | git commit --quiet --file=-
+          git push --quiet origin HEAD
+          echo "Pushed $(git rev-parse HEAD) to the public repository." >> "$GITHUB_STEP_SUMMARY"
