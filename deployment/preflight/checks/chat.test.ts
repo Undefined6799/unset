@@ -114,6 +114,23 @@ describe("C36 the chat servers' settings", () => {
     }
   });
 
+  test("synapse_reaches_only_the_door_count_port_and_sends_no_message_content", () => {
+    // Build step 10 (ADR 0082 decision 2, ADR 0090 decision 2): a pusher's URL is set by the browser, so the one private
+    // address Synapse may post to is the door's count port; and a push never carries a message's body or sender.
+    const ranges = "homeserver.yaml: ip_range_whitelist is not its reviewed value";
+    for (const value of [undefined, [], ["10.250.38.16/29"], ["10.250.38.19", "10.250.38.3"], ["10.0.0.0/8"]])
+      expect(synapseProblem(edited(synapse(), "ip_range_whitelist", value), SERVER), JSON.stringify(value)).toBe(ranges);
+    const push = "homeserver.yaml: push is not its reviewed value";
+    for (const [path, value] of [
+      ["push", undefined],
+      ["push.include_content", true],
+      ["push.group_unread_count_by_room", false],
+      ["push.enabled", false],
+    ] as const)
+      expect(synapseProblem(edited(synapse(), path, value), SERVER), path).toBe(push);
+    expect(synapse().ip_range_whitelist).toEqual(["10.250.38.19"]);
+  });
+
   test("synapse_config_is_read_as_its_yaml_reads_it", () => {
     // Synapse's PyYAML reads YAML 1.1, where a bare `off` is the boolean false, which Synapse refuses or misreads; only
     // the quoted "off" is the string Synapse's room config takes (config_documentation.md:4049 at v1.165.0).
