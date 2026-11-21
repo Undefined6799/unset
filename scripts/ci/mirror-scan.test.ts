@@ -438,8 +438,6 @@ describe("mirror scan per stage", () => {
     const seaweedfsLookalike = `docker.io/chrislusf/seaweedfs-x:1${digest(8)}`;
     const newt = `docker.io/fosrl/newt:1.20.0${digest(9)}`;
     const newtLookalike = `docker.io/fosrl/newt-x:1${digest(10)}`;
-    const python = `docker.io/library/python:3.13-slim-trixie${digest(11)}`;
-    const pythonLookalike = `docker.io/library/python-x:1${digest(12)}`;
     const ran = scan(
       [
         { source: caddy, stage: "runtime" },
@@ -449,8 +447,6 @@ describe("mirror scan per stage", () => {
         { source: seaweedfsLookalike, stage: "runtime" },
         { source: newt, stage: "runtime" },
         { source: newtLookalike, stage: "runtime" },
-        { source: python, stage: "runtime" },
-        { source: pythonLookalike, stage: "runtime" },
         { source: SOURCE.builder, stage: "build" },
       ],
       [],
@@ -464,8 +460,6 @@ describe("mirror scan per stage", () => {
       `${seaweedfsLookalike} .github/trivyignore.yaml`,
       `${newt} .github/trivyignore.newt.yaml`,
       `${newtLookalike} .github/trivyignore.yaml`,
-      `${python} .github/trivyignore.python.yaml`,
-      `${pythonLookalike} .github/trivyignore.yaml`,
       `${SOURCE.builder} .github/trivyignore.yaml`,
       `${SOURCE.builder} .github/trivyignore.yaml`,
     ]);
@@ -475,7 +469,6 @@ describe("mirror scan per stage", () => {
     expect(scanStep).not.toMatch(/--ignorefile \.github\/trivyignore\.pds\.yaml/);
     expect(scanStep).toContain("docker.io/chrislusf/seaweedfs:*|docker.io/chrislusf/seaweedfs@*)");
     expect(scanStep).toContain("docker.io/fosrl/newt:*|docker.io/fosrl/newt@*)");
-    expect(scanStep).toContain("docker.io/library/python:*|docker.io/library/python@*)");
 
     const jobs = workflow("images.yml").jobs;
     const runsOf = (id: string) => (jobs[id]?.steps ?? []).map((item) => item.run ?? "").join("\n");
@@ -486,13 +479,11 @@ describe("mirror scan per stage", () => {
     expect(pins).not.toMatch(/--ignorefile \.github\/trivyignore\.pds\.yaml/);
     expect(pins).toContain("docker.io/chrislusf/seaweedfs:*|docker.io/chrislusf/seaweedfs@*)");
     expect(pins).toContain("docker.io/fosrl/newt:*|docker.io/fosrl/newt@*)");
-    expect(pins).toContain("docker.io/library/python:*|docker.io/library/python@*)");
     for (const id of ["images", "edge", "scan-image"]) {
       const runs = runsOf(id);
       expect(runs, id).not.toContain("trivyignore.pds.yaml");
       expect(runs, id).not.toContain("trivyignore.seaweedfs.yaml");
       expect(runs, id).not.toContain("trivyignore.newt.yaml");
-      expect(runs, id).not.toContain("trivyignore.python.yaml");
     }
     // P1.33u: the secret scan of our own images reads no ignore file.
     expect(runsOf("scan-image")).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");

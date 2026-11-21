@@ -35,11 +35,6 @@
     "stage": "runtime"
   },
   {
-    "source": "docker.io/library/python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
-    "mirror": "ghcr.io/undefined6799/mirror/python",
-    "stage": "runtime"
-  },
-  {
     "source": "ghcr.io/element-hq/matrix-authentication-service:1.29.0@sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
     "mirror": "ghcr.io/undefined6799/mirror/matrix-authentication-service",
     "stage": "runtime"

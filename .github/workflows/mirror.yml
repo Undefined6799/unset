@@ -28,7 +28,6 @@ on:
       - .github/trivyignore.pds.yaml
       - .github/trivyignore.seaweedfs.yaml
       - .github/trivyignore.newt.yaml
-      - .github/trivyignore.python.yaml
       - .github/workflows/mirror.yml
       - scripts/ci/verify-images.ts
       - deployment/sigstore/trusted_root.json
@@ -104,10 +103,6 @@ jobs:
               # P1.37m: only docker.io/fosrl/newt reads its own file (CVE-2026-78661, x/net/html not linked).
               docker.io/fosrl/newt:*|docker.io/fosrl/newt@*)
                 ignorefile=.github/trivyignore.newt.yaml
-                ;;
-              # P6.02: only docker.io/library/python reads its own file (zlib1g, under the zlib exception).
-              docker.io/library/python:*|docker.io/library/python@*)
-                ignorefile=.github/trivyignore.python.yaml
                 ;;
             esac
             # P1.29v (Alex's card "Skip stripped files", 2026-10-07T18:56:42Z): the paths a runtime entry's lock entry

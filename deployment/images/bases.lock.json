@@ -62,14 +62,6 @@
     "stage": "runtime",
     "buildStage": false
   },
-  "python": {
-    "ref": "docker.io/library/python",
-    "tag": "3.13-slim-trixie",
-    "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
-    "source": "upstream",
-    "stage": "runtime",
-    "buildStage": false
-  },
   "mas": {
     "ref": "ghcr.io/element-hq/matrix-authentication-service",
     "tag": "1.29.0",
