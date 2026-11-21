@@ -119,7 +119,7 @@ end where they began has no unsaved changes: delete it without Discard (`discard
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
 - `integration/web/query-budget.test.ts`: every page and handler under `interfaces/web/src/routes` (test routes
   aside), asked once as a signed-out browser asks it, stays under the statement budget, counted on the wire through a
-  loopback relay to Postgres. The Hono manifests and their fixtures went with interfaces/http (P1.20k).
+  loopback relay to Postgres. The Hono route manifests and their fixtures were deleted with the Hono server (P1.20k).
 
 **Rules worth knowing.** No module mocks; only unmanaged dependencies get doubles (TE-1). Vitest fails if a
 discovered test did not run. Re-checked at P1.01a: integration tests import postgres and audit by package name;

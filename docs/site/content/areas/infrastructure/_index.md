@@ -14,11 +14,14 @@ External systems behind small contracts. Decision 34 is recorded in [ADR 0001](h
 
 One package per folder. `SDK_ADAPTERS` in `scripts/lint/.dependency-cruiser.cjs` names one adapter path per vendor SDK.
 
-The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session` and `storage`. These pages follow the tree.
+The tree has `audit`, `email`, `firehose`, `image`, `net-guard`, `pds`, `postgres`, `seal`, `session` and `storage`. These pages follow the tree.
 
 | Package | Path | Page |
 | --- | --- | --- |
 | audit | `infrastructure/audit` | [audit](audit/) |
+| email | `infrastructure/email` | |
+| firehose | `infrastructure/firehose` | |
+| image | `infrastructure/image` | |
 | net-guard | `infrastructure/net-guard` | [net-guard](net-guard/) |
 | pds | `infrastructure/pds` | [pds](pds/) |
 | postgres | `infrastructure/postgres` | [postgres](postgres/) |
@@ -59,12 +62,15 @@ No `main.ts` under `infrastructure/`. Each package publishes `index.ts` (`packag
 | Package | Public module | Process |
 | --- | --- | --- |
 | audit | `infrastructure/audit/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` does not construct it. `interfaces/web/src/lib/server/age-gate-audit.ts` calls `appendAudit`. |
+| email | `infrastructure/email/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createSmtpMailer`. |
+| firehose | `infrastructure/firehose/index.ts` | None. `interfaces/indexer/compose.ts` reads the PDS event stream through it. |
+| image | `infrastructure/image/index.ts` | None. `interfaces/review/compose.ts` calls `createImagePool`. `interfaces/web/src/lib/server/compose.ts` calls `createRemoteImageProcessor`. |
 | net-guard | `infrastructure/net-guard/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createNetGuard`. |
 | pds | `infrastructure/pds/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createIdentityNetwork`, `createOAuthClient` and `createPdsCall`. |
 | postgres | `infrastructure/postgres/index.ts` | `unset-migrate` and `unset-rewrap`. See [postgres](postgres/). |
 | seal | `infrastructure/seal/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createSealer`. |
 | session | `infrastructure/session/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createSessionStore`. |
-| storage | `infrastructure/storage/index.ts` | None. No file under `interfaces/` or `apps/` calls `createObjectStore`. |
+| storage | `infrastructure/storage/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createObjectStore` for the `drafts` store, and `interfaces/media/compose.ts` calls it for reads. |
 
 ## Data
 

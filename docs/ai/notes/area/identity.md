@@ -37,7 +37,7 @@ network itself.
   or writes anything, for every date alike, so the confirm step hints at no threshold.
 - `account.ts`: the `AccountRepository` contract (P2.12g): the account record's read and its four onboarding
   writes. [[postgres]] implements it on `app.account`; an interface gets one from its composition root. A new
-  process that needs the account record takes this contract; it never imports `interfaces/http`.
+  process that needs the account record takes this contract; it never imports another interface such as `interfaces/web`.
 - `legal/versions.ts`: `TERMS_VERSION` and `PRIVACY_VERSION`, the date strings P2.12 compares (P2.15).
 
 **How data flows.** Interface → identity → `IdentityNetwork` → [[pds]] adapter → [[net-guard]] → network. Every

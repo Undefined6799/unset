@@ -14,13 +14,15 @@ Route tables are on [Endpoints](/endpoints/). This section does not list paths.
 
 ## Owns
 
-On this tree: `interfaces/web` (the web server), `interfaces/indexer` and `interfaces/pds-admin`. The other processes in guideline §1 get their folder with their first code (decision 34).
+On this tree: `interfaces/web` (the web server), `interfaces/indexer`, `interfaces/media`, `interfaces/pds-admin` and `interfaces/review`. The other processes in guideline §1 get their folder with their first code (decision 34).
 
 | Process | Path | Page |
 | --- | --- | --- |
 | web | `interfaces/web` | [web](./web/) |
 | indexer | `interfaces/indexer` | |
+| media | `interfaces/media` | |
 | pds-admin | `interfaces/pds-admin` | |
+| review | `interfaces/review` | |
 
 ## May import
 
@@ -55,6 +57,8 @@ No `index.ts` under `interfaces/`. The web process starts at `interfaces/web/ser
 | Process | Start | Composition root | In a container today |
 | --- | --- | --- | --- |
 | web | `interfaces/web/server.ts` | `interfaces/web/src/lib/server/compose.ts` | Yes. `deployment/images/node-app.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/web/server.ts"]`. Compose service `web` runs that image (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`). |
+| media | `interfaces/media/main.ts` | `interfaces/media/compose.ts` | No. No Compose file on main runs it. |
+| review | `interfaces/review/main.ts` | `interfaces/review/compose.ts` | Only the stacks built from the checkout (`SOURCE_ONLY_SERVICES` in `deployment/preflight/local-only.ts`): `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml`. Not `deployment/compose.dev.yaml`. |
 
 `server.ts` loads settings with `bootOrExit` and listens after the SvelteKit `init` hook has built the adapters.
 

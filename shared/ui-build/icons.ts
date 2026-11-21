@@ -34,6 +34,10 @@ class IconsError extends Error {
 
 /** One drawn element: its tag and its attributes, in the sheet's camelCase names. */
 export type IconElement = readonly [tag: "path", attributes: Readonly<Record<string, string>>];
+/** A drawing as icons.json holds it: each path's attributes. */
+type Drawn = Readonly<Record<string, string>>[];
+/** The Lucide drawings and icons.json's `lucide` field, both empty when there is no Lucide file. */
+type LucideOut = { drawings: Record<string, Drawn>; field: { lucide?: typeof LUCIDE } };
 
 const README = "sheet/components/Icon/README.md";
 const BUNDLE = "sheet/bundle.js.txt";
@@ -126,6 +130,65 @@ export function parseSvg(name: string, svg: string): IconElement[] {
     });
     return ["path", Object.fromEntries(entries)];
   });
+}
+
+/**
+ * ADR 0087: the one icon from a second set. Lucide 1.72.0 (ISC, icons/LICENSE-lucide.txt) `icons/grip-vertical.svg`,
+ * copied byte for byte from https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/grip-vertical.svg as
+ * icons/lucide/grip.svg.txt: the six-dot drag handle Crepe 7.23.0 draws, which Iconoir 7.12.1 lacks. No other file
+ * may sit in icons/lucide/ and no Lucide package is installed.
+ */
+export const LUCIDE = {
+  version: "1.72.0",
+  icons: {
+    grip: { lucideName: "grip-vertical", sha256: "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5" },
+  },
+} as const;
+const LUCIDE_DIR = "icons/lucide";
+const LUCIDE_ROOT =
+  '<svg\n  xmlns="http://www.w3.org/2000/svg"\n  width="24"\n  height="24"\n  viewBox="0 0 24 24"\n  fill="none"\n' +
+  '  stroke="currentColor"\n  stroke-width="2"\n  stroke-linecap="round"\n  stroke-linejoin="round"\n>\n';
+const LUCIDE_DOT = /^ {2}<circle cx="(\d{1,2})" cy="(\d{1,2})" r="1" \/>$/;
+
+/**
+ * A Lucide file of radius-1 circles as Iconoir-style paths: each circle becomes the two arcs that draw it, with
+ * Lucide's colour, caps and joins; its stroke width 2 is left out so the Icon's 1.5 applies. Anything else is refused.
+ */
+export function parseLucide(name: string, svg: string): IconElement[] {
+  const refuse = () => new IconsError("icons.drawing_mismatch", `${name}.svg is not a plain Lucide circle file`);
+  if (!svg.startsWith(LUCIDE_ROOT) || !svg.endsWith("\n</svg>\n")) throw refuse();
+  const lines = svg.slice(LUCIDE_ROOT.length, -"\n</svg>\n".length).split("\n");
+  return lines.map((line) => {
+    const m = LUCIDE_DOT.exec(line);
+    if (m === null) throw refuse();
+    const [cx, cy] = [Number(m[1]), Number(m[2])];
+    const d = `M${cx - 1} ${cy}a1 1 0 1 0 2 0a1 1 0 1 0 -2 0`;
+    return ["path", { d, stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }];
+  });
+}
+
+/**
+ * The Lucide drawings as icons.json writes them, and its `lucide` field; neither when icons/lucide/ is empty or
+ * absent. Any file but a pinned one, and any name an Iconoir icon already has, is refused.
+ */
+function lucideDrawings(io: IconsIo, iconoir: ReadonlyMap<string, string>): LucideOut {
+  const files = listOrNone(io, LUCIDE_DIR);
+  if (files.length === 0) return { drawings: {}, field: {} };
+  const pinned = Object.keys(LUCIDE.icons).map((n) => `${n}.svg.txt`);
+  if (JSON.stringify(files.sort()) !== JSON.stringify(pinned.sort()))
+    throw new IconsError("icons.list_mismatch", `${LUCIDE_DIR}/ may hold only ${pinned.join(", ")}`);
+  const out: Record<string, Drawn> = {};
+  for (const [name, pin] of Object.entries(LUCIDE.icons)) {
+    if (iconoir.has(name)) throw new IconsError("icons.list_mismatch", `${name} is both an Iconoir and a Lucide icon`);
+    const file = `${LUCIDE_DIR}/${name}.svg.txt`;
+    if (io.sha256(file) !== pin.sha256)
+      throw new IconsError(
+        "icons.source_mismatch",
+        `${name}.svg differs from Lucide ${LUCIDE.version} ${pin.lucideName}`,
+      );
+    out[name] = parseLucide(name, io.readText(file)).map(([, attributes]) => attributes);
+  }
+  return { drawings: out, field: { lucide: LUCIDE } };
 }
 
 const sortKeys = (o: Readonly<Record<string, string>>) => Object.fromEntries(Object.entries(o).sort());
@@ -240,7 +303,7 @@ function buildIcons(io: IconsIo): string {
       throw new IconsError("icons.source_mismatch", `${name}.svg differs from its immutable Iconoir source`);
   }
   const icons: Record<string, string> = {};
-  const drawn: Record<string, Readonly<Record<string, string>>[]> = {};
+  const drawn: Record<string, Drawn> = {};
   for (const [name, iconoir] of list) {
     const file = `${SVG_DIR}/${name}.svg.txt`;
     const elements = parseSvg(name, io.readText(file));
@@ -249,6 +312,8 @@ function buildIcons(io: IconsIo): string {
     icons[name] = io.sha256(file);
     drawn[name] = elements.map(([, attributes]) => attributes);
   }
+  const lucide = lucideDrawings(io, list);
+  Object.assign(drawn, lucide.drawings);
   const iconoir = Object.fromEntries(list);
   const out = {
     iconoirVersion: ICONOIR_VERSION,
@@ -267,6 +332,7 @@ function buildIcons(io: IconsIo): string {
             iconoirCommit: extension.record.iconoir.commit,
           },
         }),
+    ...lucide.field,
   };
   return `${JSON.stringify(out, null, 2)}\n`;
 }
@@ -276,6 +342,14 @@ const readOrNone = (io: IconsIo, path: string): string | undefined => {
     return io.readText(path);
   } catch {
     return undefined;
+  }
+};
+
+const listOrNone = (io: IconsIo, dir: string): string[] => {
+  try {
+    return io.list(dir);
+  } catch {
+    return [];
   }
 };
 

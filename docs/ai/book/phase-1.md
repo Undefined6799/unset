@@ -4936,6 +4936,9 @@ says "Type / to choose a block", Crepe's placeholder feature (Milkdown ships no 
 and Down move the block with the caret (its list item, or the top-level block) past its neighbour: the grip's move
 by keys, which neither plugin-block nor Crepe has.
 
+Slice 5 (2026-11-21, Alex: "Perfect yes get the lucide"): the grip is Crepe's six dots, Lucide 1.72.0's
+grip-vertical copied and pinned under ADR 0087, drawn at Iconoir's 1.5 stroke in place of the `menu` placeholder.
+
 Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
 raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
 the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
@@ -16847,6 +16850,21 @@ decision 4 (book edit 2026-10-20-adr-0031-no-login). A tightening, so nothing is
 tolerance for CSAM and the vault note `research/atproto-blob-serving-security` forbid. Each deny gets a
 property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
 ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
+
+### P1.38w — Fix three local test failures at their cause (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Three failures earlier threads saw locally, each reproduced first and fixed at its cause, never re-run (Alex: flaky
+tests are fixed). `generate_builds_outside_the_repo` watched the shared system temp folder, so another build there
+at the same time failed it; the build now gets a temp folder of its own. `pds-key.test.ts` got a SeaweedFS 500, not
+from a cold bucket: the image sizes its volume count from the free space on /data and each bucket claims 7, so below
+about 21 GB free on Docker's disk the third bucket had none; the test store runs on a 40 GB tmpfs. Test containers
+outlived a run stopped by Ctrl-C or a kill, since vitest then runs no teardown; the helpers remove what they started
+when their process exits, and the integration setup removes containers whose owner has ended. Ownership: tests/support,
+tests/integration/setup, shared/lexicons/scripts.
+
+---
 
 ### P1.38x — Mark a multi-line ADR status superseded
 Tags: [SEC] trusted            Depends on: —

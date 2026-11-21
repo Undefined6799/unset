@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { type FSWatcher, readdirSync, readFileSync, watch } from "node:fs";
+import { type FSWatcher, mkdtempSync, readdirSync, readFileSync, rmSync, watch } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -233,9 +233,21 @@ describe("lexicon build output folder", () => {
   let inTemp: string[] = [];
   beforeAll(async () => {
     const shared = folders(join(REPO, "shared"));
-    const touched = await entriesTouched([...shared, tmpdir()], () => generatedDrift());
-    underShared = touched.filter((path) => !relative(join(REPO, "shared"), path).startsWith(".."));
-    inTemp = touched.filter((path) => dirname(path) === tmpdir());
+    // The build runs with a temp folder of its own: the system one is shared with every other process, and another
+    // checkout's test run building there at the same time added its folders to this one's (P1.38w). Off Windows,
+    // os.tmpdir() asks libuv on each call, which reads TMPDIR first (Node v26.x lib/os.js; libuv misc.rst).
+    const temp = mkdtempSync(join(tmpdir(), "lexicons-build-test-"));
+    const outer = process.env.TMPDIR;
+    process.env.TMPDIR = temp;
+    try {
+      const touched = await entriesTouched([...shared, temp], () => generatedDrift());
+      underShared = touched.filter((path) => !relative(join(REPO, "shared"), path).startsWith(".."));
+      inTemp = touched.filter((path) => dirname(path) === temp);
+    } finally {
+      if (outer === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = outer;
+      rmSync(temp, { recursive: true, force: true });
+    }
   }, 60_000);
 
   test("generate_writes_nothing_under_shared", () => {
