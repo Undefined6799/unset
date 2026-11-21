@@ -19,6 +19,7 @@ import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations } from "./conversation-service.ts";
+import { BACKUP_WAIT_MS, backupSettled } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import { createKeyHolder, type Keys, makeKey, phaseOf, readFacts, storeKey, unlock } from "./recovery.ts";
 
@@ -45,6 +46,8 @@ export type ChatOptions = {
   readonly setup: { readonly claim: () => Promise<ClaimOutcome>; readonly release: () => Promise<void> };
   /** The door's pushkey for this device (ADR 0090 decision 1), asked for once this browser is ready. */
   readonly pushKey: () => Promise<PushTarget | null>;
+  /** The door's Log out for this device (core/sign-out.ts): true once the device and its lock key are gone. */
+  readonly signOut: () => Promise<boolean>;
 };
 
 /**
@@ -91,8 +94,12 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     chat.stop();
     return chat;
   };
+  const cryptoDatabasePrefix = storePrefix(session.userId);
+  // A device new to this browser cannot open a store left by an ended one (its lock key is gone): that store is wiped,
+  // as Log out would have (ADR 0083 decision 5). clearStores names the same two databases (src/client.ts:1614-1669).
+  if (session.newDevice) await client.clearStores({ cryptoDatabasePrefix });
   try {
-    await client.initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix: storePrefix(session.userId) });
+    await client.initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix });
   } catch {
     return fail("chat.keys_unavailable"); // IndexedDB refused, WASM blocked, or a store this key cannot open
   }
@@ -114,6 +121,22 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     const target = await options.pushKey();
     if (target !== null && !stopped) await registerPusher(client, target);
   };
+  /**
+   * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
+   * apps/web/src/Lifecycle.ts onLoggedOut, clearStorage): the backup catches up, the client stops, the door ends the
+   * device and deletes its lock key, and only then are this account's stores deleted. If the door cannot, nothing is
+   * deleted: the store stays locked by a key only the door holds, and the page says so.
+   */
+  const logOut = async () => {
+    busy = true;
+    tell({ kind: "logging_out" });
+    await backupSettled(client, BACKUP_WAIT_MS);
+    chat.stop();
+    if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
+    await client.clearStores({ cryptoDatabasePrefix });
+    options.onState({ kind: "logged_out" });
+  };
+  const leave = () => void logOut();
   const report = async () => {
     if (busy) return;
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
@@ -122,7 +145,11 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
     if (phase === "ready") void registerOnce();
-    tell(phase === "ready" ? { kind: "ready", conversations, me: session.userId } : { kind: "locked", unlock: tryKey });
+    tell(
+      phase === "ready"
+        ? { kind: "ready", conversations, me: session.userId, logOut: leave }
+        : { kind: "locked", unlock: tryKey, logOut: leave },
+    );
   };
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;

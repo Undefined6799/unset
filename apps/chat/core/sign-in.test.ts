@@ -11,6 +11,7 @@ const ANSWER = {
   deviceId: "ABCDEFGHIJ",
   expiresAt: "2026-11-21T12:00:00.000Z",
   storageKey: KEY,
+  newDevice: false,
   returnTo: "/c/x",
 };
 
@@ -81,6 +82,7 @@ describe("redeem", () => {
         deviceId: "ABCDEFGHIJ",
         expiresAtMs: Date.parse(ANSWER.expiresAt),
         storageKey: new Uint8Array(Buffer.alloc(32, 9)),
+        newDevice: false,
       },
     });
   });
@@ -91,6 +93,7 @@ describe("redeem", () => {
     ["a bad user", { ...ANSWER, userId: "abc" }],
     ["a bad device", { ...ANSWER, deviceId: "a b" }],
     ["a bad time", { ...ANSWER, expiresAt: "soon" }],
+    ["no new-device flag", { ...ANSWER, newDevice: "yes" }],
     ["an offsite return", { ...ANSWER, returnTo: "//evil.example" }],
     ["a full URL return", { ...ANSWER, returnTo: "https://evil.example/" }],
     ["not an object", ["x"]],

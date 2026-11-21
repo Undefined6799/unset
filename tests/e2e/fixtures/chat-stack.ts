@@ -305,6 +305,8 @@ export type ChatStack = {
   /** The number web would read for the member. */
   readonly count: () => Promise<unknown>;
   readonly homeserver: FakeHomeserver;
+  /** Ends every chat session at MAS, as an erasure or a revoked grant does, without the page knowing. */
+  readonly endAllSessions: () => void;
   close(): Promise<void>;
 };
 
@@ -374,6 +376,9 @@ export async function startChatStack(db: ChatDatabase, pageDir: string, dir: str
   return {
     proxy: `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`,
     homeserver,
+    endAllSessions: () => {
+      for (const session of mas.sessions) session.revoked = true;
+    },
     async notify(pushkey, unread) {
       const notification = { counts: { unread }, devices: [{ app_id: "sh.unset.count", pushkey, pushkey_ts: 1 }] };
       const init = { method: "POST", headers: { "content-type": "application/json" } };

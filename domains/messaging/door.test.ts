@@ -139,7 +139,7 @@ describe("redeem", () => {
   test("door.redeem_new_browser: a new device is minted, and its entry holds a fresh lock key", async () => {
     const { door, rows, calls } = ports(minted("DEVICEAAAA"));
     const out = await redeem(door, { ticket: ticketFor(), state: STATE, browser: BROWSER, deadline });
-    expect(out).toMatchObject({ kind: "signed_in", token: "tok", expiresAtS: NOW_S + 3600 });
+    expect(out).toMatchObject({ kind: "signed_in", token: "tok", expiresAtS: NOW_S + 3600, newDevice: true });
     expect(calls).toEqual(["mint new"]);
     expect(rows.map((r) => [r.entry.did, r.entry.user, r.entry.device])).toEqual([[ALICE, USER_A, "DEVICEAAAA"]]);
     expect(out.kind === "signed_in" && out.entry.lockKey).toEqual(new Uint8Array(32).fill(1));
@@ -151,6 +151,7 @@ describe("redeem", () => {
     const again = await redeem(door, { ticket: ticketFor(), state: STATE, browser: BROWSER, deadline });
     expect(calls).toEqual(["mint new", "mint DEVICEAAAA"]);
     expect(again.kind === "signed_in" && again.entry).toEqual(first.kind === "signed_in" && first.entry);
+    expect(again).toMatchObject({ newDevice: false });
   });
 
   test("door.redeem_no_state: with no one-time value in the browser nothing is sent to chat-admin", async () => {
