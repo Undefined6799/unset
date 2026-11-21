@@ -17,12 +17,10 @@ import {
   codeBlockSchema,
   headingSchema,
   hrSchema,
-  insertHardbreakCommand,
   linkSchema,
   orderedListSchema,
   paragraphSchema,
   setBlockTypeCommand,
-  splitListItemCommand,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
   toggleLinkCommand,
@@ -31,7 +29,7 @@ import {
   wrapInBlockTypeCommand,
 } from "@milkdown/preset-commonmark";
 import { findParent, posToDOMRect } from "@milkdown/prose";
-import { chainCommands, createParagraphNear, exitCode, liftEmptyBlock, splitBlock } from "@milkdown/prose/commands";
+import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
 import type { NodeType } from "@milkdown/prose/model";
 import { type Command, type EditorState, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
@@ -233,44 +231,8 @@ const leaveLastCode: Command = (state, dispatch) => {
   return exitCode(state, dispatch);
 };
 
-/**
- * Alex, 2026-11-21: "swap the enter and shift enter everywhere". Enter breaks the line inside a paragraph, a quote's
- * included (Milkdown's InsertHardbreak, which Shift+Enter ran: a second Enter at a line's end turns the break into a
- * new block). A heading is one line in Markdown and a list item's line break does not show on the page (parse.ts), so
- * there, and on an empty line, Enter keeps its old meaning and falls through to Milkdown's own keys.
- */
-const breakLine =
-  (ctx: Ctx): Command =>
-  (state) => {
-    const { $from } = state.selection;
-    if ($from.parent.type.name !== "paragraph" || $from.parent.content.size === 0) return false;
-    if ($from.depth > 1 && $from.node(-1).type.name === "list_item") return false;
-    return ctx.get(commandsCtx).call(insertHardbreakCommand.key);
-  };
-/**
- * Shift+Enter starts a new block: what Enter did (prosemirror-commands 1.7.2 baseKeymap's Enter without its
- * newlineInCode, and commonmark's NextListItem in a list), and leaves a code block (exitCode, as Mod-Enter).
- */
-const newBlock =
-  (ctx: Ctx): Command =>
-  (state, dispatch, view) => {
-    const { $from } = state.selection;
-    if ($from.parent.type.spec.code) return exitCode(state, dispatch);
-    if ($from.depth > 1 && $from.node(-1).type.name === "list_item") {
-      return ctx.get(commandsCtx).call(splitListItemCommand.key);
-    }
-    return chainCommands(createParagraphNear, liftEmptyBlock, splitBlock)(state, dispatch, view);
-  };
-
-// After the block menu's plugin, so an open menu still takes Enter, and before Milkdown's keymap, which runs last.
-const moveKeys = $prose((ctx) =>
-  keymap({
-    "Mod-Shift-ArrowUp": moveBlock(-1),
-    "Mod-Shift-ArrowDown": moveBlock(1),
-    ArrowDown: leaveLastCode,
-    Enter: breakLine(ctx),
-    "Shift-Enter": newBlock(ctx),
-  }),
+const moveKeys = $prose(() =>
+  keymap({ "Mod-Shift-ArrowUp": moveBlock(-1), "Mod-Shift-ArrowDown": moveBlock(1), ArrowDown: leaveLastCode }),
 );
 
 /** Adds the handle, the block menu and the bar to `editor`, drawn in the elements `options` names. */

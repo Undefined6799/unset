@@ -4948,7 +4948,8 @@ Enter right after typing a filter picks from the new filter, and on a phone the 
 so it flips above a low line. Arrow down at the end of a last code block leaves it (gapcursor cannot, since a code
 block is a textblock). The 3 px ring while editing became a light outline 8 px out, kept for keyboard users.
 
-Slice 7 (2026-11-21, Alex: "swap the enter and shift enter everywhere"): in a paragraph, a quote's included, Enter
+Slice 7 (2026-11-21, Alex: "swap the enter and shift enter everywhere"): in every Text editor, the dialog's and
+the page's (enter-keys.ts), in a paragraph, a quote's included, Enter
 breaks the line (a Markdown hard break, which the page shows) and Shift+Enter starts a new block; a second Enter at a
 line's end also starts one. A heading is one line, and a list item's line break would not show on the page, so there
 both keys start the next block (a new item in a list). In a code block Enter is a new line and Shift+Enter leaves it.

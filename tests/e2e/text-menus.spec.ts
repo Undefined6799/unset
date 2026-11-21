@@ -278,8 +278,9 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await page.keyboard.type("c");
   await expect(editor.locator("ul > li")).toHaveText(["a", "b", "c"]);
   await expect(editor.locator("li [data-type='hardbreak']")).toHaveCount(0);
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
+  // Shift+Enter twice ends the list, as Enter twice did: the second, on an empty item, lifts it out.
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("``` ");
   await page.keyboard.type("x = 1");
   await page.keyboard.press("Enter");
@@ -287,6 +288,7 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
   await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
+  await expect(editor.locator("ul > li")).toHaveCount(3);
   await expect(blocks.last()).toHaveText("after");
   // The empty line's hint says how to start one.
   await page.keyboard.press("Shift+Enter");
