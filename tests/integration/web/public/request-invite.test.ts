@@ -94,6 +94,8 @@ describe("the invite-request page", () => {
     expect(html).toContain('name="email"');
     expect(html).toContain('name="ageAck"');
     expect(html).not.toContain("<script");
+    // The core shell with the app's navigation, not the older site header (staging test 2026-11-21, u7).
+    expect(html).toMatch(/<section[^>]*id="core-menu"[^>]*popover="auto"/);
   });
 
   test("invite_request.first_ask: the owner gets one mail naming the address, with it as Reply-To", async () => {
@@ -181,7 +183,8 @@ describe("the invite-request page", () => {
 
   test("invite_request.closed: with requests off there is no form, and a POST sends nothing", async () => {
     const html = await (await get("/request-invite", closed)).text();
-    expect(html).toContain("Invite requests are closed for now.");
+    expect(html).toContain("unset is invite only, and invite requests are closed for now.");
+    expect(html).not.toContain("Leave your email address"); // one sentence, not an ask and then a refusal
     expect(html).not.toContain('name="email"');
     const response = await post(form(ASK), { server: closed });
     expect(response.headers.get("location")).toBe("/request-invite");

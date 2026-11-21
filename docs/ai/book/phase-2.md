@@ -2584,6 +2584,19 @@ the time or edit a row, the sweep), the route's denial and largest form, the cal
 erasure counts the rows, the e2e page and the no-script page.
 **Not in this step:** the second check before deleting (P2.28).
 
+### P2.27d — Show the member's initial on notification pages
+Tags: —            Depends on: P2.27c
+`interfaces/web/src/routes/{notifications,notifications/sign-ins,invite}/+page.server.ts` and the notifications'
+empty-list hint; staging break test 2026-11-21, bugs 3 and 4.
+
+**What:** those three pages passed their own shell `account` with a path and no name, which replaces the root
+layout's, so the header's account button drew the person icon as if signed out. They now leave the account to the
+layout, and `shell-account.test.ts` fails on any page shell that names an account without its name. A sign-in's entry
+is shown only in the browsers signed in before it (migration 0036 `older_sessions_only`), by design, so the browser
+that signed in never sees its own; the empty list's hint now says so.
+
+---
+
 ### P2.28 — Ask for a second check before sensitive actions
 Tags: [SEC] [ALEX]            Depends on: P2.27c
 Alex 2026-11-21 00:58Z: "make a note about like the things that we believe will require 2FA, and then when we build
@@ -2596,6 +2609,18 @@ own email 2FA) rather than a second-factor store of our own; the choice is Alex'
 
 **What:** one check the interface runs before each listed action, the same everywhere, so adding an action is one
 line. Until it exists, the listed actions run on the signed-in session alone (nothing is live, Alex 00:58Z).
+
+### P2.27e — Clear the bell's count once the list is seen
+Tags: [SEC]            Depends on: P2.27c
+Alex 2026-11-21 05:16Z: the number should disappear when he opens the bell and come back only for newer
+notifications, with no need to dismiss. ADR 0085, Proposed; migration 0039.
+
+**What:** a seen mark per browser session (`app.session.notifications_seen_at`), moved forward by opening the bell
+(a background POST with script) or loading `/notifications`, never past an entry this browser may see. The badge
+counts entries newer than the mark; seen ones stay listed until dismissed.
+**Tests:** the mark against real Postgres as `web` (this browser's own, never back, nothing for a later browser's or
+another member's id), the page clearing its own browser's count only, a newer entry counting again, the `seen` form
+refused cross-site and harmless from the alert's new browser.
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a

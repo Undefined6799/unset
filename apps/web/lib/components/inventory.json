@@ -345,6 +345,10 @@
         "origin": "ours",
         "purpose": "A Text card's words on the owner's page, edited where they stand once the page is idle (ADR 0074 item 4); the rendered blocks with no script."
       },
+      "text-menus.svelte": {
+        "origin": "ours",
+        "purpose": "The in-place Text editor's side handle, block menu and floating bar, as Crepe draws them; editor/menus.ts places them with Milkdown's plugins (P1.21v slice 3)."
+      },
       "carousel.svelte": {
         "origin": "ours",
         "purpose": "A carousel card's sideways scrolling area, a keyboard stop, with the stock Button as Previous and Next once script runs."
@@ -364,6 +368,10 @@
       "limited-profile.svelte": {
         "origin": "ours",
         "purpose": "The limited page (ADR 0078): one card centered on the page with only avatar, name, handle and DID and one sentence, for someone the member's page visibility leaves out; a sign-in button when signing in would show the page."
+      },
+      "own-public-view.svelte": {
+        "origin": "ours",
+        "purpose": "The notice above the member's own public page when the member looks at it: how others see it, and a plain link back to the page they edit."
       },
       "page-audience.svelte": {
         "origin": "ours",

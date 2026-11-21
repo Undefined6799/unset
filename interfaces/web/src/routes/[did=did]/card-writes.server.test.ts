@@ -269,6 +269,82 @@ describe("cardWrites", () => {
   });
 });
 
+// Review of #1911: all of a member's cards together must fit one page (domains/profile MAX_PAGE_BYTES, 4 MiB),
+// counted on the list the write is checked against, so the index never leaves out a card the owner saved.
+describe("a page's cards together fit one page", () => {
+  // Forty-one Text cards of 100,000 characters: about 4.1 MB, just under the budget.
+  const full = "a".repeat(100_000);
+  const page = (cards: number) =>
+    ok({
+      cards: Array.from({ length: cards }, (_, i) => ({ key: `k${i}`, value: readme(full), cid: "c" })),
+      complete: true,
+      overflow: false,
+    });
+
+  test("adding a card past the budget is refused and nothing is written", async () => {
+    const { writes, calls } = store({ list: async () => page(41) });
+    expect(await writes.create(input(full).content, "full")).toEqual({ kind: "failed", code: "card.page_full" });
+    expect(calls.created).toEqual([]);
+    expect(await store({ list: async () => page(40) }).writes.create(input(full).content, "full")).toEqual({
+      kind: "saved",
+    });
+  });
+
+  test("an edit that takes the page past the budget is refused; one that keeps it within is saved", async () => {
+    const { writes, calls } = store({ list: async () => page(41) });
+    expect(await writes.save(KEY, input(full).content, "full")).toEqual({ kind: "failed", code: "card.page_full" });
+    expect(calls.saved).toMatchObject([{ built: { ok: false, code: "card.page_full" } }]);
+    expect(await writes.save("k0" as CardKey, input(full).content, "full")).toEqual({ kind: "saved" });
+  });
+
+  test("an edit is counted on a complete list only", async () => {
+    const cut = { cards: [], complete: false, overflow: false };
+    const { writes, calls } = store({ list: async () => ok(cut) });
+    expect(await writes.save(KEY, input().content, "full")).toEqual({ kind: "failed", code: "card.list_incomplete" });
+    expect(calls.saved).toEqual([]);
+  });
+
+  test("a Save sends the cards that shrink before the ones that grow, so each commit fits", async () => {
+    // Codex review of #1911: a Save past one applyWrites body lands in several commits, judged one at a time.
+    const stored = {
+      cards: [
+        { key: "a", value: readme("a".repeat(35_000)), cid: "c" },
+        { key: "b", value: readme("b".repeat(65_000)), cid: "c" },
+      ],
+      complete: true,
+      overflow: false,
+    };
+    const { writes, calls } = store({ list: async () => ok(stored) });
+    const version = "c" as Parameters<CardWrites["saveAll"]>[0][number]["version"];
+    const edit = (key: string, text: string) => ({
+      key: key as CardKey,
+      version,
+      content: { kind: "readme", text } as CardContent,
+      width: "full" as const,
+    });
+    expect(await writes.saveAll([edit("a", "a".repeat(65_000)), edit("b", "b".repeat(45_000))])).toEqual({
+      kind: "saved",
+    });
+    expect(calls.many.map((call) => (call.updates as { key: string }[]).map((u) => u.key))).toEqual([["b", "a"]]);
+  });
+
+  test("a Save of several cards past the budget is refused and nothing is written", async () => {
+    const stored = { cards: [{ key: "k0", value: readme("A"), cid: "c" }], complete: true, overflow: false };
+    const { writes, calls } = store({ list: async () => ok(stored) });
+    const big = { kind: "readme", text: "a".repeat(100_000) } as CardContent;
+    const edits = Array.from({ length: 1 }, () => ({
+      key: "k0" as CardKey,
+      version: "c" as Parameters<CardWrites["saveAll"]>[0][number]["version"],
+      content: big,
+      width: "full" as const,
+    }));
+    expect(await writes.saveAll(edits)).toEqual({ kind: "saved" });
+    const many = await store({ list: async () => page(42) }).writes.saveAll(edits);
+    expect(many).toEqual({ kind: "failed", code: "card.page_full" });
+    expect(calls.many).toHaveLength(1);
+  });
+});
+
 test("create and save pass the chosen surface to the member's stored record", async () => {
   const { writes, calls } = store();
   const { content, width } = input();
@@ -329,7 +405,7 @@ describe("saveAll", () => {
     expect(calls.many).toEqual([]);
   });
 
-  test("a card that is gone is refused by name; one a cut-short list may not hold is not a guess", async () => {
+  test("a card that is gone is refused by name; a cut-short list refuses the Save", async () => {
     const gone = store({ list: async () => listing([{ key: "a", cid: V }]) });
     expect(await gone.writes.saveAll([edit("a", "New A"), edit("z", "Z")])).toEqual({
       kind: "failed",
@@ -338,8 +414,10 @@ describe("saveAll", () => {
     });
     const cut = store({ list: async () => listing([{ key: "a", cid: V }], false) });
     expect(await cut.writes.saveAll([edit("z", "Z")])).toEqual({ kind: "failed", code: "card.list_incomplete" });
-    expect(await cut.writes.saveAll([edit("a", "New A")])).toEqual({ kind: "saved" });
+    // The page budget counts every card, so a list cut short refuses even a card it holds (Codex review of #1911).
+    expect(await cut.writes.saveAll([edit("a", "New A")])).toEqual({ kind: "failed", code: "card.list_incomplete" });
     expect(gone.calls.many).toEqual([]);
+    expect(cut.calls.many).toEqual([]);
   });
 
   test("a card the domain refuses is named and nothing is written", async () => {
@@ -427,6 +505,43 @@ describe("saveAll", () => {
       saved: ["a"],
     });
     expect(calls.many).toHaveLength(1);
+  });
+
+  // P1.21v follow-up (Codex on c6cddd7): the answer names the version each written card now has, as the PDS gave it, so
+  // the page settles words typed meanwhile on that version and never on one another tab wrote after it. A CID that is
+  // not one is left out (the page then keeps those words on their own version, so a later Save is a conflict).
+  test("a_save_names_the_version_each_written_card_now_has", async () => {
+    const { writes, calls } = store({
+      list: async () =>
+        listing([
+          { key: "a", cid: V },
+          { key: "b", cid: V },
+        ]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        return ok({
+          kind: "saved",
+          versions: [
+            { key: "a", cid: V2 },
+            { key: "b", cid: "not a cid" },
+          ],
+        });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A"), edit("b", "New B")])).toEqual({
+      kind: "saved",
+      versions: [{ key: "a", version: V2 }],
+    });
+    const part = store({
+      list: async () => listing([{ key: "a", cid: V }]),
+      saveMany: async () => ok({ kind: "partial", saved: ["a"], versions: [{ key: "a", cid: V2 }] }),
+    });
+    expect(await part.writes.saveAll([edit("a", "New A")])).toEqual({
+      kind: "failed",
+      code: "card.save_partial",
+      saved: ["a"],
+      versions: [{ key: "a", version: V2 }],
+    });
   });
 
   test("an outage is a retryable failure and an ended session sends the member to sign in", async () => {

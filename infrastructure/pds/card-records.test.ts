@@ -105,7 +105,7 @@ describe("listCardRecords", () => {
     expect("keys" in result && result.keys).toHaveLength(100);
   });
 
-  test("a page past the size cap is read again one card at a time", async () => {
+  test("a page past the size cap is read again with half as many cards, down to one", async () => {
     // Card 12 is large: any page holding it with another card is past the cap; alone it fits.
     const { pdsCall, ctx, calls } = pds(holding(15, (n, limit) => n === 12 && limit > 1));
     expect(keys(await listCardRecords(pdsCall, ctx, DID))).toEqual({
@@ -113,7 +113,17 @@ describe("listCardRecords", () => {
       complete: true,
       overflow: false,
     });
-    expect(calls.map((c) => c.url.searchParams.get("limit"))).toEqual(["10", "10", "1", "1", "1", "1", "1", "1"]);
+    // 0-9; 10-19 and 10-14 hold 12; 10-11; 12-15 and 12-13 hold it; 12 alone; 13-14; an empty last page.
+    expect(calls.map((c) => c.url.searchParams.get("limit"))).toEqual(["10", "10", "5", "2", "4", "2", "1", "2", "4"]);
+  });
+
+  test("a page of large cards under the page budget is read in full, in a few calls", async () => {
+    // Codex review of #1911: 29 Text cards of 60,000 quotation marks, about 120 KB of JSON each (3.5 MB together,
+    // under the 4 MiB budget). Eight fit one response under the 1 MiB cap; nine do not.
+    const quotes = { ...card, content: { $type: "sh.unset.section#readme", text: '"'.repeat(60_000) } };
+    const { pdsCall, ctx, calls } = pds(holding(29, (_n, limit) => limit > 8, quotes));
+    expect(keys(await listCardRecords(pdsCall, ctx, DID))).toMatchObject({ complete: true, overflow: false });
+    expect(calls.length).toBeLessThanOrEqual(10);
   });
 
   test("one card alone past the cap stops the read before it, and the page keeps what it read", async () => {
@@ -216,6 +226,38 @@ describe("createCardRecord", () => {
 });
 
 describe("saveCardRecords", () => {
+  // P1.21v follow-up (Codex on c6cddd7): the page settles words typed during a Save on the version this Save wrote,
+  // never on one read later that another tab may have written. applyWrites answers each update's new CID
+  // (@atproto/api 0.30.3 com.atproto.repo.applyWrites OutputSchema.results, UpdateResult { uri, cid }).
+  test("each_card_written_comes_back_with_the_version_the_pds_gave_it", async () => {
+    const result = (rkey: string, cid: string) => ({
+      $type: "com.atproto.repo.applyWrites#updateResult",
+      uri: `at://${DID}/sh.unset.section/${rkey}`,
+      cid,
+    });
+    const { pdsCall, ctx } = pds(() =>
+      Response.json({
+        commit: { cid: CID, rev: REV },
+        results: [result("k1", CID), result("k2", CID2), result("not-sent", CID)],
+      }),
+    );
+    const updates = [
+      { key: "k1", record: card },
+      { key: "k2", record: card },
+    ];
+    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+      kind: "ok",
+      value: {
+        kind: "saved",
+        rev: REV,
+        versions: [
+          { key: "k1", cid: CID },
+          { key: "k2", cid: CID2 },
+        ],
+      },
+    });
+  });
+
   test("writes every card in one applyWrites call, on the repo head it was given", async () => {
     const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: REV } }));
     const other = { ...card, content: { ...card.content, text: "Bye" } };

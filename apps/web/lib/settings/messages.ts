@@ -45,9 +45,9 @@ export const PROFILE_SETTINGS = {
   /** A refusal shown under the field it blames; the limit is the one the hint gives. */
   tooLong: (n: number) => `This is too long: up to ${n} characters. Shorten it and save again.`,
   fieldError: {
-    "profile.url_invalid": "Use an http or https address, such as https://example.com.",
+    "profile.url_invalid": "Use a public http or https address, such as https://example.com.",
     "profile.name_required": "Add a name before you save.",
-    "profile.invalid": "This could not be read. Use one line and save again.",
+    "profile.invalid": "This could not be read. Use one line of plain text, with no hidden characters, and save again.",
   } as Readonly<Record<string, string>>,
   unavailableTitle: "Your profile could not be loaded",
   unavailable: "Your sign-in server did not answer just now. Reload the page to try again.",
@@ -86,6 +86,7 @@ export const PAGE_VISIBILITY = {
     "This asks apps not to show your page; it does not hide your profile. What you publish stays public on the atproto network: any app or person can still read it from your sign-in server.",
   save: "Save privacy",
   saved: "Privacy saved.",
+  catchingUp: "Your public page is still catching up and will follow this choice within a few seconds.",
   noProfile: "You have no page yet. Publish your profile first, then choose who sees it.",
   unreadable:
     "We could not read your profile from your sign-in server, so this choice is not shown. Try again in a moment.",

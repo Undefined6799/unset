@@ -39,7 +39,10 @@ function tickAll(on: boolean) {
   for (const entry of entries) tick(entry.id, on);
 }
 
-const row = "grid min-h-12 grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 border-b px-3.5";
+// On a phone the "How long ago" column goes, so the whole time fits (staging test 2026-11-21, u8).
+const row =
+  "grid min-h-12 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 border-b px-3.5 sm:grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,1fr)_auto]";
+const agoCell = "max-sm:hidden";
 // 24 px: the smallest target WCAG 2.2 SC 2.5.8 allows (tests/e2e/a11y.spec.ts target_size).
 const checkbox = "size-6 accent-primary";
 </script>
@@ -78,16 +81,17 @@ const checkbox = "size-6 accent-primary";
               <Icon name="delete" size={16} />{T.deleteSelected}
             </Button>
           </form>
-          <span class="ml-auto text-muted-foreground">{T.count(entries.length, view.more)}</span>
           <form method="POST" action="{HOME}?/deleteAll">
             <input type="hidden" name="upTo" value={entries[0]?.id} />
             <Button type="submit" variant="outline" size="sm"><Icon name="delete" size={16} />{T.deleteAll}</Button>
           </form>
+          <!-- On a phone the count goes, so the toolbar stays one line. -->
+          <span class="ml-auto text-muted-foreground max-sm:hidden">{T.count(entries.length, view.more)}</span>
         </div>
 
         <div class="min-h-0 flex-1 overflow-auto">
           <div class="{row} sticky top-0 z-10 min-h-9 bg-card text-xs font-medium text-muted-foreground" aria-hidden="true">
-            <span></span><span>{T.when}</span><span>{T.ago}</span><span class="sr-only">{T.delete}</span>
+            <span></span><span>{T.when}</span><span class={agoCell}>{T.ago}</span><span class="sr-only">{T.delete}</span>
           </div>
           <ul class="m-0 list-none p-0" aria-label={T.title}>
             {#each entries as entry (entry.id)}
@@ -103,8 +107,11 @@ const checkbox = "size-6 accent-primary";
                   checked={ticked.has(entry.id)}
                   onchange={(e) => tick(entry.id, e.currentTarget.checked)}
                 />
-                <time datetime={entry.at} class="truncate">{when}</time>
-                <span class="truncate text-sm text-muted-foreground">{now === undefined ? "" : howLongAgo(entry.at, now)}</span>
+                <!-- With script the time is the device's own; the tooltip keeps UTC (staging test 2026-11-21). -->
+                <time datetime={entry.at} class="truncate" title={now === undefined ? undefined : timeText(entry.at, false)}
+                  >{when}</time
+                >
+                <span class="truncate text-sm text-muted-foreground {agoCell}">{now === undefined ? "" : howLongAgo(entry.at, now)}</span>
                 <form method="POST" action="{HOME}?/delete">
                   <input type="hidden" name="id" value={entry.id} />
                   <Button type="submit" variant="ghost" size="icon-sm" aria-label={T.deleteOne(when)}>
