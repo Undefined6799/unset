@@ -515,16 +515,18 @@ for (const { name, within, has, piece, at, expected, text: words } of [
     expected: "left\nEARLYright",
   },
   { name: "inside_a_code_block_s_indentation", within: "pre", has: "foo", piece: 0, at: 4, expected: "    EARLYfoo" },
-  // Codex on 2dd6f8a: the page draws items with a blank line between them as two lists, the editor as one
-  // (CommonMark 0.31.2 §5.3), so the block a place names is another one in the editor, with as many characters.
+  // Codex on 2dd6f8a: the page draws items with a blank line between them as lists of their own, the editor as one
+  // (CommonMark 0.31.2 §5.3), so the block a place names is another one in the editor, with as many characters. Four
+  // of them: the editor draws them closer together than the page, so by the fourth the click's point on the screen is
+  // other words (CI, #1968 at 64e0b31: with two, the point was the same words only while the page's font loaded).
   {
     name: "before_an_item_the_page_draws_as_a_list_of_its_own",
     within: "li",
-    has: "two",
+    has: "four",
     piece: 0,
     at: 0,
-    expected: "EARLYtwo",
-    text: "- one\n\n- two\n\nend",
+    expected: "EARLYfour",
+    text: "- one\n\n- two\n\n- three\n\n- four\n\nend",
   },
 ]) {
   test(`a_click_before_the_editor_opens_${name}_lands_on_the_same_side`, async ({ page }) => {
