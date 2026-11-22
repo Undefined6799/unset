@@ -22,11 +22,12 @@ export type Place = {
  * A count of a block's characters, carried from one piece of its words to the next. `pending` is the white space a
  * code block keeps as written, counted once a character follows it or another line starts; `ending` is whether the
  * last of it is a line ending, which the page's code holds after its last line and the editor's does not; `line` is
- * set at the start of a line and cleared by its first character.
+ * set at the start of a line and cleared by its first character, and set before the first one, which a break may end
+ * too.
  */
 export type Count = { chars: number; space: boolean; pending: number; ending: boolean; line: boolean };
 
-export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0, ending: false, line: false });
+export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0, ending: false, line: true });
 
 /**
  * The white space HTML collapses (ASCII white space, WHATWG Infra): a no-break space and the other Unicode spaces are
@@ -82,11 +83,11 @@ export function startLine(count: Count): void {
 
 /**
  * A hard line break (the page's <br>, the editor's hard break node): it starts another line, and when the line it ends
- * held nothing (two breaks in a row) that empty line counts as a character, so a place on it is told from one at the
- * start of the line after it.
+ * held nothing (two breaks in a row, or a break before the first words) that empty line counts as a character, so a
+ * place on it is told from one at the start of the line after it.
  */
 export function breakLine(count: Count): void {
-  if (count.line && count.chars > 0) count.chars += 1;
+  if (count.line) count.chars += 1;
   startLine(count);
 }
 
