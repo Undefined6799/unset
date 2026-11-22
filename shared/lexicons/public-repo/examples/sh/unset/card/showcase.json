@@ -1,0 +1,34 @@
+{
+  "$type": "sh.unset.card",
+  "content": {
+    "$type": "sh.unset.block.showcase",
+    "title": "Projects",
+    "layout": "carousel",
+    "items": [
+      {
+        "title": "Harbour atlas",
+        "tag": "2026",
+        "description": "A printed atlas of one harbour, drawn tide by tide.",
+        "uri": "https://example.com/harbour-atlas",
+        "image": {
+          "image": {
+            "$type": "blob",
+            "ref": { "$link": "bafkreidl7tabbyfa7rwmeved3mmwxbjh7rrpkdl2gurvkwmvnvgscaexy4" },
+            "mimeType": "image/jpeg",
+            "size": 412870
+          },
+          "alt": "An open atlas showing a harbour chart in blue and sand colours.",
+          "aspectRatio": { "width": 4, "height": 3 }
+        }
+      },
+      {
+        "title": "Type for small screens",
+        "tag": "Talk",
+        "description": "Notes from a talk on setting text for watches and car dashboards.",
+        "uri": "https://example.com/talks/small-screens"
+      },
+      { "title": "Wayfinding for a night market" }
+    ]
+  },
+  "createdAt": "2026-11-21T15:07:00.000Z"
+}

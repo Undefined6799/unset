@@ -1,0 +1,16 @@
+{
+  "$type": "sh.unset.card",
+  "content": {
+    "$type": "sh.unset.block.buttons",
+    "heading": "Work with me",
+    "text": "I take on two projects a season. Tell me what you are making.",
+    "buttons": [
+      { "$type": "sh.unset.block.buttons#link", "uri": "https://example.com/book", "preset": "book-call" },
+      { "$type": "sh.unset.block.buttons#link", "uri": "https://example.com/rates", "label": "See rates" },
+      { "$type": "sh.unset.block.buttons#email", "address": "hello@example.com" }
+    ]
+  },
+  "width": "half",
+  "surface": "outlined",
+  "createdAt": "2026-11-21T15:08:00.000Z"
+}

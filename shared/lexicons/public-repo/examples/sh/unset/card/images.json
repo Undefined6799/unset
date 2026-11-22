@@ -1,0 +1,32 @@
+{
+  "$type": "sh.unset.card",
+  "content": {
+    "$type": "sh.unset.block.images",
+    "title": "From the studio",
+    "fit": "cover",
+    "images": [
+      {
+        "image": {
+          "$type": "blob",
+          "ref": { "$link": "bafkreid5bn5prlhkc4xz3h6wctdutuzbvd3gdx6iekgxccv5gottg373hm" },
+          "mimeType": "image/webp",
+          "size": 268114
+        },
+        "alt": "A desk by a window with proof sheets pinned to the wall.",
+        "aspectRatio": { "width": 3, "height": 2 },
+        "caption": "Proofs for the harbour atlas"
+      },
+      {
+        "image": {
+          "$type": "blob",
+          "ref": { "$link": "bafkreif3q7unm2i627oelc24kj47rcfc24bvy4decvbcsc3ozmu4j4zf5m" },
+          "mimeType": "image/jpeg",
+          "size": 351002
+        },
+        "alt": "",
+        "aspectRatio": { "width": 1, "height": 1 }
+      }
+    ]
+  },
+  "createdAt": "2026-11-21T15:09:00.000Z"
+}
