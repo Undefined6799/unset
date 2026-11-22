@@ -9,7 +9,9 @@ import { withErrorParam } from "@unset/shared-errors";
  * a refused record), which each caller answers in its own page and which keeps the session.
  */
 export function pdsSignInRedirect(result: Exclude<PdsResult<unknown>, { kind: "ok" }>): string | null {
-  if (result.kind === "scope_missing") return withErrorParam("/verify-email", "login.scope_insufficient");
+  // A grant from before a permission the app now asks for (staging, 2026-11-21): /allow asks the member to consent
+  // again. Not /verify-email, which is about the email permission and showed "confirmed" for a card write.
+  if (result.kind === "scope_missing") return "/allow";
   if (result.kind === "auth_dead") return withErrorParam("/login", "login.session_ended");
   return null;
 }
