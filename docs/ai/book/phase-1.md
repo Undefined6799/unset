@@ -5029,7 +5029,7 @@ footnotes stay out of the count). The page reader (`apps/web/lib/profile/parse.t
 subset; the editor (Milkdown 7.23.0) reads with remark-parse 11.0.0, that is mdast-util-from-markdown 2.1.0 on
 micromark 4.0.3, plus remark-gfm 4.0.1 (micromark-extension-gfm 3.0.0, mdast-util-gfm 3.1.0). Decision (editor thread, reuse over reinvent; review of #1980): the block count that anchors styles is taken with
 micromark 4.0.3 through mdast-util-from-markdown 2.1.0 plus the GFM table extension only (micromark-extension-gfm-table
-and mdast-util-gfm-table, pinned exactly), with no footnote and no math extension, on the page and in the editor
+2.1.2 and mdast-util-gfm-table 2.0.1, pinned exactly), with no footnote and no math extension, on the page and in the editor
 alike. The editor still edits with remark-gfm 4.0.1 (Milkdown 7.23.0), but counts blocks with that same table-only
 parse of its saved string, since remark-gfm makes `[^1]:` a block and remark-math makes a `$$` block one block where
 CommonMark makes two, so another app could not reproduce a count taken from them. The page parses with these
@@ -5039,7 +5039,7 @@ packages as direct dependencies of apps/web and maps mdast to the existing `Bloc
 Why it is safe and cheap: parsing runs on the server in `view.ts`, so the public page still runs no script and no
 parser reaches its bundle; the owner's editor chunk already carries micromark. The mapping keeps the page's rules:
 `html` nodes render as text, links and images keep `safeHref` (http and https only), image syntax stays a link.
-The packages meet ADR 0057 (established, maintained, already in the lockfile, audit green), so no ADR.
+The packages meet ADR 0057 (established, maintained, in the lockfile through remark-gfm once the editor's GFM PR lands, audit green), so no ADR.
 
 Tests first: a shared corpus of samples (fenced code with its closing fence, lists and quotes, a GFM table, lazy
 continuation lines, reference definitions, raw HTML, a footnote definition `[^1]:` and a `$$` math block, each counted
