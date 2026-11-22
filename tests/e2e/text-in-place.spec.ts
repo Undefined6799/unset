@@ -596,18 +596,27 @@ test("enter_or_space_pressed_twice_on_save_saves_once_and_leaves_the_words", asy
   await removeCard(page, word);
 });
 
+/** Two frames of the page: a change the editor reports reaches the page within them (milkdown.ts, once a frame). */
+async function nextFrames(page: Page) {
+  await page.evaluate(
+    () => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
+  );
+}
+
 // #1967 on WebKit (run 44969033836): when the answer came before the second press, the Save had already put the
 // caret back in the words, so that press went into the card and left it unsaved. A Save made by keyboard leaves the
-// keys where they are, however soon its answer comes.
+// keys where they are, however soon its answer comes. #1981 on WebKit (run 44971445183): once Save goes, focus falls
+// to the page and WebKit still sends Enter and Space to the words where the caret was left, a frame later; so the
+// test waits out that frame and reads the words exactly (a typed space included).
 test("enter_or_space_pressed_again_after_a_keyboard_save_answered_leaves_the_words", async ({ page }) => {
   const word = `keyagain${Date.now()}`;
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
   await openOwnPage(page);
   const { editor } = await editorHolding(page, word);
-  for (const [key, typed] of [
-    ["Enter", " one"],
-    ["Space", " two"],
+  for (const [key, typed, words] of [
+    ["Enter", " one", `${word} start one`],
+    ["Space", " two", `${word} start one two`],
   ] as const) {
     await editor.click();
     await editor.press("End");
@@ -619,8 +628,10 @@ test("enter_or_space_pressed_again_after_a_keyboard_save_answered_leaves_the_wor
     await expect(bar(page).getByRole("status")).toHaveText("Saved.");
     await expect(editor).not.toBeFocused();
     await page.keyboard.press(key);
+    await nextFrames(page);
     await expect(bar(page).getByRole("status")).toHaveText("Saved.");
     await expect(bar(page)).not.toContainText("unsaved");
+    expect(await editor.evaluate((node) => node.textContent)).toBe(words);
   }
   await expect(editor).toHaveText(`${word} start one two`);
   await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(0);
