@@ -64,6 +64,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
     "Some of your cards could not be read just now, so nothing was changed. Try again in a moment.",
   "card.conflict": "This card changed somewhere else since you opened it. Reload to see it, then save again.",
   "card.pds_unavailable": "Your sign-in server is not answering, so your card was not saved. Try again.",
+  "card.scope_missing":
+    "unset.sh needs a permission your sign-in has not given it yet, so your card was not saved. Allow access, then save again.",
   "card.image_missing": "This picture is no longer available. Upload it again, then save.",
   "card.image_unavailable": "Your picture could not be saved just now. Nothing was changed. Try again.",
   "card.image_too_large":

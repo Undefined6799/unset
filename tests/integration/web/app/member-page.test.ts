@@ -661,10 +661,31 @@ describe("a grant that does not cover a write", () => {
       headers: { origin: ORIGIN, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie, ...headers },
     });
 
-  test("a_card_write_leads_to_allowing_access_and_is_logged_as_a_missing_permission", async () => {
-    const plain = await post(`/${OWNER}?/create`, "kind=readme&width=full&text=x", { accept: HTML });
-    expect(plain.status).toBe(303);
-    expect(plain.headers.get("location")).toBe("/allow");
+  test("a_card_editor_keeps_what_was_typed_and_offers_allow_access_beside_it", async () => {
+    // The editor stays open with every field as it was (words, width, style, rows), and its refusal links to /allow
+    // in a new tab, so nothing typed is lost while the member allows access (staging 2026-11-21 follow-up).
+    const typed = new URLSearchParams({ kind: "links", width: "half", surface: "outlined", title: "Kept title" });
+    typed.append("items.0.uri", "https://kept.example/");
+    typed.append("items.0.label", "Kept label");
+    const plain = await post(`/${OWNER}?/create&add=links`, typed.toString(), { accept: HTML });
+    expect(plain.status).toBe(403);
+    const page = await plain.text();
+    expect(page).toContain("card.scope_missing");
+    expect(page).toContain("Kept title");
+    expect(page).toContain("https://kept.example/");
+    expect(page).toMatch(/href="\/allow"[^>]*target="_blank"/);
+    const script = await post(`/${OWNER}?/save`, `key=${CARD_A}&kind=readme&width=full&text=Kept`, {
+      accept: "application/json",
+      "x-sveltekit-action": "true",
+    });
+    expect(script.status).toBe(403);
+    const answer = JSON.parse(await script.text()) as { type: string; data: string };
+    expect(answer.type).toBe("failure");
+    expect(answer.data).toContain("card.scope_missing");
+    expect(narrow.writes()).toEqual([]);
+  });
+
+  test("the_one_save_leads_to_allowing_access_and_is_logged_as_a_missing_permission", async () => {
     // The page's own client (use:enhance, the one Save) hears the same place to go, so its drafts stay on the device.
     const one = new URLSearchParams([
       ["cards.0.key", CARD_A],
