@@ -503,7 +503,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
 // of a list's second item landed at the end of the first (the page draws <li>one</li><li>two</li>, nothing between).
 // Codex on 921401f (00:53Z): a click at the start of the line after a hard line break landed at the end of the line
 // before it, and a click inside a code block's indentation landed before the indentation (white space was one space).
-for (const { name, within, has, piece, at, expected } of [
+for (const { name, within, has, piece, at, expected, text: words } of [
   { name: "just_after_a_space", within: "p", has: "hello", piece: 0, at: 6, expected: "hello EARLYworld" },
   { name: "at_the_start_of_a_later_list_item", within: "li", has: "two", piece: 0, at: 0, expected: "EARLYtwo" },
   {
@@ -515,11 +515,22 @@ for (const { name, within, has, piece, at, expected } of [
     expected: "left\nEARLYright",
   },
   { name: "inside_a_code_block_s_indentation", within: "pre", has: "foo", piece: 0, at: 4, expected: "    EARLYfoo" },
+  // Codex on 2dd6f8a: the page draws items with a blank line between them as two lists, the editor as one
+  // (CommonMark 0.31.2 §5.3), so the block a place names is another one in the editor, with as many characters.
+  {
+    name: "before_an_item_the_page_draws_as_a_list_of_its_own",
+    within: "li",
+    has: "two",
+    piece: 0,
+    at: 0,
+    expected: "EARLYtwo",
+    text: "- one\n\n- two\n\nend",
+  },
 ]) {
   test(`a_click_before_the_editor_opens_${name}_lands_on_the_same_side`, async ({ page }) => {
     const word = `side${Date.now()}`;
     await openOwnPage(page);
-    const text = `${word} start\n\nhello world\n\n- one\n- two\n\nleft  \nright\n\n\`\`\`\n    foo\n\`\`\``;
+    const text = `${word} start\n\n${words ?? "hello world\n\n- one\n- two\n\nleft  \nright\n\n```\n    foo\n```"}`;
     await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
     const cold = await freshPage(page);
     await addPageCookies(cold.context(), OWN_PAGE);
