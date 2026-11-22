@@ -572,6 +572,16 @@ for (const { name, within, has, piece, at, up, expected, text: words } of [
     expected: "left\nEARLY\nright",
     text: (word: string) => `${word} start\n\nleft\\\n\\\nright`,
   },
+  // Codex on 8911813: a click inside that empty code block was carried to before the words after it, the same place.
+  {
+    name: "inside_an_empty_block_before_the_first_words",
+    within: "pre",
+    has: "",
+    piece: 0,
+    at: 0,
+    expected: "EARLY",
+    text: (word: string) => `\`\`\`\n\`\`\`\n\nhello\n\n${word}`,
+  },
   // Codex on cef4242: a place before the words' first character is the start of the first block with words, not of
   // the first block, which here is an empty code block.
   {
@@ -618,7 +628,11 @@ for (const { name, within, has, piece, at, up, expected, text: words } of [
           if (left === 0) break;
           left -= 1;
         }
-        if (words === null) throw new Error("no words");
+        if (words === null) {
+          // An element with no words (an empty code block): its middle.
+          const box = element.getBoundingClientRect();
+          return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        }
         const range = page.createRange();
         range.setStart(words, index);
         range.setEnd(words, index + 1);
