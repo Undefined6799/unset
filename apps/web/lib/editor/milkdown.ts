@@ -319,11 +319,11 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
   return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
 }
 
-/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when its block differs. */
+/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when its blocks differ. */
 function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
-  if (place.block < 0 || place.block >= doc.childCount) return null;
+  if (place.block < 0 || place.block >= doc.childCount || doc.childCount !== place.blocks.length) return null;
+  for (let i = 0; i < doc.childCount; i += 1) if (countWords(doc.child(i)).chars !== place.blocks[i]) return null;
   const node = doc.child(place.block);
-  if (countWords(node).chars !== place.total) return null;
   let start = 0;
   for (let i = 0; i < place.block; i += 1) start += doc.child(i).nodeSize;
   if (place.chars === 0) return TextSelection.near(doc.resolve(start), 1);

@@ -6,15 +6,16 @@
 /**
  * The block (its index among the top-level blocks), how many characters of its words come before the place, whether a
  * space or the start of another line of the block (a list's next item, a table's next cell) comes between them and the
- * place, and how many characters the block holds in all: the editor uses the place only when its block holds as many,
- * so a block the two drawings show differently falls back to the point on the screen. A character is a code point, as
- * `for...of` walks a string.
+ * place, and how many characters each top-level block holds in all: the editor uses the place only when its blocks
+ * are as many and each holds as many, so words the two drawings split into blocks differently (items with a blank line
+ * between them are two lists on the page and one in the editor, CommonMark 0.31.2 §5.3) fall back to the point on the
+ * screen. A character is a code point, as `for...of` walks a string.
  */
 export type Place = {
   readonly block: number;
   readonly chars: number;
   readonly space: boolean;
-  readonly total: number;
+  readonly blocks: readonly number[];
 };
 
 /**
@@ -103,5 +104,6 @@ export function placeIn(root: HTMLElement, node: Node, offset: number): Place | 
   before.setEnd(node, offset);
   const count = countIn(block, before);
   const index = Array.prototype.indexOf.call(blocks.children, block);
-  return { block: index, ...placeOf(count), total: countIn(block).chars };
+  const blocksChars = Array.from(blocks.children, (each) => countIn(each).chars);
+  return { block: index, ...placeOf(count), blocks: blocksChars };
 }
