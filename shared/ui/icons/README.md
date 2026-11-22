@@ -44,6 +44,6 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   editor's drag handle (Crepe's six dots; Iconoir has none). `LUCIDE` in `shared/ui-build/icons.ts` pins the version
   and sha256; no other file may sit in `lucide/`. Its circles are drawn as paths at the Icon's 1.5 stroke, and
   `icons.json` records it under `lucide`, apart from the Iconoir maps. No Lucide package is installed.
-- ADR 0097 adds six more the same way: `h1` to `h6` are Lucide 1.72.0's `icons/heading-1.svg` to `heading-6.svg`,
+- ADR 0109 adds six more the same way: `h1` to `h6` are Lucide 1.72.0's `icons/heading-1.svg` to `heading-6.svg`,
   copied byte for byte to `lucide/h1.svg.txt` to `h6.svg.txt`, for the block menu's Heading 1 to Heading 6 (Iconoir
   has no numbered heading). Each is pinned in `LUCIDE`; their paths are kept and h6's circle is drawn as two arcs.

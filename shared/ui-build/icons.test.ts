@@ -104,7 +104,7 @@ test("icon_lucide_grip_is_six_dots_at_iconoirs_stroke", () => {
   expect(licence).toContain("Copyright (c) 2026 Lucide Icons and Contributors");
 });
 
-// ADR 0097: the block menu's Heading 1 to 6 are Lucide heading-1 to heading-6 at 1.72.0, Crepe's numbered headings;
+// ADR 0109: the block menu's Heading 1 to 6 are Lucide heading-1 to heading-6 at 1.72.0, Crepe's numbered headings;
 // Iconoir 7.12.1 has none. Their paths are kept as Lucide writes them and their circle drawn as two arcs.
 test("icon_lucide_headings_keep_their_paths_at_iconoirs_stroke", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
