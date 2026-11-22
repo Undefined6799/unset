@@ -4,7 +4,7 @@
 // added is deleted again.
 import { expect, type Page, test } from "@playwright/test";
 import { addCard, OWN_PAGE } from "./cards.ts";
-import { openPage, pageNoise, watch } from "./observe.ts";
+import { addPageCookies, openPage, pageNoise, watch } from "./observe.ts";
 
 /** The in-place editor of the Text card that holds `word`, once the page has loaded it. */
 async function editorHolding(page: Page, word: string) {
@@ -349,10 +349,26 @@ async function warm(page: Page) {
   await expect(page.locator("[data-text-in-place] [contenteditable='true']").first()).toBeVisible();
 }
 
-/** Holds the editor's own script (the chunk that carries ProseMirror) for `ms`, or fails it, as a slow or broken load. */
-async function holdEditorScript(page: Page, how: { readonly ms: number } | "fail") {
+/**
+ * A page in a browser context of its own. WebKit gives a page a script it already holds in its memory cache without
+ * asking page.route (in Playwright 1.64.1's WebKit no route call came for the editor's chunk once a page had loaded
+ * it), so a hold or a failure set on a page that had drawn an editor did nothing, at random under load. A new context
+ * starts with nothing cached here, while `page`'s visit stays the member's earlier one.
+ */
+async function freshPage(page: Page): Promise<Page> {
+  const browser = page.context().browser();
+  if (browser === null) throw new Error("no browser");
+  return (await browser.newContext()).newPage();
+}
+
+/**
+ * A fresh page (freshPage) whose editor's own script (the chunk that carries ProseMirror) is held for `ms`, or failed,
+ * as a slow or broken load. Close it with closeHeld.
+ */
+async function holdEditorScript(page: Page, how: { readonly ms: number } | "fail"): Promise<Page> {
   await warm(page);
-  await page.route("**/_app/immutable/**/*.js", async (route) => {
+  const held = await freshPage(page);
+  await held.route("**/_app/immutable/**/*.js", async (route) => {
     const answer = await route.fetch();
     const body = await answer.text();
     if (!body.includes("ProseMirror-")) return route.fulfill({ response: answer, body });
@@ -360,28 +376,34 @@ async function holdEditorScript(page: Page, how: { readonly ms: number } | "fail
     await new Promise((done) => setTimeout(done, how.ms));
     return route.fulfill({ response: answer, body });
   });
+  return held;
+}
+
+async function closeHeld(held: Page) {
+  await held.context().close();
 }
 
 test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }) => {
   const word = `early${Date.now()}`;
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
-  await holdEditorScript(page, { ms: 1500 });
+  const held = await holdEditorScript(page, { ms: 1500 });
   // Not openOwnPage: its wait for a quiet network would wait out the held script.
-  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  expect((await openPage(held, OWN_PAGE))?.status()).toBe(200);
   // A press before the page's own script runs is the browser's alone; from the moment it runs, the card listens.
-  await expect(page.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
-  await expect(page.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
-  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await expect(held.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+  await expect(held.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  const card = held.locator('[data-slot="card"]', { hasText: word });
   await card.getByText(`${word} start`).click();
-  await page.keyboard.type("Q");
-  const { editor } = await editorHolding(page, word);
+  await held.keyboard.type("Q");
+  const { editor } = await editorHolding(held, word);
   await expect(editor).toBeFocused();
   await expect(editor).toContainText("Q");
-  await page.keyboard.type("R");
+  await held.keyboard.type("R");
   await expect(editor).toContainText("QR");
-  await expect(bar(page)).toContainText("1 card has unsaved changes.");
-  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await expect(bar(held)).toContainText("1 card has unsaved changes.");
+  await bar(held).getByRole("button", { name: "Discard" }).click();
+  await closeHeld(held);
   await removeCard(page, word);
 });
 
@@ -393,11 +415,12 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `- first item\n\n${word} start` });
   // Every script of the page held, as a cold load on a slow line: the words are drawn and nothing listens yet. A
-  // new page, as WebKit serves this page's own scripts again from its memory cache without asking the route.
+  // fresh page (freshPage), as WebKit serves the scripts it holds without asking the route.
   // Held until the click is made, then all let go: held by a fixed time instead, three waves of it (the page, its
   // parts, the editor) brought the editor 4.6 to 5.2 s after the click in Firefox, past the wait (CI, #1951).
   await warm(page);
-  const cold = await page.context().newPage();
+  const cold = await freshPage(page);
+  await addPageCookies(cold.context(), OWN_PAGE);
   const clicked = Promise.withResolvers<void>();
   await cold.route("**/_app/immutable/**/*.js", async (route) => {
     await clicked.promise;
@@ -425,7 +448,7 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   await expect(editor.locator("li")).toHaveText("first item");
   await bar(cold).getByRole("button", { name: "Discard" }).click();
   await removeCard(cold, word);
-  await cold.close();
+  await closeHeld(cold);
 });
 
 /**
@@ -438,12 +461,13 @@ async function giveBackWrites(page: Page, used: number) {
 }
 
 /** The own page opened while the editor's script is held, with every Text card listening and none drawn yet. */
-async function openHeld(page: Page) {
-  await holdEditorScript(page, { ms: 1500 });
+async function openHeld(page: Page): Promise<Page> {
+  const held = await holdEditorScript(page, { ms: 1500 });
   // Not openOwnPage: its wait for a quiet network would wait out the held script.
-  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
-  await expect(page.locator("[data-text-in-place]:not([data-listening])")).toHaveCount(0);
-  await expect(page.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  expect((await openPage(held, OWN_PAGE))?.status()).toBe(200);
+  await expect(held.locator("[data-text-in-place]:not([data-listening])")).toHaveCount(0);
+  await expect(held.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  return held;
 }
 
 // Codex on 46550e5: only the card pressed last takes the keys typed before the editors open, and a card lets go of
@@ -454,24 +478,25 @@ test("keys_typed_before_the_editor_opens_go_only_to_the_card_pressed_last", asyn
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${first} start` });
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${second} start` });
-  await openHeld(page);
-  await page.getByText(`${first} start`).click();
-  await page.getByText(`${second} start`).click();
-  await page.keyboard.type("XY");
-  const one = await editorHolding(page, first);
-  const two = await editorHolding(page, second);
+  const held = await openHeld(page);
+  await held.getByText(`${first} start`).click();
+  await held.getByText(`${second} start`).click();
+  await held.keyboard.type("XY");
+  const one = await editorHolding(held, first);
+  const two = await editorHolding(held, second);
   await expect(two.editor).toContainText("XY");
   await expect(one.editor).toHaveText(`${first} start`);
-  await expect(bar(page)).toContainText("1 card has unsaved changes.");
-  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await expect(bar(held)).toContainText("1 card has unsaved changes.");
+  await bar(held).getByRole("button", { name: "Discard" }).click();
+  await closeHeld(held);
   // A press outside every card lets go too.
-  await openHeld(page);
-  await page.getByText(`${first} start`).click();
-  await page.locator("main").click({ position: { x: 2, y: 2 } });
-  await page.keyboard.type("Z");
-  await expect((await editorHolding(page, first)).editor).toHaveText(`${first} start`);
-  await expect(page.getByText("unsaved changes")).toHaveCount(0);
-  await page.unroute("**/_app/immutable/**/*.js");
+  const again = await openHeld(page);
+  await again.getByText(`${first} start`).click();
+  await again.locator("main").click({ position: { x: 2, y: 2 } });
+  await again.keyboard.type("Z");
+  await expect((await editorHolding(again, first)).editor).toHaveText(`${first} start`);
+  await expect(again.getByText("unsaved changes")).toHaveCount(0);
+  await closeHeld(again);
   await removeCard(page, first);
   await removeCard(page, second);
   await giveBackWrites(page, 4);
@@ -483,16 +508,16 @@ test("a_key_typed_before_the_editor_opens_that_cannot_be_replayed_ends_the_kept_
   const word = `replay${Date.now()}`;
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
-  await openHeld(page);
-  await page.getByText(`${word} start`).click();
-  await page.keyboard.type("ab");
-  await page.keyboard.press("Backspace");
-  await page.keyboard.type("c");
-  const { editor } = await editorHolding(page, word);
+  const held = await openHeld(page);
+  await held.getByText(`${word} start`).click();
+  await held.keyboard.type("ab");
+  await held.keyboard.press("Backspace");
+  await held.keyboard.type("c");
+  const { editor } = await editorHolding(held, word);
   await expect(editor).toContainText("ab");
   await expect(editor).not.toContainText("c");
-  await bar(page).getByRole("button", { name: "Discard" }).click();
-  await page.unroute("**/_app/immutable/**/*.js");
+  await bar(held).getByRole("button", { name: "Discard" }).click();
+  await closeHeld(held);
   await removeCard(page, word);
   await giveBackWrites(page, 2);
 });
@@ -517,13 +542,12 @@ test("an_editor_that_cannot_load_says_so", async ({ page }) => {
   const word = `broken${Date.now()}`;
   await openOwnPage(page);
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
-  await holdEditorScript(page, "fail");
-  await openOwnPage(page);
-  const card = page.locator('[data-slot="card"]', { hasText: word });
+  const held = await holdEditorScript(page, "fail");
+  await openOwnPage(held);
+  const card = held.locator('[data-slot="card"]', { hasText: word });
   await expect(card.getByRole("alert")).toHaveText("The editor could not load. Reload the page to edit here.");
   await expect(card).toContainText(`${word} start`);
-  await page.unroute("**/_app/immutable/**/*.js");
-  await openOwnPage(page);
+  await closeHeld(held);
   await removeCard(page, word);
 });
 
