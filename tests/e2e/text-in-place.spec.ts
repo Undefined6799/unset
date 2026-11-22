@@ -535,7 +535,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
 // of a list's second item landed at the end of the first (the page draws <li>one</li><li>two</li>, nothing between).
 // Codex on 921401f (00:53Z): a click at the start of the line after a hard line break landed at the end of the line
 // before it, and a click inside a code block's indentation landed before the indentation (white space was one space).
-for (const { name, within, has, piece, at, expected, text: words } of [
+for (const { name, within, has, piece, at, up, expected, text: words } of [
   { name: "just_after_a_space", within: "p", has: "hello", piece: 0, at: 6, expected: "hello EARLYworld" },
   { name: "at_the_start_of_a_later_list_item", within: "li", has: "two", piece: 0, at: 0, expected: "EARLYtwo" },
   {
@@ -550,7 +550,7 @@ for (const { name, within, has, piece, at, expected, text: words } of [
   // Codex on 2dd6f8a: the page draws items with a blank line between them as lists of their own, the editor as one
   // (CommonMark 0.31.2 §5.3), so the block a place names is another one in the editor, with as many characters. Four
   // of them: the editor draws them closer together than the page, so by the fourth the click's point on the screen is
-  // other words (CI, #1968 at 64e0b31: with two, the point was the same words only while the page's font loaded).
+  // other words (with two, it happened to be the same words).
   {
     name: "before_an_item_the_page_draws_as_a_list_of_its_own",
     within: "li",
@@ -559,6 +559,18 @@ for (const { name, within, has, piece, at, expected, text: words } of [
     at: 0,
     expected: "EARLYfour",
     text: (word: string) => `${word} start\n\n- one\n\n- two\n\n- three\n\n- four\n\nend`,
+  },
+  // Codex on 7aa34b8: a click on the empty line between two hard line breaks landed at the start of the line after
+  // them, as both line starts were counted the same. `up` clicks that many lines above the character.
+  {
+    name: "on_an_empty_line_between_two_line_breaks",
+    within: "p",
+    has: "right",
+    piece: 1,
+    at: 0,
+    up: 1,
+    expected: "left\nEARLY\nright",
+    text: (word: string) => `${word} start\n\nleft\\\n\\\nright`,
   },
   // Codex on cef4242: a place before the words' first character is the start of the first block with words, not of
   // the first block, which here is an empty code block.
@@ -596,7 +608,7 @@ for (const { name, within, has, piece, at, expected, text: words } of [
     await untilStyled(cold);
     // The left edge of the character at `at`, a pixel in: the browser puts the caret just before it.
     const point = await target.evaluate(
-      (element, { index, skip }) => {
+      (element, { index, skip, lines }) => {
         const page = element.ownerDocument;
         // NodeFilter.SHOW_TEXT (the e2e project has no DOM types).
         const walker = page.createTreeWalker(element, 4);
@@ -611,9 +623,9 @@ for (const { name, within, has, piece, at, expected, text: words } of [
         range.setStart(words, index);
         range.setEnd(words, index + 1);
         const box = range.getBoundingClientRect();
-        return { x: box.left + 1, y: box.top + box.height / 2 };
+        return { x: box.left + 1, y: box.top + box.height / 2 - lines * box.height };
       },
-      { index: at, skip: piece },
+      { index: at, skip: piece, lines: up ?? 0 },
     );
     await cold.mouse.click(point.x, point.y);
     clicked.resolve();
