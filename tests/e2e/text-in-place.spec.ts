@@ -339,8 +339,19 @@ test("words_typed_in_the_frame_of_the_save_are_saved", async ({ page }) => {
   await removeCard(page, word);
 });
 
+/**
+ * The own page as a member had it open before: an editor drawn, so the editor's script has run in this browser. CI
+ * on WebKit failed the held and broken loads below only when the idle load had run first (runs 44971448694 and
+ * 44971449858); here it is always so.
+ */
+async function warm(page: Page) {
+  await openOwnPage(page);
+  await expect(page.locator("[data-text-in-place] [contenteditable='true']").first()).toBeVisible();
+}
+
 /** Holds the editor's own script (the chunk that carries ProseMirror) for `ms`, or fails it, as a slow or broken load. */
 async function holdEditorScript(page: Page, how: { readonly ms: number } | "fail") {
+  await warm(page);
   await page.route("**/_app/immutable/**/*.js", async (route) => {
     const answer = await route.fetch();
     const body = await answer.text();
@@ -385,6 +396,7 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   // new page, as WebKit serves this page's own scripts again from its memory cache without asking the route.
   // Held until the click is made, then all let go: held by a fixed time instead, three waves of it (the page, its
   // parts, the editor) brought the editor 4.6 to 5.2 s after the click in Firefox, past the wait (CI, #1951).
+  await warm(page);
   const cold = await page.context().newPage();
   const clicked = Promise.withResolvers<void>();
   await cold.route("**/_app/immutable/**/*.js", async (route) => {
