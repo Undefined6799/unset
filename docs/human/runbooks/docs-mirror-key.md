@@ -2,7 +2,7 @@
 
 `.github/workflows/docs-mirror.yml` copies this repository's human docs (`docs/human` and `docs/site`) to the docs
 repository, [unset-sh/docs](https://github.com/unset-sh/docs), where every repository's docs are gathered and from
-which docs.unset.sh is built (ADR 0092). It pushes with a deploy key: an SSH key pair whose public half is on the docs
+which docs.unset.sh is built (ADR 0111). It pushes with a deploy key: an SSH key pair whose public half is on the docs
 repository and whose private half is the secret `DOCS_DEPLOY_KEY` of the `docs-mirror` environment here. Only Alex
 makes and places the key. Never paste the private half anywhere but the secret field, and never give it to an agent.
 

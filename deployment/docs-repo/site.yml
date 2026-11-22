@@ -1,4 +1,4 @@
-# docs.unset.sh, built from this repository and published as GitHub Pages on every push (ADR 0092 in
+# docs.unset.sh, built from this repository and published as GitHub Pages on every push (ADR 0111 in
 # github.com/Undefined6799/unset). This file is written there, as deployment/docs-repo/site.yml, and copied here by
 # that repository's docs-mirror workflow: a change made here is replaced by the next copy.
 #
