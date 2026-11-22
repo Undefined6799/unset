@@ -1,4 +1,4 @@
-// The docs repository's Pages workflow (P1.21t; ADR 0092), which lives here as deployment/docs-repo/site.yml and is
+// The docs repository's Pages workflow (P1.21t; ADR 0093), which lives here as deployment/docs-repo/site.yml and is
 // copied there by docs-mirror.yml. It runs in another repository, out of reach of this one's workflow guard, so its
 // rules are held here: the build CI runs here, GitHub's own pinned actions only, the publish rights in the deploy job
 // alone. The step that turns the other repositories' folders into sections is run as written.

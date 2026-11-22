@@ -1,4 +1,4 @@
-// docs-mirror.yml's own rules (P1.21t; ADR 0092), on top of the repository-wide workflow guard
+// docs-mirror.yml's own rules (P1.21t; ADR 0093), on top of the repository-wide workflow guard
 // (scripts/guards/workflows.ts): what starts it, what the one job that holds the deploy key may do, and what its push
 // step does to a docs repository that other source repositories write to as well. The push step is run here as
 // written, under the shell the step declares, against a throwaway repository cloned the way actions/checkout clones
