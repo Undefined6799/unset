@@ -319,20 +319,16 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
   return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
 }
 
-/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when its blocks differ. */
+/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when they differ. */
 function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
-  if (place.block < 0 || place.block >= doc.childCount || doc.childCount !== place.blocks.length) return null;
-  for (let i = 0; i < doc.childCount; i += 1) if (countWords(doc.child(i)).chars !== place.blocks[i]) return null;
-  const node = doc.child(place.block);
-  let start = 0;
-  for (let i = 0; i < place.block; i += 1) start += doc.child(i).nodeSize;
-  if (place.chars === 0) return TextSelection.near(doc.resolve(start), 1);
+  if (countWords(doc).chars !== place.total) return null;
+  if (place.chars === 0) return TextSelection.near(doc.resolve(0), 1);
   const count = emptyCount();
   let found: number | null = null;
-  doc.nodesBetween(start, start + node.nodeSize, (child, pos, parent) => {
+  doc.descendants((child, pos, parent) => {
     if (found !== null) return false;
-    // Each text block starts another line of the block's words, as the page counts its list items (place.ts), and so
-    // does a hard line break, as the page counts its <br>.
+    // Each text block starts another line of the words, as the page counts its list items and its blocks (place.ts),
+    // and so does a hard line break, as the page counts its <br>.
     if (child.isTextblock || isHardBreak(child)) startLine(count);
     if (!child.isText) return true;
     found = placeInText(child.text ?? "", pos, count, place, parent?.type.spec.code === true);
@@ -363,7 +359,7 @@ function placeInText(text: string, pos: number, count: Count, place: Place, lite
   return null;
 }
 
-/** The characters of a top-level block's words, counted as the page counts them (place.ts). */
+/** The characters of a node's words (the whole document's, for a place), counted as the page counts them (place.ts). */
 function countWords(node: ProseNode): Count {
   const count = emptyCount();
   const visit = (child: ProseNode, literal: boolean) => {

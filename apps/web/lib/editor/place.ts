@@ -4,18 +4,18 @@
 // file imports nothing.
 
 /**
- * The block (its index among the top-level blocks), how many characters of its words come before the place, whether a
- * space or the start of another line of the block (a list's next item, a table's next cell) comes between them and the
- * place, and how many characters each top-level block holds in all: the editor uses the place only when its blocks
- * are as many and each holds as many, so words the two drawings split into blocks differently (items with a blank line
- * between them are two lists on the page and one in the editor, CommonMark 0.31.2 §5.3) fall back to the point on the
- * screen. A character is a code point, as `for...of` walks a string.
+ * How many characters of the card's words come before the place, counted through all its blocks as one (each block
+ * starts another line, as a list's next item does), whether a space or the start of another line comes between them
+ * and the place, and how many characters the words hold in all. Counted over all the blocks, not within one: the two
+ * drawings can split the same words into blocks differently (items with a blank line between them are lists of their
+ * own on the page and one list in the editor, CommonMark 0.31.2 §5.3), and the words are the same either way. The
+ * editor uses the place only when its words hold as many characters in all; otherwise it falls back to the point on
+ * the screen. A character is a code point, as `for...of` walks a string.
  */
 export type Place = {
-  readonly block: number;
   readonly chars: number;
   readonly space: boolean;
-  readonly blocks: readonly number[];
+  readonly total: number;
 };
 
 /**
@@ -66,7 +66,7 @@ export function startLine(count: Count): void {
 /** The page's elements that hold one line of a block's words, as the editor's text blocks do. */
 const LINES = "p, li, h1, h2, h3, h4, h5, h6, pre, td, th";
 
-/** Counts the words of `block` up to the end of `range` (to its end when there is none). */
+/** Counts the words of `block` (one block, or all of them) up to the end of `range` (to its end when there is none). */
 function countIn(block: Node, range?: Range): Count {
   const count = emptyCount();
   // NodeFilter.SHOW_ELEMENT | SHOW_TEXT: the text, and the <br> of a hard line break.
@@ -94,16 +94,8 @@ const textBefore = (text: Text, range?: Range) =>
 export function placeIn(root: HTMLElement, node: Node, offset: number): Place | undefined {
   const blocks = root.firstElementChild;
   if (blocks === null || !blocks.contains(node) || node === blocks) return undefined;
-  let block: Node = node;
-  while (block.parentNode !== blocks) {
-    if (block.parentNode === null) return undefined;
-    block = block.parentNode;
-  }
   const before = document.createRange();
-  before.setStart(block, 0);
+  before.setStart(blocks, 0);
   before.setEnd(node, offset);
-  const count = countIn(block, before);
-  const index = Array.prototype.indexOf.call(blocks.children, block);
-  const blocksChars = Array.from(blocks.children, (each) => countIn(each).chars);
-  return { block: index, ...placeOf(count), blocks: blocksChars };
+  return { ...placeOf(countIn(blocks, before)), total: countIn(blocks).chars };
 }
