@@ -92,7 +92,7 @@ describe("idx schema", () => {
         WHERE c.relnamespace = 'idx'::regnamespace AND c.relkind = 'r' AND a.attname IN ('rev', 'last_rev')
         ORDER BY c.relname`,
     );
-    expect(revs).toEqual(["account false C", "profile true C", "section true C"]);
+    expect(revs).toEqual(["account false C", "page true C", "profile true C", "section true C"]);
   });
 
   test("rev_collation_bytewise", async () => {

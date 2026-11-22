@@ -70,6 +70,7 @@ function stack(over: Over = {}) {
       return ok(HEAD);
     },
     profile: async () => ok({ value: { $type: "sh.unset.profile", displayName: "A", createdAt: T1 }, cid: "p" }),
+    page: async () => ok(null),
     newKey: () => NEW_KEY,
     write: async ({ card }) => {
       if (card?.kind === "create") written.push(card.record);
@@ -140,6 +141,20 @@ describe("a new picture card", () => {
       `settle ${NEW_KEY} ${REV} ${LINK} ${DRAFT}`,
     ]);
     expect(written).toEqual([{ $type: "sh.unset.card", content: PUBLISHED, createdAt: NOW }]);
+  });
+
+  test("picture.create_once: a picture card sent again matches the stored one, its blob decoded as the client reads it", async () => {
+    const first = stack();
+    expect(await first.writes.create(picture(), "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    const stored = JSON.parse(JSON.stringify(first.written[0]));
+    // As @atproto/api hands back a listed record: the blob a decoded BlobRef whose toJSON gives the JSON form
+    // (@atproto/lexicon blob-refs.js toJSON, ipldToJson), its keys in another order.
+    const image = stored.content.images[0];
+    const decoded = { size: image.image.size, mimeType: image.image.mimeType, toJSON: () => image.image };
+    stored.content.images[0] = { alt: image.alt, ...image, image: decoded };
+    const again = stack({ cards: [{ key: NEW_KEY, value: stored, cid: "cn" }] });
+    expect(await again.writes.create(picture(), "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    expect(again.log.some((line) => line.startsWith("create"))).toBe(false);
   });
 
   test("picture.create_full: a page with no room is refused before any use or upload", async () => {

@@ -89,9 +89,9 @@ What the pinned SDK does (matrix-js-sdk 43.0.0, `lib/crypto-api/index.d.ts`, `li
   renewal), the page takes the tab lock over and runs Log out as above, then returns to unset.sh through GET
   /logout/done, a stateless page whose meta refresh is a same-site navigation to /signed-out, so the issuer cookie
   stays Strict (RFC 6265bis-22 section 5.2). The queued end fires after 120 s if the page never finishes. The ticket's
-  session must be the one that last signed the entry in (migration 0050), so it cannot log out another browser of the
+  session must be the one that last signed the entry in (migration 0051), so it cannot log out another browser of the
   same member. Sign out everywhere queues every device at once and runs the same hop for the browser that pressed it,
-  whose devices wait the 120 s instead (migration 0051); a revoked grant has no browser and only queues.
+  whose devices wait the 120 s instead (migration 0052); a revoked grant has no browser and only queues.
 
 ## Follow-ups
 - [ADR 0104](0104-chat-trusts-devices-as-element-does.md) amends decision 1's isolation mode. The page now sets

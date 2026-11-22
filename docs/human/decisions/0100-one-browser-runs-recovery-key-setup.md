@@ -36,7 +36,7 @@ ChangeRecoveryKeyBody.tsx:77-133`), and makes the signing keys before the backup
 104-111`).
 
 ## Decision
-1. **The door keeps a claim per account.** `door.chat_setup` (migration 0044): the chat user as primary key, the
+1. **The door keeps a claim per account.** `door.chat_setup` (migration 0045): the chat user as primary key, the
    browser entry holding it (`door.browser.id`, `ON DELETE CASCADE`) and `claimed_until`. `POST /setup/claim
    { deviceId }` claims for 15 minutes in one statement, `INSERT ... ON CONFLICT (chat_user) DO UPDATE ... WHERE` the
    row is the holder's own or its time has passed (rule DA-4: the primary key serialises claims; nothing is held

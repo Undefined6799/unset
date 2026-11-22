@@ -56,7 +56,7 @@ GRANT INSERT (id, browser_hash, did, chat_user, web_session, device_id, lock_key
 GRANT UPDATE (web_session, last_used_at) ON door.browser TO chat_auth;
 GRANT DELETE ON door.browser TO chat_auth;
 
--- core.erase_did, as in migration 0042, with door.browser.did added to step 2's list and its statement to step 4.
+-- core.erase_did, as in migration 0043, with door.browser.did added to step 2's list and its statement to step 4.
 -- The signature, owner and grants are unchanged, so CREATE OR REPLACE keeps them.
 CREATE OR REPLACE FUNCTION core.erase_did(p_did types.did, p_why text) RETURNS jsonb
   LANGUAGE plpgsql SECURITY DEFINER
@@ -110,7 +110,8 @@ BEGIN
          'idx.dead_letter.did', 'mod.account_state.did', 'idx.profile.uri', 'idx.section.uri', 'idx.record_blob.uri',
          'idx.track_request.did', 'app.discoverability.did', 'app.image.did', 'app.image_use.record_uri',
          'app.image_upload.did', 'app.notification.did', 'app.image_record.did',
-         'app.image_record.record_uri', 'app.sign_in.did', 'app.chat_account.did',
+         'app.image_record.record_uri', 'app.sign_in.did', 'idx.page.did', 'idx.page.uri',
+         'app.chat_account.did',
          'door.browser.did')
   ) THEN
     RAISE EXCEPTION 'erase_uncovered_did_column' USING ERRCODE = '55000';
@@ -150,7 +151,7 @@ BEGIN
     ON CONFLICT (chat_user) DO NOTHING;
   DELETE FROM app.chat_account WHERE did = p_did;
   GET DIAGNOSTICS v_chat_account = ROW_COUNT;
-  --    The door's browser list (0043): the member's chat devices per browser and their sealed lock keys. With the key
+  --    The door's browser list (0044): the member's chat devices per browser and their sealed lock keys. With the key
   --    gone no browser's local store opens again; the deactivation ends the devices themselves (ADR 0096).
   DELETE FROM door.browser WHERE did = p_did;
   GET DIAGNOSTICS v_door_browser = ROW_COUNT;
@@ -158,7 +159,8 @@ BEGIN
   GET DIAGNOSTICS v_account = ROW_COUNT;
   DELETE FROM idx.track_request WHERE did = p_did;
   GET DIAGNOSTICS v_track_request = ROW_COUNT;
-  --    The index: idx.account_job, idx.profile, idx.section and idx.record_blob, with their DID and AT-URI columns,
+  --    The index: idx.account_job, idx.profile, idx.page, idx.section and idx.record_blob, with their DID and AT-URI
+  --    columns,
   --    cascade from idx.account; each AT-URI there names the DID of its own row.
   DELETE FROM idx.dead_letter WHERE did = p_did;
   GET DIAGNOSTICS v_idx_dead_letter = ROW_COUNT;

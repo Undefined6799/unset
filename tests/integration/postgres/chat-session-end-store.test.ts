@@ -1,4 +1,4 @@
-// Ending chat when web ends a session (infrastructure/postgres/chatSessionEndStore.ts, migration 0050; ADR 0095
+// Ending chat when web ends a session (infrastructure/postgres/chatSessionEndStore.ts, migration 0051; ADR 0095
 // decision 5, ADR 0096 decision 7), against real Postgres connected as `web` and as the door's `chat_auth` (TE-2).
 // In web's own transaction, Log out queues the devices that web session signed in, and a revoked grant every device
 // of the member, for chat-admin's session.end. A ticket from an ended session can then neither add nor renew an entry.

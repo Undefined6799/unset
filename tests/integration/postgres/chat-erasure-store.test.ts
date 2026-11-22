@@ -1,4 +1,4 @@
-// The erased members' chat accounts (infrastructure/postgres/chatErasureStore.ts, migrations 0042 and 0047; ADR 0096
+// The erased members' chat accounts (infrastructure/postgres/chatErasureStore.ts, migrations 0043 and 0048; ADR 0096
 // decision 3), against real Postgres connected as `web` (TE-2). core.erase_did, run as its owner as erasure runs,
 // queues the chat user with no DID; web claims it under a lease, deletes it once chat-admin has deactivated the
 // account, or puts it back with a wait. web can neither add a row nor read anything but the queue's own columns.

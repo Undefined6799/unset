@@ -7,6 +7,7 @@
 	bind 10.250.37.3
 	import tls
 	import access-log
+	import app-route-class
 	import security-headers
 	import too-many-tries
 	import noindex

@@ -20,11 +20,11 @@ later idea and is not part of this record. From here the record changes only to 
 The chat page shows a partner by their chat display name, which chat-admin sets to the member's handle when it creates
 the account (`domains/messaging/chat-account.ts`, account.create). Alex asked for the profile name with the handle under
 it (2026-11-21 22:18:09Z). The name lives in `idx.profile`, which only the indexer and web's views can read; chat_auth,
-the door, could read only `door.chat_contact` (migration 0046, ADR 0101 decision 3). Copying the name into Synapse would
+the door, could read only `door.chat_contact` (migration 0047, ADR 0101 decision 3). Copying the name into Synapse would
 put a second copy of personal data in the homeserver, and members cannot set it there (C36, ADR 0098).
 
 ## Decision
-1. **What chat_auth can now see.** `door.chat_name` (migration 0052), a view over `door.chat_contact` joined to
+1. **What chat_auth can now see.** `door.chat_name` (migration 0053), a view over `door.chat_contact` joined to
    `idx.profile`: `(chat_user, display_name)` of members whose chat is ready and whose public page shows, by web's own
    rule (`idx.public_profile`). It is read-only, holds no row, and copies nothing. chat_auth has SELECT on those two
    columns and nothing under them.

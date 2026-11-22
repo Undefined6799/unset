@@ -1,4 +1,4 @@
-// door.chat_name (migration 0052; ADR 0107): a chat partner's public profile name, for chat_auth. One statement by
+// door.chat_name (migration 0053; ADR 0107): a chat partner's public profile name, for chat_auth. One statement by
 // chat user; the view leaves out every member whose chat is not ready or whose public page does not show, so all of
 // them read as null.
 import type { ChatNames } from "@unset/domains-messaging";

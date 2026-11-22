@@ -185,6 +185,17 @@ describe("image workflows", () => {
     ].join(" \\\n        ");
     expect(run).toContain(verify);
     expect(run.indexOf(verify)).toBeLessThan(run.indexOf('crane copy "$source"'));
+    // P6.02 (ADR 0092): the distroless Python runtime base is checked the same way, against the identity and issuer
+    // GoogleContainerTools/distroless README.md ("How do I verify distroless images?") names.
+    const distroless = [
+      "cosign verify --trusted-root deployment/sigstore/trusted_root.json",
+      "--certificate-identity keyless@distroless.iam.gserviceaccount.com",
+      "--certificate-oidc-issuer https://accounts.google.com",
+      '"$source" < /dev/null > /dev/null',
+    ].join(" \\\n        ");
+    expect(run).toContain("gcr.io/distroless/python3-debian13:*@*)");
+    expect(run).toContain(distroless);
+    expect(run.indexOf(distroless)).toBeLessThan(run.indexOf('crane copy "$source"'));
     expect(job?.steps?.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/mirror.lock.json"');
   });
 

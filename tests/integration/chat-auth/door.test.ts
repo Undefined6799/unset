@@ -387,7 +387,7 @@ describe("POST /sign-out", () => {
 });
 
 describe("POST /sign-out/redeem (unset.sh's Log out; ADR 0095 decision 5)", () => {
-  // web's role, to queue the end as POST /logout does and to see whether the claim keeps it (migration 0049).
+  // web's role, to queue the end as POST /logout does and to see whether the claim keeps it (migration 0050).
   const webDb = createPool({
     connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
     service: "door-test-web",

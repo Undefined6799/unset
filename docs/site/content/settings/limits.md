@@ -111,10 +111,10 @@ Configurable per stack in the compose files.
 | `LIMITS.profile.headline` | `200` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarMaxSize` | `2000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarShapeBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.profile.visibilityBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.location` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.websiteBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.profile.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.page.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.page.visibilityBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.widthBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.surfaceBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.textBytes` | `20000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |

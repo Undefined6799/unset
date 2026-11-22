@@ -1,4 +1,4 @@
-// door.browser (migration 0043; ADR 0093 decision 4, ADR 0095 decision 4): the door's browser list, for chat_auth.
+// door.browser (migration 0044; ADR 0093 decision 4, ADR 0095 decision 4): the door's browser list, for chat_auth.
 // Every statement names the browser or the entry's own id and DID, so nothing a request sends reaches another
 // browser's row (rule SE-2). The lock key is sealed to its row id (sealed-columns.json), so a dump opens nothing and a
 // key moved to another row fails. Each call is one statement; none holds a transaction open (rule DA-4): a concurrent

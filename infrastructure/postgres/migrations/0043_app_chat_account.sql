@@ -36,7 +36,7 @@ CREATE TABLE app.chat_erasure (
   queued_at timestamptz NOT NULL
 );
 
--- core.erase_did, as in migration 0038 (app.sign_in), with app.chat_account.did added to step 2's list and its statements to step
+-- core.erase_did, as in migration 0042 (idx.page), with app.chat_account.did added to step 2's list and its statements to step
 -- 4, before app.account. The signature, owner and grants are unchanged, so CREATE OR REPLACE keeps them.
 CREATE OR REPLACE FUNCTION core.erase_did(p_did types.did, p_why text) RETURNS jsonb
   LANGUAGE plpgsql SECURITY DEFINER
@@ -89,7 +89,8 @@ BEGIN
          'idx.dead_letter.did', 'mod.account_state.did', 'idx.profile.uri', 'idx.section.uri', 'idx.record_blob.uri',
          'idx.track_request.did', 'app.discoverability.did', 'app.image.did', 'app.image_use.record_uri',
          'app.image_upload.did', 'app.notification.did', 'app.image_record.did',
-         'app.image_record.record_uri', 'app.sign_in.did', 'app.chat_account.did')
+         'app.image_record.record_uri', 'app.sign_in.did', 'idx.page.did', 'idx.page.uri',
+         'app.chat_account.did')
   ) THEN
     RAISE EXCEPTION 'erase_uncovered_did_column' USING ERRCODE = '55000';
   END IF;
@@ -132,7 +133,8 @@ BEGIN
   GET DIAGNOSTICS v_account = ROW_COUNT;
   DELETE FROM idx.track_request WHERE did = p_did;
   GET DIAGNOSTICS v_track_request = ROW_COUNT;
-  --    The index: idx.account_job, idx.profile, idx.section and idx.record_blob, with their DID and AT-URI columns,
+  --    The index: idx.account_job, idx.profile, idx.page, idx.section and idx.record_blob, with their DID and AT-URI
+  --    columns,
   --    cascade from idx.account; each AT-URI there names the DID of its own row.
   DELETE FROM idx.dead_letter WHERE did = p_did;
   GET DIAGNOSTICS v_idx_dead_letter = ROW_COUNT;

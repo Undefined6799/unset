@@ -1,5 +1,5 @@
 // The chat account follows the Unset account (ADR 0096). Erasure: core.erase_did keeps an erased member's chat user,
-// with no DID, in a queue (migration 0042), and this job asks chat-admin to deactivate each one, which ends every
+// with no DID, in a queue (migration 0043), and this job asks chat-admin to deactivate each one, which ends every
 // session and asks the homeserver to erase the account (decision 3). It retries until chat-admin has done it and never
 // gives up (decision 4: chat cannot be forgotten); a row stuck long is counted so the log shows it. Suspension: a
 // chat account is locked while its member is not active and unlocked when they are again (decisions 1 and 2). The

@@ -263,7 +263,7 @@ export function parseRepoDid(raw: unknown): RepoDid | null {
     : null;
 }
 
-/** The at:// address the profile's card list names a card of `owner` by (atproto.com/specs/at-uri-scheme). */
+/** The at:// address the page's card list names a card of `owner` by (atproto.com/specs/at-uri-scheme). */
 export const cardUri = (owner: RepoDid, key: CardKey) => `at://${owner}/${NSID}/${key}`;
 
 /** The key of a listed card, or null when the entry names no card of `owner` (another account's cards are skipped). */
@@ -274,9 +274,9 @@ function listedKey(owner: RepoDid, entry: unknown): string | null {
 }
 
 /**
- * Page order (ADR 0086 point 3): only the cards the profile lists, in its order; an entry with no card is skipped and a
- * repeat shows once, at its first place. A card the list does not name is not on the page. `order` is the stored
- * profile's `cards`, unchecked.
+ * Page order (ADR 0086 point 3, ADR 0091): only the cards the page lists, in its order; an entry with no card is
+ * skipped and a repeat shows once, at its first place. A card the list does not name is not on the page. `order` is
+ * the stored page's `cards`, unchecked.
  */
 export function orderCards(owner: RepoDid, order: unknown, cards: readonly Card[]): Card[] {
   const byKey = new Map(cards.map((card) => [card.key as string, card]));
@@ -305,9 +305,9 @@ export function shownCards(stored: readonly StoredCardRecord[]): Card[] {
   return cards;
 }
 
-/** The shown cards in page order: the ones the profile record's `cards` list names, in its order. */
-export function pageCards(owner: RepoDid, profileRecord: unknown, stored: readonly StoredCardRecord[]): Card[] {
-  return orderCards(owner, cardOrder(profileRecord), shownCards(stored));
+/** The shown cards in page order: the ones the page record's `cards` list names, in its order (none without a page). */
+export function pageCards(owner: RepoDid, pageRecord: unknown, stored: readonly StoredCardRecord[]): Card[] {
+  return orderCards(owner, cardOrder(pageRecord), shownCards(stored));
 }
 
 function cardOrder(record: unknown): unknown {

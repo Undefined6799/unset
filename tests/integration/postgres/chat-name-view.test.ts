@@ -1,4 +1,4 @@
-// The chat partner's public name (migration 0052; ADR 0107): door.chat_name, read by `chat_auth` as the real role
+// The chat partner's public name (migration 0053; ADR 0107): door.chat_name, read by `chat_auth` as the real role
 // (TE-2). Rows are written as the roles that own them in production: web's account and chat mapping, the indexer's
 // account and profile. A member whose public page shows gives their profile's display name by chat user; a hidden
 // one (inactive, delisted, no profile, chat not ready) reads as missing, as on their page (D7, SE-2); and chat_auth

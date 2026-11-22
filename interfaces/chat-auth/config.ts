@@ -1,6 +1,6 @@
 // The unset.cc door's settings (build step 6; ADR 0093 decision 4; ADR 0025: unset.cc, staging.unset.cc for staging),
 // read once at boot through shared/config, exit 78 when invalid. The kit's keys without MEDIA_ORIGIN, which only pages
-// that show pictures need; web's origin, where the hop signs its ticket; its own Postgres role (migration 0043), the
+// that show pictures need; web's origin, where the hop signs its ticket; its own Postgres role (migration 0044), the
 // seal keyring for the lock keys, net-guard, chat-admin with the door's own key, which may only end sessions, and the
 // internal count port (ADR 0101).
 import { poolFields, postgresFields } from "@unset/infrastructure-postgres";

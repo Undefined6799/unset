@@ -461,6 +461,19 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "idx.page": {
+      "indexer": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "uri": ["SELECT", "INSERT", "UPDATE"],
+          "cid": ["SELECT", "INSERT", "UPDATE"],
+          "rev": ["SELECT", "INSERT", "UPDATE"],
+          "record": ["SELECT", "INSERT", "UPDATE"],
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "idx.record_blob": {
       "indexer": {
         "columns": {
@@ -501,6 +514,14 @@
           "did": ["SELECT"],
           "handle": ["SELECT"],
           "cid": ["SELECT"],
+          "record": ["SELECT"]
+        }
+      }
+    },
+    "idx.public_page": {
+      "web": {
+        "columns": {
+          "did": ["SELECT"],
           "record": ["SELECT"]
         }
       }

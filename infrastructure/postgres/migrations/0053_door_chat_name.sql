@@ -4,7 +4,7 @@
 -- rights (https://www.postgresql.org/docs/18/sql-createview.html, security_invoker defaults to false), so chat_auth
 -- reads it with no grant on idx.profile, idx.public_profile or app.chat_account; security_barrier keeps a function in
 -- the door's own WHERE clause from seeing a row the view leaves out
--- (https://www.postgresql.org/docs/18/rules-privileges.html). It is built on door.chat_contact (migration 0046), so the
+-- (https://www.postgresql.org/docs/18/rules-privileges.html). It is built on door.chat_contact (migration 0047), so the
 -- page rule is web's own: only a ready chat account whose public page shows (idx.public_profile, migrations 0025 and
 -- 0030), and a hidden, deactivated, suspended, erased or profile-less member reads as missing (D7, SE-2). The view
 -- holds no row of its own: core.erase_did deletes the rows under it.

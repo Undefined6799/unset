@@ -1,4 +1,4 @@
-// Ending chat when web ends a session (migration 0049; ADR 0095 decision 5, ADR 0096 decision 7). `queueForSession`
+// Ending chat when web ends a session (migration 0050; ADR 0095 decision 5, ADR 0096 decision 7). `queueForSession`
 // and `queueForDid` run on the caller's transaction, the one that ends the web session, so the chat end commits with
 // it and no network I/O runs inside (rule DA-4); web's job then claims, puts back and finishes rows through the
 // owner's functions, since web reads no door table. A claim locks due rows with SKIP LOCKED in one statement; a finish
@@ -16,7 +16,7 @@ export type ChatSessionEndStore = {
   queueForDid(db: Db, did: Did): Promise<number>;
   /**
    * After `queueForDid`: the queued devices this web session signed in wait the Log out grace instead (migration
-   * 0051), for the chat page in the browser that signed out everywhere. How many it held.
+   * 0052), for the chat page in the browser that signed out everywhere. How many it held.
    */
   holdForSession(db: Db, idHash: Uint8Array): Promise<number>;
   claim(limit: number): Promise<ChatSessionEndJob[]>;

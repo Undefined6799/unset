@@ -2,11 +2,11 @@
 -- Ending chat when web ends a session (ADR 0095 decision 5: Log out on unset.sh ends chat on the browsers that web
 -- session signed in, through a queued job; ADR 0096 decision 7: a grant revoked at the PDS ends every chat session of
 -- the account and deletes its lock keys). The door's browser list names, per entry, the web session that last signed
--- it in (migration 0043, door.browser.web_session, domains/messaging sessionRef). web cannot read the door's schema,
+-- it in (migration 0044, door.browser.web_session, domains/messaging sessionRef). web cannot read the door's schema,
 -- so it calls app.end_chat_sessions, as its owner, inside the transaction that ends the web session: the session's
 -- reference is marked ended, and the devices it signed in (or, with a DID, every device of the member) are queued for
 -- chat-admin's session.end. No network I/O runs in that transaction (rule DA-4); web's job drains the queue, as the
--- erasure job drains app.chat_erasure (migration 0047), and deletes the entry, and with it the lock key, only once
+-- erasure job drains app.chat_erasure (migration 0048), and deletes the entry, and with it the lock key, only once
 -- chat-admin has ended the device, so a failure leaves the entry for the next try (as the door's own Log out does).
 --
 -- A ticket web signed for the session just before it ended may still reach the door. door.ended_session keeps each
@@ -142,7 +142,7 @@ $$;
 CREATE TRIGGER browser_refuse_ended_session BEFORE INSERT OR UPDATE OF web_session ON door.browser
   FOR EACH ROW EXECUTE FUNCTION door.refuse_ended_session();
 
--- The erasure job (migration 0047) reads how long ago a row was queued: an account MAS does not hold yet may still be
+-- The erasure job (migration 0048) reads how long ago a row was queued: an account MAS does not hold yet may still be
 -- created by a creation claimed before the erasure, so "no account" only finishes the row once none can land.
 GRANT SELECT (queued_at) ON app.chat_erasure TO web;
 

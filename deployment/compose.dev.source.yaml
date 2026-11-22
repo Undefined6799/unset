@@ -751,7 +751,7 @@ secrets:
     file: ../../unset-dev-secrets/pg_api_password
   pg_indexer_password:
     file: ../../unset-dev-secrets/pg_indexer_password
-  # The door's chat_auth role password (migration 0043), which migrate sets from it like the others (roles.json).
+  # The door's chat_auth role password (migration 0044), which migrate sets from it like the others (roles.json).
   pg_chat_auth_password:
     file: ../../unset-dev-secrets/pg_chat_auth_password
   web_seal_keyring:
