@@ -5042,10 +5042,12 @@ parser reaches its bundle; the owner's editor chunk already carries micromark. T
 The packages meet ADR 0057 (established, maintained, in the lockfile through remark-gfm once the editor's GFM PR lands, audit green), so no ADR.
 
 Tests first: a shared corpus of samples (fenced code with its closing fence, lists and quotes, a GFM table, lazy
-continuation lines, reference definitions, raw HTML, a footnote definition `[^1]:` and a `$$` math block, each counted
-as CommonMark counts it) that the page and the editor's block count must cut to the same blocks and the same block
+continuation lines, reference definitions, raw HTML, a footnote definition `[^1]:` and a `$$` math block, and list
+items with a blank line between them, each counted as CommonMark counts it) that the page and the editor's block count must cut to the same blocks and the same block
 count; the existing parse tests keep passing or are updated where the subset was not CommonMark, each such change
-named in the PR. Ownership: apps/web/lib/profile
+named in the PR. One known such change (review of #1968, 2026-11-22): `takeList` in `parse.ts` ends a list at a blank
+line, so `- one\n\n- two` is drawn as two lists, where CommonMark 0.31.2 §5.3 makes one loose list (as the editor
+does); the page must draw one. Ownership: apps/web/lib/profile
 (parser) → apps/web (Text card). Styles build only after this merges.
 
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
