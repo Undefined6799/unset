@@ -280,6 +280,18 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await editor.locator("h3").hover();
   await grip.click();
   await expect(menu).toBeVisible();
+  // The change menu takes the block menu's keys: right and left jump between groups, Escape closes it, changing nothing.
+  const active = () => menu.getByRole("option", { selected: true });
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Bullet list");
+  await page.keyboard.press("ArrowLeft");
+  await expect(active()).toHaveText("Quote");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(editor.locator("h3")).toHaveText("second line");
+  await editor.locator("h3").hover();
+  await grip.click();
+  await expect(menu).toBeVisible();
   await menu.getByRole("option", { name: "Text" }).click();
   await expect(editor.locator("p")).toHaveText([`${word} one`, "second line", "third line"]);
   await expect(editor).toBeFocused();
