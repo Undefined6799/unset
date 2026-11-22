@@ -190,12 +190,12 @@ const blockAlign = /*#__PURE__*/ l.typedObject<BlockAlign>(
 
 export { blockAlign };
 
-/** The first 8 lowercase hexadecimal characters of SHA-256 over one source line as UTF-8, with every space and tab removed. Lines end as CommonMark defines. A look applies to a top-level block whose lines give exactly these fingerprints, in order, and which ends there: the next line is blank, the end of the text, or the start of another top-level block. Looks with the same fingerprints go to the matching blocks in order; if their numbers differ, none applies. */
+/** The first 8 lowercase hexadecimal characters of SHA-256 over one source line as UTF-8, with every space and tab removed. Lines end as CommonMark defines. Blocks are read as CommonMark with the GFM table extension only: no math and no footnote extension. A look applies to a top-level block whose lines give exactly these fingerprints, in order, and which ends there: the next line is blank, the end of the text, or the start of another top-level block. Looks with the same fingerprints go to the matching blocks in order; if their numbers differ, none applies. */
 type LineFingerprint = string;
 
 export type { LineFingerprint };
 
-/** The first 8 lowercase hexadecimal characters of SHA-256 over one source line as UTF-8, with every space and tab removed. Lines end as CommonMark defines. A look applies to a top-level block whose lines give exactly these fingerprints, in order, and which ends there: the next line is blank, the end of the text, or the start of another top-level block. Looks with the same fingerprints go to the matching blocks in order; if their numbers differ, none applies. */
+/** The first 8 lowercase hexadecimal characters of SHA-256 over one source line as UTF-8, with every space and tab removed. Lines end as CommonMark defines. Blocks are read as CommonMark with the GFM table extension only: no math and no footnote extension. A look applies to a top-level block whose lines give exactly these fingerprints, in order, and which ends there: the next line is blank, the end of the text, or the start of another top-level block. Looks with the same fingerprints go to the matching blocks in order; if their numbers differ, none applies. */
 const lineFingerprint = /*#__PURE__*/ l.string({ minLength: 8, maxLength: 8 });
 
 export { lineFingerprint };

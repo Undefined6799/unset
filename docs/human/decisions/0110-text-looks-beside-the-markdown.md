@@ -63,19 +63,20 @@ are not Markdown.
    characters of SHA-256 over the UTF-8 bytes. The number of strings is the number of lines, so no count is
    stored, and a reader fingerprints each line of the text once and then looks for the strings in a row (Alex,
    02:12Z).
-5. **Reader rule.** Read the text with a CommonMark parser that has the GFM table extension, and note the line each
-   top-level block starts on. A look matches a block when the lines from that start give exactly the look's
-   fingerprints, in order, and the block ends there: the next line is blank, the end of the text, or the start of
-   another top-level block as the parser reports it. Looks with the same fingerprints go to the matching blocks in
-   order; if their numbers differ, none applies. A look with no match is ignored and its block shows as plain
-   Markdown. A block that can carry a look never holds a blank line, so a fingerprint of an empty line matches
-   nothing. A reader that knows nothing of looks shows the whole text as plain Markdown.
-6. **What follows from the rule.** A look stays with its block when text is added, removed or moved around it, in
-   any app. Any change inside the block outside our editor, other than spaces and tabs, puts that block back to
-   the normal look, and the member adds the look again in our editor (Alex, 02:05Z). A look cannot land on other
-   words, because only a block with the same lines matches. Spaces are ignored because serialisers re-pad tables
-   (`tablePipeAlign` defaults to true in mdast-util-gfm-table, `lib/index.js`, read at tag 2.0.0), re-indent and
-   trim.
+5. **Reader rule.** To place looks, read the text as CommonMark with the GFM table extension only: no math and no
+   footnote extension, because those change where blocks start and end. This parse only places looks; a reader may
+   still draw math its own way. Note the line each top-level block starts on. A look matches a block when the lines
+   from that start give exactly the look's fingerprints, in order, and the block ends there: the next line is blank,
+   the end of the text, or the start of another top-level block as the parser reports it. Looks with the same
+   fingerprints go to the matching blocks in order; if their numbers differ, none applies. A look with no match is
+   ignored and its block shows as plain Markdown. A block that can carry a look never holds a blank line, so a
+   fingerprint of an empty line matches nothing. A reader that knows nothing of looks shows the whole text as plain
+   Markdown.
+6. **What follows from the rule.** A look stays with its block when text is added, removed or moved around it, in any
+   app. Any change inside the block outside our editor, other than spaces and tabs, puts that block back to the normal
+   look, and the member adds the look again in our editor (Alex, 02:05Z). A look cannot land on other words, because
+   only a block with the same lines matches. Spaces are ignored because serialisers re-pad tables (`tablePipeAlign`
+   defaults to true in mdast-util-gfm-table 2.0.1, `lib/index.js:24`, the version P1.21k pins), re-indent and trim.
 7. **Validation.** Values outside the bounds or types make the record invalid, as for any field: our app hides the
    card, the index skips it and the editor refuses it. Writing refuses any field a look does not define. Our save
    path writes fresh fingerprints on every save and drops a look whose block is gone.
