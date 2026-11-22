@@ -163,6 +163,9 @@ export function createPdsCall(deps: PdsCallDeps) {
         }
         if (failure.kind === "rate_limited") return { kind: "transient", code: "pds_rate_limited" };
         if (failure.kind === "scope_missing") {
+          // The grant predates a permission the app now asks for: not an outage, and no field (the scope names a
+          // collection, nothing about the member).
+          deps.log.warn("pds.scope_missing");
           return failure.scope === undefined
             ? { kind: "scope_missing" }
             : { kind: "scope_missing", scope: failure.scope };

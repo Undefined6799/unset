@@ -1,7 +1,7 @@
 # Docs site (docs.unset.sh)
 
 docs.unset.sh is GitHub Pages on the docs repository, [unset-sh/docs](https://github.com/unset-sh/docs), built by
-that repository's `site` workflow on every push (ADR 0092). The workflow and the site are written here
+that repository's `site` workflow on every push (ADR 0111). The workflow and the site are written here
 (`deployment/docs-repo/site.yml`, `docs/site`) and copied there by `docs-mirror.yml`
 ([docs-mirror-key.md](docs-mirror-key.md)), so a docs change merged to main is live a few minutes later with no step
 by hand.
@@ -32,7 +32,7 @@ record so that nobody else can claim the name in between (github/docs,
    GitHub then asks Let's Encrypt for the certificate; the CAA records already allow `letsencrypt.org`.
 6. **HTTPS.** When Settings, Pages shows the DNS check passed and the certificate issued, tick **Enforce HTTPS**.
 7. **Pangolin.** Remove the `docs.unset.sh` resource. The edge's docs site, its limit and its folder bind are removed
-   by the change that follows this one (ADR 0092 Decision 6).
+   by the change that follows this one (ADR 0111 Decision 6).
 
 The `github-pages` environment that GitHub creates deploys from the default branch only. Leave it so.
 

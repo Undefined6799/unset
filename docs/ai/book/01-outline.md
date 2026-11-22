@@ -272,6 +272,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21s | Make Markdown in a Text card behave as typed: paste, empty lines, quotes, line breaks, links, pasted HTML (added 2026-11-21) | — | P1.21r | `phase-1.md` |
 | P1.21y | Settings › Privacy with Search and AI and a search result preview (added 2026-11-20) | trusted | P1.21b | `phase-1.md` |
 | P1.21z | Make the Text editor's buttons toggle and show state; heading sizes in a menu (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
+| P1.21k | Parse Text cards with micromark, the parser the editor uses, so block boundaries agree (added 2026-11-22) | trusted | P1.21v | `phase-1.md` |
 | P1.22a | Who sees your page: Public, Signed-in members only, Only me; the limited page, ADR 0078 (added 2026-11-20) | trusted | P1.21y | `phase-1.md` |
 | P1.22c | Say "Privacy saved" once the public page follows | — | P1.22a | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |

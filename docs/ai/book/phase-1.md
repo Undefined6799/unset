@@ -5018,6 +5018,38 @@ tags); a page that is not public is never listed in the sitemap or robots.txt, a
 ADR 0078 supersedes decision 37's "never hides on unset.sh" sentence and decision 35 D7 for this page.
 Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postgres for the listing queries.
 
+### P1.21k — Parse Text cards with micromark (added step, 2026-11-22)
+
+**Tags:** trusted · **Depends on:** P1.21v · **Plan:** §5.1
+
+Hard precondition for text and table styles (design `/mnt/project-files/plans/lexicons/styling/design.md`, version 3
+§8): a style is anchored by a spec-defined block count under one whole-text fingerprint, so a block-counting bug would
+misplace styles, and the page, the editor and other apps must cut blocks as CommonMark plus GFM tables say (math and
+footnotes stay out of the count). The page reader (`apps/web/lib/profile/parse.ts`, `readme-scan.ts`) is a hand-written CommonMark
+subset; the editor (Milkdown 7.23.0) reads with remark-parse 11.0.0, that is mdast-util-from-markdown 2.1.0 on
+micromark 4.0.3, plus remark-gfm 4.0.1 (micromark-extension-gfm 3.0.0, mdast-util-gfm 3.1.0). Decision (editor thread, reuse over reinvent; review of #1980): the block count that anchors styles is taken with
+micromark 4.0.3 through mdast-util-from-markdown 2.1.0 plus the GFM table extension only (micromark-extension-gfm-table
+2.1.2 and mdast-util-gfm-table 2.0.1, pinned exactly), with no footnote and no math extension, on the page and in the editor
+alike. The editor still edits with remark-gfm 4.0.1 (Milkdown 7.23.0), but counts blocks with that same table-only
+parse of its saved string, since remark-gfm makes `[^1]:` a block and remark-math makes a `$$` block one block where
+CommonMark makes two, so another app could not reproduce a count taken from them. The page parses with these
+packages as direct dependencies of apps/web and maps mdast to the existing `Block`/`Inline` view types, so
+`readme.svelte` and its escaping do not change.
+
+Why it is safe and cheap: parsing runs on the server in `view.ts`, so the public page still runs no script and no
+parser reaches its bundle; the owner's editor chunk already carries micromark. The mapping keeps the page's rules:
+`html` nodes render as text, links and images keep `safeHref` (http and https only), image syntax stays a link.
+The packages meet ADR 0057 (established, maintained, in the lockfile through remark-gfm once the editor's GFM PR lands, audit green), so no ADR.
+
+Tests first: a shared corpus of samples (fenced code with its closing fence, lists and quotes, a GFM table, lazy
+continuation lines, reference definitions, raw HTML, a footnote definition `[^1]:` and a `$$` math block, and list
+items with a blank line between them, each counted as CommonMark counts it) that the page and the editor's block count must cut to the same blocks and the same block
+count; the existing parse tests keep passing or are updated where the subset was not CommonMark, each such change
+named in the PR. One known such change (review of #1968, 2026-11-22): `takeList` in `parse.ts` ends a list at a blank
+line, so `- one\n\n- two` is drawn as two lists, where CommonMark 0.31.2 §5.3 makes one loose list (as the editor
+does); the page must draw one. Ownership: apps/web/lib/profile
+(parser) → apps/web (Text card). Styles build only after this merges.
+
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1
@@ -5047,7 +5079,7 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
 c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), f (card
-surfaces), g (split client), h (limit budget tests), i (leaving in the terms), l, m, q.
+surfaces), g (split client), h (limit budget tests), i (leaving in the terms), k (micromark page parser), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
