@@ -572,6 +572,18 @@ for (const { name, within, has, piece, at, up, expected, text: words } of [
     expected: "left\nEARLY\nright",
     text: (word: string) => `${word} start\n\nleft\\\n\\\nright`,
   },
+  // Codex on c127b78: the white space a code block ends with was dropped from the count at the next line's start, so a
+  // click two characters into the paragraph after the block was the same place as one after the block's spaces.
+  {
+    name: "in_the_words_after_a_code_block_ending_in_spaces",
+    within: "p",
+    // "ar" and not "bar": the typed word splits "bar", and the editor is read with the same locator.
+    has: "ar",
+    piece: 0,
+    at: 1,
+    expected: "bEARLYar",
+    text: (word: string) => `\`\`\`\nfoo  \n\`\`\`\n\nbar\n\n${word}`,
+  },
   // Codex on 8911813: a click inside that empty code block was carried to before the words after it, the same place.
   {
     name: "inside_an_empty_block_before_the_first_words",
