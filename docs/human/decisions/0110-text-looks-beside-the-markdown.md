@@ -92,10 +92,9 @@ are not Markdown.
 
 ## Consequences
 
-- Not decided here: Alex's 02:31Z message names the block `sh.unset.block.markdown`. Today it is
-  `sh.unset.block.text` (ADR 0086 point 2). Whether to rename it is his separate choice, asked on 2026-11-22 and
-  open when this was written. A rename would be its own step, before anything is published, with its own amendment
-  of ADR 0086; the definitions here would move with the block unchanged.
+- The block keeps its name. Alex's 02:31Z message named it `sh.unset.block.markdown`; today it is
+  `sh.unset.block.text` (ADR 0086 point 2). Asked which he wanted, he chose to keep `sh.unset.block.text` (card,
+  02:37Z), so ADR 0086 is not amended on this point. A rename stays possible only before anything is published.
 - Size: a line fingerprint is about 11 bytes, an edge about 45. At every bound the two parts could pass the
   index's 1,000,000-byte record cap (`domains/profile/index-plan.ts`); such a record is hidden like any oversize
   record. The lexicon cannot bound sums, so the editor step sets our app's own limits for one card, as it does
