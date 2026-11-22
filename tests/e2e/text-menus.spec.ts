@@ -346,7 +346,9 @@ test("shift_enter_over_words_selected_across_two_points_replaces_them_with_a_new
   await page.keyboard.press("ArrowDown");
   await page.keyboard.up("Shift");
   // From after "o" in "one" to after "t" in "two".
-  await expect.poll(() => page.evaluate(() => getSelection()?.toString().replace(/\s/g, ""))).toBe("net");
+  await expect
+    .poll(() => editor.evaluate((element) => element.ownerDocument.getSelection()?.toString().replace(/\s/g, "")))
+    .toBe("net");
   await page.keyboard.press("Shift+Enter");
   await expect(editor.locator("li")).toHaveText(["o"]);
   await expect(blocks.last()).toHaveText("wo");
