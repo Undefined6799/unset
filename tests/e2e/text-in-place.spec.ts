@@ -350,6 +350,36 @@ async function warm(page: Page) {
 }
 
 /**
+ * Waits until the page is drawn as a person sees it: its stylesheets applied and no font still on its way. A test that
+ * measures where words are and then clicks there must measure that drawing: Playwright reads boxes from whatever has
+ * loaded, so a stylesheet or font that arrives between the two moves the words, and the click lands on others or on
+ * none (CI, #1968 at 64e0b31: WebKit never took the caret; here a stylesheet held until after the measure fails every
+ * such test in Chromium). document.fonts.ready is no use: it also waits for the document to finish loading, which a
+ * page with its scripts held never does.
+ */
+async function untilStyled(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const { document } = globalThis as unknown as {
+          document: {
+            querySelectorAll(selector: string): Iterable<{ sheet: unknown }>;
+            body: { offsetHeight: number };
+            fonts: Iterable<{ status: string }>;
+          };
+        };
+        if (Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some((link) => link.sheet === null)) {
+          return false;
+        }
+        // Laid out with the styles, so every font the words use has been asked for.
+        void document.body.offsetHeight;
+        return !Array.from(document.fonts).some((face) => face.status === "loading");
+      }),
+    )
+    .toBe(true);
+}
+
+/**
  * A page in a browser context of its own. WebKit gives a page a script it already holds in its memory cache without
  * asking page.route (in Playwright 1.64.1's WebKit no route call came for the editor's chunk once a page had loaded
  * it), so a hold or a failure set on a page that had drawn an editor did nothing, at random under load. A new context
@@ -431,6 +461,7 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   const line = card.getByText(`${word} start`);
   await expect(line).toBeVisible();
   await expect(cold.locator("[data-text-in-place][data-listening]")).toHaveCount(0);
+  await untilStyled(cold);
   const box = await line.boundingBox();
   if (box === null) throw new Error("no line");
   // At the end of the line, as the tester clicked at the end of a sentence.
@@ -481,6 +512,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   const card = cold.locator('[data-slot="card"]', { hasText: word });
   const line = card.getByText(last);
   await expect(line).toBeVisible();
+  await untilStyled(cold);
   const box = await line.boundingBox();
   if (box === null) throw new Error("no line");
   await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
@@ -561,6 +593,7 @@ for (const { name, within, has, piece, at, expected, text: words } of [
     const card = cold.locator('[data-slot="card"]', { hasText: word });
     const target = card.locator(within, { hasText: has });
     await expect(target).toBeVisible();
+    await untilStyled(cold);
     // The left edge of the character at `at`, a pixel in: the browser puts the caret just before it.
     const point = await target.evaluate(
       (element, { index, skip }) => {
