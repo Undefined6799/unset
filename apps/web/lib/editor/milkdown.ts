@@ -30,7 +30,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
-import { type Count, countChars, type Place, startLine } from "./place.ts";
+import { type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -327,33 +327,37 @@ function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
   let start = 0;
   for (let i = 0; i < place.block; i += 1) start += doc.child(i).nodeSize;
   if (place.chars === 0) return TextSelection.near(doc.resolve(start), 1);
-  const count: Count = { chars: 0, space: false };
+  const count = emptyCount();
   let found: number | null = null;
-  doc.nodesBetween(start, start + node.nodeSize, (child, pos) => {
+  doc.nodesBetween(start, start + node.nodeSize, (child, pos, parent) => {
     if (found !== null) return false;
-    // Each text block starts another line of the block's words, as the page counts its list items (place.ts).
-    if (child.isTextblock) startLine(count);
+    // Each text block starts another line of the block's words, as the page counts its list items (place.ts), and so
+    // does a hard line break, as the page counts its <br>.
+    if (child.isTextblock || isHardBreak(child)) startLine(count);
     if (!child.isText) return true;
-    found = placeInText(child.text ?? "", pos, count, place);
+    found = placeInText(child.text ?? "", pos, count, place, parent?.type.spec.code === true);
     return false;
   });
   return found === null ? null : TextSelection.near(doc.resolve(found), place.space ? 1 : -1);
 }
 
+const isHardBreak = (node: ProseNode) => node.type.name === "hardbreak";
+
 /**
  * Where `place` falls in one piece of a block's words starting at `pos`, or null when it is further on. By code point,
  * as the page counts (place.ts): an emoji is one character but two positions. After a space or at a line's start the
- * place is before the next word's first character; otherwise it is after the last one counted.
+ * place is before the next character counted; otherwise it is after the last one. In a code block (`literal`) each
+ * white space character counts.
  */
-function placeInText(text: string, pos: number, count: Count, place: Place): number | null {
+function placeInText(text: string, pos: number, count: Count, place: Place, literal: boolean): number | null {
   let offset = 0;
   for (const ch of text) {
-    const before = count.chars;
-    const apart = count.space;
-    countChars(ch, count);
-    const word = count.chars > before;
-    if (place.space && word && apart && before === place.chars) return pos + offset;
-    if (!place.space && word && count.chars === place.chars) return pos + offset + ch.length;
+    const before = placeOf(count);
+    countChars(ch, count, literal);
+    const after = placeOf(count);
+    const moved = after.chars > before.chars;
+    if (place.space && moved && before.space && before.chars === place.chars) return pos + offset;
+    if (!place.space && moved && after.chars === place.chars) return pos + offset + ch.length;
     offset += ch.length;
   }
   return null;
@@ -361,13 +365,16 @@ function placeInText(text: string, pos: number, count: Count, place: Place): num
 
 /** The characters of a top-level block's words, counted as the page counts them (place.ts). */
 function countWords(node: ProseNode): Count {
-  const count: Count = { chars: 0, space: false };
-  const visit = (child: ProseNode) => {
-    if (child.isTextblock) startLine(count);
-    if (child.isText) countChars(child.text ?? "", count);
-    else child.forEach(visit);
+  const count = emptyCount();
+  const visit = (child: ProseNode, literal: boolean) => {
+    if (child.isTextblock || isHardBreak(child)) startLine(count);
+    if (child.isText) countChars(child.text ?? "", count, literal);
+    else
+      child.forEach((inner) => {
+        visit(inner, child.type.spec.code === true);
+      });
   };
-  visit(node);
+  visit(node, false);
   return count;
 }
 
