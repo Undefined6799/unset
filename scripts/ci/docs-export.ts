@@ -1,4 +1,4 @@
-// What this repository sends to the docs repository, github.com/unset-sh/docs (P1.21t; ADR 0093): its own folder,
+// What this repository sends to the docs repository, github.com/unset-sh/docs (P1.21t; ADR 0111): its own folder,
 // `unset/`, and the docs repository's own files (its front page and its Pages workflow).
 // `node scripts/ci/docs-export.ts <new folder>` writes the tree; docs-mirror.yml pushes it. docs/human and docs/site
 // keep their places beside each other, so `unset/site` builds there as docs/site builds here: hugo.yaml reads the
