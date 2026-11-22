@@ -8,7 +8,10 @@ import { encodeFrame, FRAME_TYPE, JOB_CEILING, type Job, PROCESS_PATH, parseJob 
 
 export type Outcome = "ok" | ImageRefusal | "bad_request";
 
-export function reviewListener(processor: ImageProcessor, counted: (outcome: Outcome) => void) {
+/** Told each answer's outcome and, once a job has run, how long it took in whole milliseconds. */
+export type Counted = (outcome: Outcome, ms?: number) => void;
+
+export function reviewListener(processor: ImageProcessor, counted: Counted) {
   return (request: IncomingMessage, response: ServerResponse): void => {
     if (request.method === "GET" && request.url === "/health") {
       json(response, 200, { healthy: true });
@@ -41,20 +44,16 @@ export function reviewListener(processor: ImageProcessor, counted: (outcome: Out
   };
 }
 
-async function run(
-  processor: ImageProcessor,
-  bytes: Uint8Array,
-  job: Job,
-  response: ServerResponse,
-  counted: (o: Outcome) => void,
-) {
+async function run(processor: ImageProcessor, bytes: Uint8Array, job: Job, response: ServerResponse, counted: Counted) {
+  const started = performance.now();
   const result = await processor.process(bytes, job.limits, job.versions);
+  const ms = Math.round(performance.now() - started);
   if (result.kind === "refused") {
-    refuse(response, counted, result.code);
+    refuse(response, counted, result.code, ms);
     return;
   }
   const frame = encodeFrame(result);
-  counted("ok");
+  counted("ok", ms);
   response.writeHead(200, { "content-type": FRAME_TYPE, "content-length": frame.length }).end(frame);
 }
 
@@ -77,8 +76,8 @@ function readBody(request: IncomingMessage, length: number): Promise<Uint8Array>
   });
 }
 
-function refuse(response: ServerResponse, counted: (o: Outcome) => void, outcome: Exclude<Outcome, "ok">): void {
-  counted(outcome);
+function refuse(response: ServerResponse, counted: Counted, outcome: Exclude<Outcome, "ok">, ms?: number): void {
+  counted(outcome, ms);
   if (outcome === "bad_request") {
     json(response, 400, {});
     return;
