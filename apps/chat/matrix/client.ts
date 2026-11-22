@@ -108,6 +108,21 @@ export function chatClient(session: ChatSession, baseUrl: string, cryptoCallback
 const sameOriginFetch: typeof globalThis.fetch = (input, init) =>
   globalThis.fetch(input, { ...init, credentials: "same-origin" }); // guard-allow: egress browser-own-origin-homeserver
 
+/**
+ * The page's report of the account's key facts: none while `held` (a setup, an unlock or a Log out runs its own
+ * steps), otherwise `read` the facts and `act` on them.
+ */
+export function serialReports<F>(
+  held: () => boolean,
+  read: () => Promise<F>,
+  act: (facts: F) => Promise<unknown>,
+): () => Promise<void> {
+  return async () => {
+    if (held()) return;
+    await act(await read());
+  };
+}
+
 /** Start the client for this session. Every outcome reaches `onState` until it is stopped; nothing is thrown. */
 export async function openChat(session: ChatSession, options: ChatOptions): Promise<Chat> {
   const holder = createKeyHolder();
@@ -186,20 +201,22 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     })();
     return pusher;
   };
-  const report = async () => {
-    if (busy) return;
+  const report = serialReports(
+    () => busy,
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
-    const facts = await readFacts(client, crypto, session.userId).catch(() => null);
-    if (facts === null) return void fail(UNAVAILABLE);
-    const phase = phaseOf(facts);
-    if (phase === "setup") return setUp(facts.hasIdentity);
-    if (phase === "ready") await registerOnce();
-    tell(
-      phase === "ready"
-        ? { kind: "ready", conversations, names: options.names, me: session.userId }
-        : { kind: "locked", unlock: tryKey },
-    );
-  };
+    () => readFacts(client, crypto, session.userId).catch(() => null),
+    async (facts) => {
+      if (facts === null) return void fail(UNAVAILABLE);
+      const phase = phaseOf(facts);
+      if (phase === "setup") return setUp(facts.hasIdentity);
+      if (phase === "ready") await registerOnce();
+      tell(
+        phase === "ready"
+          ? { kind: "ready", conversations, names: options.names, me: session.userId }
+          : { kind: "locked", unlock: tryKey },
+      );
+    },
+  );
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;
     const outcome = await unlock(keys, session.userId, typed).finally(() => (busy = false));
