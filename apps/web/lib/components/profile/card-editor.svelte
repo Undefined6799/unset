@@ -92,7 +92,15 @@ let pending = $state(false);
  * A refused save, shown inside the editor: beside the field it blames when the answer names one the form holds, in
  * words for that field, else as the catalog's words above the form.
  */
-type Refused = { readonly message: string; readonly field?: string; readonly fieldText?: string };
+type Refused = {
+  readonly message: string;
+  readonly field?: string;
+  readonly fieldText?: string;
+  /** The grant lacks a permission: the refusal links to /allow in a new tab, and the editor keeps what was typed. */
+  readonly allow?: boolean;
+};
+/** The refusal of a write the member's grant does not cover (routes/[did=did]/+page.server.ts write). */
+const SCOPE_MISSING = "card.scope_missing";
 let refused: Refused | undefined = $state(fromPanel());
 let summary: HTMLElement | undefined = $state();
 let triggerLink: HTMLAnchorElement | undefined = $state();
@@ -110,6 +118,7 @@ function fromPanel(): Refused | undefined {
   const failed = panel?.refusal;
   if (failed === undefined) return undefined;
   const { code, message, field } = failed;
+  if (code === SCOPE_MISSING) return { message, allow: true };
   return field === undefined ? { message } : { message, field, fieldText: fieldText(code, message) };
 }
 
@@ -151,7 +160,8 @@ async function showRefusal(data: Record<string, unknown> | undefined) {
   const form = document.getElementById(formId);
   const target = field === undefined || !(form instanceof HTMLFormElement) ? null : form.elements.namedItem(field);
   const text = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
-  refused = text === null ? { message } : { message, field, fieldText: fieldText(code, message) };
+  if (code === SCOPE_MISSING) refused = { message, allow: true };
+  else refused = text === null ? { message } : { message, field, fieldText: fieldText(code, message) };
   // A refusal that blames the README text shows it on the Write tab, where the field can take focus.
   if (text !== null) tab = "write";
   await tick();
@@ -270,7 +280,14 @@ const buttonRows = $derived([
 {#snippet refusal()}
   {#if refused !== undefined && (refused.field === undefined || panel !== undefined)}
     <div bind:this={summary} tabindex="-1" class="outline-none">
-      <Alert.Root variant="destructive"><Alert.Description>{refused.message}</Alert.Description></Alert.Root>
+      <Alert.Root variant="destructive">
+        <Alert.Description>
+          <p>{refused.message}</p>
+          {#if refused.allow}
+            <a href="/allow" target="_blank" rel="noopener">{CARD_EDIT.allowAccess}<Icon name="external" size={16} label={CARD_EDIT.newTab} /></a>
+          {/if}
+        </Alert.Description>
+      </Alert.Root>
     </div>
   {/if}
 {/snippet}
