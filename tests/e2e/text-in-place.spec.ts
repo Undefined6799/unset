@@ -572,6 +572,18 @@ for (const { name, within, has, piece, at, up, expected, text: words } of [
     expected: "left\nEARLY\nright",
     text: (word: string) => `${word} start\n\nleft\\\n\\\nright`,
   },
+  // Codex on b497e1a: the same before the card's first words, where neither break counted, so the empty line was the
+  // same place as the start of the words after it.
+  {
+    name: "on_an_empty_line_before_the_first_words",
+    within: "p",
+    has: "right",
+    piece: 0,
+    at: 0,
+    up: 1,
+    expected: "\nEARLY\nright",
+    text: (word: string) => `\\\n\\\nright\n\n${word}`,
+  },
   // Codex on c127b78: the white space a code block ends with was dropped from the count at the next line's start, so a
   // click two characters into the paragraph after the block was the same place as one after the block's spaces.
   {
