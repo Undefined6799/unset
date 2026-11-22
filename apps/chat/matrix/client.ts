@@ -110,16 +110,26 @@ const sameOriginFetch: typeof globalThis.fetch = (input, init) =>
 
 /**
  * The page's report of the account's key facts: none while `held` (a setup, an unlock or a Log out runs its own
- * steps), otherwise `read` the facts and `act` on them.
+ * steps), otherwise `read` the facts and `act` on them. Reports run one at a time in effect: each one started makes
+ * every earlier one stale, and a stale report, or one whose read was still under way when a setup, an unlock or a Log
+ * out began, acts on nothing. So trust events arriving together during one read start one setup, never a second key
+ * over the one shown (Codex review on #1963), and an older read never paints over a newer one. `act` gets the same
+ * check for anything it awaits before it paints. As conversation-service.ts's watch drops a read once a later one
+ * starts (`latest`).
  */
 export function serialReports<F>(
   held: () => boolean,
   read: () => Promise<F>,
-  act: (facts: F) => Promise<unknown>,
+  act: (facts: F, current: () => boolean) => Promise<unknown>,
 ): () => Promise<void> {
+  let latest = 0;
   return async () => {
-    if (held()) return;
-    await act(await read());
+    const mine = ++latest;
+    const current = () => mine === latest && !held();
+    if (!current()) return;
+    const facts = await read();
+    if (!current()) return;
+    await act(facts, current);
   };
 }
 
@@ -205,11 +215,13 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     () => busy,
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
     () => readFacts(client, crypto, session.userId).catch(() => null),
-    async (facts) => {
+    async (facts, current) => {
       if (facts === null) return void fail(UNAVAILABLE);
       const phase = phaseOf(facts);
+      // setUp holds the page (busy) before its first await, so no other report gets past `current` after this one.
       if (phase === "setup") return setUp(facts.hasIdentity);
       if (phase === "ready") await registerOnce();
+      if (!current()) return;
       tell(
         phase === "ready"
           ? { kind: "ready", conversations, names: options.names, me: session.userId }
