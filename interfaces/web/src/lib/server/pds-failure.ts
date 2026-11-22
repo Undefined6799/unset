@@ -4,12 +4,17 @@
 import type { PdsResult } from "@unset/infrastructure-pds";
 import { withErrorParam } from "@unset/shared-errors";
 
+/** The page that asks a member to consent again to the permissions the app now needs (routes/allow). */
+export const ALLOW_PATH = "/allow";
+
 /**
  * Where a dropped grant or a missing scope sends the member: the sign-in pages. Null for any other failure (an outage,
  * a refused record), which each caller answers in its own page and which keeps the session.
  */
 export function pdsSignInRedirect(result: Exclude<PdsResult<unknown>, { kind: "ok" }>): string | null {
-  if (result.kind === "scope_missing") return withErrorParam("/verify-email", "login.scope_insufficient");
+  // A grant from before a permission the app now asks for (staging, 2026-11-21): /allow asks the member to consent
+  // again. Not /verify-email, which is about the email permission and showed "confirmed" for a card write.
+  if (result.kind === "scope_missing") return ALLOW_PATH;
   if (result.kind === "auth_dead") return withErrorParam("/login", "login.session_ended");
   return null;
 }

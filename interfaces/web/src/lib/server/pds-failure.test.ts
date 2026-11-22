@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { pdsSignInRedirect } from "./pds-failure.ts";
 
 test("pdsSignInRedirect sends only an ended grant or a missing scope to sign in", () => {
-  expect(pdsSignInRedirect({ kind: "scope_missing" })).toBe("/verify-email?error=login.scope_insufficient");
+  expect(pdsSignInRedirect({ kind: "scope_missing" })).toBe("/allow");
   expect(pdsSignInRedirect({ kind: "auth_dead" })).toBe("/login?error=login.session_ended");
   expect(pdsSignInRedirect({ kind: "transient", code: "pds_unavailable" })).toBeNull();
   expect(pdsSignInRedirect({ kind: "transient", code: "pds_rate_limited" })).toBeNull();

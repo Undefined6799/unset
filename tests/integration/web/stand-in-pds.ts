@@ -107,6 +107,11 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
         : wrongRepo();
     const method = url.pathname.replace(/^\/xrpc\/com\.atproto\.repo\./, "");
     if (fixture.failing?.includes(method)) return json(503, { error: "Unavailable" });
+    if (fixture.denied?.includes(method))
+      return json(403, {
+        error: "ScopeMissingError",
+        message: 'Missing required scope "repo:sh.unset.card?action=create"',
+      });
     const hold = fixture.slow?.[method];
     if (hold !== undefined) await new Promise((done) => setTimeout(done, hold));
     if (request.method === "GET") {

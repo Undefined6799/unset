@@ -78,6 +78,7 @@ export const ERROR_CODES = {
   "card.list_incomplete": { status: 503, public: true },
   "card.conflict": { status: 409, public: true },
   "card.pds_unavailable": { status: 503, public: true },
+  "card.scope_missing": { status: 403, public: true },
   // P2.19b: a picture card's new picture is not the member's upload, or is gone (a day unused) or held.
   "card.image_missing": { status: 409, public: true },
   // P2.19b: the picture could not be read from our store or sent to the member's PDS; nothing was written.
