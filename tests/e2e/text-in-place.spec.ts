@@ -465,14 +465,25 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
 
 // Review of #1968 (Codex, 2026-11-22 00:17Z): a click just after a space landed before it, and a click at the start
 // of a list's second item landed at the end of the first (the page draws <li>one</li><li>two</li>, nothing between).
-for (const { name, line, at, expected } of [
-  { name: "just_after_a_space", line: "hello world", at: 6, expected: "hello EARLYworld" },
-  { name: "at_the_start_of_a_later_list_item", line: "two", at: 0, expected: "EARLYtwo" },
+// Codex on 921401f (00:53Z): a click at the start of the line after a hard line break landed at the end of the line
+// before it, and a click inside a code block's indentation landed before the indentation (white space was one space).
+for (const { name, within, has, piece, at, expected } of [
+  { name: "just_after_a_space", within: "p", has: "hello", piece: 0, at: 6, expected: "hello EARLYworld" },
+  { name: "at_the_start_of_a_later_list_item", within: "li", has: "two", piece: 0, at: 0, expected: "EARLYtwo" },
+  {
+    name: "at_the_start_of_the_line_after_a_line_break",
+    within: "p",
+    has: "right",
+    piece: 1,
+    at: 0,
+    expected: "left\nEARLYright",
+  },
+  { name: "inside_a_code_block_s_indentation", within: "pre", has: "foo", piece: 0, at: 4, expected: "    EARLYfoo" },
 ]) {
   test(`a_click_before_the_editor_opens_${name}_lands_on_the_same_side`, async ({ page }) => {
     const word = `side${Date.now()}`;
     await openOwnPage(page);
-    const text = `${word} start\n\nhello world\n\n- one\n- two`;
+    const text = `${word} start\n\nhello world\n\n- one\n- two\n\nleft  \nright\n\n\`\`\`\n    foo\n\`\`\``;
     await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
     const cold = await page.context().newPage();
     const clicked = Promise.withResolvers<void>();
@@ -486,22 +497,29 @@ for (const { name, line, at, expected } of [
     });
     await cold.goto(page.url(), { waitUntil: "commit" });
     const card = cold.locator('[data-slot="card"]', { hasText: word });
-    const target = card.getByText(line, { exact: true });
+    const target = card.locator(within, { hasText: has });
     await expect(target).toBeVisible();
     // The left edge of the character at `at`, a pixel in: the browser puts the caret just before it.
-    const point = await target.evaluate((element, index) => {
-      const page = element.ownerDocument;
-      // NodeFilter.SHOW_TEXT (the e2e project has no DOM types).
-      const walker = page.createTreeWalker(element, 4);
-      let words = walker.nextNode();
-      while (words !== null && (words.textContent ?? "").trim() === "") words = walker.nextNode();
-      if (words === null) throw new Error("no words");
-      const range = page.createRange();
-      range.setStart(words, index);
-      range.setEnd(words, index + 1);
-      const box = range.getBoundingClientRect();
-      return { x: box.left + 1, y: box.top + box.height / 2 };
-    }, at);
+    const point = await target.evaluate(
+      (element, { index, skip }) => {
+        const page = element.ownerDocument;
+        // NodeFilter.SHOW_TEXT (the e2e project has no DOM types).
+        const walker = page.createTreeWalker(element, 4);
+        let words = walker.nextNode();
+        for (let left = skip; words !== null; words = walker.nextNode()) {
+          if ((words.textContent ?? "").trim() === "") continue;
+          if (left === 0) break;
+          left -= 1;
+        }
+        if (words === null) throw new Error("no words");
+        const range = page.createRange();
+        range.setStart(words, index);
+        range.setEnd(words, index + 1);
+        const box = range.getBoundingClientRect();
+        return { x: box.left + 1, y: box.top + box.height / 2 };
+      },
+      { index: at, skip: piece },
+    );
     await cold.mouse.click(point.x, point.y);
     clicked.resolve();
     await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
@@ -510,7 +528,12 @@ for (const { name, line, at, expected } of [
     typed.resolve();
     const { editor } = await editorHolding(cold, word);
     await expect(editor).toBeFocused();
-    await expect(editor.getByText(expected, { exact: true })).toBeVisible();
+    // As drawn, so the side of a line break shows (innerText writes it as a new line).
+    await expect
+      .poll(() =>
+        editor.locator(within, { hasText: has }).evaluate((element) => (element as { innerText: string }).innerText),
+      )
+      .toBe(expected);
     await bar(cold).getByRole("button", { name: "Discard" }).click();
     await removeCard(cold, word);
     await cold.close();
