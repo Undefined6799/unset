@@ -331,6 +331,30 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Review of #1969 (Codex, 2026-11-22 00:15Z): with words selected across two points, Shift+Enter found no split
+// (prosemirror-schema-list 1.6.0 splitListItem declines a selection that leaves its item) and lifted a point out of
+// the list with the words still selected. It now takes the selected words out first, as Enter does elsewhere.
+test("shift_enter_over_words_selected_across_two_points_replaces_them_with_a_new_block", async ({ page }) => {
+  const watched = watch(page);
+  const word = `across${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} start\n\n- one\n- two`);
+  const blocks = editor.locator(":scope > *");
+  await editor.locator("li").first().click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.up("Shift");
+  // From after "o" in "one" to after "t" in "two".
+  await expect.poll(() => page.evaluate(() => getSelection()?.toString().replace(/\s/g, ""))).toBe("net");
+  await page.keyboard.press("Shift+Enter");
+  await expect(editor.locator("li")).toHaveText(["o"]);
+  await expect(blocks.last()).toHaveText("wo");
+  await expect(blocks.last()).toHaveJSProperty("tagName", "P");
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ page }) => {
   const watched = watch(page);
   const word = `moves${Date.now()}`;

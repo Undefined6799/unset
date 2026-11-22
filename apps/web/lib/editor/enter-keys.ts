@@ -72,9 +72,14 @@ const newBlock =
     const inside = inListItem(state) || inQuote(state);
     if (!inside) return startBlock(state, dispatch, view);
     if (dispatch === undefined || view === undefined) return true;
+    // Selected words go first, as baseKeymap's Enter takes them (splitBlock deletes the selection): splitListItem
+    // (prosemirror-schema-list 1.6.0) declines a selection that leaves its item, and the lift below would then take
+    // points out of the list with the words still there. Once the caret is alone, a split it declines is an empty
+    // point, which the lift takes out of the list, as before.
+    if (!state.selection.empty) view.dispatch(view.state.tr.deleteSelection());
     const commands = ctx.get(commandsCtx);
-    if (inListItem(state)) commands.call(splitListItemCommand.key);
-    else splitBlock(state, dispatch);
+    if (inListItem(view.state)) commands.call(splitListItemCommand.key);
+    else splitBlock(view.state, view.dispatch);
     // Out of each list and quote it is in, the innermost first; they nest at most a few levels.
     for (let depth = 0; depth < 8; depth += 1) {
       const out = inListItem(view.state)
