@@ -20,11 +20,12 @@ export type Place = {
 
 /**
  * A count of a block's characters, carried from one piece of its words to the next. `pending` is the white space a
- * code block keeps as written, counted once a character follows it.
+ * code block keeps as written, counted once a character follows it; `line` is set at the start of a line and cleared
+ * by its first character.
  */
-export type Count = { chars: number; space: boolean; pending: number };
+export type Count = { chars: number; space: boolean; pending: number; line: boolean };
 
-export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0 });
+export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0, line: false });
 
 /**
  * The white space HTML collapses (ASCII white space, WHATWG Infra): a no-break space and the other Unicode spaces are
@@ -47,6 +48,7 @@ export function countChars(text: string, count: Count, literal = false): void {
     count.chars += (count.space ? 2 : 1) + count.pending;
     count.space = false;
     count.pending = 0;
+    count.line = false;
   }
 }
 
@@ -67,6 +69,17 @@ export function placeOf(count: Count): { chars: number; space: boolean } {
 export function startLine(count: Count): void {
   count.space = count.chars > 0;
   count.pending = 0;
+  count.line = true;
+}
+
+/**
+ * A hard line break (the page's <br>, the editor's hard break node): it starts another line, and when the line it ends
+ * held nothing (two breaks in a row) that empty line counts as a character, so a place on it is told from one at the
+ * start of the line after it.
+ */
+export function breakLine(count: Count): void {
+  if (count.line && count.chars > 0) count.chars += 1;
+  startLine(count);
 }
 
 /** The page's elements that hold one line of a block's words, as the editor's text blocks do. */
@@ -80,7 +93,7 @@ function countIn(block: Node, range?: Range): Count {
   let line: Element | null | undefined;
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if (range !== undefined && !range.intersectsNode(node)) break;
-    if (node.nodeName === "BR") startLine(count);
+    if (node.nodeName === "BR") breakLine(count);
     if (!(node instanceof Text)) continue;
     const owner = node.parentElement?.closest(LINES) ?? null;
     if (owner !== line) {

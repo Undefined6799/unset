@@ -30,7 +30,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
-import { type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
+import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -327,8 +327,14 @@ function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
   doc.descendants((child, pos, parent) => {
     if (found !== null) return false;
     // Each text block starts another line of the words, as the page counts its list items and its blocks (place.ts),
-    // and so does a hard line break, as the page counts its <br>.
-    if (child.isTextblock || isHardBreak(child)) startLine(count);
+    // and so does a hard line break, as the page counts its <br>. A place at the start of an empty line is just before
+    // the break that ends it.
+    if (isHardBreak(child)) {
+      if (count.line && place.space && placeOf(count).chars === place.chars) found = pos;
+      else breakLine(count);
+      return false;
+    }
+    if (child.isTextblock) startLine(count);
     if (!child.isText) return true;
     found = placeInText(child.text ?? "", pos, count, place, parent?.type.spec.code === true);
     return false;
@@ -366,7 +372,8 @@ function placeInText(text: string, pos: number, count: Count, place: Place, lite
 function countWords(node: ProseNode): Count {
   const count = emptyCount();
   const visit = (child: ProseNode, literal: boolean) => {
-    if (child.isTextblock || isHardBreak(child)) startLine(count);
+    if (isHardBreak(child)) breakLine(count);
+    else if (child.isTextblock) startLine(count);
     if (child.isText) countChars(child.text ?? "", count, literal);
     else
       child.forEach((inner) => {
