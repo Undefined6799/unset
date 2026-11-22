@@ -346,6 +346,12 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
   expect((await lines.first().boundingBox())?.y).toBe(before.y);
   const point = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
   if (page.context().browser()?.browserType().name() !== "webkit") {
+    // A short move over the handle first starts the drag. Moving straight off it in steps lost the drag on a slow
+    // runner (CI on #1967, 2026-11-22; every run failed so under 20x CPU throttling, none since): Playwright 1.64.1 takes a
+    // move for a drag only if dragstart comes before a timer it sets on that move's first mousemove (coreBundle.js,
+    // crDragDrop interceptDragCausedByMove), and otherwise sends the moves as plain mouse moves.
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2 + 12);
+    await expect(editor).toHaveAttribute("data-dragging", "true");
     await page.mouse.move(point.x, point.y, { steps: 10 });
     await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
     await page.mouse.up();
