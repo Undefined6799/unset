@@ -248,6 +248,16 @@ jobs:
                   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
                   "$source" < /dev/null > /dev/null
                 ;;
+              # P6.02 (ADR 0092): distroless Python, the Synapse image's runtime base, waits for its upstream keyless
+              # signature, with the identity and issuer GoogleContainerTools/distroless README.md names ("How do I
+              # verify distroless images?", read 2026-11-21). Checked by hand on 2026-11-21 with cosign v3.1.3 and
+              # this root: passes for 6c4cb3bf, exit 12 for another identity.
+              gcr.io/distroless/python3-debian13:*@*)
+                cosign verify --trusted-root deployment/sigstore/trusted_root.json \
+                  --certificate-identity keyless@distroless.iam.gserviceaccount.com \
+                  --certificate-oidc-issuer https://accounts.google.com \
+                  "$source" < /dev/null > /dev/null
+                ;;
             esac
             crane copy "$source" "$mirror@$digest" < /dev/null
             test "$(crane digest "$mirror@$digest" < /dev/null)" = "$digest"
