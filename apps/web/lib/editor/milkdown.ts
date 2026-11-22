@@ -30,7 +30,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
-import { countChars, type Place } from "./place.ts";
+import { countChars, countedChars, type Place } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -319,29 +319,32 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
   return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
 }
 
-/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when it has no such block. */
+/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when its block differs. */
 function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
   if (place.block < 0 || place.block >= doc.childCount) return null;
+  const node = doc.child(place.block);
+  if (countedChars(node.textContent) !== place.total) return null;
   let start = 0;
   for (let i = 0; i < place.block; i += 1) start += doc.child(i).nodeSize;
-  const end = start + doc.child(place.block).nodeSize;
+  if (place.chars === 0) return TextSelection.near(doc.resolve(start), 1);
   const count = { chars: 0, space: false };
-  let found: number | null = place.chars === 0 ? start : null;
-  doc.nodesBetween(start, end, (node, pos) => {
+  let found: number | null = null;
+  doc.nodesBetween(start, start + node.nodeSize, (child, pos) => {
     if (found !== null) return false;
-    if (!node.isText) return true;
-    const text = node.text ?? "";
-    for (let i = 0; i < text.length && found === null; i += 1) {
-      const ch = text[i] as string;
-      // A place just after a space is before the next word.
-      if (!/\s/.test(ch) && count.space && count.chars + 1 === place.chars) found = pos + i;
+    if (!child.isText) return true;
+    // By code point, as the page counts (place.ts): an emoji is one character but two positions.
+    let offset = 0;
+    for (const ch of child.text ?? "") {
+      offset += ch.length;
       countChars(ch, count);
-      if (found === null && count.chars === place.chars && !/\s/.test(ch)) found = pos + i + 1;
+      if (count.chars === place.chars && !/\s/.test(ch)) {
+        found = pos + offset;
+        break;
+      }
     }
     return false;
   });
-  if (found === null) return Selection.findFrom(doc.resolve(end), -1, true);
-  return TextSelection.near(doc.resolve(found), found === start ? 1 : -1);
+  return found === null ? null : TextSelection.near(doc.resolve(found), -1);
 }
 
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {

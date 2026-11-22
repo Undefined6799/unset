@@ -3,8 +3,12 @@
 // not at the same point on the screen (staging, 2026-11-21). Imported by the card's markup in the page bundle, so this
 // file imports nothing.
 
-/** The block (its index among the top-level blocks) and how many characters of its words come before the place. */
-export type Place = { readonly block: number; readonly chars: number };
+/**
+ * The block (its index among the top-level blocks), how many characters of its words come before the place, and how
+ * many it holds in all: the editor uses the place only when its block holds as many, so a block the two drawings show
+ * differently falls back to the point on the screen. A character is a code point, as `for...of` walks a string.
+ */
+export type Place = { readonly block: number; readonly chars: number; readonly total: number };
 
 /**
  * Counts characters as both drawings show them: a run of white space is one space, and none before the block's first
@@ -22,6 +26,13 @@ export function countChars(text: string, count: { chars: number; space: boolean 
   }
 }
 
+/** The characters `text` holds, counted as countChars does. */
+export function countedChars(text: string): number {
+  const count = { chars: 0, space: false };
+  countChars(text, count);
+  return count.chars;
+}
+
 /** The place of (node, offset) in the page's drawing held by `root`, or undefined when it is not in its words. */
 export function placeIn(root: HTMLElement, node: Node, offset: number): Place | undefined {
   const blocks = root.firstElementChild;
@@ -36,5 +47,6 @@ export function placeIn(root: HTMLElement, node: Node, offset: number): Place | 
   before.setEnd(node, offset);
   const count = { chars: 0, space: false };
   countChars(before.toString(), count);
-  return { block: Array.prototype.indexOf.call(blocks.children, block), chars: count.chars };
+  const index = Array.prototype.indexOf.call(blocks.children, block);
+  return { block: index, chars: count.chars, total: countedChars(block.textContent ?? "") };
 }

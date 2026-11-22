@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { countChars } from "./place.ts";
+import { countChars, countedChars } from "./place.ts";
 
 const counted = (...pieces: string[]) => {
   const count = { chars: 0, space: false };
@@ -15,4 +15,11 @@ test("a_place_counts_white_space_runs_as_one_and_none_before_the_first_word", ()
   expect(counted("A ", "weekly")).toBe("A weekly".length);
   // A space with no word after it yet is not counted.
   expect(counted("A weekly ")).toBe("A weekly".length);
+});
+
+test("a_place_counts_an_emoji_as_one_character", () => {
+  // Two UTF-16 units, one character on the page: the editor must count it the same (caretAtPlace walks by code point).
+  expect("🎧".length).toBe(2);
+  expect(counted("A 🎧 show")).toBe(8);
+  expect(countedChars("\n A  🎧 show ")).toBe(8);
 });

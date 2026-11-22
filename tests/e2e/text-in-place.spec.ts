@@ -426,7 +426,9 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   const word = `place${Date.now()}`;
   await openOwnPage(page);
   const code = "```\none\ntwo\nthree\nfour\n```";
-  const text = `${word} start\n\n${code}\n\nSound design for short films\n\nA weekly slow-radio show`;
+  // The emoji is one character on the page and two UTF-16 units in the editor: the count must agree.
+  const last = "A weekly 🎧 slow-radio show";
+  const text = `${word} start\n\n${code}\n\nSound design for short films\n\n${last}`;
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
   const cold = await page.context().newPage();
   const clicked = Promise.withResolvers<void>();
@@ -441,7 +443,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   });
   await cold.goto(page.url(), { waitUntil: "commit" });
   const card = cold.locator('[data-slot="card"]', { hasText: word });
-  const line = card.getByText("A weekly slow-radio show");
+  const line = card.getByText(last);
   await expect(line).toBeVisible();
   const box = await line.boundingBox();
   if (box === null) throw new Error("no line");
@@ -454,7 +456,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   const { editor } = await editorHolding(cold, word);
   await expect(editor).toBeFocused();
   await cold.keyboard.type("!");
-  await expect(editor.locator(":scope > p").last()).toHaveText("A weekly slow-radio showEARLY!");
+  await expect(editor.locator(":scope > p").last()).toHaveText(`${last}EARLY!`);
   await expect(editor.locator(":scope > p").nth(1)).toHaveText("Sound design for short films");
   await bar(cold).getByRole("button", { name: "Discard" }).click();
   await removeCard(cold, word);
