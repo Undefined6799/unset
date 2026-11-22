@@ -27,9 +27,11 @@ cell no lasting identity.
 
 ## Decision
 
-1. `sh.unset.block.text` gains one optional object, `tableStyle`, beside `text`. It holds every table look setting the
-   Markdown cannot hold, and only affects the look. A reader
-   that ignores it shows the tables with its own lines, and the text means exactly the same.
+1. `sh.unset.block.text` gains one optional field, `tableStyle`, beside `text`. Its shape is the named definition
+   `sh.unset.block.text#tableStyle`, the table style's own definition inside the text block's lexicon, and it is
+   stored in the card record (Alex, 01:00Z: "yes and that would remain optionnal right??", which it does). It holds
+   every table look setting the Markdown cannot hold, and only affects the look. A reader that ignores it shows the
+   tables with its own lines, and the text means exactly the same.
 2. `tableStyle` holds four optional booleans that apply to every table in the card: `header` (the line under the
    header row), `rows` (between body rows), `columns` (between columns) and `outline` (the edge around the table).
    A switch that is left out means the reader's usual look for those lines.
@@ -89,8 +91,15 @@ cell no lasting identity.
   and every reader would need a rule to choose between them. Rejected.
 - **Markers inside the Markdown** (an HTML comment or attribute syntax). This breaks his rule that the text is exactly
   Markdown, and raw HTML is refused. Rejected.
-- **A separate record for a card's look.** That is a second write and a second record that must stay in step with
-  the text. Rejected, because the field sits beside the text it describes.
+- **A separate table-style record linked to the card** (Alex asked at 00:58Z: "can it just not be an extra table
+  style lexicon of its own?? link to that card"). The card lexicon would stay untouched and other apps would never
+  see the style. But it costs a second record and write for every styled card, which another app can change or
+  delete without the other, a dangling link when either is deleted, a new index table with its migration, erasure
+  entry and caps, and an extra read on every page view. Drift stays the same, because positions still follow the
+  Markdown. Weighed and not taken: Alex chose the named definition inside the card (point 1) at 01:00Z.
+- **A separate schema file** (`sh.unset.style.table`, referred to from the text block). This is reusable by other
+  blocks, but it is one more lexicon to publish for a style only text has. A later block that needs the style can
+  refer to `sh.unset.block.text#tableStyle` itself. Not taken.
 
 ## Compliance
 
