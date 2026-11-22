@@ -191,6 +191,45 @@ describe("rooms.sweep", () => {
     expect(synapse.rooms.has("!zidle")).toBe(false);
   });
 
+  test("sweep.resumes_within_page: a page longer than one run hands on its first unchecked room", async () => {
+    // One page holds 2 idle rooms, 12 active ones, then the idle !zidle; a run checks only a few, so the point
+    // handed on must lie inside the page, two earlier for the two rooms this run deleted before it.
+    synapse.rooms.set("!aaidle0", { encryption: null, state: PLAIN_STATE, newest: old() });
+    synapse.rooms.set("!aaidle1", { encryption: null, state: PLAIN_STATE, newest: old() });
+    for (let n = 0; n < 12; n++)
+      synapse.rooms.set(`!active${String(n).padStart(2, "0")}`, {
+        encryption: null,
+        state: PLAIN_STATE,
+        newest: recent(),
+      });
+    synapse.rooms.set("!zidle", { encryption: null, state: PLAIN_STATE, newest: old() });
+    const file = join(tempDir(), "sweep.cursor");
+    await service.close();
+    let clock = Date.now();
+    service = await startService(mas, {
+      synapse: createSynapse({ adminUrl: synapse.url }),
+      sweepCursor: openSweepCursor(file),
+      now: () => {
+        clock += 1000;
+        return clock;
+      },
+    });
+    const first = (await (await sweep()).json()) as { deleted: number };
+    expect(first.deleted).toBe(2);
+    const handedOn = Number(readFileSync(file, "utf8").trim());
+    // The rooms left at offsets below the point are the active ones this run checked, none skipped or repeated.
+    const ids = [...synapse.rooms.keys()].sort();
+    expect(handedOn).toBeGreaterThan(0);
+    expect(ids.slice(0, handedOn).every((id) => id.startsWith("!active"))).toBe(true);
+    let runs = 1;
+    while (synapse.rooms.has("!zidle") && runs < 6) {
+      clock = Date.now();
+      expect((await sweep()).status).toBe(200);
+      runs++;
+    }
+    expect(synapse.rooms.has("!zidle")).toBe(false);
+  });
+
   test("sweep.resume_survives_restart: the resume point is kept in chat-admin's state folder", async () => {
     synapse.pageSize = 2;
     for (let n = 0; n < 12; n++)

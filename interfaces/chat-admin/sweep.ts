@@ -8,7 +8,7 @@
 import { readLines, replaceLines } from "@unset/shared-admin-envelope";
 import type { Abandoned, Result } from "./commands.ts";
 import { type Mas, MasUnavailable } from "./mas.ts";
-import { type RoomId, type StateEvent, type Synapse, SynapseUnavailable } from "./synapse.ts";
+import { type ListedRoom, type RoomId, type StateEvent, type Synapse, SynapseUnavailable } from "./synapse.ts";
 
 /** The service user (decision 2). The hyphen keeps it apart from every member's name, which is [a-z0-9]{12,64}. */
 export const SWEEPER = "unset-room-sweeper";
@@ -107,9 +107,10 @@ type Counts = { listed: number; plain: number; deleted: number; failed: number }
 
 /**
  * Pages of the room list from the resume point (at most MAX_PAGES), each page's rooms checked before the next is read.
- * The point handed on is the first page not wholly checked, or the start once the list has ended. Each page starts as
- * many rooms earlier as the one before deleted, since Synapse's offsets close up behind a delete; rooms made or
- * deleted elsewhere between runs can still move a few across the point, and the next walk of the list reaches them.
+ * The point handed on is the first room not checked, or the start once the list has ended, so a page longer than one
+ * run is still walked to its end over the next runs. Synapse's offsets close up behind a delete, so a point lies as
+ * many rooms earlier as this run deleted before it; rooms made or deleted elsewhere between runs can still move a few
+ * across the point, and the next walk of the list reaches them.
  */
 async function sweepWith(deps: SweepDeps, token: string, abandoned: Abandoned): Promise<SweepCounts> {
   const counts: Counts = { listed: 0, plain: 0, deleted: 0, failed: 0 };
@@ -118,28 +119,36 @@ async function sweepWith(deps: SweepDeps, token: string, abandoned: Abandoned): 
   for (let page = 0; from !== null && page < MAX_PAGES && abandoned() === null; page++) {
     const answer = await deps.synapse.rooms(token, from);
     counts.listed += answer.rooms.length;
-    const candidates = answer.rooms.filter((room) => !room.encrypted).map((room) => room.id);
     const deletedBefore = counts.deleted;
-    if (!(await checkRooms(deps, token, candidates, counts, abandoned))) break;
-    // The list closes up behind a delete, so the next page starts that many rooms earlier.
-    from = answer.next === null ? null : answer.next - (counts.deleted - deletedBefore);
+    const checked = await checkRooms(deps, token, answer.rooms, counts, abandoned);
+    // The list closes up behind a delete, so a point after this page's deletes lies that many rooms earlier.
+    const deletedHere = counts.deleted - deletedBefore;
+    if (checked < answer.rooms.length) {
+      resumeAt = from + checked - deletedHere;
+      break;
+    }
+    from = answer.next === null ? null : answer.next - deletedHere;
     resumeAt = from ?? 0;
   }
   deps.cursor.write(Math.max(0, resumeAt));
   return { ...counts, kept: counts.listed - counts.deleted - counts.failed };
 }
 
-/** Checks `rooms` in order, adding to `counts`; false when the run stopped before the last one. */
+/**
+ * Checks a page's `rooms` in order, adding to `counts`, and answers how many it checked: the page's length, or the
+ * index of the first room the run stopped before. An encrypted room needs no call, so it counts as checked.
+ */
 async function checkRooms(
   deps: SweepDeps,
   token: string,
-  rooms: readonly RoomId[],
+  rooms: readonly ListedRoom[],
   counts: Counts,
   abandoned: Abandoned,
-): Promise<boolean> {
-  for (const room of rooms) {
-    if (counts.deleted + counts.failed >= MAX_DELETES || abandoned() !== null) return false;
-    const outcome = await sweepOne(deps, token, room, abandoned).catch((error: unknown) => {
+): Promise<number> {
+  for (const [index, room] of rooms.entries()) {
+    if (room.encrypted) continue;
+    if (counts.deleted + counts.failed >= MAX_DELETES || abandoned() !== null) return index;
+    const outcome = await sweepOne(deps, token, room.id, abandoned).catch((error: unknown) => {
       if (error instanceof SynapseUnavailable) return "failed" as const;
       throw error;
     });
@@ -147,7 +156,7 @@ async function checkRooms(
     if (outcome === "deleted") counts.deleted++;
     if (outcome === "failed" || outcome === "delete_failed") counts.failed++;
   }
-  return true;
+  return rooms.length;
 }
 
 /** `failed`: a call failed before the room was known plain; `delete_failed`: Synapse failed it or it had not ended. */
