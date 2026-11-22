@@ -1,5 +1,5 @@
 // Field limits of our records, the one place code reads them (P1.31). Strings count graphemes unless the name ends in
-// Bytes; arrays count items; *MaxSize counts blob bytes. Each value equals the schema's constraint, which
+// Bytes; arrays count items; *MaxSize counts blob bytes; *Highest is the largest integer allowed. Each value equals the schema's constraint, which
 // limits.test.ts proves with one record at the limit and one past it.
 export const LIMITS = {
   profile: {
@@ -18,6 +18,11 @@ export const LIMITS = {
     widthBytes: 32,
     surfaceBytes: 32,
     textBytes: 20_000,
+    tableEdgesMax: 500,
+    tableHighest: 99,
+    edgeDirectionBytes: 32,
+    edgeLineHighest: 999,
+    edgeCellHighest: 999,
     title: 100,
     layoutBytes: 32,
     linksMax: 50,

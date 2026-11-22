@@ -40,6 +40,16 @@ const picture = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const images = (list: unknown[], extra: Record<string, unknown> = {}) => card("images", { images: list, ...extra });
+// One table cell side (sh.unset.block.text#edge): the top of the first header cell, shown.
+const edge = (extra: Record<string, unknown> = {}) => ({
+  table: 0,
+  direction: "horizontal",
+  line: 0,
+  cell: 0,
+  shown: true,
+  ...extra,
+});
+const tableText = (tableStyle: Record<string, unknown>) => card("text", { text: "| a |\n| - |", tableStyle });
 const cardRef = { uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzfcijpj2z2a" };
 
 // One record per limit: the value exactly at the limit passes and one past it fails, which proves LIMITS equals the
@@ -70,6 +80,11 @@ const FIXTURES: Record<string, Build> = {
   "card.widthBytes": C((n) => ({ ...links([]), width: text(n) })),
   "card.surfaceBytes": C((n) => ({ ...links([]), surface: text(n) })),
   "card.textBytes": C((n) => card("text", { text: text(n) })),
+  "card.tableEdgesMax": C((n) => tableText({ edges: many(n, edge()) })),
+  "card.tableHighest": C((n) => tableText({ edges: [edge({ table: n })] })),
+  "card.edgeDirectionBytes": C((n) => tableText({ edges: [edge({ direction: text(n) })] })),
+  "card.edgeLineHighest": C((n) => tableText({ edges: [edge({ line: n })] })),
+  "card.edgeCellHighest": C((n) => tableText({ edges: [edge({ cell: n })] })),
   "card.title": C((n) => links([], { title: text(n) })),
   "card.layoutBytes": C((n) => showcase([], { layout: text(n) })),
   "card.linksMax": C((n) => links(many(n, { uri: ORIGIN }))),
@@ -150,6 +165,28 @@ describe("LIMITS", () => {
   test("an_unknown_block_is_valid_since_the_union_is_open", () => {
     const value = { ...links([]), content: { $type: "com.example.video", id: "x" } };
     expect(validateRecord("sh.unset.card", value, "read").ok).toBe(true);
+  });
+
+  test("table_lines: four optional switches and single cell sides, beside unchanged Markdown", () => {
+    const write = (value: Record<string, unknown>) => validateRecord("sh.unset.card", value, "write").ok;
+    // ADR 0110: every part is optional, so a text card without it is unchanged.
+    expect(write(card("text", { text: "| a |\n| - |" }))).toBe(true);
+    expect(write(tableText({}))).toBe(true);
+    expect(write(tableText({ header: true, rows: false, columns: false, outline: true }))).toBe(true);
+    expect(write(tableText({ edges: [edge(), edge({ direction: "vertical", line: 1, shown: false })] }))).toBe(true);
+    // An edge names all five parts, with whole numbers from 0.
+    for (const part of ["table", "direction", "line", "cell", "shown"]) {
+      const partial: Record<string, unknown> = edge();
+      delete partial[part];
+      expect(write(tableText({ edges: [partial] })), part).toBe(false);
+    }
+    expect(write(tableText({ edges: [edge({ line: -1 })] }))).toBe(false);
+    expect(write(tableText({ edges: [edge({ cell: 1.5 })] }))).toBe(false);
+    expect(write(tableText({ rows: "yes" }))).toBe(false);
+    // A later direction is an open value (knownValues), so an older reader still accepts the record.
+    expect(validateRecord("sh.unset.card", tableText({ edges: [edge({ direction: "diagonal" })] }), "read").ok).toBe(
+      true,
+    );
   });
 
   test("the_page_lists_cards_by_address", () => {

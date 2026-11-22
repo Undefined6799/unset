@@ -112,6 +112,11 @@ Configurable per stack in the compose files.
 | `LIMITS.card.widthBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.surfaceBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.textBytes` | `20000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.tableEdgesMax` | `500` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.tableHighest` | `99` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.edgeDirectionBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.edgeLineHighest` | `999` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.card.edgeCellHighest` | `999` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.title` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.layoutBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.card.linksMax` | `50` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
