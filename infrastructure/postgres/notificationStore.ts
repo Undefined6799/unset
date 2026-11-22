@@ -32,14 +32,20 @@ const DISMISS_UP_TO = `DELETE FROM app.notification n WHERE n.did = $1 AND n.id 
  * 0085, migration 0039) and the account's (ADR 0090, migration 0041), which counts on every browser of the member for
  * every entry not sent `older_sessions_only` (app.inbox says which mark covers which row). greatest() ignores the
  * null of a mark not set yet (https://www.postgresql.org/docs/18/functions-conditional.html#FUNCTIONS-GREATEST-LEAST).
- * One statement: each row's lock orders two browsers marking at once (rule DA-4), and an id this browser may not see
- * matches no row, so neither mark moves.
+ * Each sign-in alert this browser may see, up to `upTo`, is marked on its own row (ADR 0108, migration 0043), so it
+ * counts as seen everywhere; app.inbox names only alerts sent after this browser's session began, never the one about
+ * it. One statement: each row's lock orders two browsers marking at once (rule DA-4), and an id this browser may not
+ * see matches no row, so no mark moves.
  */
 const MARK_SEEN = `WITH shown AS (
       SELECT i.created_at FROM app.inbox i WHERE i.viewer = $2 AND i.did = $1 AND i.id = $3
     ), this_browser AS (
       UPDATE app.session s SET notifications_seen_at = greatest(s.notifications_seen_at, shown.created_at)
         FROM shown WHERE s.id_hash = $2 AND s.did = $1
+    ), alerts AS (
+      UPDATE app.notification n SET seen_at = now()
+        FROM shown WHERE n.did = $1 AND n.older_sessions_only AND n.seen_at IS NULL
+         AND n.created_at <= shown.created_at AND n.id IN (${VISIBLE_IDS})
     )
     UPDATE app.account a SET notifications_seen_at = greatest(a.notifications_seen_at, shown.created_at)
       FROM shown WHERE a.did = $1`;
