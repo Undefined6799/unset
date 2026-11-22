@@ -1,5 +1,5 @@
 {{- /*
-  The page's own Content-Security-Policy (ADR 0092). GitHub Pages sends none of our response headers, so the policy
+  The page's own Content-Security-Policy (ADR 0111). GitHub Pages sends none of our response headers, so the policy
   the staging edge sent for this site (ADR 0075 Decision 3) is written into each page: nothing inline, no eval, and
   only files of this origin. A policy in a meta tag governs what the browser reads after it and cannot hold
   frame-ancestors (CSP Level 3, "The meta element"). Hextra v0.13.0 includes this partial at the end of head

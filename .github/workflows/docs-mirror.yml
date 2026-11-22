@@ -1,4 +1,4 @@
-# The human docs, copied to the docs repository (P1.21t; ADR 0092). On a push to main that changes docs/human,
+# The human docs, copied to the docs repository (P1.21t; ADR 0111). On a push to main that changes docs/human,
 # docs/site or the docs repository's own files, this builds this repository's part of github.com/unset-sh/docs
 # (scripts/ci/docs-export.ts: the folder `unset/`, README.md and the Pages workflow) and pushes it as one commit that
 # links its source. Every source repository owns one folder there, named after it, and replaces only that;
