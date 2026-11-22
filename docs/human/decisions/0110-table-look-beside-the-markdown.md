@@ -61,10 +61,11 @@ cell no lasting identity.
      longer exists. Entries that still exist may then sit on other cells, and the member fixes them in the editor.
    - Another app that edits the Markdown is not bound by this, so its edits can move lines.
 6. Growth. Other look settings go into `tableStyle` as new optional fields, without a breaking change
-   (https://atproto.com/specs/lexicon, "Lexicon Evolution"). Column widths are the first one expected (Alex asked at
-   00:48Z how to resize columns), for example `widths: [{ table, column, share }]`, where a share is relative and
-   not in pixels, so the same card fits any screen. A reader that does not know a later field shows its own widths,
-   which is a correct table. New `direction` values are open too, and a reader ignores one it does not know.
+   (https://atproto.com/specs/lexicon, "Lexicon Evolution"). Column widths are the likely first one: Alex asked at
+   00:48Z how to resize columns, and at 00:54Z left them out of the first version. They could take the shape
+   `widths: [{ table, column, share }]`, where a share is relative and not in pixels, so the same card fits any
+   screen. A reader that does not know a later field shows its own widths, which is a correct table. New
+   `direction` values are open too, and a reader ignores one it does not know.
 
 ## Consequences
 
