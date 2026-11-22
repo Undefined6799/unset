@@ -52,3 +52,12 @@ test("a_place_after_a_line_break_is_the_start_of_another_line", () => {
   startLine(count);
   expect(placeOf(count)).toEqual({ chars: 4, space: true });
 });
+
+test("a_place_counts_each_space_html_keeps_as_written", () => {
+  // Codex on cef4242: HTML collapses only ASCII white space (a run of it is one space), so both drawings keep each
+  // no-break space, and a place between two of them is told apart from one after both.
+  expect(counted("hello\u00a0\u00a0world")).toBe("hello\u00a0\u00a0world".length);
+  const count = emptyCount();
+  countChars("hello\u00a0", count);
+  expect(placeOf(count)).toEqual({ chars: 6, space: false });
+});

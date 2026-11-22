@@ -526,13 +526,25 @@ for (const { name, within, has, piece, at, expected, text: words } of [
     piece: 0,
     at: 0,
     expected: "EARLYfour",
-    text: "- one\n\n- two\n\n- three\n\n- four\n\nend",
+    text: (word: string) => `${word} start\n\n- one\n\n- two\n\n- three\n\n- four\n\nend`,
+  },
+  // Codex on cef4242: a place before the words' first character is the start of the first block with words, not of
+  // the first block, which here is an empty code block.
+  {
+    name: "before_the_first_words_after_an_empty_block",
+    within: "p",
+    has: "hello",
+    piece: 0,
+    at: 0,
+    expected: "EARLYhello",
+    text: (word: string) => `\`\`\`\n\`\`\`\n\nhello\n\n${word}`,
   },
 ]) {
   test(`a_click_before_the_editor_opens_${name}_lands_on_the_same_side`, async ({ page }) => {
     const word = `side${Date.now()}`;
     await openOwnPage(page);
-    const text = `${word} start\n\n${words ?? "hello world\n\n- one\n- two\n\nleft  \nright\n\n```\n    foo\n```"}`;
+    const text =
+      words?.(word) ?? `${word} start\n\nhello world\n\n- one\n- two\n\nleft  \nright\n\n\`\`\`\n    foo\n\`\`\``;
     await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
     const cold = await freshPage(page);
     await addPageCookies(cold.context(), OWN_PAGE);
