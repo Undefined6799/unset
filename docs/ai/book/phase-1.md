@@ -5022,9 +5022,10 @@ Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postg
 
 **Tags:** trusted · **Depends on:** P1.21v · **Plan:** §5.1
 
-Precondition for text and table styles (design `/mnt/project-files/plans/lexicons/styling/design.md` §6): a style is
-anchored by block position plus a fingerprint of the block's whole source lines, so the page and the editor must cut
-blocks identically. The page reader (`apps/web/lib/profile/parse.ts`, `readme-scan.ts`) is a hand-written CommonMark
+Hard precondition for text and table styles (design `/mnt/project-files/plans/lexicons/styling/design.md`, version 3
+§8): a style is anchored by a spec-defined block count under one whole-text fingerprint, so a block-counting bug would
+misplace styles, and the page, the editor and other apps must cut blocks as CommonMark plus GFM says (math and
+footnotes stay out of the count). The page reader (`apps/web/lib/profile/parse.ts`, `readme-scan.ts`) is a hand-written CommonMark
 subset; the editor (Milkdown 7.23.0) reads with remark-parse 11.0.0, that is mdast-util-from-markdown 2.1.0 on
 micromark 4.0.3, plus remark-gfm 4.0.1 (micromark-extension-gfm 3.0.0, mdast-util-gfm 3.1.0). Decision (editor thread,
 reuse over reinvent): the page parses with those same packages, pinned exactly as direct dependencies of apps/web,
@@ -5037,7 +5038,7 @@ The packages meet ADR 0057 (established, maintained, already in the lockfile, au
 
 Tests first: a shared corpus of samples (fenced code with its closing fence, lists and quotes, a GFM table, lazy
 continuation lines, reference definitions, raw HTML, a `$$` math block) that the page's block cut and the editor's
-remark parse must cut to the same blocks and the same whole-line slices; the existing parse tests keep passing or are
+remark parse must cut to the same blocks and the same block count; the existing parse tests keep passing or are
 updated where the subset was not CommonMark, each such change named in the PR. Ownership: apps/web/lib/profile
 (parser) → apps/web (Text card). Styles build only after this merges.
 
