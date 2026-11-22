@@ -96,6 +96,7 @@ function fixture(
     [CARD_C]: storedCollection(50),
   },
   slow?: Record<string, number>,
+  denied?: readonly string[],
 ): StandInFixture {
   return {
     http: {
@@ -126,6 +127,7 @@ function fixture(
       writesFile,
       ...(failing === undefined ? {} : { failing }),
       ...(slow === undefined ? {} : { slow }),
+      ...(denied === undefined ? {} : { denied }),
     },
   };
 }
@@ -164,13 +166,14 @@ async function memberServer(
   failing?: readonly string[],
   cards?: Record<string, unknown>,
   slow?: Record<string, number>,
+  denied?: readonly string[],
 ): Promise<Member> {
   const dir = mkdtempSync(join(tmpdir(), "web-member-"));
   const writesFile = join(dir, "writes.jsonl");
   writeFileSync(writesFile, "");
   const keyringFile = join(dir, "seal_keyring");
   writeFileSync(keyringFile, KEYRING);
-  const web = await startWeb(pg, { SEAL_KEYRING_FILE: keyringFile }, fixture(writesFile, failing, cards, slow));
+  const web = await startWeb(pg, { SEAL_KEYRING_FILE: keyringFile }, fixture(writesFile, failing, cards, slow, denied));
   const writes = () =>
     readFileSync(writesFile, "utf8")
       .split("\n")
@@ -638,6 +641,66 @@ describe("an unavailable PDS", () => {
     expect(refused.status).toBe(503);
     expect(await refused.text()).toContain("card.pds_unavailable");
     expect(down.writes()).toEqual([]);
+  });
+});
+
+// Staging, 2026-11-21: a session from before the app asked for sh.unset.card and sh.unset.page. The PDS refused the
+// write with 403 ScopeMissingError, and the page said the sign-in server was not answering (503, no log event).
+describe("a grant that does not cover a write", () => {
+  let narrow: Member;
+  beforeAll(async () => {
+    narrow = await memberServer(undefined, undefined, undefined, ["applyWrites", "putRecord", "createRecord"]);
+  }, 120_000);
+  afterAll(async () => {
+    await narrow?.stop();
+  });
+  const post = (path: string, body: string, headers: Record<string, string>) =>
+    narrow.web.fetch(path, {
+      method: "POST",
+      body,
+      headers: { origin: ORIGIN, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie, ...headers },
+    });
+
+  test("a_card_write_leads_to_allowing_access_and_is_logged_as_a_missing_permission", async () => {
+    const plain = await post(`/${OWNER}?/create`, "kind=readme&width=full&text=x", { accept: HTML });
+    expect(plain.status).toBe(303);
+    expect(plain.headers.get("location")).toBe("/allow");
+    // The page's own client (use:enhance, the one Save) hears the same place to go, so its drafts stay on the device.
+    const one = new URLSearchParams([
+      ["cards.0.key", CARD_A],
+      ["cards.0.version", "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm"],
+      ["cards.0.kind", "readme"],
+      ["cards.0.width", "half"],
+      ["cards.0.text", "Kept on the device"],
+    ]);
+    const enhanced = await post(`/${OWNER}?/saveAll`, one.toString(), {
+      accept: "application/json",
+      "x-sveltekit-action": "true",
+    });
+    const answer = JSON.parse(await enhanced.text()) as { type: string; location?: string };
+    expect(answer).toMatchObject({ type: "redirect", location: "/allow" });
+    expect(narrow.web.logs().some((line) => line.event === "pds.scope_missing")).toBe(true);
+    expect(narrow.writes()).toEqual([]);
+  });
+
+  test("a_profile_save_leads_to_allowing_access", async () => {
+    const saved = await post("/profile", "displayName=Member", { accept: HTML });
+    expect(saved.status).toBe(303);
+    expect(saved.headers.get("location")).toBe("/allow");
+  });
+
+  test("the_allow_page_explains_and_its_button_starts_a_new_consent", async () => {
+    const shown = await narrow.web.fetch("/allow", {
+      headers: { accept: HTML, "x-forwarded-for": clientAddress(), cookie },
+    });
+    expect(shown.status).toBe(200);
+    const html = await shown.text();
+    expect(html).toContain("needs a permission");
+    expect(html).toContain('action="?/reconsent"');
+    const signedOut = await narrow.web.fetch("/allow", {
+      headers: { accept: HTML, "x-forwarded-for": clientAddress() },
+    });
+    expect(signedOut.status).toBe(303);
   });
 });
 
