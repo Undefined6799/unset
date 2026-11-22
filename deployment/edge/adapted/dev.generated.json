@@ -305,6 +305,47 @@
                     {
                       "handle": [
                         {
+                          "defaults": ["other"],
+                          "destinations": ["{route_class}"],
+                          "handler": "map",
+                          "mappings": [
+                            {
+                              "input_regexp": "^/_app/immutable/",
+                              "outputs": ["build"]
+                            },
+                            {
+                              "input_regexp": "^/_app/version\\.json(?:\\?[^#]*)?$",
+                              "outputs": ["version"]
+                            },
+                            {
+                              "input_regexp": "^/fonts/",
+                              "outputs": ["fonts"]
+                            },
+                            {
+                              "input_regexp": "^[^?#]*/__data\\.json(?:\\?[^#]*)?$",
+                              "outputs": ["data"]
+                            },
+                            {
+                              "input_regexp": "^[^?#]*\\?/",
+                              "outputs": ["action"]
+                            },
+                            {
+                              "input_regexp": "^/images(?:\\?[^#]*)?$",
+                              "outputs": ["images"]
+                            },
+                            {
+                              "input_regexp": "^/health(?:\\?[^#]*)?$",
+                              "outputs": ["health"]
+                            }
+                          ],
+                          "source": "{http.request.orig_uri}"
+                        },
+                        {
+                          "handler": "log_append",
+                          "key": "route_class",
+                          "value": "{route_class}"
+                        },
+                        {
                           "handler": "headers",
                           "response": {
                             "deferred": true,
