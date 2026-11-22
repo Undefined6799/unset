@@ -162,5 +162,8 @@ function encode(image: Sharp, format: VersionSpec["format"], step: Attempt): Sha
   const { quality } = step;
   if (format === "jpeg") return image.flatten({ background: "#ffffff" }).jpeg({ quality, mozjpeg: true });
   if (format === "webp") return image.webp({ quality });
-  return image.avif({ quality, effort: 4 });
+  // Effort 3, not sharp's default 4 (sharp 0.35.5 dist/output.mjs `avif`, 0 fastest to 9 slowest). Measured in
+  // review's one-thread child on a 12-megapixel photo: the 1600 px AVIF took 3.6 s at effort 4 and 0.5 s at 3, at
+  // 45 KB instead of 32 KB (its cap is 400,000 bytes). Effort 4 put a phone photo past review's 20 s on staging.
+  return image.avif({ quality, effort: 3 });
 }
