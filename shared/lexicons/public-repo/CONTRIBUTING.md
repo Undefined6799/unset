@@ -16,6 +16,19 @@ pull request here is not merged with the merge button. Instead:
    source.
 4. We close the pull request here with a link to that commit.
 
+## Sign off your commits
+
+The lexicon files are MIT, so anyone may use them. Each commit in your pull request carries a sign-off line,
+`Signed-off-by: Your Name <you@example.com>`. With it you certify the
+[Developer Certificate of Origin](https://developercertificate.org): the change is yours to give under that licence.
+There is nothing else to sign.
+
+- In GitHub's web editor the line is added for you.
+- On your computer, commit with `git commit -s`. Forgot? `git commit --amend --no-edit -s` fixes the last commit,
+  `git rebase --signoff origin/main` fixes them all; then push again with `--force-with-lease`.
+
+When we make your change in the application repository, that commit carries your sign-off as well as your name.
+
 ## What can change
 
 A published lexicon is close to permanent, because other apps and the records already written depend on it
