@@ -17,7 +17,6 @@ const REAL = {
   ACME_EMAIL: "edge@unset.test",
   APP_HOST: "staging.unset.sh",
   APP_UPSTREAM: "web:8080",
-  DOCS_HOST: "docs.unset.sh",
 } as const;
 /** What Caddy adapts for `env`'s values: the reviewed text with each sentinel replaced, as a plain text replace. */
 const adaptedFor = (name: AdaptedEnvName, env: Readonly<Record<EnvName, string>>): Json =>

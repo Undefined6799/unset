@@ -791,16 +791,13 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
   });
 
   test("edge_serves_the_dev_sites_and_leaf", () => {
-    // P1.36c (ADR 0032 Decisions 1 and 3; book P1.38e shape (b)): read-only file binds, dev/app.caddy, dev/pds.caddy
-    // and dev/docs.caddy (P1.21w) by name where the image imports sites and dev/tls.caddy over the shipped (tls); then
-    // the built docs the docs site serves, one read-only folder (ADR 0075).
+    // P1.36c (ADR 0032 Decisions 1 and 3; book P1.38e shape (b)): three read-only file binds, dev/app.caddy and
+    // dev/pds.caddy by name where the image imports sites and dev/tls.caddy over the shipped (tls).
     const edge = service(dev(), "edge");
     expect(edge.mounts.filter((m) => m.type === "bind")).toEqual([
       { type: "bind", source: "./edge/dev/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
       { type: "bind", source: "./edge/dev/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
-      { type: "bind", source: "./edge/dev/docs.caddy", target: "/etc/caddy/sites/enabled/docs.caddy", readOnly: true },
       { type: "bind", source: "./edge/dev/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
-      { type: "bind", source: "../docs/site/public", target: "/srv/docs", readOnly: true },
     ]);
     expect(Object.fromEntries(envOf(edge))).toEqual({
       PDS_HOST: "${PDS_HOSTNAME}",
@@ -808,7 +805,6 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       ACME_EMAIL: "${EDGE_ACME_EMAIL}",
       APP_HOST: "${APP_HOST}",
       APP_UPSTREAM: "web:8080",
-      DOCS_HOST: "docs.unset.sh",
     });
   });
 

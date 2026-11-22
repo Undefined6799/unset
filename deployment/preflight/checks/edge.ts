@@ -11,7 +11,7 @@
 // 1 and 2). Every config rule still applies to what it serves; only where the image's identity comes from changes.
 import { lstatSync, readdirSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
-import { DEV_APP, DOCS_ROOT, ENV_NAMES } from "../../edge/adapted-rules.ts";
+import { DEV_APP, ENV_NAMES } from "../../edge/adapted-rules.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
@@ -75,25 +75,19 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
 }
 
 /**
- * The dev edge's site mounts, or why its binds are not exactly ADR 0032 Decision 3's three and the docs site's two:
- * dev/app.caddy, dev/pds.caddy and dev/docs.caddy, each one read-only file bind at /etc/caddy/sites/enabled/<its
- * name>, dev/tls.caddy at /etc/caddy/snippets/tls.caddy (P1.38e), and the built docs at DOCS_ROOT (P1.21w; ADR 0075).
- * No directory is mounted at the enabled sites, and the edge binds nothing else; siteMountsProblem then requires each
- * site from dev/ by its own name.
+ * The dev edge's site mounts, or why its binds are not exactly ADR 0032 Decision 3's three: dev/app.caddy and
+ * dev/pds.caddy, each one read-only file bind at /etc/caddy/sites/enabled/<its name>, and dev/tls.caddy at
+ * /etc/caddy/snippets/tls.caddy (P1.38e). No directory is mounted at the enabled sites, and the edge binds nothing
+ * else; siteMountsProblem then requires each site from dev/ by its own name.
  */
 export function devSiteMounts(compose: Compose, edgeDir: string): SiteMount[] | Outcome {
   const edge = compose.services.find((service) => service.name === "edge");
   if (edge === undefined) return missing("the edge service");
   const sites: SiteMount[] = [];
   const tls: Mount[] = [];
-  const docs: Mount[] = [];
   for (const mount of edge.mounts) {
     const target = mountTarget(mount);
     if (target === SITES_TARGET) return fail(`the dev edge mounts a directory at ${SITES_TARGET}`);
-    if (target === DOCS_ROOT) {
-      docs.push(mount);
-      continue;
-    }
     if (siteFileTarget(target)) {
       const site = siteMount(mount, posix.basename(target));
       if (!("source" in site)) return site;
@@ -109,33 +103,10 @@ export function devSiteMounts(compose: Compose, edgeDir: string): SiteMount[] | 
   if (again.length > 0) return fail(`the edge mounts ${CADDY_ROOT}/snippets/tls.caddy more than once`);
   const problem = editFileMount(snippet, allowed, EDGE_FILES.realpath(join(edgeDir, "dev")), "dev");
   if (problem !== null) return problem;
-  const built = docsMountProblem(docs, edgeDir);
-  if (built !== null) return built;
   const absent = sites.find((site) => !sourceExists(site.source));
   if (absent !== undefined) return missing(absent.source);
   if (sites.length === 0) return missing(`the edge's site mounts in ${SITES_TARGET}`);
   return siteMountsProblem(sites, edgeDir, "dev") ?? sites;
-}
-
-/** The built docs, relative to the repository root: the Hugo site's output folder (docs/site/README.md). */
-const DOCS_BUILD = "docs/site/public";
-
-/**
- * Why the dev edge's docs mount is not exactly one read-only bind of the repository's own DOCS_BUILD folder at
- * DOCS_ROOT, or null (P1.21w; ADR 0075). The folder is git-ignored but for its .gitkeep, so it exists on every
- * checkout; realpath follows any link, so the bind cannot name a folder outside the checkout under another name.
- */
-function docsMountProblem(docs: readonly Mount[], edgeDir: string): Outcome | null {
-  const [mount, ...again] = docs;
-  if (mount === undefined) return fail(`the built docs are not mounted at ${DOCS_ROOT}`);
-  if (again.length > 0) return fail(`the edge mounts ${DOCS_ROOT} more than once`);
-  if (mount.type !== "bind" || mount.source === null) return fail(`${DOCS_ROOT} is not a bind mount`);
-  if (!mount.readOnly) return fail(`${DOCS_ROOT} is not mounted read-only`);
-  const root = EDGE_FILES.realpath(join(edgeDir, "..", ".."));
-  const source = EDGE_FILES.realpath(mount.source);
-  if (source === null) return missing(mount.source);
-  if (root === null || source !== join(root, DOCS_BUILD)) return fail(`${DOCS_ROOT} is not mounted from ${DOCS_BUILD}`);
-  return EDGE_FILES.kind(source).type === "dir" ? null : fail(`${DOCS_ROOT} is not mounted from a directory`);
 }
 
 /**
@@ -334,8 +305,8 @@ function sourceExists(path: string): boolean {
 /** One read-only file mount at /etc/caddy/sites/enabled/`name`: the host file it binds and its name there (P1.34q). */
 type SiteMount = { source: string; name: string };
 
-/** The dev edge's three sites, each from deployment/edge/dev/ under its own name (ADR 0032 Decision 3; P1.21w). */
-const DEV_SITES = ["app.caddy", "docs.caddy", "pds.caddy"];
+/** The dev edge's two sites, each from deployment/edge/dev/ under its own name (ADR 0032 Decision 3). */
+const DEV_SITES = ["app.caddy", "pds.caddy"];
 /** The app site a local edge mounts from deployment/edge/local/ beside the shipped sites (P1.34a). */
 const LOCAL_APP_SITE = "app.caddy";
 

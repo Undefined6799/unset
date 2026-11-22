@@ -1,7 +1,5 @@
-# Hugo build output. Not committed; CI uploads public/ as an artifact, and the staging edge serves it as docs.unset.sh
-# (ADR 0075). The folder itself is kept, empty, so the edge's bind of it exists on a fresh checkout.
-/public/*
-!/public/.gitkeep
+# Hugo build output. Not published; CI uploads public/ as an artifact.
+/public/
 /resources/
 # Written while a build is running so two builds cannot share one project.
 /.hugo_build.lock

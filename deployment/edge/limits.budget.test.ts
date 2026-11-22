@@ -22,13 +22,12 @@ type Zone = { events: number; window: string };
 const limits = JSON.parse(readFileSync(join(import.meta.dirname, "limits.json"), "utf8")) as {
   rateLimitZones: Record<string, Zone>;
   appRateLimitZones: Record<string, Zone>;
-  docsRateLimitZones: Record<string, Zone>;
 };
 
 const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000 };
 
 function zone(name: string): { events: number; windowMs: number } {
-  const found = limits.appRateLimitZones[name] ?? limits.rateLimitZones[name] ?? limits.docsRateLimitZones[name];
+  const found = limits.appRateLimitZones[name] ?? limits.rateLimitZones[name];
   const parts = found?.window.match(/^(\d+)([smh])$/);
   if (found === undefined || parts === null || parts === undefined) throw new Error(`no zone ${name} in limits.json`);
   return { events: found.events, windowMs: Number(parts[1]) * (UNIT_MS[parts[2] ?? ""] ?? Number.NaN) };
@@ -195,25 +194,4 @@ describe("web's own calls to our pds", () => {
   test.each(["global", "oauth_token", "web_global", "web_oauth_token"])("a_flood_one_past_%s_is_refused", (name) =>
     expectFloodRefused(name),
   );
-});
-
-// The docs site (P1.21w; ADR 0075): one zone, docs_global, for every request. A docs page with no cache is at most 12
-// requests (the page, the stylesheet, five scripts, the icons, the manifest and the search index; Hextra v0.13.0 as
-// built at P1.21w), and nothing is counted as cached, since the edge sets no cache lifetime and a browser revalidates.
-describe("docs_global", () => {
-  const DOCS_PAGE = 12;
-  /** One reader opening `pages` pages, one every `everyMs`, each page's requests at once. */
-  const reader = (pages: number, everyMs: number, from = 0) =>
-    paced(pages, everyMs, from).flatMap((at) => Array(DOCS_PAGE).fill(at) as number[]);
-
-  test("a_reader_opening_a_page_a_second_for_five_minutes_passes", () => {
-    expect(refusedIn("docs_global", reader(300, 1000))).toBe(0);
-  });
-
-  test("twenty_readers_behind_one_address_each_reading_twenty_pages_in_five_minutes_pass", () => {
-    const office = Array.from({ length: 20 }, (_, n) => reader(20, 15_000, n * 500));
-    expect(refusedIn("docs_global", together(...office))).toBe(0);
-  });
-
-  test("a_flood_one_past_docs_global_is_refused", () => expectFloodRefused("docs_global"));
 });

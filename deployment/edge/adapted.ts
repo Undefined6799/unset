@@ -21,7 +21,6 @@ export const SENTINELS = {
   ACME_EMAIL: "acme-email@sentinel.invalid",
   APP_HOST: "app-host.invalid",
   APP_UPSTREAM: "app-upstream.invalid:2",
-  DOCS_HOST: "docs-host.invalid",
 } as const;
 type EnvName = keyof typeof SENTINELS;
 /** The values a config was adapted with; a name the env does not set is absent. */
