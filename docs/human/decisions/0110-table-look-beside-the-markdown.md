@@ -52,8 +52,11 @@ cell no lasting identity.
    Rows, columns and several boxes chosen together are only ways the editor selects boxes. It stores what they set
    as these sides.
 4. Reader rule: start from the switches, then apply the edges in order. When two entries name the same side, the
-   later one counts. An entry whose table, direction, line or cell the text does not have is ignored, never an
-   error. A reader never refuses a card because of `tableStyle`.
+   later one counts. An edge within the schema's bounds whose table, direction, line or cell the text does not
+   have is ignored, never an error. A `tableStyle` that breaks the schema's limits or types (for example 501
+   edges, a line of 1000, a missing `shown`, or text where a boolean goes) makes the record invalid, as any other
+   field does: our app then hides the card, the index skips it and the editor refuses it. There is no special read
+   path that strips the field.
 5. Drift, accepted by Alex at 00:46Z. Positions refer to the Markdown as it stands.
    - Our editor renumbers the entries when its own tools insert, delete or move rows or columns.
    - It writes each side at most once, and it drops an entry that matches what the switches already give.

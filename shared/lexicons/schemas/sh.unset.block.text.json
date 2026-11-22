@@ -81,7 +81,7 @@
             "type": "ref",
             "ref": "#edge"
           },
-          "description": "Single cell sides shown or hidden whatever the switches say. Two neighbouring cells share one edge, so each side is stored once. Edges are named by their position in the text as it stands, so an edit that adds, removes or moves a row or column can move them onto other cells. A reader ignores an edge whose table, direction or position the text does not have; when two entries name the same edge, the later one counts."
+          "description": "Single cell sides shown or hidden whatever the switches say. Two neighbouring cells share one edge, so each side is stored once. Edges are named by their position in the text as it stands, so an edit that adds, removes or moves a row or column can move them onto other cells. A reader ignores an edge within these bounds whose table, direction or position the text does not have; when two entries name the same edge, the later one counts. Values outside the bounds or types make the record invalid, as for any field."
         }
       }
     }
