@@ -270,26 +270,57 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await expect(blocks).toHaveCount(3);
   await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(1);
   await page.keyboard.press("Enter");
-  await page.keyboard.type("- a");
-  await expect(blocks.nth(3)).toHaveText("a");
+  // In a list Enter makes another point, and Shift+Enter a new block after the list (Alex 2026-11-22 00:02Z).
+  await page.keyboard.type("- a1");
+  await expect(blocks.nth(3)).toHaveText("a1");
   await page.keyboard.press("Enter");
-  await page.keyboard.type("b");
-  await page.keyboard.press("Shift+Enter");
-  await page.keyboard.type("c");
-  await expect(editor.locator("ul > li")).toHaveText(["a", "b", "c"]);
+  await page.keyboard.type("b1b2");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("c1");
+  await expect(editor.locator("ul > li")).toHaveText(["a1", "b1b2", "c1"]);
   await expect(editor.locator("li [data-type='hardbreak']")).toHaveCount(0);
-  // Shift+Enter twice ends the list, as Enter twice did: the second, on an empty item, lifts it out.
   await page.keyboard.press("Shift+Enter");
-  await page.keyboard.press("Shift+Enter");
-  await page.keyboard.type("``` ");
+  await expect(editor.locator("ul > li")).toHaveText(["a1", "b1b2", "c1"]);
+  // Three backticks then Enter starts a code block, as in the playground (preset-commonmark's code fence rule), and
+  // Enter in it is a new line; Shift+Enter leaves it.
+  await page.keyboard.type("```");
+  await page.keyboard.press("Enter");
   await page.keyboard.type("x = 1");
   await page.keyboard.press("Enter");
   await page.keyboard.type("y = 2");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
   await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
-  await expect(editor.locator("ul > li")).toHaveCount(3);
   await expect(blocks.last()).toHaveText("after");
+  // Shift+Enter after three backticks too.
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("```");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("z");
+  await expect(editor.locator("pre")).toHaveText(["x = 1\ny = 2", "z"]);
+  await page.keyboard.press("Shift+Enter");
+  // In the middle of a point, Shift+Enter makes the words after the caret a block of their own between the two
+  // halves of the list.
+  const middle = editor.locator("li").nth(1);
+  await middle.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Shift+Enter");
+  await expect(blocks.nth(3)).toHaveText("a1b1");
+  await expect(blocks.nth(4)).toHaveText("b2");
+  await expect(blocks.nth(4)).toHaveJSProperty("tagName", "P");
+  await expect(blocks.nth(5)).toHaveText("c1");
+  // In a quote, Enter is another line and Shift+Enter a new block after the quote.
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("> said");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("more");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("outside");
+  await expect(editor.locator("blockquote")).toHaveText("saidmore");
+  await expect(blocks.last()).toHaveText("outside");
+  await expect(blocks.last()).toHaveJSProperty("tagName", "P");
   // The empty line's hint says how to start one.
   await page.keyboard.press("Shift+Enter");
   await expect(editor.locator("[data-placeholder]")).toHaveAttribute(
