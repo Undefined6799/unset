@@ -30,7 +30,7 @@ test("a_place_counts_the_start_of_another_line_as_a_space", () => {
   startLine(count);
   countChars("one", count);
   startLine(count);
-  expect(count).toEqual({ chars: 3, space: true, pending: 0, line: true });
+  expect(count).toEqual({ chars: 3, space: true, pending: 0, ending: false, line: true });
   countChars("two", count);
   expect(count.chars).toBe("one two".length);
 });

@@ -20,12 +20,13 @@ export type Place = {
 
 /**
  * A count of a block's characters, carried from one piece of its words to the next. `pending` is the white space a
- * code block keeps as written, counted once a character follows it; `line` is set at the start of a line and cleared
- * by its first character.
+ * code block keeps as written, counted once a character follows it or another line starts; `ending` is whether the
+ * last of it is a line ending, which the page's code holds after its last line and the editor's does not; `line` is
+ * set at the start of a line and cleared by its first character.
  */
-export type Count = { chars: number; space: boolean; pending: number; line: boolean };
+export type Count = { chars: number; space: boolean; pending: number; ending: boolean; line: boolean };
 
-export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0, line: false });
+export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0, ending: false, line: false });
 
 /**
  * The white space HTML collapses (ASCII white space, WHATWG Infra): a no-break space and the other Unicode spaces are
@@ -41,13 +42,16 @@ const COLLAPSED = /[\t\n\f\r ]/;
 export function countChars(text: string, count: Count, literal = false): void {
   for (const ch of text) {
     if (COLLAPSED.test(ch)) {
-      if (literal) count.pending += 1;
-      else count.space = count.chars > 0;
+      if (literal) {
+        count.pending += 1;
+        count.ending = ch === "\n";
+      } else count.space = count.chars > 0;
       continue;
     }
     count.chars += (count.space ? 2 : 1) + count.pending;
     count.space = false;
     count.pending = 0;
+    count.ending = false;
     count.line = false;
   }
 }
@@ -64,11 +68,15 @@ export function placeOf(count: Count): { chars: number; space: boolean } {
 /**
  * Starts another line of the block's words (a list item, a quote's paragraph, a table cell, the line after a hard
  * line break): counted as one space, as the editor counts the start of each of its text blocks, since the page draws
- * `<li>one</li><li>two</li>` with nothing between the two words.
+ * `<li>one</li><li>two</li>` with nothing between the two words. White space a code block ends with is counted first,
+ * all but the page's last line ending, so a place in it is told from one in the words after it.
  */
 export function startLine(count: Count): void {
+  const kept = count.pending - (count.ending ? 1 : 0);
+  if (kept > 0) count.chars += (count.space ? 1 : 0) + kept;
   count.space = count.chars > 0;
   count.pending = 0;
+  count.ending = false;
   count.line = true;
 }
 
