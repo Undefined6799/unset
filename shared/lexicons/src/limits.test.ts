@@ -40,9 +40,9 @@ const picture = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const images = (list: unknown[], extra: Record<string, unknown> = {}) => card("images", { images: list, ...extra });
-// One line's fingerprint (sh.unset.markdownStyle#lineFingerprint): 8 characters.
+// One line's fingerprint (sh.unset.block.text#lineFingerprint): 8 characters.
 const FP = "567b4f30";
-// One table cell side (sh.unset.markdownStyle#edge): the top of the first header cell.
+// One table cell side (sh.unset.block.text#edge): the top of the first header cell.
 const edge = (extra: Record<string, unknown> = {}) => ({ direction: "horizontal", line: 0, cell: 0, ...extra });
 const oneTable = (extra: Record<string, unknown> = {}) => ({ lines: [FP], edges: [edge()], ...extra });
 const tableText = (tableStyle: Record<string, unknown>) => card("text", { text: "| a |\n| - |", tableStyle });

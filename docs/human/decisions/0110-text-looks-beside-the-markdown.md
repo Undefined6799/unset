@@ -4,7 +4,7 @@ date: "2026-11-22"
 step: P1.31x
 amends:
   - adr: "0086"
-    part: point 2, the text block sh.unset.block.text gaining the optional fields tableStyle and textStyle beside its Markdown, defined in the new lexicon sh.unset.markdownStyle
+    part: point 2, the text block sh.unset.block.text gaining the optional fields tableStyle and textStyle beside its Markdown, with their shapes as its own definitions #tableStyle and #textStyle
 ---
 # 0110 — A text card keeps its looks beside the Markdown, each named by its block's line fingerprints
 
@@ -25,6 +25,7 @@ he then set these rules, in his words:
 - "i thought it would be more something like 3 small string for the table for exemple", "otherwise you still need
   to find what lines make that sha", "and if you have a fingerprint per line, it tell you how many you have"
   (02:12Z)
+- "though we werre going to do sh.unset.block.markdown#textStyle, #listStyle, #tableStyle etc" (02:31Z)
 
 Nothing is published yet (`published.lock.json` is `{}`), so the shape can still change freely before this merges.
 The options, the prior art and three review rounds are in `/mnt/project-files/plans/lexicons/styling/`
@@ -42,9 +43,11 @@ are not Markdown.
 ## Decision
 
 1. **Two optional fields on `sh.unset.block.text`:** `tableStyle` and `textStyle`, beside `text`, which stays one
-   Markdown string. Their shapes are `#table` and `#text` in a new lexicon, `sh.unset.markdownStyle`, which names
-   nothing of ours, so another app's Markdown record can carry the same two fields. The name is flat because the
-   build allows one group only, `sh.unset.block` (ADR 0086 point 2).
+   Markdown string. Their shapes are the block's own definitions, `sh.unset.block.text#tableStyle` and
+   `sh.unset.block.text#textStyle`, as Alex chose for the table style at 01:00Z ("yes and that would remain
+   optionnal right??", item 19 of the target-look decisions) and expected again at 02:31Z. Another app's Markdown
+   record can carry the same looks by referring to these definitions. A look for lists is not part of this
+   version; it would come as a new optional field with its own definition, `#listStyle`.
 2. **Table lines.** `tableStyle` holds four optional booleans for every table in the text, each false when left out
    (the atproto style guide's rule for optional booleans): `hideHeaderLine`, `hideRowLines`, `showColumnLines`,
    `showOutline`. Our look with none set draws the header line and the row lines, and no column lines or outline.
@@ -89,6 +92,10 @@ are not Markdown.
 
 ## Consequences
 
+- Not decided here: Alex's 02:31Z message names the block `sh.unset.block.markdown`. Today it is
+  `sh.unset.block.text` (ADR 0086 point 2). Whether to rename it is his separate choice, asked on 2026-11-22 and
+  open when this was written. A rename would be its own step, before anything is published, with its own amendment
+  of ADR 0086; the definitions here would move with the block unchanged.
 - Size: a line fingerprint is about 11 bytes, an edge about 45. At every bound the two parts could pass the
   index's 1,000,000-byte record cap (`domains/profile/index-plan.ts`); such a record is hidden like any oversize
   record. The lexicon cannot bound sums, so the editor step sets our app's own limits for one card, as it does
@@ -127,6 +134,9 @@ are not Markdown.
 - **Looks for the whole card only.** Smallest, but it drops single lines and per-block alignment. Rejected.
 - **Markers inside the Markdown** (Pandoc or djot attributes, HTML comments). The text would no longer be exactly
   Markdown. Rejected.
+- **A separate lexicon for the looks** (`sh.unset.markdownStyle#table` and `#text`, built in this pull request's
+  earlier commits so that the name held nothing of ours). One more lexicon to publish, and not what Alex expected:
+  he named the looks as parts of the block (02:31Z). Not taken; another app can refer to the block's definitions.
 - **A separate style record linked to the card** (Alex asked at 00:58Z). A second record and write for each styled
   card, a dangling link when either is deleted, a new index table. Not taken: he chose a field inside the card at
   01:00Z.
