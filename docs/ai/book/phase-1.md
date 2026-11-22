@@ -4890,6 +4890,18 @@ edge rules and C18 accept exactly that site and that bind. Publishing is the man
 `docs/human/runbooks/docs-site.md`; DNS, the Pangolin resource and the deploy are Alex's. Proposed ADR 0075; it
 merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs/site.
 
+### P1.21t — Retire the app docs mirror at the organisation cutover (added step, 2026-11-22)
+
+**Tags:** trusted · **Depends on:** P1.21w · **Plan:** §7, §8
+
+The docs-pipeline step used by #1957 and #1985 is recorded here. Alex's accepted org-0002 keeps docs.unset.sh to
+organisation repositories, with the old site up until replaced; on 2026-11-22 he authorised the deployment sequence
+and asked for HTTPS. ADR 0112 records the app-side retirement without rewriting ADR 0111. Once the first real org
+export and replacement build are green, remove the app publisher, exporter and their dedicated tests and root-file
+copies. Keep app documentation and the Hugo CI job. Drain old runs and remove the app's write credential access before the new
+framework publishes; key and environment cleanup remain Alex's. Staging-edge removal stays in #1985. Done when the
+ordinary gate and retained docs build pass, the cutover runbook is current, and the durable AI note is updated.
+
 ### P1.21x — Keep one profile layout (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21o · **Plan:** §5.4
