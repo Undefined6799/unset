@@ -598,9 +598,10 @@ test("enter_or_space_pressed_twice_on_save_saves_once_and_leaves_the_words", asy
 
 /** Two frames of the page: a change the editor reports reaches the page within them (milkdown.ts, once a frame). */
 async function nextFrames(page: Page) {
-  await page.evaluate(
-    () => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
-  );
+  await page.evaluate(() => {
+    const view = globalThis as unknown as { requestAnimationFrame(next: () => void): number };
+    return new Promise<void>((done) => view.requestAnimationFrame(() => view.requestAnimationFrame(() => done())));
+  });
 }
 
 // #1967 on WebKit (run 44969033836): when the answer came before the second press, the Save had already put the
