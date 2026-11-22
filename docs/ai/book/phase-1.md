@@ -5024,12 +5024,17 @@ Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postg
 
 Hard precondition for text and table styles (design `/mnt/project-files/plans/lexicons/styling/design.md`, version 3
 §8): a style is anchored by a spec-defined block count under one whole-text fingerprint, so a block-counting bug would
-misplace styles, and the page, the editor and other apps must cut blocks as CommonMark plus GFM says (math and
+misplace styles, and the page, the editor and other apps must cut blocks as CommonMark plus GFM tables say (math and
 footnotes stay out of the count). The page reader (`apps/web/lib/profile/parse.ts`, `readme-scan.ts`) is a hand-written CommonMark
 subset; the editor (Milkdown 7.23.0) reads with remark-parse 11.0.0, that is mdast-util-from-markdown 2.1.0 on
-micromark 4.0.3, plus remark-gfm 4.0.1 (micromark-extension-gfm 3.0.0, mdast-util-gfm 3.1.0). Decision (editor thread,
-reuse over reinvent): the page parses with those same packages, pinned exactly as direct dependencies of apps/web,
-and maps mdast to the existing `Block`/`Inline` view types, so `readme.svelte` and its escaping do not change.
+micromark 4.0.3, plus remark-gfm 4.0.1 (micromark-extension-gfm 3.0.0, mdast-util-gfm 3.1.0). Decision (editor thread, reuse over reinvent; review of #1980): the block count that anchors styles is taken with
+micromark 4.0.3 through mdast-util-from-markdown 2.1.0 plus the GFM table extension only (micromark-extension-gfm-table
+and mdast-util-gfm-table, pinned exactly), with no footnote and no math extension, on the page and in the editor
+alike. The editor still edits with remark-gfm 4.0.1 (Milkdown 7.23.0), but counts blocks with that same table-only
+parse of its saved string, since remark-gfm makes `[^1]:` a block and remark-math makes a `$$` block one block where
+CommonMark makes two, so another app could not reproduce a count taken from them. The page parses with these
+packages as direct dependencies of apps/web and maps mdast to the existing `Block`/`Inline` view types, so
+`readme.svelte` and its escaping do not change.
 
 Why it is safe and cheap: parsing runs on the server in `view.ts`, so the public page still runs no script and no
 parser reaches its bundle; the owner's editor chunk already carries micromark. The mapping keeps the page's rules:
@@ -5037,9 +5042,10 @@ parser reaches its bundle; the owner's editor chunk already carries micromark. T
 The packages meet ADR 0057 (established, maintained, already in the lockfile, audit green), so no ADR.
 
 Tests first: a shared corpus of samples (fenced code with its closing fence, lists and quotes, a GFM table, lazy
-continuation lines, reference definitions, raw HTML, a `$$` math block) that the page's block cut and the editor's
-remark parse must cut to the same blocks and the same block count; the existing parse tests keep passing or are
-updated where the subset was not CommonMark, each such change named in the PR. Ownership: apps/web/lib/profile
+continuation lines, reference definitions, raw HTML, a footnote definition `[^1]:` and a `$$` math block, each counted
+as CommonMark counts it) that the page and the editor's block count must cut to the same blocks and the same block
+count; the existing parse tests keep passing or are updated where the subset was not CommonMark, each such change
+named in the PR. Ownership: apps/web/lib/profile
 (parser) → apps/web (Text card). Styles build only after this merges.
 
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
