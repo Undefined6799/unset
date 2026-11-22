@@ -4,7 +4,7 @@
 // that opened it, and cannot be sent twice while on its way; editing a stored card saves in place. A card moved from
 // its three-dot menu keeps focus on that menu's button (Alex 2026-11-18: actions behind three dots, always shown).
 // The cards added are deleted again, so the member page is as the other specs expect it.
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE, postedText, writeText } from "./cards.ts";
 import { openPage } from "./observe.ts";
@@ -230,6 +230,140 @@ test("two_quick_presses_on_move_down_move_the_card_twice", async ({ page }) => {
     for (const name of ["Alpha card", "Beta card", "Gamma card"]) {
       if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
     }
+  }
+});
+
+/** A press on a card's menu item, then the menu gone, as a member waits to see it close before the next press. */
+async function pressInMenu(page: Page, name: string, item: string) {
+  await chooseFromMenu(page, name, item);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+}
+
+/** The card's box, which a move dims and marks busy (card-controls.svelte markMoving). */
+const surfaceOf = (page: Page, name: string) =>
+  page.locator("[data-surface]", { has: page.getByRole("group", { name }) });
+const movedTitles = (page: Page) => page.getByRole("heading", { level: 2 }).filter({ hasText: /^(Alpha|Beta|Gamma)$/ });
+
+/** A move the PDS refused, as the reorder action answers it (a SvelteKit failure, played as in the delete test below). */
+const REFUSED_MOVE = {
+  status: 503,
+  headers: { "content-type": "application/json", "cache-control": "private, no-store" },
+  body: JSON.stringify({
+    type: "failure",
+    status: 503,
+    data: JSON.stringify([{ code: 1, message: 2 }, "card.pds_unavailable", ERROR_MESSAGES["card.pds_unavailable"]]),
+  }),
+};
+
+/** Alpha, Beta and Gamma, with the first order held until `release` is called; `reorders` counts the orders sent. */
+async function heldMoves(page: Page) {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  for (const title of ["Alpha", "Beta", "Gamma"]) await addCard(page, linksCard(title));
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  const held = Promise.withResolvers<"go" | "refuse">();
+  const sent = { reorders: 0 };
+  await page.route("**/*?/reorder", async (route) => {
+    sent.reorders += 1;
+    if (sent.reorders === 1 && (await held.promise) === "refuse") return route.fulfill(REFUSED_MOVE);
+    await route.continue();
+  });
+  return { sent, release: (how: "go" | "refuse" = "go") => held.resolve(how) };
+}
+
+/**
+ * Deletes the three cards, then gives back the member's writes (limits.ts `profile`: 30 a minute, one back every two
+ * seconds), as cards-stale.spec.ts does, so the tests after these are not refused: three adds, the orders sent, three
+ * deletes, and any `more` the test made.
+ */
+async function removeMoved(page: Page, sent: { reorders: number }, more = 0) {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  // A menu a failed step left open would hold a second Delete item.
+  await page.keyboard.press("Escape");
+  await page.reload();
+  for (const name of ["Alpha card", "Beta card", "Gamma card"]) {
+    if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
+  }
+  await page.waitForTimeout((6 + sent.reorders + more) * 2_000 + 1_000);
+}
+
+// Codex review of #1978 (00:36Z): a queued press whose move is gone by its turn (Alpha already last) did nothing,
+// and the presses queued after it never ran. It is skipped, and the queue goes on.
+test("a_queued_move_that_is_no_longer_there_is_skipped_and_the_next_one_runs", async ({ page }) => {
+  const { sent, release } = await heldMoves(page);
+  try {
+    for (let i = 0; i < 3; i += 1) await pressInMenu(page, "Alpha card", "Move down");
+    await pressInMenu(page, "Beta card", "Move down");
+    release();
+    await expect(movedTitles(page)).toHaveText(["Gamma", "Beta", "Alpha"]);
+    await expect(surfaceOf(page, "Beta card")).not.toHaveAttribute("aria-busy", "true");
+  } finally {
+    await removeMoved(page, sent);
+  }
+});
+
+// Codex review of #1978 (00:36Z): a Save's refresh while a move was on its way let the next press go before the
+// first move's order came back, built on the old order, so the card moved once.
+test("a_save_while_a_move_is_on_its_way_does_not_send_the_next_press_early", async ({ page }) => {
+  const word = `note${Date.now()}`;
+  const { sent, release } = await heldMoves(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: word });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    await pressInMenu(page, "Alpha card", "Move down");
+    await pressInMenu(page, "Alpha card", "Move down");
+    const editor = page.locator('[data-slot="card"]', { hasText: word }).locator("[data-text-in-place] .ProseMirror");
+    await editor.click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" more");
+    await page.locator("[data-unsaved-bar]").getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("[data-unsaved-bar]").getByRole("status")).toHaveText("Saved.");
+    release();
+    await expect(movedTitles(page)).toHaveText(["Beta", "Gamma", "Alpha"]);
+    await page.reload();
+    await expect(movedTitles(page)).toHaveText(["Beta", "Gamma", "Alpha"]);
+  } finally {
+    const note = page.getByRole("group", { name: "Text card" });
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    if ((await note.count()) > 0) await deleteCard(page, "Text card");
+    // The Text card's add, its Save and its delete.
+    await removeMoved(page, sent, 3);
+  }
+});
+
+// Review of #1978 at ddfb187 (advisory 2): a refused move drops the presses queued after it, and the cards they were
+// pressed on are no longer shown as moving.
+test("a_refused_move_leaves_no_queued_card_dimmed", async ({ page }) => {
+  const { sent, release } = await heldMoves(page);
+  try {
+    await pressInMenu(page, "Alpha card", "Move down");
+    await pressInMenu(page, "Beta card", "Move down");
+    await expect(surfaceOf(page, "Beta card")).toHaveAttribute("aria-busy", "true");
+    release("refuse");
+    // Well before the 10 s after which a dimmed card shows again on its own.
+    await expect(surfaceOf(page, "Beta card")).not.toHaveAttribute("aria-busy", "true", { timeout: 2_000 });
+    await expect(surfaceOf(page, "Alpha card")).not.toHaveAttribute("aria-busy", "true", { timeout: 2_000 });
+    await expect(movedTitles(page)).toHaveText(["Alpha", "Beta", "Gamma"]);
+  } finally {
+    await removeMoved(page, sent);
+  }
+});
+
+// Review of #1978 at ddfb187 (advisory 1): a move whose answer never comes no longer holds every later press in the
+// queue; after the 10 s the card shows as moving, a press is sent at once.
+test("a_move_with_no_answer_stops_holding_later_presses_after_ten_seconds", async ({ page }) => {
+  test.slow();
+  const { sent, release } = await heldMoves(page);
+  try {
+    await pressInMenu(page, "Alpha card", "Move down");
+    await page.waitForTimeout(10_500);
+    await pressInMenu(page, "Gamma card", "Move up");
+    await expect.poll(() => sent.reorders).toBe(2);
+    await expect(movedTitles(page)).toHaveText(["Alpha", "Gamma", "Beta"]);
+  } finally {
+    release("refuse");
+    await removeMoved(page, sent);
   }
 });
 
