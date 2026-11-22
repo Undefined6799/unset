@@ -113,6 +113,10 @@ const textBefore = (text: Text, range?: Range) =>
 export function placeIn(root: HTMLElement, node: Node, offset: number): Place | undefined {
   const blocks = root.firstElementChild;
   if (blocks === null || !blocks.contains(node) || node === blocks) return undefined;
+  // A line with no words (an empty code block, list item or table cell) is no place in them: one in it would be the
+  // same as one before the words after it, so the point on the screen is used instead.
+  const line = (node instanceof Element ? node : node.parentElement)?.closest(LINES);
+  if (line != null && blocks.contains(line) && countIn(line).chars === 0) return undefined;
   const before = document.createRange();
   before.setStart(blocks, 0);
   before.setEnd(node, offset);
