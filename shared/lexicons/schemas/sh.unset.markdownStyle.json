@@ -1,0 +1,137 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.markdownStyle",
+  "description": "Optional looks that sit beside a Markdown text (CommonMark with GFM tables) and never change it. Each look names its block by one short fingerprint for each of the block's lines. A reader shows a block whose lines no longer match as plain Markdown, and a reader that ignores looks shows the whole text as plain Markdown.",
+  "defs": {
+    "table": {
+      "type": "object",
+      "description": "Lines of the tables in the text. Each switch left out means the reader's usual lines.",
+      "properties": {
+        "hideHeaderLine": {
+          "type": "boolean",
+          "description": "Hide the line under each table's header row."
+        },
+        "hideRowLines": {
+          "type": "boolean",
+          "description": "Hide the lines between body rows."
+        },
+        "showColumnLines": {
+          "type": "boolean",
+          "description": "Show lines between columns."
+        },
+        "showOutline": {
+          "type": "boolean",
+          "description": "Show a line around each table."
+        },
+        "tables": {
+          "type": "array",
+          "maxLength": 20,
+          "items": {
+            "type": "ref",
+            "ref": "#tableEdges"
+          },
+          "description": "Single cell sides, one entry for each table that has them."
+        }
+      }
+    },
+    "tableEdges": {
+      "type": "object",
+      "required": ["lines", "edges"],
+      "description": "Single cell sides of one table, shown or hidden whatever the switches say.",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "minLength": 1,
+          "maxLength": 1000,
+          "items": {
+            "type": "ref",
+            "ref": "#lineFingerprint"
+          },
+          "description": "The block this look was made for: one fingerprint for each of its source lines, in order. A table's delimiter row is left out."
+        },
+        "edges": {
+          "type": "array",
+          "maxLength": 250,
+          "items": {
+            "type": "ref",
+            "ref": "#edge"
+          },
+          "description": "Two neighbouring cells share one edge, so each side is stored once. A reader ignores an edge the table has no place for; when two entries name the same edge, the later one counts."
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["direction", "line", "cell"],
+      "description": "One cell side. The top of the cell in row r and column c (rows from 0 with the header as row 0, columns from 0) is horizontal line r, cell c; its bottom is horizontal line r + 1, cell c; its left is vertical line c, cell r; its right is vertical line c + 1, cell r.",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["horizontal", "vertical"],
+          "description": "horizontal: a side between rows; vertical: a side between columns."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "Which grid line, from 0 at the top edge (horizontal) or the left edge (vertical)."
+        },
+        "cell": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "Which cell along that line: the column for a horizontal line, the row for a vertical one."
+        },
+        "hide": {
+          "type": "boolean",
+          "description": "Hide this side. Left out, the side is shown."
+        }
+      }
+    },
+    "text": {
+      "type": "object",
+      "description": "Alignment of paragraphs, headings and block quotes. A block not listed keeps the reader's start side.",
+      "properties": {
+        "align": {
+          "type": "array",
+          "maxLength": 200,
+          "items": {
+            "type": "ref",
+            "ref": "#blockAlign"
+          },
+          "description": "One entry for each aligned block."
+        }
+      }
+    },
+    "blockAlign": {
+      "type": "object",
+      "required": ["lines", "value"],
+      "description": "The alignment of one block.",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "minLength": 1,
+          "maxLength": 1000,
+          "items": {
+            "type": "ref",
+            "ref": "#lineFingerprint"
+          },
+          "description": "The block this look was made for: one fingerprint for each of its source lines, in order. A table's delimiter row is left out."
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["center", "end"],
+          "description": "center, or end: the right side in left-to-right text."
+        }
+      }
+    },
+    "lineFingerprint": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 8,
+      "description": "The first 8 lowercase hexadecimal characters of SHA-256 over one source line as UTF-8, with every space and tab removed. Lines end as CommonMark defines. A look applies to a top-level block whose lines give exactly these fingerprints, in order, and which ends there: the next line is blank, the end of the text, or the start of another top-level block. Looks with the same fingerprints go to the matching blocks in order; if their numbers differ, none applies."
+    }
+  }
+}

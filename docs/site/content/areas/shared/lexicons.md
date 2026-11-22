@@ -32,6 +32,7 @@ Our schemas:
 | `schemas/sh.unset.block.buttons.json` | `sh.unset.block.buttons` |
 | `schemas/sh.unset.block.images.json` | `sh.unset.block.images` |
 | `schemas/sh.unset.block.defs.json` | `sh.unset.block.defs` |
+| `schemas/sh.unset.markdownStyle.json` | `sh.unset.markdownStyle` |
 | `schemas/sh.unset.authFull.json` | `sh.unset.authFull` |
 
 Snapshots:

@@ -50,6 +50,7 @@ describe("schema build checks", () => {
       "schemas/sh.unset.block.showcase.json",
       "schemas/sh.unset.block.text.json",
       "schemas/sh.unset.card.json",
+      "schemas/sh.unset.markdownStyle.json",
       "schemas/sh.unset.page.json",
       "schemas/sh.unset.profile.json",
     ]);

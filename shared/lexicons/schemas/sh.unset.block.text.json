@@ -14,74 +14,13 @@
         },
         "tableStyle": {
           "type": "ref",
-          "ref": "#tableStyle",
-          "description": "How the tables in the text look, beside the Markdown. Only the look: a reader that ignores it shows the tables its own way, and the text means the same."
-        }
-      }
-    },
-    "edge": {
-      "type": "object",
-      "required": ["table", "direction", "line", "cell", "shown"],
-      "description": "One cell side. The top of the cell in row r and column c (rows counted from 0 with the header as row 0, columns from 0) is horizontal line r, cell c; its bottom is horizontal line r + 1, cell c; its left is vertical line c, cell r; its right is vertical line c + 1, cell r.",
-      "properties": {
-        "table": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 99,
-          "description": "Which table, counted from 0 in reading order."
+          "ref": "sh.unset.markdownStyle#table",
+          "description": "How the tables in the text look. Only the look: a reader that ignores it shows the tables its own way, and the text means the same."
         },
-        "direction": {
-          "type": "string",
-          "maxLength": 32,
-          "knownValues": ["horizontal", "vertical"],
-          "description": "horizontal: a side between rows; vertical: a side between columns."
-        },
-        "line": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 999,
-          "description": "Which grid line, counted from 0 at the top edge (horizontal) or the left edge (vertical)."
-        },
-        "cell": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 999,
-          "description": "Which cell along that line: the column for a horizontal line, the row for a vertical one."
-        },
-        "shown": {
-          "type": "boolean",
-          "description": "Whether this side shows."
-        }
-      }
-    },
-    "tableStyle": {
-      "type": "object",
-      "description": "The look of the tables in the text. The four line switches apply to every table; each one left out means the reader's usual look for those lines. Edges then show or hide single cell sides on top of them. Later look settings, such as column widths, are added here as new optional fields.",
-      "properties": {
-        "header": {
-          "type": "boolean",
-          "description": "The line under the header row."
-        },
-        "rows": {
-          "type": "boolean",
-          "description": "The lines between body rows."
-        },
-        "columns": {
-          "type": "boolean",
-          "description": "The lines between columns."
-        },
-        "outline": {
-          "type": "boolean",
-          "description": "The edge around the table."
-        },
-        "edges": {
-          "type": "array",
-          "maxLength": 500,
-          "items": {
-            "type": "ref",
-            "ref": "#edge"
-          },
-          "description": "Single cell sides shown or hidden whatever the switches say. Two neighbouring cells share one edge, so each side is stored once. Edges are named by their position in the text as it stands, so an edit that adds, removes or moves a row or column can move them onto other cells. A reader ignores an edge within these bounds whose table, direction or position the text does not have; when two entries name the same edge, the later one counts. Values outside the bounds or types make the record invalid, as for any field."
+        "textStyle": {
+          "type": "ref",
+          "ref": "sh.unset.markdownStyle#text",
+          "description": "How blocks of the text are aligned. Only the look: a reader that ignores it shows the text its own way, and the text means the same."
         }
       }
     }

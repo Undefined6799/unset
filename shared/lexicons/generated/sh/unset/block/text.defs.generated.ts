@@ -4,6 +4,7 @@
  */
 
 import { l } from "@atproto/lex-schema";
+import * as UnsetMarkdownStyle from "../markdownStyle.defs.generated.ts";
 
 const $nsid = "sh.unset.block.text";
 
@@ -21,9 +22,14 @@ type Main = {
   text: string;
 
   /**
-   * How the tables in the text look, beside the Markdown. Only the look: a reader that ignores it shows the tables its own way, and the text means the same.
+   * How the tables in the text look. Only the look: a reader that ignores it shows the tables its own way, and the text means the same.
    */
-  tableStyle?: TableStyle;
+  tableStyle?: UnsetMarkdownStyle.Table;
+
+  /**
+   * How blocks of the text are aligned. Only the look: a reader that ignores it shows the text its own way, and the text means the same.
+   */
+  textStyle?: UnsetMarkdownStyle.Text;
 };
 
 export type { Main };
@@ -34,7 +40,12 @@ const main = /*#__PURE__*/ l.typedObject<Main>(
   "main",
   /*#__PURE__*/ l.object({
     text: /*#__PURE__*/ l.string({ maxLength: 20000 }),
-    tableStyle: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.ref<TableStyle>((() => tableStyle) as any)),
+    tableStyle: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.ref<UnsetMarkdownStyle.Table>((() => UnsetMarkdownStyle.table) as any),
+    ),
+    textStyle: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.ref<UnsetMarkdownStyle.Text>((() => UnsetMarkdownStyle.text) as any),
+    ),
   }),
 );
 
@@ -57,99 +68,3 @@ export const $parse = /*#__PURE__*/ main.parse.bind(main);
 export const $safeParse = /*#__PURE__*/ main.safeParse.bind(main);
 export const $validate = /*#__PURE__*/ main.validate.bind(main);
 export const $safeValidate = /*#__PURE__*/ main.safeValidate.bind(main);
-
-/** One cell side. The top of the cell in row r and column c (rows counted from 0 with the header as row 0, columns from 0) is horizontal line r, cell c; its bottom is horizontal line r + 1, cell c; its left is vertical line c, cell r; its right is vertical line c + 1, cell r. */
-type Edge = {
-  $type?: "sh.unset.block.text#edge";
-
-  /**
-   * Which table, counted from 0 in reading order.
-   */
-  table: number;
-
-  /**
-   * horizontal: a side between rows; vertical: a side between columns.
-   */
-  direction: "horizontal" | "vertical" | l.UnknownString;
-
-  /**
-   * Which grid line, counted from 0 at the top edge (horizontal) or the left edge (vertical).
-   */
-  line: number;
-
-  /**
-   * Which cell along that line: the column for a horizontal line, the row for a vertical one.
-   */
-  cell: number;
-
-  /**
-   * Whether this side shows.
-   */
-  shown: boolean;
-};
-
-export type { Edge };
-
-/** One cell side. The top of the cell in row r and column c (rows counted from 0 with the header as row 0, columns from 0) is horizontal line r, cell c; its bottom is horizontal line r + 1, cell c; its left is vertical line c, cell r; its right is vertical line c + 1, cell r. */
-const edge = /*#__PURE__*/ l.typedObject<Edge>(
-  $nsid,
-  "edge",
-  /*#__PURE__*/ l.object({
-    table: /*#__PURE__*/ l.integer({ minimum: 0, maximum: 99 }),
-    direction: /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["horizontal", "vertical"] }>({ maxLength: 32 }),
-    line: /*#__PURE__*/ l.integer({ minimum: 0, maximum: 999 }),
-    cell: /*#__PURE__*/ l.integer({ minimum: 0, maximum: 999 }),
-    shown: /*#__PURE__*/ l.boolean(),
-  }),
-);
-
-export { edge };
-
-/** The look of the tables in the text. The four line switches apply to every table; each one left out means the reader's usual look for those lines. Edges then show or hide single cell sides on top of them. Later look settings, such as column widths, are added here as new optional fields. */
-type TableStyle = {
-  $type?: "sh.unset.block.text#tableStyle";
-
-  /**
-   * The line under the header row.
-   */
-  header?: boolean;
-
-  /**
-   * The lines between body rows.
-   */
-  rows?: boolean;
-
-  /**
-   * The lines between columns.
-   */
-  columns?: boolean;
-
-  /**
-   * The edge around the table.
-   */
-  outline?: boolean;
-
-  /**
-   * Single cell sides shown or hidden whatever the switches say. Two neighbouring cells share one edge, so each side is stored once. Edges are named by their position in the text as it stands, so an edit that adds, removes or moves a row or column can move them onto other cells. A reader ignores an edge within these bounds whose table, direction or position the text does not have; when two entries name the same edge, the later one counts. Values outside the bounds or types make the record invalid, as for any field.
-   */
-  edges?: Edge[];
-};
-
-export type { TableStyle };
-
-/** The look of the tables in the text. The four line switches apply to every table; each one left out means the reader's usual look for those lines. Edges then show or hide single cell sides on top of them. Later look settings, such as column widths, are added here as new optional fields. */
-const tableStyle = /*#__PURE__*/ l.typedObject<TableStyle>(
-  $nsid,
-  "tableStyle",
-  /*#__PURE__*/ l.object({
-    header: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
-    rows: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
-    columns: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
-    outline: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
-    edges: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Edge>((() => edge) as any), { maxLength: 500 }),
-    ),
-  }),
-);
-
-export { tableStyle };

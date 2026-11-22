@@ -10,6 +10,7 @@ import links from "../schemas/sh.unset.block.links.json" with { type: "json" };
 import showcase from "../schemas/sh.unset.block.showcase.json" with { type: "json" };
 import text from "../schemas/sh.unset.block.text.json" with { type: "json" };
 import card from "../schemas/sh.unset.card.json" with { type: "json" };
+import markdownStyle from "../schemas/sh.unset.markdownStyle.json" with { type: "json" };
 import page from "../schemas/sh.unset.page.json" with { type: "json" };
 import profile from "../schemas/sh.unset.profile.json" with { type: "json" };
 import actorProfile from "../vendor/app.bsky.actor.profile.json" with { type: "json" };
@@ -61,9 +62,12 @@ function toLex(value: Record<string, unknown>): unknown {
   }
 }
 
-/** Defs other schemas refer to by NSID (a card's block, `sh.unset.block.defs#image`); no other lexicon is followed. */
+/**
+ * Defs other schemas refer to by NSID (a card's block, `sh.unset.block.defs#image`, a text block's looks in
+ * `sh.unset.markdownStyle`); no other lexicon is followed.
+ */
 const SHARED: Record<string, Defs> = Object.fromEntries(
-  [blockDefs, buttons, images, links, showcase, text].map((doc) => [doc.id, doc.defs as Defs]),
+  [blockDefs, buttons, images, links, showcase, text, markdownStyle].map((doc) => [doc.id, doc.defs as Defs]),
 );
 
 /**

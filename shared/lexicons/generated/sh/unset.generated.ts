@@ -5,5 +5,6 @@
 export * as authFull from "./unset/authFull.generated.ts";
 export * as block from "./unset/block.generated.ts";
 export * as card from "./unset/card.generated.ts";
+export * as markdownStyle from "./unset/markdownStyle.generated.ts";
 export * as page from "./unset/page.generated.ts";
 export * as profile from "./unset/profile.generated.ts";
