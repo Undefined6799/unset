@@ -11,3 +11,21 @@
 	}
 	log_append route_class {route_class}
 }
+
+# The app site's route class (staging, 2026-11-21: three bursts of 429s the access log could not explain, because it
+# keeps no path). The same closed set of names as above, never a capture: a build file, the version check, a font, a
+# page's data request, a form action, a picture upload, the health check, or `other` (a page itself). Imported on the
+# dev app site only; it changes no limit.
+(app-route-class) {
+	map {http.request.orig_uri} {route_class} {
+		~^/_app/immutable/ build
+		~^/_app/version\.json(?:\?[^#]*)?$ version
+		~^/fonts/ fonts
+		~^[^?#]*/__data\.json(?:\?[^#]*)?$ data
+		~^[^?#]*\?/ action
+		~^/images(?:\?[^#]*)?$ images
+		~^/health(?:\?[^#]*)?$ health
+		default other
+	}
+	log_append route_class {route_class}
+}

@@ -552,7 +552,36 @@ const UPSTREAMS: Red[] = [
 ];
 
 const DEV_SHAPE: Red[] = [
-  ["no HSTS", "dev", (c) => void site(c, APP_DEV).splice(0, 1), "{$APP_HOST}: does not import security-headers"],
+  [
+    "no HSTS",
+    "dev",
+    (c) => {
+      const handlers = site(c, APP_DEV);
+      handlers.splice(
+        handlers.findIndex((handler) => JSON.stringify(handler).includes("Strict-Transport-Security")),
+        1,
+      );
+    },
+    "{$APP_HOST}: does not import security-headers",
+  ],
+  // The app site's route class (staging 2026-11-21): a capture would write a member's path segment into the log, and
+  // without the class a burst cannot be told apart.
+  [
+    "an app route class that captures a path",
+    "dev",
+    (c) =>
+      void Object.assign(o(site(c, APP_DEV)[0]), {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Caddy's capture placeholder, as adapted.
+        mappings: [{ input_regexp: "^/(did:[^/]+)", outputs: ["${1}"] }],
+      }),
+    "{$APP_HOST}: the route class is not the ruled one",
+  ],
+  [
+    "no app route class",
+    "dev",
+    (c) => void site(c, APP_DEV).splice(0, 2),
+    "{$APP_HOST}: the route class is not the ruled one",
+  ],
   [
     "a weaker HSTS",
     "dev",
