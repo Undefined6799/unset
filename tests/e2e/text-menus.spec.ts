@@ -318,6 +318,42 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_width", async ({ page }) => {
+  // Alex 2026-11-22 00:12Z: the six dots and the + "outside of the card ... on the margin of the card instead of
+  // inside", for a card on the right of a row too; with a mouse the owner's page keeps room for them.
+  const stamp = Date.now();
+  const words = [`lefthalf${stamp}`, `righthalf${stamp}`];
+  await openOwnPage(page);
+  for (const word of words) await addCard(page, { kind: "readme", width: "half", surface: "filled", text: `${word} one` });
+  for (const width of [1280, 1024, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openOwnPage(page);
+    const cards = words.map((word) => page.locator('[data-slot="card"]', { hasText: word }));
+    for (const card of cards) {
+      const editor = card.locator("[data-text-in-place] .ProseMirror");
+      await editor.locator("p").first().hover();
+      const handle = card.locator("[data-block-handle]");
+      await expect(handle).toBeVisible();
+      await expect(handle.getByRole("button", { name: "Add a block below" })).toBeVisible();
+      const at = await handle.boundingBox();
+      const own = await card.boundingBox();
+      if (at === null || own === null) throw new Error(`no handle at ${width}`);
+      expect(at.x, `on the page at ${width}`).toBeGreaterThanOrEqual(0);
+      expect(at.x + at.width, `outside the card at ${width}`).toBeLessThanOrEqual(own.x);
+      for (const other of await page.locator('[data-slot="card"]').all()) {
+        const box = await other.boundingBox();
+        if (box === null) continue;
+        const apart =
+          at.x + at.width <= box.x || box.x + box.width <= at.x || at.y + at.height <= box.y || box.y + box.height <= at.y;
+        expect(apart, `over another card at ${width}`).toBe(true);
+      }
+      await page.mouse.move(0, 0);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  for (const word of words) await discardAndRemove(page, word, { changed: false });
+});
+
 test("selected_words_become_a_link_from_the_floating_bar_which_shows_edits_and_removes_it", async ({ page }) => {
   const watched = watch(page);
   const word = `links${Date.now()}`;
