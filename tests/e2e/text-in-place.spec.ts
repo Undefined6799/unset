@@ -698,21 +698,29 @@ test("a_save_after_another_tab_wrote_the_card_meanwhile_is_a_conflict", async ({
   await editor.press("End");
   await editor.pressSequentially(" two");
   const other = await context.newPage();
+  // The other tab's whole visit runs inside this route, longer than one expect waits on a slow WebKit (half a CPU,
+  // 2026-11-22): this tab waits for it before it looks for the answer.
+  const written = Promise.withResolvers<void>();
   await page.route(/\?\/saveAll$/, async (route) => {
-    const answer = await route.fetch();
-    // The other tab writes the card after this Save landed and before this tab reads the cards again.
-    await openOwnPage(other);
-    const there = await editorHolding(other, word);
-    await there.editor.click();
-    await there.editor.press("End");
-    await there.editor.pressSequentially(" elsewhere");
-    await bar(other).getByRole("button", { name: "Save" }).click();
-    await expect(bar(other)).not.toContainText("unsaved changes");
-    await route.fulfill({ response: answer });
+    try {
+      const answer = await route.fetch();
+      // The other tab writes the card after this Save landed and before this tab reads the cards again.
+      await openOwnPage(other);
+      const there = await editorHolding(other, word);
+      await there.editor.click();
+      await there.editor.press("End");
+      await there.editor.pressSequentially(" elsewhere");
+      await bar(other).getByRole("button", { name: "Save" }).click();
+      await expect(bar(other)).not.toContainText("unsaved changes");
+      await route.fulfill({ response: answer });
+    } finally {
+      written.resolve();
+    }
   });
   await bar(page).getByRole("button", { name: "Save" }).click();
   await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
   await editor.pressSequentially(" three");
+  await written.promise;
   await expect(bar(page).getByRole("status")).toHaveText("Saved.");
   await page.unroute(/\?\/saveAll$/);
   await expect(bar(page)).toContainText("1 card has unsaved changes.");
