@@ -41,6 +41,6 @@ export const VERIFY_EMAIL = {
 export const ALLOW_ACCESS = {
   title: "Allow access",
   why: "unset.sh needs a permission your sign-in has not given it yet, so your change was not saved.",
-  kept: "Your unsaved changes stay on this device. Allow access on your sign-in server, then save again.",
+  kept: "Your unsaved words stay on this device. Allow access on your sign-in server, then save again.",
   allow: "Allow access",
 } as const;
