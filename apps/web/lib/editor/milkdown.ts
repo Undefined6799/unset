@@ -8,6 +8,7 @@
 // dynamically). Changes are reported once per animation frame, not after @milkdown/plugin-listener's 200 ms
 // debounce, so a save pressed right after typing never posts stale text; the caller also reads `markdown()` as the
 // form is sent.
+
 import {
   defaultValueCtx,
   Editor,
@@ -29,6 +30,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
+import { countChars, type Place } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -187,6 +189,8 @@ export type MarkdownEditor = {
    * card's padding, or below the last line), then focuses the editor.
    */
   readonly focusAt: (x: number, y: number) => void;
+  /** Puts the caret at `place` in the words and focuses the editor; false when the editor has no such block. */
+  readonly focusAtPlace: (place: Place) => boolean;
   /** Types `text` at the caret, as the member's own keys would. */
   readonly type: (text: string) => void;
   readonly destroy: () => Promise<void>;
@@ -313,6 +317,31 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
   const found = y < box.top || y > box.bottom ? null : view.posAtCoords(inside);
   if (found !== null) return TextSelection.near(doc.resolve(found.pos));
   return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
+}
+
+/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when it has no such block. */
+function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
+  if (place.block < 0 || place.block >= doc.childCount) return null;
+  let start = 0;
+  for (let i = 0; i < place.block; i += 1) start += doc.child(i).nodeSize;
+  const end = start + doc.child(place.block).nodeSize;
+  const count = { chars: 0, space: false };
+  let found: number | null = place.chars === 0 ? start : null;
+  doc.nodesBetween(start, end, (node, pos) => {
+    if (found !== null) return false;
+    if (!node.isText) return true;
+    const text = node.text ?? "";
+    for (let i = 0; i < text.length && found === null; i += 1) {
+      const ch = text[i] as string;
+      // A place just after a space is before the next word.
+      if (!/\s/.test(ch) && count.space && count.chars + 1 === place.chars) found = pos + i;
+      countChars(ch, count);
+      if (found === null && count.chars === place.chars && !/\s/.test(ch)) found = pos + i + 1;
+    }
+    return false;
+  });
+  if (found === null) return Selection.findFrom(doc.resolve(end), -1, true);
+  return TextSelection.near(doc.resolve(found), found === start ? 1 : -1);
 }
 
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {
@@ -460,6 +489,15 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         const view = ctx.get(editorViewCtx);
         view.dispatch(view.state.tr.setSelection(caretAt(view, x, y)));
         view.focus();
+      }),
+    focusAtPlace: (place) =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const caret = caretAtPlace(view.state.doc, place);
+        if (caret === null) return false;
+        view.dispatch(view.state.tr.setSelection(caret));
+        view.focus();
+        return true;
       }),
     type: (text) =>
       editor.action((ctx) => {

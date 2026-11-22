@@ -416,6 +416,51 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   await cold.close();
 });
 
+// Staging, 2026-11-21 23:52Z (tester, main 10f85af): a click at the end of "A weekly slow-radio show" before the
+// editor opened put the caret on the line above, mid-word in Chromium. The page and the editor draw some blocks at
+// different sizes (here a code block: 13 px on the page), so the click's point is other words once the editor shows.
+// The click is carried as a place in the words, not a point on the screen.
+test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_draws_them_elsewhere", async ({
+  page,
+}) => {
+  const word = `place${Date.now()}`;
+  await openOwnPage(page);
+  const code = "```\none\ntwo\nthree\nfour\n```";
+  const text = `${word} start\n\n${code}\n\nSound design for short films\n\nA weekly slow-radio show`;
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
+  const cold = await page.context().newPage();
+  const clicked = Promise.withResolvers<void>();
+  const typed = Promise.withResolvers<void>();
+  // Every script held until the click, as a cold load; then the editor's own held until the letters are typed.
+  await cold.route("**/_app/immutable/**/*.js", async (route) => {
+    await clicked.promise;
+    const answer = await route.fetch();
+    const body = await answer.text();
+    if (body.includes("ProseMirror-")) await typed.promise;
+    return route.fulfill({ response: answer, body });
+  });
+  await cold.goto(page.url(), { waitUntil: "commit" });
+  const card = cold.locator('[data-slot="card"]', { hasText: word });
+  const line = card.getByText("A weekly slow-radio show");
+  await expect(line).toBeVisible();
+  const box = await line.boundingBox();
+  if (box === null) throw new Error("no line");
+  await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  clicked.resolve();
+  await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+  await expect(cold.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  await cold.keyboard.type("EARLY");
+  typed.resolve();
+  const { editor } = await editorHolding(cold, word);
+  await expect(editor).toBeFocused();
+  await cold.keyboard.type("!");
+  await expect(editor.locator(":scope > p").last()).toHaveText("A weekly slow-radio showEARLY!");
+  await expect(editor.locator(":scope > p").nth(1)).toHaveText("Sound design for short films");
+  await bar(cold).getByRole("button", { name: "Discard" }).click();
+  await removeCard(cold, word);
+  await cold.close();
+});
+
 /**
  * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
  * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
