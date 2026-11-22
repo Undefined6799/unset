@@ -465,7 +465,8 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   const last = "A weekly 🎧 slow-radio show";
   const text = `${word} start\n\n${code}\n\nSound design for short films\n\n${last}`;
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
-  const cold = await page.context().newPage();
+  const cold = await freshPage(page);
+  await addPageCookies(cold.context(), OWN_PAGE);
   const clicked = Promise.withResolvers<void>();
   const typed = Promise.withResolvers<void>();
   // Every script held until the click, as a cold load; then the editor's own held until the letters are typed.
@@ -495,7 +496,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   await expect(editor.locator(":scope > p").nth(1)).toHaveText("Sound design for short films");
   await bar(cold).getByRole("button", { name: "Discard" }).click();
   await removeCard(cold, word);
-  await cold.close();
+  await closeHeld(cold);
 });
 
 // Review of #1968 (Codex, 2026-11-22 00:17Z): a click just after a space landed before it, and a click at the start
@@ -520,7 +521,8 @@ for (const { name, within, has, piece, at, expected } of [
     await openOwnPage(page);
     const text = `${word} start\n\nhello world\n\n- one\n- two\n\nleft  \nright\n\n\`\`\`\n    foo\n\`\`\``;
     await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
-    const cold = await page.context().newPage();
+    const cold = await freshPage(page);
+    await addPageCookies(cold.context(), OWN_PAGE);
     const clicked = Promise.withResolvers<void>();
     const typed = Promise.withResolvers<void>();
     await cold.route("**/_app/immutable/**/*.js", async (route) => {
@@ -571,7 +573,7 @@ for (const { name, within, has, piece, at, expected } of [
       .toBe(expected);
     await bar(cold).getByRole("button", { name: "Discard" }).click();
     await removeCard(cold, word);
-    await cold.close();
+    await closeHeld(cold);
   });
 }
 
