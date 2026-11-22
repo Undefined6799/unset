@@ -322,7 +322,6 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
 /** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when they differ. */
 function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
   if (countWords(doc).chars !== place.total) return null;
-  if (place.chars === 0) return TextSelection.near(doc.resolve(0), 1);
   const count = emptyCount();
   let found: number | null = null;
   doc.descendants((child, pos, parent) => {
@@ -342,16 +341,20 @@ const isHardBreak = (node: ProseNode) => node.type.name === "hardbreak";
 /**
  * Where `place` falls in one piece of a block's words starting at `pos`, or null when it is further on. By code point,
  * as the page counts (place.ts): an emoji is one character but two positions. After a space or at a line's start the
- * place is before the next character counted; otherwise it is after the last one. In a code block (`literal`) each
- * white space character counts.
+ * place is before the next character counted; otherwise it is after the last one, or before the first when there is
+ * none. In a code block (`literal`) each white space character counts.
  */
 function placeInText(text: string, pos: number, count: Count, place: Place, literal: boolean): number | null {
   let offset = 0;
   for (const ch of text) {
     const before = placeOf(count);
+    const pending = count.pending;
     countChars(ch, count, literal);
     const after = placeOf(count);
     const moved = after.chars > before.chars;
+    // Before the words' first character (or a code block's first white space, which counts), in whichever block they
+    // start: not at the document's start, which can be an empty block before them.
+    if (place.chars === 0 && before.chars === 0 && pending === 0 && (moved || count.pending > 0)) return pos + offset;
     if (place.space && moved && before.space && before.chars === place.chars) return pos + offset;
     if (!place.space && moved && after.chars === place.chars) return pos + offset + ch.length;
     offset += ch.length;

@@ -27,13 +27,19 @@ export type Count = { chars: number; space: boolean; pending: number };
 export const emptyCount = (): Count => ({ chars: 0, space: false, pending: 0 });
 
 /**
+ * The white space HTML collapses (ASCII white space, WHATWG Infra): a no-break space and the other Unicode spaces are
+ * kept as written by both drawings, so each is a character of its own.
+ */
+const COLLAPSED = /[\t\n\f\r ]/;
+
+/**
  * Counts characters as both drawings show them: a run of white space is one space, and none before the block's first
  * word (the page's headings hold the markup's line breaks around their words). In a code block (`literal`) each white
  * space character is one, as both draw it, except at the end of the code.
  */
 export function countChars(text: string, count: Count, literal = false): void {
   for (const ch of text) {
-    if (/\s/.test(ch)) {
+    if (COLLAPSED.test(ch)) {
       if (literal) count.pending += 1;
       else count.space = count.chars > 0;
       continue;
