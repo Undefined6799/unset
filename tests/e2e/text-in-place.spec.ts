@@ -596,6 +596,37 @@ test("enter_or_space_pressed_twice_on_save_saves_once_and_leaves_the_words", asy
   await removeCard(page, word);
 });
 
+// #1967 on WebKit (run 44969033836): when the answer came before the second press, the Save had already put the
+// caret back in the words, so that press went into the card and left it unsaved. A Save made by keyboard leaves the
+// keys where they are, however soon its answer comes.
+test("enter_or_space_pressed_again_after_a_keyboard_save_answered_leaves_the_words", async ({ page }) => {
+  const word = `keyagain${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  for (const [key, typed] of [
+    ["Enter", " one"],
+    ["Space", " two"],
+  ] as const) {
+    await editor.click();
+    await editor.press("End");
+    await page.keyboard.type(typed);
+    const saved = page.waitForResponse(/\?\/saveAll$/);
+    await bar(page).getByRole("button", { name: "Save" }).focus();
+    await page.keyboard.press(key);
+    await saved;
+    await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+    await expect(editor).not.toBeFocused();
+    await page.keyboard.press(key);
+    await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+    await expect(bar(page)).not.toContainText("unsaved");
+  }
+  await expect(editor).toHaveText(`${word} start one two`);
+  await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(0);
+  await removeCard(page, word);
+});
+
 // Codex on b9d96b6: the Markdown field (Show Markdown) is a way back too, so a Save from it returns there and not to
 // the editor the member typed in before.
 test("after_a_save_from_the_markdown_field_typing_goes_on_there", async ({ page }) => {
