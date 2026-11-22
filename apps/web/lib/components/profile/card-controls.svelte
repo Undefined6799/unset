@@ -25,10 +25,15 @@ let pendingMove: Move | null = null;
  * bug hunt 2026-11-21).
  */
 const queuedMoves: Move[] = [];
-/** How each card on the page sends a move, by key, for the queue to run the next press. */
-const movers = new Map<string, (to: Move["to"]) => void>();
-/** How long a moving card stays dimmed when no new order comes (a refused or lost move). */
+/**
+ * How each card on the page takes part in the queue, by key: `send` posts a move and says whether there was one to
+ * post (a card already last has no Move down), `mark` shows the card as moving or not.
+ */
+const movers = new Map<string, { send: (to: Move["to"]) => boolean; mark: (on: boolean) => void }>();
+/** How long a moving card stays dimmed, and the queue waits, when no new order comes (a refused or lost move). */
 const MOVE_SHOWN_MS = 10_000;
+/** Ends a move whose answer never came, so later presses are not held for ever. */
+let pendingTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * While a move is on its way the card is dimmed and busy, so a press is seen at once (staging test 2026-11-21: a move
@@ -44,6 +49,26 @@ function markMoving(group: HTMLElement | undefined, on: boolean) {
   } else {
     delete shown.dataset.moving;
     shown.removeAttribute("aria-busy");
+  }
+}
+
+/** The move on its way is over: nothing holds the next press. */
+function endMove() {
+  pendingMove = null;
+  clearTimeout(pendingTimer);
+}
+
+/** Drops the presses queued behind a move that did not happen: they were built on the order it would have made. */
+function dropQueue() {
+  for (const queued of queuedMoves.splice(0)) movers.get(queued.key)?.mark(false);
+}
+
+/** Sends the next queued press, skipping those with nothing to post (a Move down on a card that has become last). */
+function sendNext() {
+  for (let next = queuedMoves.shift(); next !== undefined; next = queuedMoves.shift()) {
+    const mover = movers.get(next.key);
+    if (mover?.send(next.to) === true) return;
+    mover?.mark(false);
   }
 }
 
@@ -238,8 +263,10 @@ const removeCard: SubmitHandler = () => {
   };
 };
 /**
- * Sends a move, or queues it while another is on its way. A refused or failed move drops the presses queued after it,
- * which were built on the order it would have made; the page shows why, as before.
+ * Sends a move, or queues it while another is on its way. The next press goes once this move's own answer has come and
+ * the page holds the order it made, not on any change of the cards (a Save's refresh while the move is on its way
+ * changes them too; Codex review of #1978). A refused or failed move drops the presses queued after it; the page
+ * shows why, as before.
  */
 function moveCard(to: Move["to"]): SubmitHandler {
   return ({ cancel }) => {
@@ -250,36 +277,52 @@ function moveCard(to: Move["to"]): SubmitHandler {
       queuedMoves.push({ key, to });
       return async () => undefined;
     }
-    pendingMove = { key, to };
+    const move = { key, to };
+    pendingMove = move;
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(() => {
+      if (pendingMove !== move) return;
+      endMove();
+      dropQueue();
+    }, MOVE_SHOWN_MS);
     return async ({ result, update }) => {
       await update();
-      if (result.type !== "failure" && result.type !== "error") return;
-      pendingMove = null;
-      queuedMoves.length = 0;
+      // Given up on after MOVE_SHOWN_MS: later presses have gone on without it.
+      if (pendingMove !== move) return;
+      endMove();
       markMoving(group, false);
+      if (result.type === "failure" || result.type === "error") {
+        dropQueue();
+        return;
+      }
+      await tick();
+      focusMoved(to);
+      sendNext();
     };
   };
+}
+/** After a move from the menu, focus stays on the moved card's menu button (or its move button with no script). */
+function focusMoved(to: Move["to"]) {
+  const target =
+    group?.querySelector<HTMLElement>("[data-card-menu]") ??
+    group?.querySelector<HTMLElement>(`[data-move="${to}"]`) ??
+    group?.querySelector<HTMLElement>("[data-move]");
+  target?.focus();
 }
 $effect(() => {
   const key = card?.key;
   if (key === undefined) return;
-  movers.set(key, (to) => moveForms[to]?.requestSubmit());
+  movers.set(key, {
+    send: (direction) => {
+      const form = moveForms[direction];
+      // A form no longer drawn is null (bind:this clears it), not undefined.
+      if (form == null) return false;
+      form.requestSubmit();
+      return true;
+    },
+    mark: (on) => markMoving(group, on),
+  });
   return () => movers.delete(key);
-});
-// Runs when the new order arrives (cards changes); pendingMove itself is not reactive, so a press alone does nothing.
-$effect(() => {
-  const moved = cards[index];
-  const pending = pendingMove;
-  if (pending === null || moved?.key !== pending.key || group === undefined) return;
-  pendingMove = null;
-  markMoving(group, false);
-  const next = queuedMoves.shift();
-  if (next !== undefined) void tick().then(() => movers.get(next.key)?.(next.to));
-  const target =
-    group.querySelector<HTMLElement>("[data-card-menu]") ??
-    group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ??
-    group.querySelector<HTMLElement>("[data-move]");
-  target?.focus();
 });
 </script>
 
