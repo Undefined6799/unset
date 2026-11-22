@@ -202,6 +202,37 @@ test("moving_or_deleting_a_card_keeps_the_place_and_focus", async ({ page }) => 
   }
 });
 
+// Staging bug hunt 2026-11-21: two quick presses on Move down sent two reorders built from the same order, so the card
+// moved once with no sign. Each press now moves the card one place, the second once the first order has arrived.
+test("two_quick_presses_on_move_down_move_the_card_twice", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  for (const title of ["Alpha", "Beta", "Gamma"]) await addCard(page, linksCard(title));
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    // The first order is held until the second press is made, as a slow PDS write holds it (about 2 s on staging).
+    const pressed = Promise.withResolvers<void>();
+    let reorders = 0;
+    await page.route("**/*?/reorder", async (route) => {
+      reorders += 1;
+      if (reorders === 1) await pressed.promise;
+      await route.continue();
+    });
+    await chooseFromMenu(page, "Alpha card", "Move down");
+    await chooseFromMenu(page, "Alpha card", "Move down");
+    pressed.resolve();
+    const titles = page.getByRole("heading", { level: 2 }).filter({ hasText: /^(Alpha|Beta|Gamma)$/ });
+    await expect(titles).toHaveText(["Beta", "Gamma", "Alpha"]);
+    await page.reload();
+    await expect(titles).toHaveText(["Beta", "Gamma", "Alpha"]);
+  } finally {
+    await page.unrouteAll();
+    for (const name of ["Alpha card", "Beta card", "Gamma card"]) {
+      if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
+    }
+  }
+});
+
 // Codex review of f14b5ab: a delete the server refuses keeps the dialog open with the reason inside it, where the
 // member is looking, rather than behind the modal. The refusal is played as in the gate test above.
 test("a_refused_delete_shows_its_reason_inside_the_dialog", async ({ page }) => {

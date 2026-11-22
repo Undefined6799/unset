@@ -16,8 +16,17 @@
   turns on and off (the page swaps the editor for the plain field).
 -->
 <script module lang="ts">
+type Move = { key: string; to: "up" | "down" };
 /** The card a move button was pressed on, and which, until the new order arrives. */
-let pendingMove: { key: string; to: "up" | "down" } | null = null;
+let pendingMove: Move | null = null;
+/**
+ * Presses made while a move is on its way, in order. Each waits for the order before it, so it is built from the
+ * order it changes: two quick presses on Move down used to post the same order twice, and the card moved once (staging
+ * bug hunt 2026-11-21).
+ */
+const queuedMoves: Move[] = [];
+/** How each card on the page sends a move, by key, for the queue to run the next press. */
+const movers = new Map<string, (to: Move["to"]) => void>();
 /** How long a moving card stays dimmed when no new order comes (a refused or lost move). */
 const MOVE_SHOWN_MS = 10_000;
 
@@ -228,6 +237,35 @@ const removeCard: SubmitHandler = () => {
     focusAfterRemove(at);
   };
 };
+/**
+ * Sends a move, or queues it while another is on its way. A refused or failed move drops the presses queued after it,
+ * which were built on the order it would have made; the page shows why, as before.
+ */
+function moveCard(to: Move["to"]): SubmitHandler {
+  return ({ cancel }) => {
+    const key = card?.key ?? "";
+    markMoving(group, true);
+    if (pendingMove !== null) {
+      cancel();
+      queuedMoves.push({ key, to });
+      return async () => undefined;
+    }
+    pendingMove = { key, to };
+    return async ({ result, update }) => {
+      await update();
+      if (result.type !== "failure" && result.type !== "error") return;
+      pendingMove = null;
+      queuedMoves.length = 0;
+      markMoving(group, false);
+    };
+  };
+}
+$effect(() => {
+  const key = card?.key;
+  if (key === undefined) return;
+  movers.set(key, (to) => moveForms[to]?.requestSubmit());
+  return () => movers.delete(key);
+});
 // Runs when the new order arrives (cards changes); pendingMove itself is not reactive, so a press alone does nothing.
 $effect(() => {
   const moved = cards[index];
@@ -235,6 +273,8 @@ $effect(() => {
   if (pending === null || moved?.key !== pending.key || group === undefined) return;
   pendingMove = null;
   markMoving(group, false);
+  const next = queuedMoves.shift();
+  if (next !== undefined) void tick().then(() => movers.get(next.key)?.(next.to));
   const target =
     group.querySelector<HTMLElement>("[data-card-menu]") ??
     group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ??
@@ -250,11 +290,7 @@ $effect(() => {
     method="POST"
     action="?/reorder"
     hidden={hydrated}
-    use:enhance
-    onsubmit={() => {
-      pendingMove = { key: card?.key ?? "", to: direction };
-      markMoving(group, true);
-    }}
+    use:enhance={moveCard(direction)}
   >
     {#each swapped(index, to) as key (key)}<input type="hidden" name="order" value={key} />{/each}
     {#if !hydrated}
