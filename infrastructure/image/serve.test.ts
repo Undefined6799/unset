@@ -12,11 +12,17 @@ import { encodeJob, PROCESS_PATH } from "./wire.ts";
 
 const pool = createImagePool({ children: 1, queueMax: 1, timeoutMs: 20_000, addressSpaceMb: 8192 });
 const outcomes: Outcome[] = [];
+const times: (number | undefined)[] = [];
 let server: Server;
 let origin: string;
 
 beforeAll(async () => {
-  server = createServer(reviewListener(pool, (o) => outcomes.push(o)));
+  server = createServer(
+    reviewListener(pool, (o, ms) => {
+      outcomes.push(o);
+      times.push(ms);
+    }),
+  );
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -102,6 +108,8 @@ describe("review door", () => {
     if (result.kind !== "ok") return;
     expect(result.versions.map((v) => v.name)).toEqual(imageVersions().map((v) => v.name));
     expect(seconds).toBeLessThan(7);
+    // review logs each job's time, so the next slow picture on staging shows where its seconds went.
+    expect([outcomes.at(-1), (times.at(-1) ?? 0) > 0]).toEqual(["ok", true]);
   }, 60_000);
 
   test("a file that is not a picture is refused with its code", async () => {
