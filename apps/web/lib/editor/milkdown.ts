@@ -30,7 +30,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, getMarkdown } from "@milkdown/utils";
-import { countChars, countedChars, type Place } from "./place.ts";
+import { type Count, countChars, type Place, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -323,28 +323,52 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
 function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
   if (place.block < 0 || place.block >= doc.childCount) return null;
   const node = doc.child(place.block);
-  if (countedChars(node.textContent) !== place.total) return null;
+  if (countWords(node).chars !== place.total) return null;
   let start = 0;
   for (let i = 0; i < place.block; i += 1) start += doc.child(i).nodeSize;
   if (place.chars === 0) return TextSelection.near(doc.resolve(start), 1);
-  const count = { chars: 0, space: false };
+  const count: Count = { chars: 0, space: false };
   let found: number | null = null;
   doc.nodesBetween(start, start + node.nodeSize, (child, pos) => {
     if (found !== null) return false;
+    // Each text block starts another line of the block's words, as the page counts its list items (place.ts).
+    if (child.isTextblock) startLine(count);
     if (!child.isText) return true;
-    // By code point, as the page counts (place.ts): an emoji is one character but two positions.
-    let offset = 0;
-    for (const ch of child.text ?? "") {
-      offset += ch.length;
-      countChars(ch, count);
-      if (count.chars === place.chars && !/\s/.test(ch)) {
-        found = pos + offset;
-        break;
-      }
-    }
+    found = placeInText(child.text ?? "", pos, count, place);
     return false;
   });
-  return found === null ? null : TextSelection.near(doc.resolve(found), -1);
+  return found === null ? null : TextSelection.near(doc.resolve(found), place.space ? 1 : -1);
+}
+
+/**
+ * Where `place` falls in one piece of a block's words starting at `pos`, or null when it is further on. By code point,
+ * as the page counts (place.ts): an emoji is one character but two positions. After a space or at a line's start the
+ * place is before the next word's first character; otherwise it is after the last one counted.
+ */
+function placeInText(text: string, pos: number, count: Count, place: Place): number | null {
+  let offset = 0;
+  for (const ch of text) {
+    const before = count.chars;
+    const apart = count.space;
+    countChars(ch, count);
+    const word = count.chars > before;
+    if (place.space && word && apart && before === place.chars) return pos + offset;
+    if (!place.space && word && count.chars === place.chars) return pos + offset + ch.length;
+    offset += ch.length;
+  }
+  return null;
+}
+
+/** The characters of a top-level block's words, counted as the page counts them (place.ts). */
+function countWords(node: ProseNode): Count {
+  const count: Count = { chars: 0, space: false };
+  const visit = (child: ProseNode) => {
+    if (child.isTextblock) startLine(count);
+    if (child.isText) countChars(child.text ?? "", count);
+    else child.forEach(visit);
+  };
+  visit(node);
+  return count;
 }
 
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {

@@ -463,6 +463,60 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   await cold.close();
 });
 
+// Review of #1968 (Codex, 2026-11-22 00:17Z): a click just after a space landed before it, and a click at the start
+// of a list's second item landed at the end of the first (the page draws <li>one</li><li>two</li>, nothing between).
+for (const { name, line, at, expected } of [
+  { name: "just_after_a_space", line: "hello world", at: 6, expected: "hello EARLYworld" },
+  { name: "at_the_start_of_a_later_list_item", line: "two", at: 0, expected: "EARLYtwo" },
+]) {
+  test(`a_click_before_the_editor_opens_${name}_lands_on_the_same_side`, async ({ page }) => {
+    const word = `side${Date.now()}`;
+    await openOwnPage(page);
+    const text = `${word} start\n\nhello world\n\n- one\n- two`;
+    await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
+    const cold = await page.context().newPage();
+    const clicked = Promise.withResolvers<void>();
+    const typed = Promise.withResolvers<void>();
+    await cold.route("**/_app/immutable/**/*.js", async (route) => {
+      await clicked.promise;
+      const answer = await route.fetch();
+      const body = await answer.text();
+      if (body.includes("ProseMirror-")) await typed.promise;
+      return route.fulfill({ response: answer, body });
+    });
+    await cold.goto(page.url(), { waitUntil: "commit" });
+    const card = cold.locator('[data-slot="card"]', { hasText: word });
+    const target = card.getByText(line, { exact: true });
+    await expect(target).toBeVisible();
+    // The left edge of the character at `at`, a pixel in: the browser puts the caret just before it.
+    const point = await target.evaluate((element, index) => {
+      const page = element.ownerDocument;
+      // NodeFilter.SHOW_TEXT (the e2e project has no DOM types).
+      const walker = page.createTreeWalker(element, 4);
+      let words = walker.nextNode();
+      while (words !== null && (words.textContent ?? "").trim() === "") words = walker.nextNode();
+      if (words === null) throw new Error("no words");
+      const range = page.createRange();
+      range.setStart(words, index);
+      range.setEnd(words, index + 1);
+      const box = range.getBoundingClientRect();
+      return { x: box.left + 1, y: box.top + box.height / 2 };
+    }, at);
+    await cold.mouse.click(point.x, point.y);
+    clicked.resolve();
+    await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+    await expect(cold.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+    await cold.keyboard.type("EARLY");
+    typed.resolve();
+    const { editor } = await editorHolding(cold, word);
+    await expect(editor).toBeFocused();
+    await expect(editor.getByText(expected, { exact: true })).toBeVisible();
+    await bar(cold).getByRole("button", { name: "Discard" }).click();
+    await removeCard(cold, word);
+    await cold.close();
+  });
+}
+
 /**
  * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
  * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec

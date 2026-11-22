@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { countChars, countedChars } from "./place.ts";
+import { countChars, startLine } from "./place.ts";
 
 const counted = (...pieces: string[]) => {
   const count = { chars: 0, space: false };
@@ -21,5 +21,16 @@ test("a_place_counts_an_emoji_as_one_character", () => {
   // Two UTF-16 units, one character on the page: the editor must count it the same (caretAtPlace walks by code point).
   expect("🎧".length).toBe(2);
   expect(counted("A 🎧 show")).toBe(8);
-  expect(countedChars("\n A  🎧 show ")).toBe(8);
+  expect(counted("\n A  🎧 show ")).toBe(8);
+});
+
+test("a_place_counts_the_start_of_another_line_as_a_space", () => {
+  // The page draws a list as <li>one</li><li>two</li>, nothing between the words; the editor as two text blocks.
+  const count = { chars: 0, space: false };
+  startLine(count);
+  countChars("one", count);
+  startLine(count);
+  expect(count).toEqual({ chars: 3, space: true });
+  countChars("two", count);
+  expect(count.chars).toBe("one two".length);
 });
