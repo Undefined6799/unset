@@ -228,8 +228,89 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
   const handle = card.locator("[data-block-handle]");
   await expect(handle).toBeHidden();
+
+  // Alex 2026-11-21 18:48Z: the dots "fully in the margin ... on the side", and a pointer along the card's side shows
+  // the handle of the block level with it, though the pointer never enters the card.
+  const box = await card.boundingBox();
+  const lines = await editor.locator("p").evaluateAll((all) =>
+    all.map((p) => {
+      const r = p.getBoundingClientRect();
+      return r.top + r.height / 2;
+    }),
+  );
+  if (box === null || lines.length !== 3) throw new Error("no card");
+  const handleMiddle = async () => {
+    const at = await handle.boundingBox();
+    return at === null ? Number.POSITIVE_INFINITY : at.y + at.height / 2;
+  };
+  await page.mouse.move(box.x - 20, lines[2] as number);
+  await expect(handle).toBeVisible();
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[2] as number))).toBeLessThan(8);
+  const placed = await handle.boundingBox();
+  expect((placed?.x ?? 0) + (placed?.width ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(box.x);
+  await page.mouse.move(box.x - 20, lines[0] as number, { steps: 4 });
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[0] as number))).toBeLessThan(8);
+
+  // Pressed, not dragged, the dots open the block menu to change their block, keeping its words.
+  // The handle follows the pointer on its next frame; a press or drag before it is level with the block works the
+  // dots of the block it left (WebKit, CI 857ee3c; Chromium, CI 2918521).
+  const hoverBlock = async (block: Locator) => {
+    await block.hover();
+    await expect
+      .poll(async () => {
+        const at = await block.boundingBox();
+        return at === null ? Number.POSITIVE_INFINITY : Math.abs((await handleMiddle()) - (at.y + at.height / 2));
+      })
+      .toBeLessThan(8);
+  };
+  await hoverBlock(editor.locator("p").nth(1));
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  await grip.click();
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await expect(menu).toBeVisible();
+  // What a block can become; a divider or a table is added, never turned into, so they are not offered here.
+  await expect(menu.getByRole("option")).toHaveText([
+    "Text",
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+    "Quote",
+    "Bullet list",
+    "Ordered list",
+    "Task list",
+    "Code",
+  ]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  // Only that block changed (a level 2 heading is an h3 under the card's h2).
+  await expect(editor.locator("h3")).toHaveText("second line");
+  await expect(editor.locator("p")).toHaveText([`${word} one`, "third line"]);
+  await hoverBlock(editor.locator("h3"));
+  await grip.click();
+  await expect(menu).toBeVisible();
+  // The change menu takes the block menu's keys: right and left jump between groups, Escape closes it, changing nothing.
+  const active = () => menu.getByRole("option", { selected: true });
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Bullet list");
+  await page.keyboard.press("ArrowLeft");
+  await expect(active()).toHaveText("Quote");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(editor.locator("h3")).toHaveText("second line");
+  await hoverBlock(editor.locator("h3"));
+  await grip.click();
+  await expect(menu).toBeVisible();
+  await menu.getByRole("option", { name: "Text" }).click();
+  await expect(editor.locator("p")).toHaveText([`${word} one`, "second line", "third line"]);
+  await expect(editor).toBeFocused();
+
   const first = editor.locator("p").first();
-  await first.hover();
+  await hoverBlock(first);
   await expect(handle).toBeVisible();
   await expect(handle.getByRole("button", { name: "Add a block below" })).toBeVisible();
   await handle.getByRole("button", { name: "Add a block below" }).click();
@@ -240,8 +321,7 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await expect(editor.locator("p").nth(1)).toHaveText("new line");
 
   // The grip drags its block: the third line goes above the first.
-  await editor.locator("p").nth(3).hover();
-  const grip = handle.getByRole("img", { name: "Drag to move this block" });
+  await hoverBlock(editor.locator("p").nth(3));
   await expect(grip).toBeVisible();
   // Crepe's handle is six dots; ours draws Lucide's grip-vertical (ADR 0087), one path per dot.
   await expect(grip.locator("svg path")).toHaveCount(6);
@@ -249,6 +329,123 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await expect(editor.locator("p")).toHaveText(["third line", `${word} one`, "new line", "second line"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Codex on #1965: the dots of a quote or a list change the whole block, its container too. Text takes a quote's
+// paragraphs out of it, and a list turned into a quote is a quote of its items' words.
+test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
+  const word = `whole${Date.now()}`;
+  const { card, editor } = await cardWithCaret(
+    page,
+    word,
+    `${word} one\n\n> a quote\n>\n> said twice\n\n- an item\n- another`,
+  );
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator("blockquote").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Text" }).click();
+  await expect(editor.locator("blockquote")).toHaveCount(0);
+  await expect(editor.locator(":scope > p")).toHaveText([`${word} one`, "a quote", "said twice"]);
+  await editor.locator("ul").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Quote" }).click();
+  await expect(editor.locator("ul, li")).toHaveCount(0);
+  await expect(editor.locator("blockquote p")).toHaveText(["an item", "another"]);
+  await expect(editor).toBeFocused();
+  await discardAndRemove(page, word);
+});
+
+// Codex on #1965 at 8acb2f1: Enter breaks a line inside its block, and the page shows no break inside a list item
+// (milkdown.ts pageShapes), so a block with broken lines turned into a list becomes one item a line; before, the list
+// was refused and a quote lost its formatting on the way.
+test("the_dots_turn_broken_lines_into_one_list_item_each", async ({ page }) => {
+  const word = `broken${Date.now()}`;
+  const { card, editor } = await cardWithCaret(
+    page,
+    word,
+    `${word} one\\\nline two\n\n> quoted\\\n> again\n\nto do\\\nto do too`,
+  );
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator(":scope > p").first().hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Bullet list" }).click();
+  await expect(editor.locator("ul li")).toHaveText([`${word} one`, "line two"]);
+  await editor.locator("blockquote").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Ordered list" }).click();
+  await expect(editor.locator("blockquote")).toHaveCount(0);
+  await expect(editor.locator("ol li")).toHaveText(["quoted", "again"]);
+  await editor.locator(":scope > p").last().hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Task list" }).click();
+  await expect(editor.locator('li[data-item-type="task"][data-checked="false"]')).toHaveText(["to do", "to do too"]);
+  await expect(editor.locator("[data-type='hardbreak'], br")).toHaveCount(0);
+  await discardAndRemove(page, word);
+});
+
+// A heading or a code block the dots turn into a quote or a list becomes its words first: a quote holds only
+// paragraphs on the page (milkdown.ts pageShapes), so wrapping the block as it is would be refused (Codex on #1965).
+test("the_dots_turn_a_heading_or_code_block_into_a_quote_or_list", async ({ page }) => {
+  const word = `wrapped${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\n## a title\n\n\`\`\`\nsome code\n\`\`\``);
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator("h3").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Quote" }).click();
+  await expect(editor.locator("h3")).toHaveCount(0);
+  await expect(editor.locator("blockquote p")).toHaveText(["a title"]);
+  await editor.locator("pre").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Bullet list" }).click();
+  await expect(editor.locator("pre")).toHaveCount(0);
+  await expect(editor.locator("ul li")).toHaveText(["some code"]);
+  await discardAndRemove(page, word);
+});
+
+test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_width", async ({ page }) => {
+  // Alex 2026-11-22 00:12Z: the six dots and the + "outside of the card ... on the margin of the card instead of
+  // inside", for a card on the right of a row too; with a mouse the owner's page keeps room for them.
+  const stamp = Date.now();
+  const words = [`lefthalf${stamp}`, `righthalf${stamp}`];
+  await openOwnPage(page);
+  for (const word of words)
+    await addCard(page, { kind: "readme", width: "half", surface: "filled", text: `${word} one` });
+  for (const width of [1280, 1024, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openOwnPage(page);
+    const cards = words.map((word) => page.locator('[data-slot="card"]', { hasText: word }));
+    for (const card of cards) {
+      const editor = card.locator("[data-text-in-place] .ProseMirror");
+      await editor.locator("p").first().hover();
+      const handle = card.locator("[data-block-handle]");
+      await expect(handle).toBeVisible();
+      await expect(handle.getByRole("button", { name: "Add a block below" })).toBeVisible();
+      const at = await handle.boundingBox();
+      const own = await card.boundingBox();
+      if (at === null || own === null) throw new Error(`no handle at ${width}`);
+      expect(at.x, `on the page at ${width}`).toBeGreaterThanOrEqual(0);
+      expect(at.x + at.width, `outside the card at ${width}`).toBeLessThanOrEqual(own.x);
+      for (const other of await page.locator('[data-slot="card"]').all()) {
+        const box = await other.boundingBox();
+        if (box === null) continue;
+        const apart =
+          at.x + at.width <= box.x ||
+          box.x + box.width <= at.x ||
+          at.y + at.height <= box.y ||
+          box.y + box.height <= at.y;
+        expect(apart, `over another card at ${width}`).toBe(true);
+      }
+      await page.mouse.move(0, 0);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  for (const word of words) await discardAndRemove(page, word, { changed: false });
 });
 
 test("selected_words_become_a_link_from_the_floating_bar_which_shows_edits_and_removes_it", async ({ page }) => {
@@ -481,7 +678,9 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
   const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
   const lines = editor.locator("p");
   await lines.first().hover();
-  const grip = card.locator("[data-block-handle]").getByRole("img", { name: "Drag to move this block" });
+  const grip = card
+    .locator("[data-block-handle]")
+    .getByRole("button", { name: "Drag to move, or press to change this block" });
   await expect(grip).toBeVisible();
   const before = await lines.first().boundingBox();
   const start = await grip.boundingBox();
