@@ -1249,6 +1249,28 @@ describe("base images", () => {
     });
   });
 
+  test("seaweedfs_next_is_mirror_only", () => {
+    // P2.18s stage 1 (#1732's plan): the next SeaweedFS release is listed so mirror.yml copies and signs it on main
+    // before objects.Dockerfile can build FROM its GHCR mirror digest (stage 2, which then drops this entry). Until
+    // then no Dockerfile builds on it, it is the same vendor image under its own tag, and the mirror list holds it.
+    const next = lock["seaweedfs-next"] as Base;
+    const current = lock.seaweedfs as Base;
+    expect(next).toStrictEqual({ ...current, tag: expect.stringMatching(/^\d+\.\d+$/), digest: expect.any(String) });
+    expect(next.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect([next.tag, next.digest]).not.toContain(current.tag);
+    expect(next.digest).not.toBe(current.digest);
+    const source = `${next.ref}:${next.tag}@${next.digest}`;
+    expect(MIRRORS.filter((entry) => entry.source === source)).toEqual([
+      { source, mirror: "ghcr.io/undefined6799/mirror/seaweedfs", stage: "runtime" },
+    ]);
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    const built = Object.values(files).flatMap((text) =>
+      fromImages(text).flatMap((image) => lockEntriesOf(image, lock)),
+    );
+    expect(built.map(([name]) => name)).not.toContain("seaweedfs-next");
+    expect(KIND_BY_FINAL_ENTRY.has("seaweedfs-next")).toBe(false);
+  });
+
   test("vendor_images_are_run_only", () => {
     // Every lock entry comes from the allowlist, a vendor image only by its exact name, and no Dockerfile builds on one.
     for (const [name, base] of Object.entries(lock)) {
