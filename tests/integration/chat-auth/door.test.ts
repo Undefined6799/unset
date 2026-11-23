@@ -198,6 +198,34 @@ describe("POST /sign-in/redeem", () => {
     expect(await rowsOf(ALICE)).toEqual([body.deviceId]);
   });
 
+  test("door.redeem_dock: the chat box's own one-time value signs it in, and its cookies are partitioned (ADR 0115)", async () => {
+    const user = await member();
+    const box = browser();
+    // The box sets its value in its own cookie (apps/chat/core/dock.ts); a frame cannot take the hop's Lax ones.
+    const state = parseDoorState(Buffer.alloc(32, 9).toString("base64url"));
+    if (state === null) throw new Error("no state");
+    box.jar.set("__Host-chat-state", state);
+    const ticket = await web().signTicket({ user, did: ALICE, sid: sessionRef(Buffer.alloc(32, 1)), state });
+    const res = await box.post("/sign-in/redeem?dock", { ticket });
+    expect(res.status).toBe(200);
+    const lines = res.headers.getSetCookie();
+    expect(lines.find((l) => l.startsWith("__Host-chat-browser="))).toMatch(
+      /; Path=\/; Max-Age=34560000; Secure; HttpOnly; SameSite=None; Partitioned$/,
+    );
+    expect(lines.find((l) => l.startsWith("__Host-chat-state="))).toMatch(
+      /; Max-Age=0; Secure; HttpOnly; SameSite=None; Partitioned$/,
+    );
+    expect([...box.jar.keys()]).toEqual(["__Host-chat-browser"]);
+    // The same box comes back to the same device.
+    box.jar.set("__Host-chat-state", state);
+    const again = await box.post("/sign-in/redeem?dock", {
+      ticket: await web().signTicket({ user, did: ALICE, sid: sessionRef(Buffer.alloc(32, 1)), state }),
+    });
+    expect(((await again.json()) as { deviceId: string }).deviceId).toBe(
+      ((await res.json()) as { deviceId: string }).deviceId,
+    );
+  });
+
   test("door.redeem_after_expiry: a new hop in the same browser gets the same device and lock key, minted first", async () => {
     const user = await member();
     const tab = browser();

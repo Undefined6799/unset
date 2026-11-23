@@ -34,7 +34,8 @@ export function loadChatPage(dir: string): ChatPage {
   return { html, files };
 }
 
-export const pageCsp = (origin: string): string =>
+/** The page's CSP; `framer`, unset.sh's origin, only for the chat box at /?dock (ADR 0115), else nothing frames it. */
+export const pageCsp = (origin: string, framer?: string): string =>
   [
     "default-src 'none'",
     `script-src ${origin}${ASSETS} 'wasm-unsafe-eval'`,
@@ -45,7 +46,7 @@ export const pageCsp = (origin: string): string =>
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-    "frame-ancestors 'none'",
+    `frame-ancestors ${framer ?? "'none'"}`,
     "require-trusted-types-for 'script'",
     "trusted-types svelte-trusted-html",
   ].join("; ");

@@ -132,6 +132,20 @@ const pageDocument: GetRoute = (_url, deps) => ({
   }),
 });
 
+/**
+ * The root: the page, or with `?dock` the chat box unset.sh frames (ADR 0115). That one answer lets unset.sh's origin
+ * alone frame it (CSP frame-ancestors) and drops the kit's X-Frame-Options: DENY, which would refuse any framing;
+ * every other page path stays unframable.
+ */
+const rootDocument: GetRoute = (url, deps) => {
+  const answer = pageDocument(url, deps);
+  if (!url.searchParams.has("dock")) return answer;
+  const { headers } = answer.response;
+  headers.delete("x-frame-options");
+  headers.set("content-security-policy", pageCsp(deps.origin, deps.webOrigin));
+  return answer;
+};
+
 /** One of the page's built files, by its exact path; anything else under ASSETS is 404. */
 const pageFile: GetRoute = (url, deps) => {
   const file = deps.page.files.get(url.pathname);
@@ -159,7 +173,7 @@ const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   // The hop's start only sets cookies and redirects; the sign-in bucket is spent once per page load, at redeem, which
   // is what calls chat-admin (routes.ts redeemRoute).
   "/sign-in": { limit: "default", handle: startSignIn },
-  "/": { limit: "default", handle: pageDocument },
+  "/": { limit: "default", handle: rootDocument },
   [RETURN_PATH]: { limit: "default", handle: pageDocument },
   [WELCOME_PATH]: { limit: "default", handle: pageDocument },
   [WELCOME_DONE]: { limit: "default", handle: welcomeDone },

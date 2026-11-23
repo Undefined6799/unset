@@ -14,11 +14,18 @@ export const HOP_MAX_AGE_S = 600;
  * 2026-11-21), so an expired chat session finds its device and lock key again (ADR 0095 decision 4). */
 export const BROWSER_MAX_AGE_S = 400 * 86_400;
 
-export type SameSite = "Lax" | "Strict";
+/**
+ * "Partitioned" is the chat box's (ADR 0115): SameSite=None with the CHIPS Partitioned attribute, so the browser keeps
+ * the cookie only for the box framed on unset.sh, apart from every unset.cc tab, and never sends it on another site
+ * (draft-cutler-httpbis-partitioned-cookies-01; tested, Chromium 157, 2026-11-23). Lax and Strict are a unset.cc
+ * tab's, which a frame on another site would neither keep nor send.
+ */
+export type SameSite = "Lax" | "Strict" | "Partitioned";
 
 /** One Set-Cookie value. `value` is already cookie-safe (base64url or percent-encoded); "" with maxAge 0 clears it. */
 export function setCookie(name: string, value: string, maxAgeS: number, sameSite: SameSite): string {
-  return `${name}=${value}; Path=/; Max-Age=${maxAgeS}; Secure; HttpOnly; SameSite=${sameSite}`;
+  const site = sameSite === "Partitioned" ? "None; Partitioned" : sameSite;
+  return `${name}=${value}; Path=/; Max-Age=${maxAgeS}; Secure; HttpOnly; SameSite=${site}`;
 }
 
 export const clearCookie = (name: string, sameSite: SameSite) => setCookie(name, "", 0, sameSite);

@@ -110,14 +110,19 @@ export type RouteSettings = {
   readonly random?: (bytes: number) => Buffer;
 };
 
-/** POST /sign-in/redeem: the hop's ticket for this browser's chat session. */
+/**
+ * POST /sign-in/redeem: the hop's ticket for this browser's chat session. With `?dock` it is the chat box's (ADR 0115):
+ * the same ticket and one-time value, from the box's own cookie, and its cookies are partitioned to the box.
+ */
 export function redeemRoute({ ports, serverName, random = randomBytes }: RouteSettings): PostRoute {
   return {
     limit: "sign-in",
     async handle(request, deadline) {
+      const dock = new URL(request.url).searchParams.has("dock");
+      const hopSite = dock ? "Partitioned" : "Lax";
       const headers = new Headers();
-      headers.append("set-cookie", clearCookie(STATE_COOKIE, "Lax"));
-      headers.append("set-cookie", clearCookie(RETURN_COOKIE, "Lax"));
+      headers.append("set-cookie", clearCookie(STATE_COOKIE, hopSite));
+      if (!dock) headers.append("set-cookie", clearCookie(RETURN_COOKIE, "Lax"));
       const raw = await onlyField(request, "ticket", MAX_TICKET);
       const ticket = raw === null ? null : readTicket(raw);
       if (ticket === null) return answer(400, { error: "chat.bad_ticket" }, headers);
@@ -125,7 +130,10 @@ export function redeemRoute({ ports, serverName, random = randomBytes }: RouteSe
       const browser = browserOf(request) ?? newBrowser(random);
       const outcome = await redeem(ports, { ticket, state, browser: browser.key, deadline });
       if (outcome.kind === "refused") return answer(STATUS[outcome.code], { error: outcome.code }, headers);
-      headers.append("set-cookie", setCookie(BROWSER_COOKIE, browser.value, BROWSER_MAX_AGE_S, "Strict"));
+      headers.append(
+        "set-cookie",
+        setCookie(BROWSER_COOKIE, browser.value, BROWSER_MAX_AGE_S, dock ? "Partitioned" : "Strict"),
+      );
       const { entry, token, expiresAtS, newDevice } = outcome;
       return answer(
         200,

@@ -131,6 +131,24 @@ describe("the chat page", () => {
     },
   );
 
+  test("door.dock_page: /?dock is the page that unset.sh alone may frame, with no X-Frame-Options (ADR 0115)", async () => {
+    const res = await door().get("/?dock");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBe(
+      CSP.replace("frame-ancestors 'none'", `frame-ancestors ${WEB}`),
+    );
+    expect(res.headers.get("x-frame-options")).toBeNull();
+    expect(await res.text()).toBe(PAGE.html);
+  });
+
+  test("door.dock_only_root: ?dock on any other page path keeps it unframable", async () => {
+    for (const path of ["/sign-in/return?dock", "/welcome?dock", "/sign-out/return?dock"]) {
+      const res = await door().get(path);
+      expect(res.headers.get("content-security-policy"), path).toBe(CSP);
+      expect(res.headers.get("x-frame-options"), path).toBe("DENY");
+    }
+  });
+
   test("door.welcome_done: the onboarding page's way back is a fixed 303 to web's chat step, whatever the query", async () => {
     const { get, lines } = door();
     for (const path of ["/welcome/done", "/welcome/done?next=https%3A%2F%2Fevil.example%2F"]) {
