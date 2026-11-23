@@ -884,9 +884,13 @@ test("enter_or_space_pressed_again_after_a_keyboard_save_answered_leaves_the_wor
     await editor.press("End");
     await page.keyboard.type(typed);
     const saved = page.waitForResponse(/\?\/saveAll$/);
+    // The bar says Saved. only once the page has read the cards back (refreshAll after the Save's answer), so the
+    // test waits for that read too and names its status should it fail (CI run 45111322551: no Saved. within 5 s).
+    const reread = page.waitForResponse((answer) => answer.url().includes("/__data.json"));
     await bar(page).getByRole("button", { name: "Save" }).focus();
     await page.keyboard.press(key);
     await saved;
+    expect((await reread).status()).toBe(200);
     await expect(bar(page).getByRole("status")).toHaveText("Saved.");
     await expect(editor).not.toBeFocused();
     await page.keyboard.press(key);
