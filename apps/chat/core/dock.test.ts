@@ -49,6 +49,15 @@ describe("dockMessage", () => {
   });
 });
 
+test("chat.dock_theme: unset.sh's light, dark or device choice, and nothing else", () => {
+  const known = (data: unknown) => dockMessage(event(data), parent, "https://unset.sh");
+  expect(known({ type: "unset.dock.theme", theme: "dark" })).toEqual({ kind: "theme", theme: "dark" });
+  expect(known({ type: "unset.dock.theme", theme: "light" })).toEqual({ kind: "theme", theme: "light" });
+  expect(known({ type: "unset.dock.theme", theme: "system" })).toEqual({ kind: "theme", theme: "system" });
+  expect(known({ type: "unset.dock.theme", theme: "blue" })).toBeNull();
+  expect(known({ type: "unset.dock.theme" })).toBeNull();
+});
+
 describe("boxVisibility", () => {
   // Hiding the frame's container leaves the box's own document "visible" (CSS display does not change
   // visibilityState), so the box is seen only while the tab is seen and the shell says the box is open; read receipts

@@ -260,8 +260,18 @@ const unread = $derived(liveUnread ?? chat?.unread ?? 0);
 /** A Message link's DID, sent with the hello when the box's page loads. */
 let dockAsk: string | undefined;
 
+/**
+ * Whether the frame holds the box's page on the chat origin: from its load event (which follows the hop's redirects)
+ * until the shell sends it on another hop. Before that the frame is about:blank or the hop on unset.sh, and a message
+ * to the chat origin would only be dropped with a console warning (HTML "Cross-document messaging", postMessage
+ * step 8, https://html.spec.whatwg.org/multipage/web-messaging.html, read 2026-11-23; Alex's staging list item 6).
+ */
+let dockGreeted = false;
+/** The chat icon was pressed before the box's page loaded: show the list once it has. */
+let dockAskList = false;
+
 function toDock(data: Record<string, unknown>) {
-  dockFrame?.contentWindow?.postMessage(data, chatOrigin);
+  if (dockGreeted) dockFrame?.contentWindow?.postMessage(data, chatOrigin);
 }
 
 /** Open the box (and the conversation with `did`); false on a phone or with no chat, where the link is followed. */
@@ -285,7 +295,8 @@ function chatClick(event: MouseEvent) {
   if (!dockMade || !dockShown) {
     if (!openDock()) return;
     event.preventDefault();
-    toDock({ type: `${DOCK}list` });
+    if (dockGreeted) toDock({ type: `${DOCK}list` });
+    else dockAskList = true;
     return;
   }
   event.preventDefault();
@@ -312,7 +323,7 @@ let loggingOut: (() => void) | undefined;
 const DOCK_LOG_OUT_MS = 20_000;
 function logOutDock(event: SubmitEvent) {
   const form = event.currentTarget as HTMLFormElement;
-  if (dockFrame?.contentWindow == null || loggingOut !== undefined) return;
+  if (dockFrame?.contentWindow == null || !dockGreeted || loggingOut !== undefined) return;
   event.preventDefault();
   const done = () => form.submit();
   const timer = window.setTimeout(done, DOCK_LOG_OUT_MS);
@@ -325,15 +336,24 @@ function logOutDock(event: SubmitEvent) {
 
 /** The box's page has loaded (again, after a renewal): say hello first, so the box learns this origin from us. */
 function dockLoaded() {
+  dockGreeted = true;
   toDock({ type: `${DOCK}hello` });
+  toDock({ type: `${DOCK}theme`, theme: current });
   toDock({ type: `${DOCK}shown`, shown: dockShown });
   if (dockAsk !== undefined) toDock({ type: `${DOCK}open`, did: dockAsk });
+  else if (dockAskList) toDock({ type: `${DOCK}list` });
+  dockAskList = false;
 }
 
 // Hiding the box leaves its page "visible" to itself, so it is told, and sends read receipts only while open
 // (apps/chat core/dock.ts boxVisibility).
 $effect(() => {
   toDock({ type: `${DOCK}shown`, shown: dockShown });
+});
+
+// The light / dark / device switch is one setting everywhere (Alex 2026-11-23): the box follows each change.
+$effect(() => {
+  toDock({ type: `${DOCK}theme`, theme: current });
 });
 
 function dockMessage(event: MessageEvent) {
@@ -343,6 +363,7 @@ function dockMessage(event: MessageEvent) {
   if (typeof message !== "object" || message === null) return;
   if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
     // web checks the value's form; the frame comes back on the box's page, which says hello again.
+    dockGreeted = false;
     dockFrame.src = `/chat/sign-in?${new URLSearchParams({ state: message.state, dock: "" })}`;
   } else if (
     message.type === `${DOCK}count` &&

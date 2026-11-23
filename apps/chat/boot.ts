@@ -24,6 +24,7 @@ import {
   signOutHere,
 } from "./core/sign-out.ts";
 import { announceHop, HOP_CHANNEL, holdTabLock } from "./core/tab-lock.ts";
+import { applyTheme, savedTheme, saveTheme, themeFromFragment } from "./core/theme.ts";
 import { type Chat, type ChatOptions, openChat, openToLogOut } from "./matrix/client.ts";
 
 const DOOR_DEADLINE_MS = 10_000;
@@ -40,9 +41,13 @@ const hop = () => {
 };
 
 export async function boot(onState: (state: ChatState) => void): Promise<void> {
+  // unset.sh's light / dark / device choice, as the hop last carried it (core/theme.ts), read before the ticket goes.
+  const returning = window.location.pathname === RETURN_PATH;
+  const carried = returning ? themeFromFragment(window.location.hash) : null;
+  if (carried !== null) saveTheme(window.localStorage, carried);
+  applyTheme(document, savedTheme(window.localStorage));
   // The ticket leaves the address bar first, whatever comes next (core/sign-in.ts).
   if (window.location.pathname === SIGN_OUT_RETURN_PATH) return signOut(takeTicket(window), onState);
-  const returning = window.location.pathname === RETURN_PATH;
   const ticket = returning ? takeTicket(window) : null;
   // Set once another tab has taken chat over: this page then stops and says only that (core/tab-lock.ts).
   const elsewhere = new AbortController();
@@ -221,6 +226,7 @@ export async function bootDock(
       return hello();
     }
     if (message.kind === "shown") return seen.setShown(message.shown);
+    if (message.kind === "theme") return applyTheme(document, message.theme);
     if (message.kind === "log_out") return void logOut();
     if (message.kind === "list" || message.kind === "back") return onList(message.kind);
     void openWith(message.did);

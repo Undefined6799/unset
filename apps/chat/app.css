@@ -1,7 +1,8 @@
 /* The chat page's stylesheet (ADR 0099): Tailwind 4 for the stock shadcn-svelte components in lib/ and the shell
  * (App.svelte), over the one theme file, mapped as apps/web/app.css maps it (shadcn-svelte 1.8.1 manual setup,
- * https://shadcn-svelte.com/docs/installation/manual, "Configure styles"). Light and dark follow the system setting
- * through theme.css's light-dark() colours; the page has no theme choice of its own yet. */
+ * https://shadcn-svelte.com/docs/installation/manual, "Configure styles"). Light and dark follow
+ * an explicit <html data-theme>, as apps/web/app.css does: unset.sh's light / dark / device switch, carried here
+ * (core/theme.ts), otherwise the system setting. */
 @import "tailwindcss";
 @import "@unset/shared-ui/theme.css";
 
@@ -9,8 +10,11 @@
 @source "./App.svelte";
 
 @custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
   @media (prefers-color-scheme: dark) {
-    &:where(:root, :root *) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
       @slot;
     }
   }

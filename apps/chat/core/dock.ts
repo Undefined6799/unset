@@ -23,6 +23,8 @@
 //   shell -> box   unset.dock.log_out               unset.sh's Log out, before it posts /logout: the box logs out
 //                                                   in its own partition (backup wait, device ended, stores cleared)
 //   box -> shell   unset.dock.logged_out            done, whatever the outcome; the shell then posts /logout
+//   shell -> box   unset.dock.theme { theme }       with the hello and at each change: unset.sh's light, dark or
+//                                                   device choice, so the box follows it (core/theme.ts)
 //
 // The box takes a message only from its parent window (MessageEvent.source), whose origin the page's frame-ancestors
 // pins to unset.sh (interfaces/chat-auth door.ts rootDocument), and after the hello only from that origin
@@ -30,6 +32,7 @@
 // origin and source). The shell cannot read the frame's address (cross-origin), and a script that fetches the hop
 // itself gets an opaque redirect. Nothing secret is ever posted to the shell.
 import type { Conversation } from "./conversations.ts";
+import { parseTheme, type Theme } from "./theme.ts";
 
 export const DOCK = "unset.dock.";
 const DID = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2048}$/;
@@ -40,7 +43,8 @@ export type DockMessage =
   | { readonly kind: "shown"; readonly shown: boolean }
   | { readonly kind: "log_out" }
   | { readonly kind: "list" }
-  | { readonly kind: "back" };
+  | { readonly kind: "back" }
+  | { readonly kind: "theme"; readonly theme: Theme };
 
 /** What the box shows (Alex 2026-11-23 and the dock mock-up, chat-mockup/dock-v1.html). */
 export type DockMode = "list" | "conversation" | "bubble";
@@ -60,7 +64,7 @@ export function dockMessage(
 ): DockMessage | null {
   if (event.source === null || event.source !== parent) return null;
   if (origin !== null && event.origin !== origin) return null;
-  const data = event.data as { type?: unknown; did?: unknown; shown?: unknown } | null;
+  const data = event.data as { type?: unknown; did?: unknown; shown?: unknown; theme?: unknown } | null;
   if (typeof data !== "object" || data === null) return null;
   if (data.type === `${DOCK}hello`) return { kind: "hello", origin: event.origin };
   if (origin === null) return null;
@@ -71,6 +75,8 @@ export function dockMessage(
   if (data.type === `${DOCK}log_out`) return { kind: "log_out" };
   if (data.type === `${DOCK}list`) return { kind: "list" };
   if (data.type === `${DOCK}back`) return { kind: "back" };
+  const theme = data.type === `${DOCK}theme` ? parseTheme(data.theme) : null;
+  if (theme !== null) return { kind: "theme", theme };
   return null;
 }
 

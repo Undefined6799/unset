@@ -224,7 +224,19 @@ describe("GET /chat/sign-in", () => {
     expect(response.status).toBe(303);
     const location = new URL(response.headers.get("location") ?? "");
     expect(`${location.origin}${location.pathname}${location.search}`).toBe(`${DOOR}/?dock`);
-    expect([...new URLSearchParams(location.hash.slice(1)).keys()]).toEqual(["ticket"]);
+    expect([...new URLSearchParams(location.hash.slice(1)).keys()]).toEqual(["ticket", "theme"]);
+  });
+
+  test("chat.sign_in_theme: the hop carries unset.sh's light / dark / device choice to the chat (Alex 2026-11-23)", async () => {
+    const { cookie } = await signedIn();
+    const theme = async (extra: string) => {
+      const hash = new URL((await get(signInPath(), `${cookie}${extra}`)).headers.get("location") ?? "").hash;
+      return new URLSearchParams(hash.slice(1)).getAll("theme");
+    };
+    expect(await theme("; __Host-theme=dark")).toEqual(["dark"]);
+    expect(await theme("; __Host-theme=light")).toEqual(["light"]);
+    expect(await theme("")).toEqual(["system"]);
+    expect(await theme("; __Host-theme=evil")).toEqual(["system"]);
   });
 
   test("chat.sign_in_fresh_each_time: two hops get two tickets", async () => {

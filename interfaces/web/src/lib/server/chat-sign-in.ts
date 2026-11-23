@@ -23,6 +23,7 @@ import { openApp } from "./app-gate.ts";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
 import { gateSession } from "./session.ts";
+import { themeFromCookies } from "./theme.ts";
 import { stepOf } from "./welcome.ts";
 
 /** The door's path that takes the ticket (the door step builds to it). */
@@ -72,6 +73,9 @@ export async function chatSignIn(event: RequestEvent): Promise<Response> {
   const ports = { readyUser: (did: Did) => chat.readyUser(did, deadline), sign: chat.signTicket };
   const outcome = await signIn(ports, { did: session.did, idHash: session.idHash, state });
   if (outcome.kind === "not_ready") return plain(503, "chat.not_ready");
-  const fragment = new URLSearchParams({ ticket: outcome.ticket });
+  // The theme switch is one setting everywhere (Alex 2026-11-23): the chat cannot read unset.sh's cookie, so the hop
+  // carries the choice (an enum, nothing personal) beside the ticket; apps/chat core/theme.ts reads it.
+  const theme = themeFromCookies(event.request.headers.get("cookie"));
+  const fragment = new URLSearchParams({ ticket: outcome.ticket, theme });
   return redirectTo(`${config.CHAT_DOOR_ORIGIN}${dock ? DOOR_DOCK_PATH : DOOR_RETURN_PATH}#${fragment}`);
 }
