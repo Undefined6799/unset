@@ -46,6 +46,7 @@ let {
   typed = "",
   unsent = false,
   controls,
+  onTyped,
 }: {
   conversations: Conversations;
   id: ConversationId;
@@ -56,6 +57,8 @@ let {
   unsent?: boolean;
   /** The chat box's own controls at the end of the top bar (DockControls.svelte). */
   controls?: Snippet;
+  /** Told what the field holds at each change, so a box that hides this conversation can open it with it again. */
+  onTyped?: (id: ConversationId, text: string) => void;
 } = $props();
 
 let view = $state<ConversationView | null>(null);
@@ -66,6 +69,9 @@ let text = $state(typed);
 let sending = $state(false);
 // svelte-ignore state_referenced_locally
 let failed = $state(unsent);
+// svelte-ignore state_referenced_locally
+const typedIn = id;
+$effect(() => onTyped?.(typedIn, text));
 const sends = $derived(view !== null && canSend(view.composer));
 
 // Only the messages scroll; the bar above and the composer below stay put (Alex 2026-11-23). The newest stays in view

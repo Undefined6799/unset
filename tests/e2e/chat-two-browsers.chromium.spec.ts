@@ -408,13 +408,16 @@ test("chat_e2e.dock: the chat box framed on unset.sh sets up, accepts, reads and
   await box.locator("#message").fill("hello from the box");
   await box.getByRole("button", { name: "Send" }).click();
   await expect(messages(b.page)).toContainText("hello from the box", { timeout: 90_000 });
-  // Minimise leaves the person's avatar; it opens the chat again. Only the messages scroll, the bar stays (Alex).
+  // Minimise leaves the person's avatar; it opens the chat again, with what was typed and not sent still there (Codex
+  // review on e4620a92). Only the messages scroll, the bar stays (Alex).
+  await box.locator("#message").fill("not sent yet");
   await box.getByRole("button", { name: "Minimise" }).click();
   await expect(a.page.locator("iframe[data-dock]")).toHaveAttribute("data-mode", "bubble");
   await box.locator("[data-dock-bubble]").click();
   await expect(a.page.locator("iframe[data-dock]")).toHaveAttribute("data-mode", "conversation");
   await expect(box.locator("[data-dock-close]")).toBeInViewport();
   await expect(box.locator("#message")).toBeInViewport();
+  await expect(box.locator("#message")).toHaveValue("not sent yet");
   // The key is asked once (Alex 2026-11-23): a reload, and a new tab once this one is gone, open the same device ready.
   await a.page.reload();
   await expect.poll(boxState, { timeout: 60_000 }).toBe("ready");

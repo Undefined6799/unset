@@ -57,6 +57,11 @@ let starting = $state(false);
 /** What the opened conversation's composer starts with, once a new conversation's first message was started. */
 let carried: { text: string; failed: boolean } | null = $state(null);
 let problem: string | null = $state(null);
+/**
+ * What was typed and not sent, by conversation: the box unmounts a conversation when it is minimised or the list
+ * covers it, and opens it with this again (Codex review on e4620a92). Kept only in this page's memory.
+ */
+let unsentText: Record<string, string> = $state({});
 const requests = $derived(list.filter((c) => c.available && c.request));
 const talks = $derived(list.filter((c) => c.available && !c.request));
 const unavailable = $derived(list.filter((c) => !c.available));
@@ -132,10 +137,11 @@ function leaveDraft() {
     {conversations}
     {names}
     id={open}
-    typed={carried?.text ?? ""}
+    typed={unsentText[open] ?? carried?.text ?? ""}
     unsent={carried?.failed === true}
     onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
     controls={dock === undefined ? undefined : conversationControls}
+    onTyped={(id, text) => (unsentText[id] = text)}
   />
 {:else if draft !== null && dock?.mode !== "list"}
   <section class="flex flex-col gap-4" data-screen="new-conversation">
