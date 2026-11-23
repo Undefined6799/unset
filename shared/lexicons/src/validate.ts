@@ -10,6 +10,7 @@ import links from "../schemas/sh.unset.block.links.json" with { type: "json" };
 import showcase from "../schemas/sh.unset.block.showcase.json" with { type: "json" };
 import text from "../schemas/sh.unset.block.text.json" with { type: "json" };
 import card from "../schemas/sh.unset.card.json" with { type: "json" };
+import page from "../schemas/sh.unset.page.json" with { type: "json" };
 import profile from "../schemas/sh.unset.profile.json" with { type: "json" };
 import actorProfile from "../vendor/app.bsky.actor.profile.json" with { type: "json" };
 
@@ -25,6 +26,7 @@ type Defs = Record<string, { type: string; record?: { properties: Props }; prope
 
 const RECORDS = {
   "sh.unset.profile": { validator: sh.unset.profile.main, defs: profile.defs, strict: true },
+  "sh.unset.page": { validator: sh.unset.page.main, defs: page.defs, strict: true },
   "sh.unset.card": { validator: sh.unset.card.main, defs: card.defs, strict: true },
   "app.bsky.actor.profile": { validator: app.bsky.actor.profile.main, defs: actorProfile.defs, strict: false },
 } satisfies Record<string, { validator: Validator; defs: object; strict: boolean }>;

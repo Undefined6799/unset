@@ -101,6 +101,9 @@ export const CARD_EDIT = {
   half: "Half width",
   /** A refused save whose answer carried no catalog message. */
   refused: "That card could not be saved.",
+  // A write the member's grant does not cover: the editor keeps what was typed while they allow access in a new tab.
+  allowAccess: "Allow access",
+  newTab: " (opens in a new tab)",
   /** A refused delete whose answer carried no catalog message. */
   removeRefused: "That card could not be deleted.",
   /** A refusal shown beside the field it blames, by its code; any other code shows the catalog message there. */

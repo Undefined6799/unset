@@ -2,7 +2,7 @@
 // interfaces/review starts it; web's composition root takes the remote processor, which only speaks the wire.
 export { createImagePool, type PoolEvent, type PoolOptions } from "./pool.ts";
 export { createRemoteImageProcessor, type ReviewAnswer, type ReviewTransport } from "./remote.ts";
-export { type Outcome, reviewListener } from "./serve.ts";
+export { type Counted, type Outcome, reviewListener } from "./serve.ts";
 export { type Sniffed, sniffImage } from "./sniff.ts";
 export {
   decodeFrame,

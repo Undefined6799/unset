@@ -60,9 +60,20 @@ const profile = (displayName = "Ada"): IndexChange => ({
     $type: "sh.unset.profile",
     displayName,
     createdAt: T,
-    cards: [CARD_1, CARD_2].map((rkey) => ({ uri: `at://${A}/sh.unset.card/${rkey}` })),
   },
 });
+/** The main page listing CARD_1 then CARD_2 (ADR 0091). */
+const page: IndexChange = {
+  kind: "put",
+  collection: "sh.unset.page",
+  rkey: "self",
+  cid: CID,
+  record: {
+    $type: "sh.unset.page",
+    cards: [CARD_1, CARD_2].map((rkey) => ({ uri: `at://${A}/sh.unset.card/${rkey}` })),
+    createdAt: T,
+  },
+};
 const section = (rkey: string): IndexChange => ({
   kind: "put",
   collection: "sh.unset.card",
@@ -130,7 +141,7 @@ describe("track store", () => {
 
   test("track.backfill_writes_the_snapshot", async () => {
     activate(A);
-    await snapshot(A, rev(3), [profile(), section(CARD_1), section(CARD_2)]);
+    await snapshot(A, rev(3), [profile(), page, section(CARD_1), section(CARD_2)]);
     expect(lines(`SELECT rkey, position FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual([
       `${CARD_1}|0`,
       `${CARD_2}|1`,

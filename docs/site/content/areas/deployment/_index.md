@@ -27,6 +27,8 @@ What puts the system on machines: Compose, the edge, images and the preflight. D
 
 The pieces in the table. `deployment/pds/` is the paired frontend recipe (`Dockerfile`, `source.lock.json`, `README.md`, `build.test.ts`, `ui/unset-theme.css`, `ui/theme.test.ts`); [images](images/) describes it. The `pds` service images are on [compose](compose/). The `/deployment/` supply-chain row below covers `deployment/pds/`. The tree also has the Sigstore root, the reserved-label list, `networks.dev.json` and `limits.dev.json`. `deployment/postgres/init-local/` is on the tree and is superseded; see [postgres init](postgres-init/).
 
+The organisation's documentation site is owned by [unset-sh/docs](https://github.com/unset-sh/docs). This app no longer exports its docs or owns that site's workflow ([ADR 0112](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0112-app-docs-mirror-retires-at-the-organisation-cutover.md)). The app's local Hugo site and its CI checks remain here; [the cutover runbook](https://github.com/Undefined6799/unset/blob/main/docs/human/runbooks/docs-mirror-key.md) covers retiring the old writer and key.
+
 `.github/CODEOWNERS` (supply chain, then the trusted-base section):
 
 | Path | Section |
