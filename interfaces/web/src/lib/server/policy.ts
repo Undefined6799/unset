@@ -3,11 +3,22 @@
 // page and its rules live together and no shared table needs editing. This file imports nothing that imports it.
 import type { PolicyName } from "./limits.ts";
 
-/** The CSP group of a response (csp.ts). `app` runs SvelteKit's client; the others run no script (`csr = false`). */
+/**
+ * The CSP group of a response (csp.ts). `app` pages run SvelteKit's client under its script policy; a `public` page
+ * runs no script (`csr = false`) unless its policy says `client`; `static` is never a page.
+ */
 export type PageGroup = "app" | "public" | "static";
 
 export type RoutePolicy = Readonly<{
   group: PageGroup;
+  /**
+   * A `public` page that runs SvelteKit's client (ADR 0114 points 2 and 3): its +page.ts says `csr = true`, and the
+   * hook sends the page the app group's script policy in place of the public group's fixed one. Nothing else about it
+   * changes: its cache rules, the system theme on a visitor's copy and the bell as a link stay the public group's,
+   * and its refusals and its data address keep the fixed header. A fact of the route, never read from the request;
+   * gate.test.ts names every route that has it and fails when `csr` and this disagree.
+   */
+  client?: true;
   /** The rate-limit policy (a key of limits.ts `policies`). */
   limit: PolicyName;
   /** The policy a POST counts against instead of `limit`, address and member buckets both (a page whose writes cost

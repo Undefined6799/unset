@@ -8,6 +8,7 @@
 // dynamically). Changes are reported once per animation frame, not after @milkdown/plugin-listener's 200 ms
 // debounce, so a save pressed right after typing never posts stale text; the caller also reads `markdown()` as the
 // form is sent.
+
 import {
   defaultValueCtx,
   Editor,
@@ -20,6 +21,7 @@ import {
 import { clipboard } from "@milkdown/plugin-clipboard";
 import { history } from "@milkdown/plugin-history";
 import { commonmark, emphasisSchema, headingSchema, imageSchema, strongSchema } from "@milkdown/preset-commonmark";
+import { gfm, remarkGFMPlugin, tableCellSchema, tableHeaderSchema } from "@milkdown/preset-gfm";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
 import { dropCursor } from "@milkdown/prose/dropcursor";
 import { gapCursor } from "@milkdown/prose/gapcursor";
@@ -28,16 +30,20 @@ import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model"
 import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
-import { $prose, getMarkdown } from "@milkdown/utils";
+import { $prose, $remark, getMarkdown } from "@milkdown/utils";
+import { codeBlockView } from "./code-block.ts";
+import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
+import { type TableOptions, type TableTools, withTables } from "./tables.ts";
 
 /** The toolbar's actions, by name. */
 export const EDITOR_COMMANDS = [
   "strong",
   "emphasis",
+  "strike",
   "code",
   "paragraph",
   "heading1",
@@ -102,6 +108,8 @@ function commandFor(name: EditorCommand, state: EditorState): Command {
       return toggleMark(schema.marks.strong as NonNullable<typeof schema.marks.strong>);
     case "emphasis":
       return toggleMark(schema.marks.emphasis as NonNullable<typeof schema.marks.emphasis>);
+    case "strike":
+      return toggleMark(schema.marks.strike_through as NonNullable<typeof schema.marks.strike_through>);
     case "code":
       return toggleMark(schema.marks.inlineCode as NonNullable<typeof schema.marks.inlineCode>);
     case "paragraph":
@@ -127,10 +135,11 @@ function commandFor(name: EditorCommand, state: EditorState): Command {
 function isActive(name: EditorCommand, state: EditorState): boolean {
   const { selection } = state;
   const parent = selection.$from.parent;
-  const mark = { strong: "strong", emphasis: "emphasis", code: "inlineCode" } as const;
+  const mark = { strong: "strong", emphasis: "emphasis", strike: "strike_through", code: "inlineCode" } as const;
   switch (name) {
     case "strong":
     case "emphasis":
+    case "strike":
     case "code": {
       const type = state.schema.marks[mark[name]];
       if (type === undefined) return false;
@@ -187,11 +196,15 @@ export type MarkdownEditor = {
    * card's padding, or below the last line), then focuses the editor.
    */
   readonly focusAt: (x: number, y: number) => void;
+  /** Puts the caret at `place` in the words and focuses the editor; false when the editor has no such block. */
+  readonly focusAtPlace: (place: Place) => boolean;
   /** Types `text` at the caret, as the member's own keys would. */
   readonly type: (text: string) => void;
   readonly destroy: () => Promise<void>;
   /** The side handle, block menu and floating bar, when the caller drew them (`MountOptions.menus`). */
   readonly menus?: Menus;
+  /** The table handles and their menus, when the caller drew them (`MountOptions.tables`). */
+  readonly tables?: TableTools;
 };
 
 export type MountOptions = {
@@ -206,6 +219,8 @@ export type MountOptions = {
   readonly onToolbar: (state: ToolbarState) => void;
   /** Where to draw the side handle, block menu and floating bar, if the editor has them (the in-place editor). */
   readonly menus?: Omit<MenusOptions, "isOn">;
+  /** Where to draw the table handles, if the editor has them (the in-place editor). */
+  readonly tables?: TableOptions;
 };
 
 // The page's parser (apps/web/lib/profile/parse.ts) shows a quote as paragraphs with line breaks, a list item as one
@@ -214,14 +229,15 @@ export type MountOptions = {
 // full one, so any stored text opens as it is; instead no edit (toolbar, shortcut or paste) may add a shape the saved
 // card would flatten: a heading, list or code block inside a quote, a second paragraph, quote, heading or code block
 // inside a list item, a line break inside a list, or a list nested deeper than the page's three levels (parse.ts
-// MAX_LIST_DEPTH), which it shows beside the third. Text already stored that way stays editable.
+// MAX_LIST_DEPTH), which it shows beside the third; nor, from GFM, a footnote. Text already stored that way stays
+// editable.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 const PAGE_LIST_DEPTH = 3;
 /**
- * How many flattened shapes `node` and what it holds carry, given its parent, its index there and how many lists hold
- * it: what the page would show differently from the editor.
+ * How many flattened shapes `node` and what it holds carry, given its parent, its index there, how many lists hold it
+ * and whether a table cell does: what the page would show differently from the editor.
  */
-function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number): number {
+function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number, cell = false): number {
   const holder = parent.type.name;
   const name = node.type.name;
   let count = 0;
@@ -229,10 +245,15 @@ function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: numb
   if (holder === "blockquote" && name !== "paragraph") count += 1;
   if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
   if (name === "hardbreak" && lists > 0) count += 1;
+  // GFM: the page reads no footnotes (preset-gfm's footnote_reference and footnote_definition), and a table cell
+  // holds one line. A cell holds a paragraph (preset-gfm 7.23.0 cellContent), so the break is the cell's grandchild.
+  if (name.startsWith("footnote_")) count += 1;
+  if (name === "hardbreak" && cell) count += 1;
   if (!node.isBlock) return count;
   const inner = lists + (ITEM_LISTS.has(name) ? 1 : 0);
+  const inCell = cell || name === "table_cell" || name === "table_header";
   node.forEach((child, _offset, at) => {
-    count += shapesIn(child, node, at, inner);
+    count += shapesIn(child, node, at, inner, inCell);
   });
   return count;
 }
@@ -262,6 +283,82 @@ function flattened(doc: ProseNode): number {
  */
 const dropLine = $prose(() => dropCursor({ width: 2, color: false, class: "rounded-full bg-ring" }));
 const gapCaret = $prose(() => gapCursor());
+
+const CELL_ALIGN: Readonly<Record<string, string>> = { left: "text-start", center: "text-center", right: "text-end" };
+const cellTag = (node: ProseNode) => (node.type.name === "table_header" ? "th" : "td");
+/** A cell's DOM attributes with its alignment as a class; GFM cells span one column and row. */
+function cellAttrs(node: ProseNode): Record<string, string> {
+  return { class: CELL_ALIGN[String(node.attrs.alignment)] ?? "text-start" };
+}
+
+/**
+ * A task's box is drawn where its bullet was (the editor's styles, from `data-checked`), and a press on it ticks or
+ * clears the task; preset-gfm 7.23.0 draws the item without a box of its own (task-list-item.ts toDOM).
+ */
+const TASK_BOX = 24;
+const taskBox = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleClickOn: (view, _pos, node, nodePos, event, direct) => {
+          if (!direct || node.type.name !== "list_item" || node.attrs.checked === null) return false;
+          const item = view.nodeDOM(nodePos);
+          if (!(item instanceof HTMLElement)) return false;
+          if (event.clientX - item.getBoundingClientRect().left > TASK_BOX) return false;
+          view.dispatch(view.state.tr.setNodeAttribute(nodePos, "checked", !node.attrs.checked));
+          return true;
+        },
+      },
+    }),
+);
+
+/** A drawn heading's own level, 1 to 6, from its data-level; anything else is none. */
+function headingLevel(value: string | undefined): number | undefined {
+  const level = Number(value);
+  return Number.isInteger(level) && level >= 1 && level <= 6 ? level : undefined;
+}
+
+/** The parts of a Markdown tree (mdast) the www rewrite reads. */
+type MdNode = {
+  type: string;
+  url?: string;
+  value?: string;
+  children?: MdNode[];
+  position?: { start: { offset?: number } };
+};
+
+/**
+ * Whether a link is a bare address rather than one the member wrote out: mdast-util-gfm-autolink-literal 2.1.0 builds
+ * a bare one either with no position (its findUrl transform) or with its text starting where it starts (the
+ * literalAutolink token), while `[name](url)` starts one character before its text, at the bracket.
+ */
+function isBare(link: MdNode, text: MdNode): boolean {
+  return link.position === undefined || text.position?.start.offset === link.position.start.offset;
+}
+
+/**
+ * A bare `www.` name opens over https, as the page reads it (parse.ts; Alex 2026-11-21: "bare addresses become
+ * https"): remark-gfm 4.0.1 gives one a link to `http://` and its name (mdast-util-gfm-autolink-literal), so that link
+ * is pointed at https before the editor draws it. A link written out keeps its own address, http too.
+ */
+const wwwOverHttps = $remark("wwwOverHttps", () => () => (tree: MdNode) => {
+  const walk = (node: MdNode) => {
+    const text = node.children?.length === 1 ? node.children[0] : undefined;
+    const name = text?.value;
+    if (
+      node.type === "link" &&
+      text !== undefined &&
+      name !== undefined &&
+      /^www\./i.test(name) &&
+      node.url === `http://${name}` &&
+      isBare(node, text)
+    ) {
+      node.url = `https://${name}`;
+    }
+    node.children?.forEach(walk);
+  };
+  walk(tree);
+});
 
 const pageShapes = $prose(
   () =>
@@ -315,6 +412,71 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
   return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
 }
 
+/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when they differ. */
+function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
+  if (countWords(doc).chars !== place.total) return null;
+  const count = emptyCount();
+  let found: number | null = null;
+  doc.descendants((child, pos, parent) => {
+    if (found !== null) return false;
+    // Each text block starts another line of the words, as the page counts its list items and its blocks (place.ts),
+    // and so does a hard line break, as the page counts its <br>. A place at the start of an empty line is just before
+    // the break that ends it.
+    if (isHardBreak(child)) {
+      if (count.line && place.space && placeOf(count).chars === place.chars) found = pos;
+      else breakLine(count);
+      return false;
+    }
+    if (child.isTextblock) startLine(count);
+    if (!child.isText) return true;
+    found = placeInText(child.text ?? "", pos, count, place, parent?.type.spec.code === true);
+    return false;
+  });
+  return found === null ? null : TextSelection.near(doc.resolve(found), place.space ? 1 : -1);
+}
+
+const isHardBreak = (node: ProseNode) => node.type.name === "hardbreak";
+
+/**
+ * Where `place` falls in one piece of a block's words starting at `pos`, or null when it is further on. By code point,
+ * as the page counts (place.ts): an emoji is one character but two positions. After a space or at a line's start the
+ * place is before the next character counted; otherwise it is after the last one, or before the first when there is
+ * none. In a code block (`literal`) each white space character counts.
+ */
+function placeInText(text: string, pos: number, count: Count, place: Place, literal: boolean): number | null {
+  let offset = 0;
+  for (const ch of text) {
+    const before = placeOf(count);
+    const pending = count.pending;
+    countChars(ch, count, literal);
+    const after = placeOf(count);
+    const moved = after.chars > before.chars;
+    // Before the words' first character (or a code block's first white space, which counts), in whichever block they
+    // start: not at the document's start, which can be an empty block before them.
+    if (place.chars === 0 && before.chars === 0 && pending === 0 && (moved || count.pending > 0)) return pos + offset;
+    if (place.space && moved && before.space && before.chars === place.chars) return pos + offset;
+    if (!place.space && moved && after.chars === place.chars) return pos + offset + ch.length;
+    offset += ch.length;
+  }
+  return null;
+}
+
+/** The characters of a node's words (the whole document's, for a place), counted as the page counts them (place.ts). */
+function countWords(node: ProseNode): Count {
+  const count = emptyCount();
+  const visit = (child: ProseNode, literal: boolean) => {
+    if (isHardBreak(child)) breakLine(count);
+    else if (child.isTextblock) startLine(count);
+    if (child.isText) countChars(child.text ?? "", count, literal);
+    else
+      child.forEach((inner) => {
+        visit(inner, child.type.spec.code === true);
+      });
+  };
+  visit(node, false);
+  return count;
+}
+
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {
   let frame = 0;
   let flush: () => void = () => undefined;
@@ -358,10 +520,15 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     options.menus === undefined
       ? undefined
       : withMenus(made, { ...options.menus, isOn: (item, state) => isActive(item, state) });
+  const tables = options.tables === undefined ? undefined : withTables(made, options.tables);
   const editor = await made
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, options.value);
+      // GitHub Flavored Markdown as the page reads it (parse.ts): struck words need two tildes each side, so a single
+      // tilde stays text (remark-gfm 4.0.1 `singleTilde`, true by default).
+      // Cells are not padded to line up (`tablePipeAlign`), so a table opened and saved keeps the spacing it had.
+      ctx.set(remarkGFMPlugin.options.key, { singleTilde: false, tablePipeAlign: false });
       ctx.update(remarkStringifyOptionsCtx, (prev) => ({
         ...prev,
         bullet: "-" as const,
@@ -372,6 +539,14 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       // wrongly. Writing italic as "_" and bold as "**" always gives "**a _b_**" and "_**word**_", which it reads.
       // The runner returns nothing: a truthy return tells the serializer the mark wrote the text itself
       // (@milkdown/transformer 7.23.0 SerializerState, "every((mark) => !runProseMark(mark, node))").
+      // preset-gfm 7.23.0 draws a cell's alignment as a style attribute (table/schema.ts, cellAttributes.alignment),
+      // which the app's CSP refuses (style-src-attr); a class aligns it instead, as the page does (readme.svelte).
+      for (const cell of [tableCellSchema, tableHeaderSchema]) {
+        ctx.update(cell.key, (prev) => (schemaCtx) => {
+          const schema = prev(schemaCtx);
+          return { ...schema, toDOM: (node) => [cellTag(node), cellAttrs(node), 0] };
+        });
+      }
       ctx.update(emphasisSchema.key, (prev) => (schemaCtx) => {
         const schema = prev(schemaCtx);
         return {
@@ -404,10 +579,12 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       // 2026-11-21: reading every hN one level up made a pasted h1 and h2 both "#").
       ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
         ...prev(schemaCtx),
-        parseDOM: [
-          ...[1, 2, 3, 4, 5].map((level) => ({ tag: `h${level + 1}[data-level="${level}"]`, attrs: { level } })),
-          ...[1, 2, 3, 4, 5, 6].map((level) => ({ tag: `h${level}`, attrs: { level } })),
-        ],
+        // HTML stops at h6, so levels 5 and 6 both draw one; data-level says which, and a copy keeps it. A heading
+        // with none (pasted from another site) keeps its own level.
+        parseDOM: [1, 2, 3, 4, 5, 6].map((shown) => ({
+          tag: `h${shown}`,
+          getAttrs: (dom: HTMLElement) => ({ level: headingLevel(dom.dataset.level) ?? shown }),
+        })),
         toDOM: (node) => [
           `h${Math.min(Number(node.attrs.level) + 1, 6)}`,
           { "data-level": String(node.attrs.level) },
@@ -436,6 +613,9 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       }));
     })
     .use(commonmark)
+    .use(gfm)
+    .use(wwwOverHttps)
+    .use(taskBox)
     .use(clipboard)
     .use(pageShapes)
     .use(history)
@@ -443,6 +623,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .use(dropLine)
     .use(gapCaret)
     .use(enterKeys)
+    .use(codeBlockView)
     .create();
   return {
     run: (command) =>
@@ -461,6 +642,15 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         view.dispatch(view.state.tr.setSelection(caretAt(view, x, y)));
         view.focus();
       }),
+    focusAtPlace: (place) =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const caret = caretAtPlace(view.state.doc, place);
+        if (caret === null) return false;
+        view.dispatch(view.state.tr.setSelection(caret));
+        view.focus();
+        return true;
+      }),
     type: (text) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
@@ -474,5 +664,6 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       await editor.destroy();
     },
     menus,
+    tables,
   };
 }

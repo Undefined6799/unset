@@ -1,13 +1,13 @@
 -- phase: expand
 -- Sign out everywhere reaching chat in the browser that pressed it (ADR 0095 decision 5, note of 2026-11-21). It
--- queues every chat device of the member by DID, due at once and ended whatever the entry says (migration 0050), and
+-- queues every chat device of the member by DID, due at once and ended whatever the entry says (migration 0051), and
 -- the other browsers keep exactly that. The browser that pressed it goes through unset.cc's sign-out page like Log
 -- out (interfaces/web lib/server/sign-out.ts), which needs its own device alive long enough to back up keys and log
 -- out; due at once, web's job could end it first. In the same transaction web holds that browser's rows back by the
 -- Log out grace: the devices whose door entry this web session last signed in. It only delays (never makes a row
 -- due sooner, never adds or deletes one, never touches a leased row) and keeps the row's DID mark, so a renewal
 -- cannot save the device and it is still ended when the grace runs out. web already may set due_at on any queued row
--- (migration 0050's grant) but reads no door table, so the join to door.browser runs here, as its owner.
+-- (migration 0052's grant) but reads no door table, so the join to door.browser runs here, as its owner.
 -- No new personal data.
 CREATE FUNCTION app.hold_chat_session_end(p_ref text, p_after_s integer) RETURNS integer
   LANGUAGE plpgsql SECURITY DEFINER

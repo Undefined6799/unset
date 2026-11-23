@@ -2634,6 +2634,39 @@ by the mark of a browser that showed it, so the browser a sign-in is about canno
 covers the alert; an alert seen on one browser still counts on another), the page clearing every browser's count, and
 the alert still counting on the member's other browsers.
 
+### P2.27g — Clear a sign-in alert seen on any older browser
+Tags: [SEC]            Depends on: P2.27f
+Staging test 2026-11-21 23:50Z: an alert seen on one browser still counted on the others, and the bell on home sent
+no mark. Alex 2026-11-21 23:56Z: an alert seen on any browser signed in before it counts as seen everywhere; the bell
+on a page with no script becomes a link. ADR 0108, Proposed; migration 0043.
+
+Threats (SE-1):
+- Data flow: browser → (trust boundary: CSRF gate, session) → web `seen` action or `/notifications` GET with Fetch
+  Metadata → `MARK_SEEN`, one statement as `web` → `app.session`, `app.account`, `app.notification` → `app.inbox` →
+  each browser's bell.
+- S (spoofing): a browser posing as an older one. The session id hash is the gate's, and `app.inbox` shows an
+  `older_sessions_only` row only to sessions that began before it. Test `an_intruder_cannot_clear_the_alert_about_its_first_sign_in`.
+- T (tampering): another member's id, or an alert this browser may not see. `VISIBLE_IDS` names this browser and DID.
+  Tests `a_later_browser_or_another_member_marks_nothing_seen`, `opening_the_bell_marks_seen_only_what_this_browser_may_see`.
+- R (repudiation): none new; marking seen deletes nothing, and the alert stays listed until dismissed.
+- I (disclosure): none; the mark is read through the same view, and no new field reaches a browser.
+- D (denial of service): one statement per look under the existing `notifications` limit; row locks order two
+  browsers (DA-4).
+- E (elevation): an older browser held by an intruder (a stolen laptop) can clear an alert everywhere. It can
+  already dismiss it, which deletes it for every browser (ADR 0081), so the mark adds no power. Alex accepted this
+  by choosing it (2026-11-21 23:56Z).
+- Forged visit: another site's link or a prefetch marks nothing (unchanged, `only_a_visit_from_our_pages_or_a_typed_address_marks_seen`).
+- LINDDUN, new data `app.notification.seen_at`: linkability and identifiability none beyond the member's own row;
+  it is not exported, and it goes with the row (dismissal, 30-day sweep, `core.erase_did`); ROPA Accounts row updated.
+- ASVS 5.0: V8.2.2 and V8.3.1 rows gain the tests above.
+
+**What:** a seen mark on each sign-in alert (`app.notification.seen_at`), set by the same look that moves the
+browser's and the account's marks, only on alerts that browser may see. On a page outside the CSP group `app` the
+bell, in the header and in More actions, is a link to `/notifications` and its panel is not drawn.
+**Tests:** as `web`, an alert shown on an older browser seen everywhere and an intruder's second browser never
+covering the first alert; on the routes, the staging case, the intruder signing in twice and the bell as a link on
+pages with no script; nojs.spec.ts for the link in a browser.
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit

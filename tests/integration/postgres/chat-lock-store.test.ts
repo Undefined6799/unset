@@ -1,4 +1,4 @@
-// The chat account follows the Unset account's state (infrastructure/postgres/chatLockStore.ts, migration 0049; ADR
+// The chat account follows the Unset account's state (infrastructure/postgres/chatLockStore.ts, migration 0050; ADR
 // 0096 decisions 1 and 2), against real Postgres connected as `web` (TE-2). The rows are written as their owners
 // would leave them (the indexer's account state, a moderator's suspension, web's mapping), here by the superuser.
 // A ready chat account whose member is suspended, deactivated or taken down is due for a lock, and for an unlock

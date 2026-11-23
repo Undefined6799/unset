@@ -197,8 +197,8 @@ describe("notification store", () => {
     expect((await list(did, phone)).map((e) => e.seen)).toEqual([false, true, true]);
   });
 
-  test("notifications.a_sign_in_entry_is_seen_only_by_the_browser_that_showed_it", async () => {
-    // ADR 0090 point 2: an entry only older browsers may see is the one each browser marks for itself.
+  test("notifications.a_sign_in_alert_shown_on_an_older_browser_is_seen_on_every_browser", async () => {
+    // ADR 0108 (Alex 2026-11-21 23:56Z): a sign-in alert shown on any browser signed in before it is seen everywhere.
     const did = await member();
     const [laptop, phone] = [await browser(did), await browser(did)];
     const thief = await browser(did, true);
@@ -215,7 +215,21 @@ describe("notification store", () => {
     if (alert === undefined) throw new Error("no alert");
     await db((c) => store.markSeen(c, did, laptop, alert.id));
     expect((await list(did, laptop)).map((e) => e.seen)).toEqual([true, true]);
-    expect((await list(did, phone)).map((e) => e.seen)).toEqual([true, false]);
+    expect((await list(did, phone)).map((e) => e.seen)).toEqual([true, true]);
+  });
+
+  test("notifications.an_intruder_never_clears_the_alert_about_its_first_sign_in", async () => {
+    // ADR 0108: the intruder's second browser is told about its third; its look covers that alert, never the first.
+    const did = await member();
+    const laptop = await browser(did);
+    const first = await browser(did, true);
+    await new Promise((done) => setTimeout(done, 2));
+    await browser(did, true);
+    expect((await list(did, laptop)).map((e) => e.reason)).toEqual(["sign_in", "sign_in"]);
+    const [second] = await list(did, first);
+    if (second === undefined) throw new Error("no alert");
+    await db((c) => store.markSeen(c, did, first, second.id));
+    expect((await list(did, laptop)).map((e) => e.seen)).toEqual([true, false]);
   });
 
   test("notifications.a_later_browser_or_another_member_marks_nothing_seen", async () => {

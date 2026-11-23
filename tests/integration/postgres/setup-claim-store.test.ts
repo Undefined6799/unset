@@ -1,4 +1,4 @@
-// Build step 8 (infrastructure/postgres/setupClaimStore.ts, migration 0045; ADR 0095 decision 2, ADR 0100): the
+// Build step 8 (infrastructure/postgres/setupClaimStore.ts, migration 0046; ADR 0095 decision 2, ADR 0100): the
 // door's setup claim, against real Postgres connected as `chat_auth`, the door's own role (TE-2). One browser entry
 // holds an account's setup at a time; its own claim is taken again; another's waits until the claim's time has
 // passed; release frees it for others only from its holder; a race of many browsers has exactly one winner; and the

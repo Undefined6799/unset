@@ -53,7 +53,7 @@ const pool = createPool({
   max: 4,
   connectTimeoutMs: 5000,
 });
-// The door's own role, to give a browser a chat entry as the door would (migration 0044).
+// The door's own role, to give a browser a chat entry as the door would (migration 0045).
 const doorPool = createPool({
   connection: { host: provided.host, port: provided.port, database, ...provided.roles.chat_auth, ssl: false },
   service: "web-sign-out-door",

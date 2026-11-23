@@ -5,7 +5,7 @@
 import { safeHref } from "@unset/shared-safe-href";
 import { CARD_TEXT } from "./messages.ts";
 import { parseReadme } from "./parse.ts";
-import type { CardContent, CardShown, CardSurface, CardView, CardWidth, ShownButton } from "./types.ts";
+import type { CardContent, CardShown, CardSurface, CardView, CardWidth, ShownButton, ShownCard } from "./types.ts";
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 
@@ -103,6 +103,13 @@ export const cardViews = (
     return version === undefined ? shown : { ...shown, version };
   });
 
+/**
+ * The cards for a page that edits nothing (the public profile): what each shows, without `content`, which only the
+ * owner's editors read. A visitor's browser is sent what their page draws and no more (rule SE-3; book P1.22h).
+ */
+export const shownCards = (cards: readonly CardView[]): ShownCard[] =>
+  cards.map(({ key, width, surface, shown }) => ({ key, width, surface, shown }));
+
 /** The profile's website as a link, or null when unset or not http(s). */
 export function websiteLink(website: string): { readonly href: string; readonly text: string } | null {
   const href = web(website);
@@ -114,7 +121,7 @@ export function websiteLink(website: string): { readonly href: string; readonly 
  * Contact card, as that card shows it, or null. The profile record holds no contact field (ADR 0051), and an account's
  * own email is never read here.
  */
-export function contactAction(cards: readonly CardView[]): { readonly href: string; readonly label: string } | null {
+export function contactAction(cards: readonly ShownCard[]): { readonly href: string; readonly label: string } | null {
   const contact = cards.find((card) => card.shown.kind === "buttons")?.shown;
   const first = contact?.kind === "buttons" ? contact.buttons[0] : undefined;
   return first === undefined ? null : { href: first.href, label: first.label };

@@ -37,8 +37,8 @@ describe.each(["compose.local.yaml", "compose.dev.source.yaml"])("%s", (file) =>
 });
 
 // chat-auth (the door) runs the same boot check (interfaces/chat-auth/compose.ts) against chat_auth's limit, set by
-// migration 0044; staging's first start exited 78 on a pool of 5 against 10 / 3 (Alex, 2026-11-23).
-const DOOR_ROLE = join(DEPLOYMENT, "../infrastructure/postgres/migrations/0044_door_browser.sql");
+// migration 0045; staging's first start exited 78 on a pool of 5 against 10 / 3 (Alex, 2026-11-23).
+const DOOR_ROLE = join(DEPLOYMENT, "../infrastructure/postgres/migrations/0045_door_browser.sql");
 
 function doorLimit(): number {
   const row = /ALTER ROLE chat_auth LOGIN CONNECTION LIMIT (\d+);/.exec(readFileSync(DOOR_ROLE, "utf8"));

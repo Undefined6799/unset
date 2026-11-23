@@ -1,4 +1,4 @@
-// door.chat_contact (migration 0047; ADR 0094 decision 6, ADR 0101 decision 3): the chat user behind a profile's
+// door.chat_contact (migration 0048; ADR 0094 decision 6, ADR 0101 decision 3): the chat user behind a profile's
 // Message link, for chat_auth. One statement by DID; the view leaves out every member whose chat is not ready or whose
 // public page does not show, so all of them read as null.
 import { type ChatContacts, parseChatUser } from "@unset/domains-messaging";

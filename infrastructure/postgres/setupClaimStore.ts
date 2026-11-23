@@ -1,4 +1,4 @@
-// door.chat_setup (migration 0045; ADR 0095 decision 2, ADR 0100): the door's setup claim, for chat_auth. A claim is
+// door.chat_setup (migration 0046; ADR 0095 decision 2, ADR 0100): the door's setup claim, for chat_auth. A claim is
 // one statement (rule DA-4): an INSERT whose conflict on the account's primary key takes the row only when it is this
 // entry's own or its time has passed. Concurrent claims serialise on the primary key's index, and each one that waits
 // reads the winner's committed row before it decides, so exactly one browser holds an account at a time

@@ -359,10 +359,11 @@ Rules for the handle domain:
 
   Data comes from the index, so published, delist and suspend states and the media proxy all apply. Pictures in Bluesky posts come through the media proxy too, never from Bluesky's hosts directly (decision 31), so the images-only-from-the-media-origin CSP below holds for them as well.
 - **This route group:**
-  - Zero JavaScript.
-  - Its own CSP: `default-src 'none'`, images only from the media origin, `form-action 'self'`, `frame-ancestors 'none'`, `base-uri 'none'`.
+  - Our own script may run here, and only ours (ADR 0114, Alex 2026-11-23; this line was "Zero JavaScript"). A page runs the client once its own step switches it on; `/@handle` is the first (book P1.22e). The server still draws the whole page, so everything can be read and done with script off: the page without script is the floor, never the ceiling. A member's content stays text, never markup.
+  - Its CSP. A page that runs the client is sent the app's script policy, unchanged: script files only from `/_app/` on our origin, the start-up script by its hash, no `'unsafe-inline'`, no eval, Trusted Types required. Every other response in the group keeps the group's own fixed policy, under which no script can run: `default-src 'none'`, images only from the media origin, `form-action 'self'`, `frame-ancestors 'none'`, `base-uri 'none'`.
   - `Referrer-Policy: same-origin`, so Follow POSTs carry an Origin header.
-  - Every response in the group, including 404, 503 and error pages, uses this CSP. A test requests `/@<script>` and checks it.
+  - Every response in the group that is not such a page, including 404, 503, refusals and error pages, uses the fixed CSP and carries no script. A test requests `/@<script>` and checks it.
+  - What a page's load returns is what the browser holds: once a page runs the client, the whole result is in its start-up script and at `<page>/__data.json`, drawn or not. A load returns only what that viewer's page shows (rule SE-3), and a test holds each viewer's copy to it.
 - **Follow** is a plain form POST that never redirects off-origin. A signed-out viewer gets the page back with a sign-in link.
 - **Caching:**
   - anonymous 200: `public, max-age=60`, no stale-while-revalidate, with a strong ETag over profile CID, section CIDs, latest post CID and moderation version;
@@ -372,7 +373,7 @@ Rules for the handle domain:
   - 404/503: `no-cache`, and an outage is a 503, never a cached 404;
   - delist or suspend purges the edge cache.
 - Review 08 argued for serving the profile on the handle host to separate user content from editor cookies. This plan keeps it on the app origin because:
-  - the page runs no script under a strict CSP;
+  - a member's content is text only, never markup, and the page's script policy lets nothing run but our own files (ADR 0114; this reason was "the page runs no script under a strict CSP"). The day a member can supply markup or styles, the handle host comes back as the answer;
   - the app already shows user content elsewhere (directory, timeline);
   - Follow then works without a cross-site hop.
 
@@ -566,7 +567,7 @@ Hard requirements with CI gates, not intentions. The prototype's `docs/complianc
 | Deadlines | every request carries a deadline per route class (the step book sets the numbers: 30 s by default, 120 s for publish) passed as the signal of every outbound call; pool acquire, `statement_timeout`, `lock_timeout` and `idle_in_transaction_session_timeout` nest inside it: PDS or PLC call < request < edge timeout; an outbound call is retried at most once, only when it is idempotent, the failure is transient (timeout, connection error, 5xx; never a 4xx or a 429) and the retry fits inside the caller's deadline, and no layer above or below retries the same call; each site writes this in place and cites step-book README rule 8a, with no shared `retry()` helper until a second caller needs one (review against the engineering rules, 2026-10-04, rule RE-1; step-book finding F-10) |
 | Data access | ≤5 queries per request path and no PDS round trip the path does not need: one for a read, and for publish exactly the writes the step names (the blob uploads, then one `applyWrites` with `swapCommit` and a CID compare, P2.22), never a call inside a loop; a query inside a loop fails review; each index is created with the query it serves in its migration comment; a cache, index or denormalisation added for speed carries before-and-after p50/p95/p99 in its PR (review against the engineering rules, 2026-10-04, rule PF-1) |
 | All pages | CSS ≤52 KB unminified and ≤12 KB min+gzip per bundle; fonts ≤120 KB, two files, preloaded, `size-adjust` fallbacks |
-| `/@handle` | **0 bytes of JS**; HTML ≤30 KB gzipped |
+| `/@handle` | JS as the app pages in the next row: the 120 KB target, a warning and never a failure (ADR 0114; it was **0 bytes of JS** until book P1.22e); HTML ≤30 KB gzipped, the start-up script's copy of the page's data included |
 | App pages | JS target 120 KB gzipped total on the SvelteKit bundle, a warning and never a failure (Alex, 2026-11-18T04:18:09Z: "it should not be like a strict barrier, but more like of a warning"; `scripts/budgets/app-js.ts` in CI, and Lighthouse warns above 120 KiB as served). It was 80 KB for the React islands (raised from 75 KB on 2026-10-23), with ≤15 KB per island; that gate goes with the islands at P1.20k |
 | Images | AVIF+WebP; avatar ≤20 KB, poster ≤30 KB, explicit `aspect-ratio` |
 | Feed clip | first frame ≤1 s after viewport entry; 360p ≤1.2 Mbps, 720p ≤3 Mbps, keyframe 2 s, faststart (ffprobe in the pipeline test) |
@@ -685,7 +686,7 @@ Small PRs to a protected `main` (the decision 40 ruleset, applied 2026-10-06; AD
 - Port the appview tests that still apply (166 at `054ab0f`; P3.04 decides each) (review against the engineering rules, 2026-10-04, rule TE-2).
 - Admin v1 (§5.7): attested key enrolment on desktop, per-action signing and the full `pds-admin` assertion verifier (the Phase 2 stub grows into it), off-box audit copies, runbooks 1 to 6, the 3,000-line warning budget.
 - **Exit:**
-  - `/@handle` renders with zero JS, and its images come only from the media origin.
+  - `/@handle` reads whole with script off and, with script on, runs only our own files under the app's script policy (ADR 0114; it was "renders with zero JS"); its images come only from the media origin.
   - An external resolver confirms handle↔DID.
   - A suspend stops the page, the bytes and the sessions.
   - Deletion leaves no rows.

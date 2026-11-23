@@ -56,7 +56,7 @@ GRANT INSERT (id, browser_hash, did, chat_user, web_session, device_id, lock_key
 GRANT UPDATE (web_session, last_used_at) ON door.browser TO chat_auth;
 GRANT DELETE ON door.browser TO chat_auth;
 
--- core.erase_did, as in migration 0043, with door.browser.did added to step 2's list and its statement to step 4.
+-- core.erase_did, as in migration 0044, with door.browser.did added to step 2's list and its statement to step 4.
 -- The signature, owner and grants are unchanged, so CREATE OR REPLACE keeps them.
 CREATE OR REPLACE FUNCTION core.erase_did(p_did types.did, p_why text) RETURNS jsonb
   LANGUAGE plpgsql SECURITY DEFINER
@@ -151,7 +151,7 @@ BEGIN
     ON CONFLICT (chat_user) DO NOTHING;
   DELETE FROM app.chat_account WHERE did = p_did;
   GET DIAGNOSTICS v_chat_account = ROW_COUNT;
-  --    The door's browser list (0044): the member's chat devices per browser and their sealed lock keys. With the key
+  --    The door's browser list (0045): the member's chat devices per browser and their sealed lock keys. With the key
   --    gone no browser's local store opens again; the deactivation ends the devices themselves (ADR 0096).
   DELETE FROM door.browser WHERE did = p_did;
   GET DIAGNOSTICS v_door_browser = ROW_COUNT;

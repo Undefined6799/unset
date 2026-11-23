@@ -1,4 +1,4 @@
-// The chat account's lock (migration 0049; ADR 0096 decisions 1 and 2): the ready accounts whose lock differs from
+// The chat account's lock (migration 0050; ADR 0096 decisions 1 and 2): the ready accounts whose lock differs from
 // their member's state, read through app.chat_lock_due, claimed under a lease and settled once chat-admin has done
 // the change. A claim is one statement that locks app.chat_account rows with SKIP LOCKED; a settle or retry writes
 // only while that lease holds (rule DA-4). Every statement names the row by its DID.

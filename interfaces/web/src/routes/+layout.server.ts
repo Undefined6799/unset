@@ -82,6 +82,10 @@ export const load: ServerLoad = async (event) => {
     locals.did === undefined ? undefined : bellView(event),
     locals.did === undefined || !open ? undefined : chatIcon(locals.did, locals.deadline),
   ]);
+  // Whether the bell opens its panel: only a page that runs script can mark what the panel showed (ADR 0085). Every
+  // other page (home, a profile, the legal pages, an error page) draws the bell as a link to /notifications, whose
+  // visit marks it (ADR 0108 point 3).
+  const bellOpens = route.id !== null && policyOf(route.id)?.group === "app";
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
   const siteNoindex = config.SEARCH_LISTING !== "on";
   return {
@@ -92,6 +96,7 @@ export const load: ServerLoad = async (event) => {
     privacyNotice,
     notifications,
     chat,
+    bellOpens,
     signInHref: signInHref(url.pathname),
     siteNoindex,
   };

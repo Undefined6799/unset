@@ -1,4 +1,4 @@
-// app.chat_account (migration 0043; ADR 0010, ADR 0093 decision 3): the DID to chat user mapping and the queued
+// app.chat_account (migration 0044; ADR 0010, ADR 0093 decision 3): the DID to chat user mapping and the queued
 // "create chat account" job it carries, for web. `request` runs on the terms transaction, so the job exists exactly
 // when the acceptance does (rule DA-2). A claim is one statement that locks due rows with SKIP LOCKED and gives each a
 // fresh lease; a settle writes only while that lease holds (rule DA-4). Every statement names the caller's DID.

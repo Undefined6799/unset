@@ -1,6 +1,6 @@
 -- phase: expand
--- A chat lock is lifted only on positive evidence too (ADR 0096 decisions 1 and 2; Codex review of migration 0049).
--- 0049's view asked for an unlock whenever its lock evidence was missing, so a locked account whose member stayed
+-- A chat lock is lifted only on positive evidence too (ADR 0096 decisions 1 and 2; Codex review of migration 0050).
+-- 0050's view asked for an unlock whenever its lock evidence was missing, so a locked account whose member stayed
 -- inactive with no status or one we do not know (the indexer stores the stream's status as it comes,
 -- infrastructure/postgres/indexStore.ts hideAccount; a confirmed deletion clears it and keeps the account hidden,
 -- accountStore.ts confirmDeletion), or whose idx row was gone, was unlocked. want_locked is now three-valued: true on

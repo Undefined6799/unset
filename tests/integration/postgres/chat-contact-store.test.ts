@@ -1,4 +1,4 @@
-// Build step 10 (infrastructure/postgres/chatContactStore.ts, migration 0047; ADR 0094 decision 6, ADR 0101 decision
+// Build step 10 (infrastructure/postgres/chatContactStore.ts, migration 0048; ADR 0094 decision 6, ADR 0101 decision
 // 3): the chat ID behind a profile's Message link, read by `chat_auth` through door.chat_contact only (TE-2). The
 // rows are written as the roles that own them in production: web's account and chat mapping, the indexer's account
 // and profile. A member is found only when their chat account is ready and their public page shows; every other case

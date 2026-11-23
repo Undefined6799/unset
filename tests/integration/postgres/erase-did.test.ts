@@ -263,7 +263,7 @@ describe("core.erase_did", () => {
   });
 
   test("a_browser_entry_after_erasure_is_refused", () => {
-    // Codex review on ad2dbf0e (migration 0056): a first sign-in whose device was minted before the erasure committed
+    // Codex review on ad2dbf0e (migration 0057): a first sign-in whose device was minted before the erasure committed
     // must not write the erased person's DID and lock key back. A member who signs up again gets a new chat user, and
     // that entry is taken.
     const add = (user: string, fill: string) =>

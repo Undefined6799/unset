@@ -34,6 +34,17 @@ export const ACCOUNT = { did: `did:plc:${"a".repeat(24)}` } as const;
 /** A member the indexer has copied (fixtures/servers.ts seeds it on the production server), shown at /@did. */
 export const INDEXED = { did: `did:plc:${"p".repeat(24)}` } as const;
 /**
+ * A second indexed member whose name, headline and every card field are text that would be markup, a handler or a
+ * script address if anything read it as one (book P1.22e; public-profile-script.spec.ts). `ran` is the global each
+ * piece would set if it ran.
+ */
+export const HOSTILE = {
+  did: `did:plc:${"x".repeat(24)}`,
+  close: "</script><script>globalThis.ran = 1</script>",
+  handler: '<img src=x onerror="globalThis.ran = 1">',
+  address: "javascript:globalThis.ran=1",
+} as const;
+/**
  * The test server writes each member's session cookie here once it listens; the specs read it. Outside test-results,
  * which Playwright empties when a run starts (outputDir).
  */
@@ -53,7 +64,7 @@ export type PageFixture = {
   /** The route it matches, as pages.test.ts names route folders. */
   readonly route: string;
   readonly group: PageGroup;
-  /** The page runs SvelteKit's client (csr, +page.ts): most app pages; never a public page. */
+  /** The page runs SvelteKit's client (csr, +page.ts): most app pages, and a public page ADR 0114 switched on. */
   readonly expectJs: boolean;
   /** Opened on the test server signed in as this member; without one, on the production server signed out. */
   readonly member?: MemberName;
@@ -79,7 +90,8 @@ export const PAGES: readonly PageFixture[] = [
   signedOut("/legal/terms", "public", "/legal/:document"),
   signedOut("/legal/privacy", "public", "/legal/:document"),
   signedOut("/legal/domains", "public", "/legal/:document"),
-  signedOut(`/@${INDEXED.did}`, "public", "/@:actor"),
+  // The public profile runs the client under the app group's script policy (ADR 0114, book P1.22e).
+  signedOut(`/@${INDEXED.did}`, "public", "/@:actor", true),
   // The sign-in page and the blocked page run no script, as on Hono: nothing on them needs it (lighthouserc.json's
   // zero-script row).
   signedOut("/login", "app", "/login", false),

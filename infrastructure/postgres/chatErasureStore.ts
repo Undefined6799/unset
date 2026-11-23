@@ -1,6 +1,6 @@
-// app.chat_erasure (migrations 0043 and 0048; ADR 0096 decision 3): the chat users of erased members, which web drains
+// app.chat_erasure (migrations 0044 and 0049; ADR 0096 decision 3): the chat users of erased members, which web drains
 // through chat-admin's deactivate. core.erase_did alone adds rows, as their owner; web only claims, deletes and puts
-// back. A claim also reads how long ago the row was queued (migration 0050's grant), so a creation still in flight
+// back. A claim also reads how long ago the row was queued (migration 0051's grant), so a creation still in flight
 // when the member was erased is waited for (domains/messaging CREATE_LANDS_WITHIN_S). A claim is one statement that locks due rows with SKIP LOCKED and gives each a fresh lease; a finish or retry
 // writes only while that lease holds (rule DA-4). The rows hold no DID, so there is no DID predicate to add.
 import { type ChatErasureJob, parseChatUser } from "@unset/domains-messaging";

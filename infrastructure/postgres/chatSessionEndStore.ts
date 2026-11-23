@@ -1,4 +1,4 @@
-// Ending chat when web ends a session (migration 0050; ADR 0095 decision 5, ADR 0096 decision 7). `queueForSession`
+// Ending chat when web ends a session (migration 0051; ADR 0095 decision 5, ADR 0096 decision 7). `queueForSession`
 // and `queueForDid` run on the caller's transaction, the one that ends the web session, so the chat end commits with
 // it and no network I/O runs inside (rule DA-4); web's job then claims, puts back and finishes rows through the
 // owner's functions, since web reads no door table. A claim locks due rows with SKIP LOCKED in one statement; a finish

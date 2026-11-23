@@ -3,7 +3,7 @@
 -- chat-admin first and writes door.browser after (domains/messaging/door.ts keep), with no transaction across the call
 -- (rule DA-4). If core.erase_did commits in between, the insert would write the erased person's DID, chat user and lock
 -- key back after step 4 removed them, and nothing would remove them again: door.browser has no foreign key to the
--- account, and migration 0050's trigger looks only at ended web sessions. This trigger takes the erasure's own advisory
+-- account, and migration 0052's trigger looks only at ended web sessions. This trigger takes the erasure's own advisory
 -- lock (core.erase_did step 3, 'erase:' || DID), so an insert waits for a running erasure to commit, then refuses the
 -- row when the DID is erased and the entry's chat user is no longer the member's. Refused, the insert writes nothing,
 -- the store reads `taken`, and redeem ends the device it minted (door.ts keep, "chat.busy"). A member who signs up again

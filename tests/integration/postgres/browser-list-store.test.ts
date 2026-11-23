@@ -1,4 +1,4 @@
-// Build step 6 (infrastructure/postgres/browserListStore.ts, migration 0044; ADR 0093 decision 4, ADR 0095 decision
+// Build step 6 (infrastructure/postgres/browserListStore.ts, migration 0045; ADR 0093 decision 4, ADR 0095 decision
 // 4): the door's browser list, against real Postgres connected as `chat_auth`, the door's own role (TE-2). An entry is
 // found only through its own browser; a second account on the browser gets its own entry; the lock key is sealed to
 // its row; a lost race to add is `taken`; the role can reach nothing outside its schema.

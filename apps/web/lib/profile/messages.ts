@@ -221,8 +221,10 @@ export const TEXT_IN_PLACE = {
 /** The in-place editor's side handle, block menu and floating bar (P1.21v slice 3), named as Crepe 7.23.0 names them. */
 export const TEXT_MENUS = {
   add: "Add a block below",
-  drag: "Drag to move this block",
+  drag: "Drag to move, or press to change this block",
   blocks: "Blocks",
+  /** The tabs above the block menu, one for each group. */
+  tabs: "Block groups",
   groups: { text: "Text", list: "List", advanced: "Advanced" },
   bar: "Format the selected words",
   items: {
@@ -230,15 +232,34 @@ export const TEXT_MENUS = {
     heading1: "Heading 1",
     heading2: "Heading 2",
     heading3: "Heading 3",
+    heading4: "Heading 4",
+    heading5: "Heading 5",
+    heading6: "Heading 6",
     quote: "Quote",
     divider: "Divider",
     bullets: "Bullet list",
     numbers: "Ordered list",
+    tasks: "Task list",
     codeBlock: "Code",
+    table: "Table",
   },
-  format: { strong: "Bold", emphasis: "Italic", code: "Inline code", link: "Link" },
+  format: { strong: "Bold", emphasis: "Italic", strike: "Strikethrough", code: "Inline code", link: "Link" },
   /** What an empty line with the caret says. */
   hint: "Type / to choose a block, Shift+Enter for a new one",
+  /** The handles above a table's column and beside its row, and their menus (target-look decision 7). */
+  table: {
+    column: "Column options",
+    row: "Row options",
+    columnActions: {
+      addLeft: "Add column left",
+      addRight: "Add column right",
+      alignLeft: "Align left",
+      alignCenter: "Align centre",
+      alignRight: "Align right",
+      delete: "Delete column",
+    },
+    rowActions: { addAbove: "Add row above", addBelow: "Add row below", delete: "Delete row" },
+  },
   link: {
     editor: "Link for the selected words",
     address: "Link address",

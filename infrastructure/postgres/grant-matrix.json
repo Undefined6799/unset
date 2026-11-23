@@ -311,7 +311,8 @@
           "topic": ["SELECT", "INSERT"],
           "dedupe_key": ["SELECT", "INSERT"],
           "older_sessions_only": ["SELECT", "INSERT"],
-          "created_at": ["SELECT"]
+          "created_at": ["SELECT"],
+          "seen_at": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }

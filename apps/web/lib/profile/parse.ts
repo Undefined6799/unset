@@ -1,8 +1,10 @@
 // The README card's text (ADR 0051): a small CommonMark subset (https://spec.commonmark.org/0.31.2/) parsed into
 // blocks that a renderer writes as escaped elements (readme.svelte), so member text is always escaped and raw HTML
-// is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced
-// code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH. Inline:
-// code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. Images are
+// is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced and
+// indented code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH.
+// Inline: code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. From GitHub
+// Flavored Markdown 0.29 (https://github.github.com/gfm/, read as cmark-gfm test/spec.txt), as ADR 0086 lets readers
+// extend CommonMark: strikethrough, task list items and tables. Images are
 // not shown (there is no media proxy), so `![alt](url)` is a link to the image with its alt text. A link is kept
 // only when safeHref accepts it as http or https (shared/ui/safe-href.ts); otherwise its characters stay text.
 // Nothing here throws: any input renders.
@@ -12,6 +14,7 @@ import {
   destinationFinder,
   emphasisCloser,
   isEscapable,
+  isEscaped,
   isWord,
   type Mark,
   nextUnescaped,
@@ -23,16 +26,28 @@ export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "break" }
-  | { readonly kind: "strong" | "em"; readonly children: readonly Inline[] }
+  | { readonly kind: "strong" | "em" | "del"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: SafeHref; readonly children: readonly Inline[] };
 
 export type Block =
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
+  | { readonly kind: "heading"; readonly level: HeadingLevel; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
   | { readonly kind: "code"; readonly text: string }
-  | { readonly kind: "rule" };
+  | { readonly kind: "rule" }
+  | TableBlock;
+
+/** A table's column alignments, header cells and data rows, each row as wide as the header (GFM "Tables"). */
+export type TableBlock = {
+  readonly kind: "table";
+  readonly align: readonly ("left" | "center" | "right" | null)[];
+  readonly head: readonly (readonly Inline[])[];
+  readonly rows: readonly (readonly (readonly Inline[])[])[];
+};
+
+/** CommonMark's six ATX heading levels, one per mark. */
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type ListBlock = {
   readonly kind: "list";
@@ -41,13 +56,25 @@ export type ListBlock = {
   readonly start?: number;
   readonly items: readonly ListItem[];
 };
-/** A list item's text, and the lists indented under it. */
-export type ListItem = { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] };
+/** A list item's text, the lists indented under it, and whether it is a task and ticked (GFM "Task list items"). */
+export type ListItem = {
+  readonly text: readonly Inline[];
+  readonly lists: readonly ListBlock[];
+  readonly task?: "open" | "done";
+};
 
 /** Guards, not limits: the lexicon caps the text at 100,000 bytes. */
 const MAX_CHARS = 100_000;
 const MAX_BLOCKS = 2_000;
 const MAX_DEPTH = 3;
+/** A guard: a table wider than this is read as text. */
+const MAX_COLUMNS = 50;
+/**
+ * A guard: the cells of all of one card's tables, header cells and the empty cells a short row is filled with
+ * counted. A row of one character fills a whole row, so without it 20 kB of text could ask the server for half a
+ * million cells. Rows past it are read as the paragraph they would be without a table.
+ */
+const MAX_CELLS = 10_000;
 /** Lists nest this deep; an item indented further is a sibling of the deepest. */
 const MAX_LIST_DEPTH = 3;
 
@@ -61,6 +88,8 @@ const ORDERED = /^\s{0,3}\d{1,9}[.)]\s+(.*)$/;
 /** Any list item line at any indent: its indent, its marker, the spaces after it and its text. */
 const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
+// Four columns of indent: four spaces, or up to three and a tab, which reaches the next tab stop.
+const INDENTED = /^(?: {4}| {0,3}\t)/;
 
 /** Removes C0 controls except tab and line feed, and DEL; CRLF and CR become LF. */
 function clean(src: string): string {
@@ -97,12 +126,109 @@ function takeAutolink(text: string, i: number): Taken | null {
   return { node: { kind: "link", href, children: [{ kind: "text", text: href }] }, next: i + match[0].length };
 }
 
+/** What may come before a bare `www.` name (micromark's previousWww); an address needs only no letter before it. */
+const BEFORE_WWW = /^[\s()*_[\]~]$/;
+const BARE_START = /^(?:https?:\/\/|www\.)/i;
+/** Ends an address: a space or a `<` (micromark's pathInside). */
+const ADDRESS_END = /[\s<]/;
+/** Ends a domain: a space, or Unicode punctuation or a symbol other than `-`, `.` and `_` (micromark's domainInside). */
+const DOMAIN_END = /\s|(?![-._])[\p{P}\p{S}]/u;
+/** Punctuation that ends an address is not part of it when only more of it, or the end, follows (tokenizeTrail). */
+const TRAIL = new Set([..."!\"')*,.:;?_~]"]);
+const isLetter = (ch: string | undefined) => ch !== undefined && /[a-zA-Z]/.test(ch);
+
+/**
+ * Bare addresses, `https://x` or `www.x` (GFM 0.29, "Autolinks (extension)", read as micromark-extension-gfm-autolink-
+ * literal 2.1.0 dev/lib/syntax.js, which the editor uses, so both link the same words): one runs to a space or a `<`,
+ * less trailing punctuation, a `)` that closes nothing, and a trailing `&name;`. A `www.` name opens over https
+ * (Alex 2026-11-21: "bare addresses become https"; GFM says http). Email addresses stay text: the page links only
+ * http and https. Each run of non-space characters is read once: an address refused ends the tries in its run, so
+ * no input reads a run again per start (a later start in that run, which GFM would still try, stays text).
+ */
+function bareLinker(text: string): (i: number) => Taken | null {
+  let runFrom = -1;
+  let runEnd = -1;
+  let refusedUntil = -1;
+  const endOfRun = (i: number) => {
+    if (i < runFrom || i >= runEnd) {
+      runFrom = i;
+      runEnd = i;
+      while (runEnd < text.length && !ADDRESS_END.test(text[runEnd] ?? "")) runEnd += 1;
+    }
+    return runEnd;
+  };
+  return (i) => {
+    if (i < refusedUntil) return null;
+    const prefix = barePrefix(text, i);
+    if (prefix === undefined) return null;
+    const end = endOfRun(i);
+    const words = trimTrail(text.slice(i, end));
+    const www = prefix.toLowerCase() === "www.";
+    const href = validDomain(words.slice(prefix.length)) ? safeHref(www ? `https://${words}` : words, WEB) : null;
+    if (href === null) {
+      refusedUntil = end;
+      return null;
+    }
+    return { node: { kind: "link", href, children: [{ kind: "text", text: words }] }, next: i + words.length };
+  };
+}
+
+/** `https://`, `http://` or `www.` at `i`, when what comes before lets an address start there. */
+function barePrefix(text: string, i: number): string | undefined {
+  const first = text[i]?.toLowerCase();
+  if (first !== "h" && first !== "w") return undefined;
+  const before = text[i - 1];
+  const allowed = before === undefined || (first === "w" ? BEFORE_WWW.test(before) : !isLetter(before));
+  return allowed ? BARE_START.exec(text.slice(i, i + 8))?.[0] : undefined;
+}
+
+/** Where a trailing `&name;` ending at `end` starts, or -1. */
+function referenceStart(words: string, end: number): number {
+  if (words[end - 1] !== ";") return -1;
+  let at = end - 2;
+  while (isLetter(words[at])) at -= 1;
+  return words[at] === "&" && at < end - 2 ? at : -1;
+}
+
+const count = (words: string, ch: string) => words.split(ch).length - 1;
+/** Trailing punctuation is not part of an address; a `)` is only while it closes no `(` in it. */
+const trailing = (ch: string, unmatched: number) => TRAIL.has(ch) && (ch !== ")" || unmatched > 0);
+
+/** Takes trailing punctuation, unmatched `)` and `&name;` off the end, reading each character once. */
+function trimTrail(words: string): string {
+  let unmatched = count(words, ")") - count(words, "(");
+  let end = words.length;
+  for (;;) {
+    const reference = referenceStart(words, end);
+    if (reference !== -1) {
+      end = reference;
+      continue;
+    }
+    const last = words[end - 1] ?? "";
+    if (!trailing(last, unmatched)) return words.slice(0, end);
+    if (last === ")") unmatched -= 1;
+    end -= 1;
+  }
+}
+
+/** Something before the first character that ends a domain, and no `_` in its last two parts (domainAfter). */
+function validDomain(rest: string): boolean {
+  const stop = rest.search(DOMAIN_END);
+  const domain = stop === -1 ? rest : rest.slice(0, stop);
+  if (domain === "") return false;
+  return !domain
+    .split(".")
+    .slice(-2)
+    .some((part) => part.includes("_"));
+}
+
 type Finders = {
   readonly labelClose: (from: number) => number;
   readonly destination: (from: number) => number;
   readonly bracket: (from: number) => number;
   readonly codeClose: (length: number, from: number) => number;
   readonly emphasisClose: (mark: Mark, from: number) => number;
+  readonly bare: (i: number) => Taken | null;
 };
 
 function takeLink(text: string, i: number, depth: number, find: Finders): Taken | null {
@@ -125,6 +251,18 @@ function takeLink(text: string, i: number, depth: number, find: Finders): Taken 
  */
 function takeImage(text: string, i: number, depth: number, find: Finders): Taken | null {
   return text[i] === "!" && text[i + 1] === "[" ? takeLink(text, i + 1, depth, find) : null;
+}
+
+/**
+ * Strikethrough, `~~words~~` (GFM 0.29, "Strikethrough (extension)"): paired as emphasis is; a single tilde is text,
+ * and so is a run of three or more (example 493), at any position inside it.
+ */
+function takeStrike(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
+  if (!text.startsWith("~~", i) || text[i + 2] === "~") return null;
+  if (text[i - 1] === "~" && !isEscaped(text, i - 1)) return null;
+  const end = find.emphasisClose("~~", i + 2);
+  if (end <= i + 2) return null;
+  return { node: { kind: "del", children: parseInline(text.slice(i + 2, end), depth + 1, links) }, next: end + 2 };
 }
 
 function takeEmphasis(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
@@ -164,6 +302,7 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
     bracket: nextUnescaped(text, "["),
     codeClose: codeCloser(text),
     emphasisClose: emphasisCloser(text),
+    bare: bareLinker(text),
   };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
@@ -184,9 +323,13 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
         ? null
         : (takeCode(text, i, find) ??
           (links
-            ? (takeAutolink(text, i) ?? takeImage(text, i, depth, find) ?? takeLink(text, i, depth, find))
+            ? (takeAutolink(text, i) ??
+              find.bare(i) ??
+              takeImage(text, i, depth, find) ??
+              takeLink(text, i, depth, find))
             : null) ??
-          takeEmphasis(text, i, depth, links, find));
+          takeEmphasis(text, i, depth, links, find) ??
+          takeStrike(text, i, depth, links, find));
     if (taken === null) {
       buffer += text[i];
       i += 1;
@@ -243,6 +386,21 @@ function takeFence(lines: readonly string[], i: number, fence: string): { block:
   let end = i + 1;
   while (end < lines.length && !closesFence(lines[end] ?? "", fence)) end += 1;
   return { block: { kind: "code", text: lines.slice(i + 1, end).join("\n") }, next: end + 1 };
+}
+
+/**
+ * An indented code block (CommonMark 0.31.2, "Indented code blocks"): indented lines and the blank lines between
+ * them, each without its first four columns; blank lines after the last indented line are not part of it.
+ */
+function takeIndented(lines: readonly string[], i: number): { block: Block; next: number } {
+  let last = i;
+  for (let at = i; at < lines.length; at += 1) {
+    const line = lines[at] ?? "";
+    if (INDENTED.test(line)) last = at;
+    else if (line.trim() !== "") break;
+  }
+  const text = lines.slice(i, last + 1).map((line) => (INDENTED.test(line) ? line.replace(INDENTED, "") : ""));
+  return { block: { kind: "code", text: text.join("\n") }, next: last + 1 };
 }
 
 /**
@@ -317,7 +475,7 @@ function takeList(lines: readonly string[], i: number, depth = 1): { block: List
       lists.push(sub.block);
       j = Math.max(sub.next, j + 1);
     }
-    items.push({ text: parseInline(item.text), lists });
+    items.push(listItem(item.text, lists));
     at = end;
   }
   const start = first?.start ?? 1;
@@ -325,21 +483,101 @@ function takeList(lines: readonly string[], i: number, depth = 1): { block: List
   return { block: start === 1 ? list : { ...list, start }, next: at };
 }
 
-function takeBlock(lines: readonly string[], i: number): { block: Block | null; next: number } {
+/**
+ * A task list item opens with `[ ]`, `[x]` or `[X]` and a space before its words (GFM 0.29, "Task list items
+ * (extension)"); the marker is not shown as text.
+ */
+const TASK = /^\[([ xX])\][ \t]+(\S.*)$/;
+
+function listItem(text: string, lists: readonly ListBlock[]): ListItem {
+  const task = TASK.exec(text);
+  if (task === null) return { text: parseInline(text), lists };
+  return { text: parseInline(task[2] ?? ""), lists, task: task[1] === " " ? "open" : "done" };
+}
+
+/**
+ * A row's cells: split at each pipe that is not escaped, without the optional pipe at each end; an escaped pipe is a
+ * pipe in its cell, inside a code span too (GFM 0.29, "Tables (extension)"). One pass over the line.
+ */
+function rowCells(line: string): string[] {
+  const cells: string[] = [];
+  let cell = "";
+  // A backslash takes the character after it, so `\\|` is a backslash and then a pipe that splits.
+  let lastSplit = -1;
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] === "\\" && i + 1 < line.length) {
+      cell += line[i + 1] === "|" ? "|" : line.slice(i, i + 2);
+      i += 1;
+    } else if (line[i] === "|") {
+      cells.push(cell);
+      cell = "";
+      lastSplit = i;
+    } else cell += line[i];
+  }
+  cells.push(cell);
+  if (line.trimStart().startsWith("|")) cells.shift();
+  if (lastSplit >= 0 && lastSplit === line.trimEnd().length - 1 && cells.length > 0) cells.pop();
+  return cells.map((c) => c.trim());
+}
+
+const DELIMITER_CELL = /^(:?)-+(:?)$/;
+
+/** The alignments of a delimiter row, or null when the line is none: only hyphens with an optional colon each end. */
+function delimiterRow(line: string): TableBlock["align"] | null {
+  if (!line.includes("-")) return null;
+  const cells = rowCells(line);
+  const align: ("left" | "center" | "right" | null)[] = [];
+  for (const cell of cells) {
+    const match = DELIMITER_CELL.exec(cell);
+    if (match === null) return null;
+    const [, left, right] = match;
+    align.push(left !== "" && right !== "" ? "center" : right !== "" ? "right" : left !== "" ? "left" : null);
+  }
+  return align;
+}
+
+/**
+ * A table from a header row whose next line is a delimiter row with as many cells. It starts only where a block may
+ * (not inside a paragraph), and its rows run to a blank line or the start of another block; each row is filled with
+ * empty cells or cut to the header's width.
+ */
+function takeTable(lines: readonly string[], i: number, budget: Budget): { block: Block; next: number } | null {
+  const header = lines[i] ?? "";
+  if (!header.includes("|")) return null;
+  const align = delimiterRow(lines[i + 1] ?? "");
+  const head = rowCells(header);
+  if (align === null || align.length !== head.length || head.length > MAX_COLUMNS) return null;
+  if (budget.cells < head.length) return null;
+  budget.cells -= head.length;
+  const rows: Inline[][][] = [];
+  let next = i + 2;
+  for (; next < lines.length && !startsBlock(lines[next] ?? "") && budget.cells >= head.length; next += 1) {
+    const cells = rowCells(lines[next] ?? "");
+    rows.push(head.map((_, c) => parseInline(cells[c] ?? "")));
+    budget.cells -= head.length;
+  }
+  return { block: { kind: "table", align, head: head.map((cell) => parseInline(cell)), rows }, next };
+}
+
+/** What is left of a card's guards as its blocks are read. */
+type Budget = { cells: number };
+
+function takeBlock(lines: readonly string[], i: number, budget: Budget): { block: Block | null; next: number } {
   const line = lines[i] ?? "";
   if (line.trim() === "") return { block: null, next: i + 1 };
+  if (INDENTED.test(line)) return takeIndented(lines, i);
   const fence = FENCE.exec(line)?.[1];
   if (fence !== undefined) return takeFence(lines, i, fence);
   const heading = HEADING_START.exec(line);
   if (heading !== null) {
-    const level = Math.min((heading[1] ?? "#").length, 3) as 1 | 2 | 3;
+    const level = (heading[1] ?? "#").length as HeadingLevel;
     const text = headingText(line.slice(heading[0].length));
     return { block: { kind: "heading", level, children: text === "" ? [] : parseInline(text) }, next: i + 1 };
   }
   if (RULE.test(line)) return { block: { kind: "rule" }, next: i + 1 };
   if (BULLET.test(line) || ORDERED.test(line)) return takeList(lines, i);
   if (QUOTE.test(line)) return takeQuote(lines, i);
-  return takeParagraph(lines, i);
+  return takeTable(lines, i, budget) ?? takeParagraph(lines, i);
 }
 
 function takeQuote(lines: readonly string[], i: number): { block: Block | null; next: number } {
@@ -402,8 +640,9 @@ function isEmptyLineMark(lines: readonly string[]): boolean {
 export function parseReadme(src: string): Block[] {
   const lines = clean(src).split("\n");
   const blocks: Block[] = [];
+  const budget: Budget = { cells: MAX_CELLS };
   for (let i = 0; i < lines.length && blocks.length < MAX_BLOCKS; ) {
-    const { block, next } = takeBlock(lines, i);
+    const { block, next } = takeBlock(lines, i, budget);
     if (block !== null) blocks.push(block);
     i = next;
   }

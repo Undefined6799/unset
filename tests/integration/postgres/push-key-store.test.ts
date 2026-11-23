@@ -1,4 +1,4 @@
-// Build step 10 (infrastructure/postgres/pushKeyStore.ts, migration 0046; ADR 0094, ADR 0101): the door's pushkeys and
+// Build step 10 (infrastructure/postgres/pushKeyStore.ts, migration 0047; ADR 0094, ADR 0101): the door's pushkeys and
 // the chat count, against real Postgres connected as `chat_auth`, the door's own role (TE-2). A key is kept only as its
 // hash on its own browser entry; a new key replaces the entry's last and keeps its number; a notification for a key
 // no entry holds changes nothing; the member's number is the one counted last over their browsers; and the key and its

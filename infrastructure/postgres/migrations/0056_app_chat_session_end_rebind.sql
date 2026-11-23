@@ -1,6 +1,6 @@
 -- phase: expand
 -- A device queued by one Log out and signed in again by a second web session follows the second Log out (ADR 0095
--- decision 5; Codex review of migration 0050). 0049's upsert kept the first session's reference when the same
+-- decision 5; Codex review of migration 0051). 0050's upsert kept the first session's reference when the same
 -- browser, signed in again through session B within session A's grace, was logged out from B: the claim then saw
 -- the entry renewed to B, not A, took it for a rebound and dropped the job, and the device stayed signed in. Now a
 -- session-scoped end that meets a session-scoped one takes the new reference and the new grace (the old job was for

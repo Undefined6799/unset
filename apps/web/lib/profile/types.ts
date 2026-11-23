@@ -47,21 +47,32 @@ export type Inline =
   | { readonly kind: "break" }
   | { readonly kind: "strong"; readonly children: readonly Inline[] }
   | { readonly kind: "em"; readonly children: readonly Inline[] }
+  | { readonly kind: "del"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: string; readonly children: readonly Inline[] };
 
 export type Block =
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
+  | { readonly kind: "heading"; readonly level: 1 | 2 | 3 | 4 | 5 | 6; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
   | { readonly kind: "code"; readonly text: string }
-  | { readonly kind: "rule" };
+  | { readonly kind: "rule" }
+  | {
+      readonly kind: "table";
+      readonly align: readonly ("left" | "center" | "right" | null)[];
+      readonly head: readonly (readonly Inline[])[];
+      readonly rows: readonly (readonly (readonly Inline[])[])[];
+    };
 
 export type ListBlock = {
   readonly kind: "list";
   readonly ordered: boolean;
   readonly start?: number;
-  readonly items: readonly { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] }[];
+  readonly items: readonly {
+    readonly text: readonly Inline[];
+    readonly lists: readonly ListBlock[];
+    readonly task?: "open" | "done";
+  }[];
 };
 
 /** A link, entry or button as the card shows it; a row with no safe address is left out. */
@@ -102,14 +113,19 @@ export type CardShown =
       readonly buttons: readonly ShownButton[];
     };
 
-export type CardView = {
+/** A card as a page that edits nothing draws it: what it shows, never the record's fields behind it (rule SE-3). */
+export type ShownCard = {
   readonly key: string;
-  /** On the owner's page, the record CID the card was read at: what an edit of it names (ADR 0074). */
-  readonly version?: string;
   readonly width: CardWidth;
   readonly surface: CardSurface;
-  readonly content: CardContent;
   readonly shown: CardShown;
+};
+
+/** A card on the owner's page: what it shows, and `content`, the record's fields its editor fills from. */
+export type CardView = ShownCard & {
+  /** The record CID the card was read at: what an edit of it names (ADR 0074). */
+  readonly version?: string;
+  readonly content: CardContent;
 };
 
 /**

@@ -1,4 +1,4 @@
-// Build step 5 (infrastructure/postgres/chatAccountStore.ts, migration 0043; ADR 0010, ADR 0093 decision 3): the DID to
+// Build step 5 (infrastructure/postgres/chatAccountStore.ts, migration 0044; ADR 0010, ADR 0093 decision 3): the DID to
 // chat user mapping and its queued "create chat account" job, against real Postgres connected as `web` (TE-2). The
 // row is written with the terms acceptance or not at all; a claim is fenced by its lease; reads are by the caller's DID.
 import { randomBytes } from "node:crypto";

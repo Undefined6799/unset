@@ -18,7 +18,7 @@ const INTEGRATION = join(REPOSITORY, "tests", "integration");
 
 /** The roles a test file connects as: the processes' own (ruling 2026-10-06 03:15Z (a)). `retention` is the jobs
  * process's role, which P1.16's sweep test connects as (architecture record 2026-10-06 p116-retention-usage).
- * `chat_auth` is the unset.cc door's (build step 6, migration 0044). */
+ * `chat_auth` is the unset.cc door's (build step 6, migration 0045). */
 export const PROCESS_ROLES = ["web", "api", "indexer", "retention", "chat_auth"] as const;
 export type ProcessRole = (typeof PROCESS_ROLES)[number];
 

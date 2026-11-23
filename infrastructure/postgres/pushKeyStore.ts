@@ -1,4 +1,4 @@
-// door.push (migration 0046; ADR 0094, ADR 0101): the door's pushkeys and the chat count, for chat_auth. A key is
+// door.push (migration 0047; ADR 0094, ADR 0101): the door's pushkeys and the chat count, for chat_auth. A key is
 // issued to an entry by its own id (rule SE-2) and replaces that entry's last one in one statement (INSERT ... ON
 // CONFLICT DO UPDATE on the primary key; rule DA-4). A number is recorded by the key's hash alone, one statement, the
 // last write winning: the homeserver sends each pusher's notifications one at a time

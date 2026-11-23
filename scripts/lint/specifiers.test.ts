@@ -165,7 +165,10 @@ test("cruise_specifiers_reach_the_check", async () => {
   expect(await cruiseSpecs(from, () => ["node:fs", "node:test", "../preflight/compose-parse.ts"])).toEqual([]);
 });
 
-test("real_tree_uses_only_allowed_specifiers", async () => {
+// Cruising the whole tree took 2.8 s to 4.9 s on CI's runners (ci code job, 2026-11-23) and grows with the tree, so
+// Vitest's 5 s default failed it on a slow runner (#1999 at 06d16ea, job 137748060547). It gets the budget the
+// other whole-tree cruise has (image-rules.test.ts, image_builds_only_in_image_tests).
+test("real_tree_uses_only_allowed_specifiers", { timeout: 30_000 }, async () => {
   const list = (dir: string) =>
     readdirSync(join(ROOT, dir), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -176,8 +179,7 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
   expect(packages.testFile("shared/http/main.test.ts")).toBe(true);
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
-  // A cruise of the whole tree: 3.5 s here, 5.4 s on a loaded CI runner (#1963 on 12c3e0bb), past vitest's 5 s default.
-}, 60_000);
+});
 
 test("sveltekit_modules_only_in_the_web_process", () => {
   // ADR 0054: SvelteKit's $app modules are allowed in interfaces/web, by name, and nowhere else.
