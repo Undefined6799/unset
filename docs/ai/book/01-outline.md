@@ -266,6 +266,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21j | Limits sized for thousands of members; web marks its PDS calls, ADR 0071 (added 2026-11-20) | trusted | P1.21h | `phase-1.md` |
 | P1.21u | Write the Text card in a Milkdown editor; CSP adds ProseMirrorClipboard, ADR 0073 (added 2026-11-20) | trusted | P1.21f | `phase-1.md` |
 | P1.21w | Serve the docs site at docs.unset.sh from the staging edge, ADR 0075 (added 2026-11-20) | [SEC], trusted | — | `phase-1.md` |
+| P1.21t | Retire the app docs mirror at the organisation cutover, ADR 0112 (added 2026-11-22) | trusted | P1.21w | `phase-1.md` |
 | P1.21x | Keep one profile layout, sticky site header, View as public, ADR 0077 (added 2026-11-20) | trusted | P1.21o | `phase-1.md` |
 | P1.21v | Edit Text cards in place, one Save for all through applyWrites, ADR 0074 (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
 | P1.21r | Fix the in-place editor's first press and the way back; owner's link from the public page (added 2026-11-21) | — | P1.21v | `phase-1.md` |
