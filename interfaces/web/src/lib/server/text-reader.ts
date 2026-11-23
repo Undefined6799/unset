@@ -27,14 +27,13 @@ import { type Block, MAX_CHARS, parseReadme, plainText } from "@unset/apps-web/l
 
 /**
  * How long reading Markdown may hold the process, and how much of it is remembered (limits.ts TEXT_READ_LIMITS).
- * `textMs` is for one card's text and `pageMs` for all of one page's. `keptNodes` is the size of what is kept between
- * page loads, counted in the nodes of the results (a paragraph, a run of text, a link: 100 to 250 bytes each).
- * `keptForMs` is how long a result is kept, a stop at `textMs` included, before the text is read afresh.
+ * `textMs` is for one card's text and `pageMs` for all of one page's. `keptBytes` is the size of what is kept between
+ * page loads, by the upper estimate below (`bytesIn`). `keptForMs` is how long a result is kept, a stop at `textMs` included, before the text is read afresh.
  */
 export type TextReadLimits = {
   readonly textMs: number;
   readonly pageMs: number;
-  readonly keptNodes: number;
+  readonly keptBytes: number;
   readonly keptForMs: number;
 };
 
@@ -61,17 +60,28 @@ export function within<T>(ms: number, task: () => T): { readonly value: T } | { 
 }
 
 /** What reading one text gave, kept until `until`: its blocks, or null for a stop at a card's whole limit. */
-type Kept = { readonly blocks: readonly Block[] | null; readonly nodes: number; readonly until: number };
+type Kept = { readonly blocks: readonly Block[] | null; readonly bytes: number; readonly until: number };
 
-/** What every kept text weighs besides its result: its key and its place in the map. */
-const ENTRY_NODES = 40;
+// What a kept text weighs is an upper estimate, never a count of objects alone: a full card that is one paragraph is
+// two objects and 20,000 characters. Measured on Node 26.12 with the collector forced, for full cards: a result's
+// objects and arrays take 65 to 115 bytes each beside their strings, a character takes one byte or two (V8 stores a
+// string holding any character outside Latin-1 at two), and a short string in a result can be a slice that holds the
+// whole text it was cut from (57 characters of result held 39 KB). So every object and array counts OBJECT_BYTES,
+// every character two bytes, and the text itself counts again as if the result held it. By this a full card weighs
+// about 80 KB as one paragraph (21 to 41 KB measured), 180 KB as prose (107), 660 KB as a dense list (449) and
+// 960 KB as a table (850).
+const OBJECT_BYTES = 120;
+const CHAR_BYTES = 2;
+/** What every kept text weighs besides its result: its key, its entry and its place in the map. */
+const ENTRY_BYTES = 1_000;
 
-/** The objects in a read result. */
-function nodesIn(value: unknown): number {
+/** The upper estimate of what a read result holds in memory, the text it was read from not counted. */
+function bytesIn(value: unknown): number {
+  if (typeof value === "string") return CHAR_BYTES * value.length;
   if (typeof value !== "object" || value === null) return 0;
-  let nodes = Array.isArray(value) ? 0 : 1;
-  for (const inner of Object.values(value)) nodes += nodesIn(inner);
-  return nodes;
+  let bytes = OBJECT_BYTES;
+  for (const inner of Object.values(value)) bytes += bytesIn(inner);
+  return bytes;
 }
 
 /** Freezes a read result all the way down: every page load that asks gets this one copy, so none may change it. */
@@ -106,17 +116,17 @@ export function createTextReads(
 ): TextReads {
   // In the order they were last read, oldest first (a Map keeps insertion order).
   const kept = new Map<string, Kept>();
-  let nodes = 0;
+  let bytes = 0;
   const forget = (key: string): void => {
-    nodes -= kept.get(key)?.nodes ?? 0;
+    bytes -= kept.get(key)?.bytes ?? 0;
     kept.delete(key);
   };
   const keep = (key: string, entry: Kept): void => {
     forget(key);
     kept.set(key, entry);
-    nodes += entry.nodes;
+    bytes += entry.bytes;
     for (const oldest of kept.keys()) {
-      if (nodes <= limits.keptNodes) break;
+      if (bytes <= limits.keptBytes) break;
       forget(oldest);
     }
   };
@@ -161,12 +171,13 @@ export function createTextReads(
         left -= now() - started;
         if ("value" in outcome) {
           const blocks = frozen(outcome.value);
-          keep(key, { blocks, nodes: ENTRY_NODES + nodesIn(blocks), until: now() + limits.keptForMs });
+          const weight = ENTRY_BYTES + CHAR_BYTES * text.length + bytesIn(blocks);
+          keep(key, { blocks, bytes: weight, until: now() + limits.keptForMs });
           return once(key, blocks);
         }
         // Only a read that had a card's whole limit says the text itself is slow. One cut short by what was left of
         // the page's budget or of the request says nothing about it, and the next page load reads it.
-        if (ms >= limits.textMs) keep(key, { blocks: null, nodes: ENTRY_NODES, until: now() + limits.keptForMs });
+        if (ms >= limits.textMs) keep(key, { blocks: null, bytes: ENTRY_BYTES, until: now() + limits.keptForMs });
         return plainText(text);
       };
     },
