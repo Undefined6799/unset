@@ -5,8 +5,8 @@
 import { TID } from "@atproto/common-web";
 import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
+import { MAIN_PAGE_RKEY, PAGE_COLLECTION } from "./page-record.ts";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
-import { PROFILE_COLLECTION, PROFILE_RKEY } from "./profile-record.ts";
 import { type BuiltRecord, isXrpcError, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
 
 export const CARD_COLLECTION = "sh.unset.card";
@@ -17,7 +17,7 @@ export const CARD_COLLECTION = "sh.unset.card";
  * page past the cap is read again with half as many, down to one, and a page well under the cap lets the next hold
  * twice as many again (GROW_BYTES), so a page of large cards is read in a few calls, not one per card (Codex review
  * of #1911: 29 cards of 120 KB took 33 calls). One page load makes at most MAX_CALLS calls and keeps at most
- * CARD_LIST_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.profile.cardsMax), all inside the request's deadline.
+ * CARD_LIST_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.page.cardsMax), all inside the request's deadline.
  * When it stops early, the list says it is incomplete, and the caller shows what it has, never more.
  */
 const PAGE = 10;
@@ -328,12 +328,12 @@ function applyCardWrites(
   );
 }
 
-/** A card created or deleted with the profile write that lists or unlists it. */
+/** A card created or deleted with the page write that lists or unlists it. */
 export type CardChange =
   | { readonly kind: "create"; readonly key: string; readonly record: Readonly<Record<string, unknown>> }
   | { readonly kind: "delete"; readonly key: string };
-/** The profile record to write, and whether one is stored (a first one is created, never written over another). */
-export type ProfileChange = { readonly record: Readonly<Record<string, unknown>>; readonly exists: boolean };
+/** The main page record to write, and whether one is stored (a first one is created, never written over another). */
+export type PageChange = { readonly record: Readonly<Record<string, unknown>>; readonly exists: boolean };
 export type ListedOutcome =
   | { readonly kind: "written"; readonly rev?: string }
   /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was written. */
@@ -342,22 +342,22 @@ export type ListedOutcome =
   | { readonly kind: "too_large" };
 
 /**
- * A card and the profile that lists it, written in one commit and only if the repo's head is still `swapCommit`
- * (ADR 0086 point 3: a card shows only when the profile lists it, so the two never land apart). One applyWrites call
+ * A card and the main page that lists it, written in one commit and only if the repo's head is still `swapCommit`
+ * (ADR 0086 point 3, ADR 0091: a card shows only when the page lists it, so the two never land apart). One applyWrites call
  * is all or none: @atproto/pds 0.5.51 applies it in one processWrites transaction and answers InvalidSwap with
  * nothing written when the head moved (dist/api/com/atproto/repo/applyWrites.js). An update or delete of a record
  * that is not stored fails the whole call there (dist/actor-store/repo/transactor.js, BadRecordSwapError), so the
- * caller says whether the profile exists and deletes only a card it read. Not retried: the caller re-reads and decides.
+ * caller says whether the page exists and deletes only a card it read. Not retried: the caller re-reads and decides.
  */
 export async function writeCardAndList(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
-  change: { readonly card?: CardChange; readonly profile?: ProfileChange },
+  change: { readonly card?: CardChange; readonly page?: PageChange },
   swapCommit: string,
 ): Promise<PdsResult<ListedOutcome>> {
   const writes: WriteOp[] = [];
-  const { card, profile } = change;
+  const { card, page } = change;
   if (card?.kind === "create") {
     writes.push({
       $type: "com.atproto.repo.applyWrites#create",
@@ -369,12 +369,12 @@ export async function writeCardAndList(
   if (card?.kind === "delete") {
     writes.push({ $type: "com.atproto.repo.applyWrites#delete", collection: CARD_COLLECTION, rkey: card.key });
   }
-  if (profile !== undefined) {
+  if (page !== undefined) {
     writes.push({
-      $type: profile.exists ? "com.atproto.repo.applyWrites#update" : "com.atproto.repo.applyWrites#create",
-      collection: PROFILE_COLLECTION,
-      rkey: PROFILE_RKEY,
-      value: { ...profile.record },
+      $type: page.exists ? "com.atproto.repo.applyWrites#update" : "com.atproto.repo.applyWrites#create",
+      collection: PAGE_COLLECTION,
+      rkey: MAIN_PAGE_RKEY,
+      value: { ...page.record },
     });
   }
   if (writes.length === 0) return { kind: "ok", value: { kind: "written" } };

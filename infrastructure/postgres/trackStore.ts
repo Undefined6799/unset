@@ -8,7 +8,7 @@
 // Lock order on every path that writes for a DID: the erasure lock (isErased takes core.erase_did's own per-DID
 // advisory lock, migration 0028 step 3) before any of that DID's rows, as erasure itself does; core.erase_did never
 // touches idx.relay_cursor, so the stream's cursor row, taken first on the ingest path, cannot deadlock with it.
-import { type IndexChange, planCommit } from "@unset/domains-profile";
+import { type IndexChange, type IndexWrite, MAIN_PAGE_RKEY, planCommit } from "@unset/domains-profile";
 import { applyWrite, count, inApplyOrder, isErased, lockAccount, queueJob, replaceBlobs } from "./indexStore.ts";
 import { claimJobs, endJob } from "./jobs.ts";
 import { type Pool, type PoolClient, withClient } from "./pool.ts";
@@ -138,20 +138,15 @@ async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, reco
   if (plan.kind !== "apply") throw new TypeError("a verified snapshot always has a signed rev");
   // Only what this snapshot writes is kept: a record the repo holds but the plan skipped (invalid, over the cap) must
   // not leave an older indexed version of it public. Removed first, so a replacement section finds room under the cap.
-  const kept = plan.writes.flatMap((write) =>
-    write.kind === "profile"
-      ? [`at://${did}/sh.unset.profile/self`]
-      : write.kind === "section"
-        ? [`at://${did}/sh.unset.card/${write.rkey}`]
-        : [],
-  );
-  for (const table of ["idx.profile", "idx.section"]) {
+  const kept = plan.writes.flatMap((write) => (write.kind === "delete" ? [] : [keptUri(did, write)]));
+  for (const table of ["idx.profile", "idx.page", "idx.section"]) {
     const { rows } = await tx.query(
       `DELETE FROM ${table} WHERE did = $1 AND rev < ($2 COLLATE "C") AND NOT (uri = ANY($3::text[])) RETURNING uri`,
       [did, rev, kept],
     );
     for (const row of rows) await replaceBlobs(tx, did, String(row.uri), []);
-    if (table === "idx.profile" && rows.length > 0) {
+    // The main page holds the card order (ADR 0091): without it, no card has a place.
+    if (table === "idx.page" && rows.length > 0) {
       await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
     }
   }
@@ -164,6 +159,13 @@ async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, reco
   );
   await endBackfill(tx, job);
   await count(tx, "backfill_applied");
+}
+
+/** The address of the record a snapshot write keeps. */
+function keptUri(did: string, write: Exclude<IndexWrite, { kind: "delete" }>): string {
+  if (write.kind === "profile") return `at://${did}/sh.unset.profile/self`;
+  if (write.kind === "page") return `at://${did}/sh.unset.page/${MAIN_PAGE_RKEY}`;
+  return `at://${did}/sh.unset.card/${write.rkey}`;
 }
 
 async function backfillFailed(tx: PoolClient, job: BackfillJob, failure: BackfillFailure): Promise<void> {

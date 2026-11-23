@@ -44,7 +44,7 @@ const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const BLOB = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
 const CARD_1 = "3jzfcijpj2z2a";
 const CARD_2 = "3jzfcijpj2z2b";
-/** A profile's card list as it is written: the addresses of A's cards (ADR 0086). */
+/** A page's card list as it is written: the addresses of A's cards (ADR 0086). */
 const listOf = (...rkeys: string[]) => rkeys.map((rkey) => ({ uri: `at://${A}/sh.unset.card/${rkey}` }));
 const rev = (n: number) => `3kaaaaaaaaa${String(n).padStart(2, "2")}`; // TIDs that sort as n does, for n in 2..9
 const sql = (query: string) => postgres.sql("unset", query);
@@ -57,6 +57,14 @@ const profile = (extra: Record<string, unknown> = {}): IndexChange => ({
   rkey: "self",
   cid: CID,
   record: { $type: "sh.unset.profile", displayName: "Ada", createdAt: T, ...extra },
+});
+/** The main page listing `cards` (ADR 0091). */
+const page = (cards: readonly { uri: string }[], rkey = "self"): IndexChange => ({
+  kind: "put",
+  collection: "sh.unset.page",
+  rkey,
+  cid: CID,
+  record: { $type: "sh.unset.page", cards, createdAt: T },
 });
 const section = (rkey: string): IndexChange => ({
   kind: "put",
@@ -89,7 +97,7 @@ afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 describe("index store", () => {
   test("index.cursor_starts_null_and_advances_only_with_a_frame", async () => {
     expect(await store.cursor()).toBeNull();
-    await commit(A, rev(3), [profile({ cards: listOf(CARD_2, CARD_1), avatar: blob() })]);
+    await commit(A, rev(3), [profile({ avatar: blob() }), page(listOf(CARD_2, CARD_1))]);
     expect(await store.cursor()).toBe(seq);
     expect(lines(`SELECT display_name, avatar_cid, rev FROM idx.profile WHERE did = '${A}'`)).toEqual([
       `Ada|${BLOB}|${rev(3)}`,
@@ -103,7 +111,7 @@ describe("index store", () => {
     expect(
       lines(`SELECT rkey, coalesce(position::text, '-') FROM idx.section WHERE did = '${A}' ORDER BY rkey`),
     ).toEqual([`${CARD_1}|1`, `${CARD_2}|0`, "3jzfcijpj2z2c|-"]);
-    await commit(A, rev(4), [profile({ cards: listOf(CARD_1) })]); // an equal rev applies (book P3.05, F-05)
+    await commit(A, rev(4), [profile(), page(listOf(CARD_1))]); // an equal rev applies (book P3.05, F-05)
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' AND position = 0`)).toEqual([CARD_1]);
     expect(lines(`SELECT count(*) FROM idx.record_blob WHERE did = '${A}'`)).toEqual(["0"]);
   });
@@ -132,9 +140,22 @@ describe("index store", () => {
     expect(stat("ingest_unsigned")).toBe("1");
   });
 
+  test("index.a_page_other_than_the_main_one_is_ignored", async () => {
+    // ADR 0091: only the main page shows today, so another page neither moves a card nor counts as refused.
+    const before = stat("ingest_invalid");
+    await commit(A, rev(4), [page(listOf(CARD_2), "work")]);
+    expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' AND position = 0`)).toEqual([CARD_1]);
+    expect(lines(`SELECT count(*) FROM idx.page WHERE did = '${A}'`)).toEqual(["1"]);
+    expect(stat("ingest_invalid")).toBe(before);
+  });
+
   test("index.delete_removes_the_record_and_its_place", async () => {
     await commit(A, rev(5), [{ kind: "delete", collection: "sh.unset.profile", rkey: "self" }]);
     expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);
+    // The main page holds the order, so the cards keep their places until it goes (ADR 0091).
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND position IS NOT NULL`)).toEqual(["1"]);
+    await commit(A, rev(5), [{ kind: "delete", collection: "sh.unset.page", rkey: "self" }]);
+    expect(lines(`SELECT count(*) FROM idx.page WHERE did = '${A}'`)).toEqual(["0"]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND position IS NOT NULL`)).toEqual(["0"]);
     await commit(A, rev(5), [{ kind: "delete", collection: "sh.unset.card", rkey: CARD_1 }]);
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual([CARD_2, "3jzfcijpj2z2c"]);
@@ -384,6 +405,30 @@ describe("index store", () => {
       "confirm_deletion",
     ]);
     expect(await store.cursor()).toBe(seq);
+  });
+
+  test("index.a_refused_main_page_is_kept_closed", async () => {
+    // ADR 0091: the main page says who sees the account, so one we cannot read is kept with no cards and shown only to
+    // its member, never dropped (a dropped page would read as public). Its own account, last in this block, so no
+    // other test's revisions or account counts move.
+    const C = "did:plc:pppppppppppppppppppppppp";
+    track(C, true);
+    await commit(C, rev(3), [section(CARD_1), page([{ uri: `at://${C}/sh.unset.card/${CARD_1}` }])]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position = 0`)).toEqual(["1"]);
+    const before = stat("ingest_invalid");
+    const broken: IndexChange = {
+      kind: "put",
+      collection: "sh.unset.page",
+      rkey: "self",
+      cid: CID,
+      record: { $type: "sh.unset.page", cards: 7, createdAt: T },
+    };
+    await commit(C, rev(4), [broken]);
+    expect(lines(`SELECT record->>'visibility', record ? 'cards' FROM idx.page WHERE did = '${C}'`)).toEqual([
+      "owner-only|f",
+    ]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${C}' AND position IS NOT NULL`)).toEqual(["0"]);
+    expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
   });
 });
 

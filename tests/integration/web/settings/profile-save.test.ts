@@ -374,7 +374,8 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     }
   });
 
-  // ADR 0078 (P1.22a): who sees the page leads the Privacy page's one form and is written to the profile record; while
+  // ADR 0078 (P1.22a): who sees the page leads the Privacy page's one form and is written to the main page record (ADR
+  // 0091), the profile left as it was; while
   // the page is not public the Search and AI choices are kept as stored, whatever the hidden fields send.
   test("who_sees_the_page_is_saved_in_the_record_and_search_and_ai_waits_until_public", async () => {
     await save(up, "displayName=Mara+Lind&headline=Night+trains.&location=&website=");
@@ -388,10 +389,15 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     const saved = await saveChoices(up, "visibility=signedIn&title=&description=");
     expect(saved.status).toBe(303);
     expect(saved.headers.get("location")).toBe("/settings/privacy?saved#privacy");
-    const [written] = up.writes().slice(before);
+    const [written, ...more] = up.writes().slice(before);
+    expect(more).toEqual([]);
     expect(written).toMatchObject({
-      record: { displayName: "Mara Lind", headline: "Night trains.", visibility: "signed-in" },
+      method: "putRecord",
+      collection: "sh.unset.page",
+      rkey: "self",
+      record: { $type: "sh.unset.page", visibility: "signed-in" },
     });
+    expect(written?.record).not.toHaveProperty("cards"); // a first choice starts a page with no cards
     const html = await (await privacyPage(up, "?saved")).text();
     expect(html).toContain("Privacy saved.");
     const document = parse(html);
@@ -410,6 +416,7 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     expect(textContent(document)).toContain("does not hide your profile");
     // Public again: the field leaves the record and the switches save again.
     await saveChoices(up, "visibility=public&title=&description=");
+    expect(up.writes().at(-1)).toMatchObject({ collection: "sh.unset.page", rkey: "self" });
     expect(up.writes().at(-1)?.record).not.toHaveProperty("visibility");
     const after = parse(await (await privacyPage(up)).text());
     expect(radios(after)[0]).toEqual(["public", true]);
@@ -428,14 +435,9 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     });
     const indexed = (visibility?: string) =>
       withClient(indexer, null, (c) =>
-        c.query("UPDATE idx.profile SET record = $2 WHERE did = $1", [
+        c.query("UPDATE idx.page SET record = $2 WHERE did = $1", [
           OWNER,
-          {
-            $type: "sh.unset.profile",
-            displayName: "Mara Lind",
-            createdAt: "x",
-            ...(visibility ? { visibility } : {}),
-          },
+          { $type: "sh.unset.page", createdAt: "x", ...(visibility ? { visibility } : {}) },
         ]),
       );
     try {
@@ -448,6 +450,10 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
           `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
            VALUES ($1, $2, 'cid-p', '3l', '{}', 'Mara Lind', false, now())`,
           [OWNER, `at://${OWNER}/sh.unset.profile/self`],
+        );
+        await c.query(
+          `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at) VALUES ($1, $2, 'cid-g', '3l', '{}', now())`,
+          [OWNER, `at://${OWNER}/sh.unset.page/self`],
         );
       });
       // The index still shows the page to everyone: the save waits, then says the page is catching up.
@@ -464,6 +470,7 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
       expect(await (await privacyPage(up, "?saved")).text()).not.toContain("still catching up");
     } finally {
       await withClient(indexer, null, async (c) => {
+        await c.query("DELETE FROM idx.page WHERE did = $1", [OWNER]);
         await c.query("DELETE FROM idx.profile WHERE did = $1", [OWNER]);
         await c.query("DELETE FROM idx.account WHERE did = $1", [OWNER]);
       });
@@ -476,7 +483,10 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     const before = up.writes().length;
     const response = await saveChoices(up, `visibility=ownerOnly&title=${"x".repeat(71)}&description=`);
     expect(response.status).toBe(303);
-    expect(up.writes().slice(before)[0]?.record).toMatchObject({ visibility: "owner-only" });
+    expect(up.writes().slice(before)[0]).toMatchObject({
+      collection: "sh.unset.page",
+      record: { visibility: "owner-only" },
+    });
     await saveChoices(up, "visibility=public&title=&description=");
   });
 

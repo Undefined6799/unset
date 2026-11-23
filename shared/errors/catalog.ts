@@ -48,6 +48,9 @@ export const ERROR_CODES = {
   "profile.name_required": { status: 400, public: true },
   "profile.conflict": { status: 409, public: true },
   "profile.pds_unavailable": { status: 503, public: true },
+  // ADR 0091: the main page's card list, written with the card it lists.
+  "page.invalid": { status: 400, public: true },
+  "page.too_long": { status: 400, public: true },
   // P2.20r, the card writes (ADR 0051). Shown to the editor, which posts in the background.
   "card.invalid": { status: 400, public: true },
   "card.kind_unknown": { status: 400, public: true },
@@ -75,6 +78,7 @@ export const ERROR_CODES = {
   "card.list_incomplete": { status: 503, public: true },
   "card.conflict": { status: 409, public: true },
   "card.pds_unavailable": { status: 503, public: true },
+  "card.scope_missing": { status: 403, public: true },
   // P2.19b: a picture card's new picture is not the member's upload, or is gone (a day unused) or held.
   "card.image_missing": { status: 409, public: true },
   // P2.19b: the picture could not be read from our store or sent to the member's PDS; nothing was written.

@@ -14,8 +14,9 @@ checked: 2026-11-21
 ---
 # lexicons
 
-**What it owns.** The public record contract (plan §3; ADR 0086): `sh.unset.profile` (who the member is, plus the
-`cards` list of at:// addresses that says which cards show, in order), `sh.unset.card` (one block plus optional
+**What it owns.** The public record contract (plan §3; ADR 0086, ADR 0091): `sh.unset.profile` (who the account
+is, nothing else), `sh.unset.page` (key `any`; `self` is the main page, whose `cards` list of at:// addresses says
+which cards show, in order; other keys are shown nowhere yet), `sh.unset.card` (one block plus optional
 width and surface), the blocks `sh.unset.block.{text,links,showcase,buttons,images}` with their shared
 `sh.unset.block.defs`, and the permission set `sh.unset.authFull`. `sh.unset.section`, `sh.unset.follow`,
 `sh.unset.authApp` and `sh.unset.defs` went with #1933 (P1.31t). Once a schema is published (P1.35) other apps rely
@@ -37,8 +38,9 @@ on it, so a change is close to permanent.
   `accept` value, a union opened or closed, or a closed union's new ref (P1.31k), or a changed `default` (an absent
   `listed` must stay not listed) on a published schema; additions to
   the permission set need Alex's approval and removals are refused. It also holds every `published/<nsid>.json`
-  snapshot with no lock entry yet. `published/sh.unset.profile.json` holds the ADR 0086 profile, replaced in
-  #1933 because nothing was published yet.
+  snapshot with no lock entry yet. `published/sh.unset.profile.json` holds the ADR 0091 profile (identity only),
+  replaced in #1933 and again by ADR 0091 because nothing was published yet; `published/sh.unset.page.json` came
+  with ADR 0091.
 
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.
