@@ -23,9 +23,11 @@ import { flushSync, onDestroy, onMount, tick } from "svelte";
 import type { BlockItem, MenusState } from "../../editor/menus.ts";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
 import { type Place, placeIn } from "../../editor/place.ts";
+import type { TableState } from "../../editor/tables.ts";
 import { TEXT_IN_PLACE, TEXT_MENUS } from "../../profile/messages.ts";
 import type { Block } from "../../profile/types.ts";
 import Readme from "./readme.svelte";
+import TableHandles from "./table-tools.svelte";
 import TextMenus from "./text-menus.svelte";
 
 let {
@@ -57,6 +59,10 @@ let menu: HTMLElement | undefined = $state();
 let bar: HTMLElement | undefined = $state();
 let linkEdit: HTMLElement | undefined = $state();
 let linkPreview: HTMLElement | undefined = $state();
+let columnHandle: HTMLElement | undefined = $state();
+let rowHandle: HTMLElement | undefined = $state();
+let dropLine: HTMLElement | undefined = $state();
+let table: TableState = $state(null);
 const optionId = (item: BlockItem) => `${id}-block-${item}`;
 /** The page's script runs here: from now on a press on the card opens the editor (a press before that is the page's). */
 let listening = $state(false);
@@ -118,6 +124,7 @@ async function mount() {
     if (closed || host === undefined || handle === undefined || add === undefined || grip === undefined || menu === undefined)
       return;
     if (bar === undefined || linkEdit === undefined || linkPreview === undefined) return;
+    if (columnHandle === undefined || rowHandle === undefined || dropLine === undefined) return;
     const mounted = await mountMarkdownEditor(host, {
       value,
       labelledBy: labelId,
@@ -125,6 +132,7 @@ async function mount() {
       onEdit: () => undefined,
       onChange: onedit,
       onToolbar: () => undefined,
+      tables: { columnHandle, rowHandle, dropLine, onTable: (state) => (table = state) },
       menus: {
         handle,
         add,
@@ -288,6 +296,16 @@ onDestroy(() => {
     edit: () => editor?.menus?.editLink(),
     remove: () => editor?.menus?.removeLink(),
   }}
+/>
+<TableHandles
+  state={table}
+  bind:columnHandle
+  bind:rowHandle
+  bind:dropLine
+  ontoggle={(which) => editor?.tables?.toggle(which)}
+  onclose={() => editor?.tables?.close()}
+  oncolumn={(action) => editor?.tables?.column(action)}
+  onrow={(action) => editor?.tables?.row(action)}
 />
 <div
   bind:this={host}

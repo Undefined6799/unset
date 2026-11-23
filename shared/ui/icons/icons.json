@@ -64,7 +64,10 @@
     "strikethrough": "strikethrough",
     "text": "text",
     "task-list": "task-list",
-    "table": "table"
+    "table": "table",
+    "align-left": "align-left",
+    "align-center": "align-center",
+    "align-right": "align-right"
   },
   "icons": {
     "next": "cf13159505df944c66c9d36838508dcd58106fe0d776702aeaf08dd91553eb3f",
@@ -129,7 +132,10 @@
     "strikethrough": "21614ebf0359ad62c70d80e9c7f9782113292e5dc08a302dbdeb8bcf0296414b",
     "text": "e334a56aefdd7379a6f4ea07e9e48f2efdbd69e57bcc4cd19211b8e585b4c0d3",
     "task-list": "5700f48d763355bf15c7258e05a0daaa9de4308505fb2f967811288ac8234cc6",
-    "table": "860f4208f8d9e0bb68d20eb1cff84abdf3cc171df8b38d2be1e61447785afb41"
+    "table": "860f4208f8d9e0bb68d20eb1cff84abdf3cc171df8b38d2be1e61447785afb41",
+    "align-left": "fb5d4bfc94ee5a0428439014401e2d94c800f00109bf1382bc91209caccc2c41",
+    "align-center": "01023a0bebd3d03d27a53636bb2556d0d62ae79c6831052043c5744425c7e2c4",
+    "align-right": "672d1c8e3adf6b1e288f2b282f8aed1a4009346906133113046a1ca00f9dc8d4"
   },
   "drawings": {
     "next": [
@@ -1137,6 +1143,84 @@
         "strokeLinejoin": "round"
       }
     ],
+    "align-left": [
+      {
+        "d": "M3 10L17 10",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 6H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 18L17 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 14H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "align-center": [
+      {
+        "d": "M3 6H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 14H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M6 10L18 10",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M6 18L18 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "align-right": [
+      {
+        "d": "M7 10L21 10",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 6H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M7 18L21 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 14H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
     "grip": [
       {
         "d": "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
@@ -1358,7 +1442,7 @@
   },
   "extensionProvenance": {
     "path": "approved-extensions.json",
-    "sha256": "a85a2891a08b15c825d72865b474fa5dd99b87b39a91ffc78da2a815566516b2",
+    "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f",
     "designApproval": {
       "by": "Alex",
       "date": "2026-10-18",

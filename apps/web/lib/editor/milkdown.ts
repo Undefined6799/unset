@@ -36,6 +36,7 @@ import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
+import { type TableOptions, type TableTools, withTables } from "./tables.ts";
 
 /** The toolbar's actions, by name. */
 export const EDITOR_COMMANDS = [
@@ -201,6 +202,8 @@ export type MarkdownEditor = {
   readonly destroy: () => Promise<void>;
   /** The side handle, block menu and floating bar, when the caller drew them (`MountOptions.menus`). */
   readonly menus?: Menus;
+  /** The table handles and their menus, when the caller drew them (`MountOptions.tables`). */
+  readonly tables?: TableTools;
 };
 
 export type MountOptions = {
@@ -215,6 +218,8 @@ export type MountOptions = {
   readonly onToolbar: (state: ToolbarState) => void;
   /** Where to draw the side handle, block menu and floating bar, if the editor has them (the in-place editor). */
   readonly menus?: Omit<MenusOptions, "isOn">;
+  /** Where to draw the table handles, if the editor has them (the in-place editor). */
+  readonly tables?: TableOptions;
 };
 
 // The page's parser (apps/web/lib/profile/parse.ts) shows a quote as paragraphs with line breaks, a list item as one
@@ -514,6 +519,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     options.menus === undefined
       ? undefined
       : withMenus(made, { ...options.menus, isOn: (item, state) => isActive(item, state) });
+  const tables = options.tables === undefined ? undefined : withTables(made, options.tables);
   const editor = await made
     .config((ctx) => {
       ctx.set(rootCtx, root);
@@ -656,5 +662,6 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       await editor.destroy();
     },
     menus,
+    tables,
   };
 }

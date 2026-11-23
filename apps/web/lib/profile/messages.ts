@@ -245,6 +245,20 @@ export const TEXT_MENUS = {
   format: { strong: "Bold", emphasis: "Italic", strike: "Strikethrough", code: "Inline code", link: "Link" },
   /** What an empty line with the caret says. */
   hint: "Type / to choose a block, Shift+Enter for a new one",
+  /** The handles above a table's column and beside its row, and their menus (target-look decision 7). */
+  table: {
+    column: "Column options",
+    row: "Row options",
+    columnActions: {
+      addLeft: "Add column left",
+      addRight: "Add column right",
+      alignLeft: "Align left",
+      alignCenter: "Align centre",
+      alignRight: "Align right",
+      delete: "Delete column",
+    },
+    rowActions: { addAbove: "Add row above", addBelow: "Add row below", delete: "Delete row" },
+  },
   link: {
     editor: "Link for the selected words",
     address: "Link address",

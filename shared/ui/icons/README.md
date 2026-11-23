@@ -39,6 +39,8 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   "add an icon for text"; same commit and pins: 61 names. The Divider item reuses `remove` (regular `minus`).
 - The block menu's Task list and Table items add `task-list` and `table` (regular, same names), under Alex's
   2026-11-21 18:52:12Z "match everything that they have"; same commit and pins: 63 names.
+- The table column menu's Align left, centre and right add `align-left`, `align-center` and `align-right` (regular,
+  same names), approved by Alex on 2026-11-22 (00:31:10Z, "yes all approved"); same commit and pins: 66 names.
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.
 - ADR 0087 adds one icon from outside Iconoir: `grip` is Lucide 1.72.0's `icons/grip-vertical.svg` (ISC licence,
   `LICENSE-lucide.txt`, © 2026 Lucide Icons and Contributors), copied byte for byte from
