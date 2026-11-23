@@ -1,16 +1,20 @@
 // What a card shows beside its own words (the profile-card mockup, Alex 2026-11-17): a labelled link names its site,
 // and an email button's address is shown under the buttons.
 import { describe, expect, test } from "vitest";
-import { parseReadme } from "./parse.ts";
-import { cardViews, contactAction, shownCards } from "./view.ts";
+import type { CodeColourLimits } from "../editor/code-colours.ts";
+import { MAX_CHARS, parseReadme } from "./parse.ts";
+import { contactAction, shownCards, cardViews as viewsWithin } from "./view.ts";
 
-type Cards = Parameters<typeof cardViews>[0];
-/** The page's cards with the parser itself as their reader, as a page with no limits would read them. */
-const views = (cards: Cards, versions?: ReadonlyMap<string, string>) => cardViews(cards, parseReadme, versions);
+// The numbers interfaces/web limits.ts CODE_COLOUR_LIMITS has today; limits.code.test.ts tests those themselves.
+const CODE_COLOURS: CodeColourLimits = { chars: 20_000, lineChars: 400, blockMs: 50, pageMs: 100 };
+const readme = (text: string) => ({ kind: "readme", text }) as const;
+/** The page's cards with the parser itself as their reader, as a page with no reading limits would read them. */
+const cardViews = (cards: Parameters<typeof viewsWithin>[0], versions?: ReadonlyMap<string, string>) =>
+  viewsWithin(cards, parseReadme, CODE_COLOURS, versions);
 
-describe("card views", () => {
-  test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", () => {
-    const [card] = views([
+describe("card views", async () => {
+  test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", async () => {
+    const [card] = await cardViews([
       {
         key: "k",
         width: "half",
@@ -34,32 +38,35 @@ describe("card views", () => {
     });
   });
 
-  test("a_card_carries_its_version_only_where_the_page_gave_one", () => {
+  test("a_card_carries_its_version_only_where_the_page_gave_one", async () => {
     const readme = { kind: "readme", text: "Hi" } as const;
-    const both = views(
+    const views = await cardViews(
       [
         { key: "a", width: "full", content: readme },
         { key: "b", width: "full", content: readme },
       ],
       new Map([["a", "bafyv"]]),
     );
-    expect(both.map((view) => view.version)).toEqual(["bafyv", undefined]);
-    expect("version" in (views([{ key: "a", width: "full", content: readme }])[0] ?? {})).toBe(false);
+    expect(views.map((view) => view.version)).toEqual(["bafyv", undefined]);
+    expect("version" in ((await cardViews([{ key: "a", width: "full", content: readme }]))[0] ?? {})).toBe(false);
   });
 
   // Book P1.22h, rule SE-3: a page that edits nothing sends the browser what a card shows, never the record behind it.
-  test("a_card_for_a_page_that_edits_nothing_is_what_it_shows_and_no_more", () => {
+  test("a_card_for_a_page_that_edits_nothing_is_what_it_shows_and_no_more", async () => {
     const text = "Typed **as Markdown**";
     const [card] = shownCards(
-      views([{ key: "k", width: "half", surface: "plain", content: { kind: "readme", text } }], new Map([["k", "v"]])),
+      await cardViews(
+        [{ key: "k", width: "half", surface: "plain", content: { kind: "readme", text } }],
+        new Map([["k", "v"]]),
+      ),
     );
     expect(Object.keys(card ?? {}).sort()).toEqual(["key", "shown", "surface", "width"]);
     expect(card).toMatchObject({ key: "k", width: "half", surface: "plain", shown: { kind: "readme" } });
     expect(JSON.stringify(card)).not.toContain(text);
   });
 
-  test("an_email_button_carries_its_address_and_a_link_button_none", () => {
-    const [card] = views([
+  test("an_email_button_carries_its_address_and_a_link_button_none", async () => {
+    const [card] = await cardViews([
       {
         key: "k",
         width: "half",
@@ -86,15 +93,15 @@ describe("card views", () => {
   });
 });
 
-test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %s surface", (surface) => {
-  const [card] = views([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
+test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %s surface", async (surface) => {
+  const [card] = await cardViews([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
   expect(card?.surface).toBe(surface);
 });
 
 // P1.21k: the page's server passes a reader that stops a slow parse, so every Text card must go through it.
-test("every Text card is read by the reader the page passes, in page order", () => {
+test("every Text card is read by the reader the page passes, in page order", async () => {
   const read: string[] = [];
-  const cards = cardViews(
+  const cards = await viewsWithin(
     [
       { key: "a", width: "full", content: { kind: "readme", text: "one" } },
       { key: "b", width: "full", content: { kind: "buttons", heading: "", text: "not Markdown", buttons: [] } },
@@ -104,6 +111,7 @@ test("every Text card is read by the reader the page passes, in page order", () 
       read.push(text);
       return [{ kind: "rule" }];
     },
+    CODE_COLOURS,
   );
   expect(read).toEqual(["one", "two"]);
   expect(cards.map((card) => card.shown)).toMatchObject([
@@ -113,8 +121,31 @@ test("every Text card is read by the reader the page passes, in page order", () 
   ]);
 });
 
+// The page's reader gives every load the same frozen blocks (interfaces/web text-reader.ts), so colouring must build
+// its own code block and leave the reader's as it was; changing a frozen object throws here.
+test("colouring code leaves the blocks the reader gave as they were", async () => {
+  const frozen = <T>(value: T): T => {
+    if (typeof value === "object" && value !== null) for (const inner of Object.values(value)) frozen(inner);
+    return Object.freeze(value);
+  };
+  const read = frozen(parseReadme("words\n\n```js\nconst a = 1;\n```"));
+  const before = JSON.stringify(read);
+  const once = await viewsWithin([{ key: "a", width: "full", content: readme("x") }], () => read, CODE_COLOURS);
+  const again = await viewsWithin([{ key: "a", width: "full", content: readme("x") }], () => read, CODE_COLOURS);
+  expect(JSON.stringify(read)).toBe(before);
+  for (const [view] of [once, again]) {
+    expect(view?.shown).toMatchObject({
+      kind: "readme",
+      blocks: [
+        { kind: "paragraph" },
+        { kind: "code", runs: expect.arrayContaining([{ text: "const", colour: "code-keyword" }]) },
+      ],
+    });
+  }
+});
+
 // P1.21o: the header's About panel repeats the page's published contact action, never an account address.
-describe("contact action", () => {
+describe("contact action", async () => {
   const buttons = (key: string, list: readonly { uri: string; label: string }[]) => ({
     key,
     width: "full" as const,
@@ -126,8 +157,8 @@ describe("contact action", () => {
     },
   });
 
-  test("is the first button of the first Contact card", () => {
-    const cards = views([
+  test("is the first button of the first Contact card", async () => {
+    const cards = await cardViews([
       { key: "t", width: "full", content: { kind: "readme", text: "Hi" } },
       buttons("a", [
         { uri: "https://cal.example/me", label: "Book a call" },
@@ -138,8 +169,62 @@ describe("contact action", () => {
     expect(contactAction(cards)).toEqual({ href: "https://cal.example/me", label: "Book a call" });
   });
 
-  test("is none with no Contact card, or one whose buttons have no safe address", () => {
-    expect(contactAction(views([{ key: "t", width: "full", content: { kind: "readme", text: "Hi" } }]))).toBeNull();
-    expect(contactAction(views([buttons("a", [{ uri: "javascript:alert(1)", label: "x" }])]))).toBeNull();
+  test("is none with no Contact card, or one whose buttons have no safe address", async () => {
+    expect(
+      contactAction(await cardViews([{ key: "t", width: "full", content: { kind: "readme", text: "Hi" } }])),
+    ).toBeNull();
+    expect(contactAction(await cardViews([buttons("a", [{ uri: "javascript:alert(1)", label: "x" }])]))).toBeNull();
+  });
+});
+
+// Review of #2004 at e36de8a: a member's code is coloured inside the page load, so a page of hostile code blocks must
+// still answer quickly, with the code as plain text. One Textile line of "<a " took 182 s before the limits.
+describe("a page of hostile code", () => {
+  const card = (key: string, language: string, code: string) => ({
+    key,
+    width: "full" as const,
+    content: { kind: "readme" as const, text: `\`\`\`${language}\n${code}\n\`\`\`` },
+  });
+  /** `piece` repeated in lines of `width` characters, 20,000 in all. */
+  const wrapped = (piece: string, width: number) =>
+    (piece.repeat(Math.ceil(20_000 / piece.length)).match(new RegExp(`[^]{1,${width}}`, "g")) ?? []).join("\n");
+  const hostile = [
+    card("a", "textile", "<a ".repeat(6_000)),
+    card("b", "textile", wrapped("<a ", 400)),
+    card("c", "erlang", wrapped("/*", 400)),
+    card("d", "coffeescript", wrapped("(", 400)),
+    card("e", "less", wrapped("[", 400)),
+    card("f", "scala", "/*".repeat(9_000)),
+    card("g", "markdown", wrapped("*_", 400)),
+  ];
+
+  test("answers within the page's budget and shows every block as its text", async () => {
+    const started = performance.now();
+    const views = await viewsWithin(
+      [...hostile, ...hostile.map((c) => ({ ...c, key: `${c.key}2` }))],
+      parseReadme,
+      CODE_COLOURS,
+    );
+    // The page's 100 ms, one more parser step (at most about 35 ms measured) and the Markdown parse; far under a second.
+    expect(performance.now() - started).toBeLessThan(1_000);
+    for (const [i, view] of views.entries()) {
+      const block = view.shown.kind === "readme" ? view.shown.blocks[0] : undefined;
+      const source = hostile[i % hostile.length]?.content.text ?? "";
+      const code = source.slice(source.indexOf("\n") + 1, -4);
+      // Plain text, and all of the code the page reads: the reader stops at its 20,000 characters (parse.ts
+      // MAX_CHARS, P1.21k), which the wrapped cards pass by a few dozen with their line ends and fences.
+      const shown = block?.kind === "code" && "text" in block ? block.text : null;
+      expect(shown).not.toBeNull();
+      expect(code.startsWith(shown ?? "not shown")).toBe(true);
+      expect(shown?.length).toBeGreaterThanOrEqual(Math.min(code.length, MAX_CHARS - 100));
+    }
+  });
+
+  test("code in a known language within the limits is still coloured", async () => {
+    const [view] = await cardViews([card("k", "js", "const a = 1;")]);
+    expect(view?.shown).toMatchObject({
+      kind: "readme",
+      blocks: [{ kind: "code", runs: expect.arrayContaining([{ text: "const", colour: "code-keyword" }]) }],
+    });
   });
 });

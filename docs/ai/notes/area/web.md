@@ -64,7 +64,7 @@ one budget across the page's cards and shows a stopped card with `plainText`. Th
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
 places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
-Preview, loaded when Preview opens, on the owner's own text. Vite's alias for `decode-named-character-reference`
+Preview, loaded when Preview opens, on the owner's own text. The reader's blocks are kept and frozen (text-reader.ts), so `colourBlocks` builds new code blocks and changes none. Vite's alias for `decode-named-character-reference`
 (`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
 without it neither the Preview nor Milkdown reads a text holding `&amp;`.
 
@@ -78,6 +78,12 @@ without it neither the Preview nor Milkdown reads a text holding `&amp;`.
   (`scripts/budgets/app-js.ts`).
 - No inline script or style on any page beyond SvelteKit's hashed startup script and two hashed style attributes
   (`interfaces/web/vite.config.ts`).
+- Work on a member's input inside a page load is synchronous and blocks every request on the process, so it needs a
+  bound a timer can enforce between small steps. Code colouring (P1.21v, review of #2004): a CodeMirror parser is
+  driven by `startParse`/`advance()` to a deadline, but a stream parser's step is whole lines and Markdown's a whole
+  paragraph, and some legacy modes are worse than quadratic in a line, so size and line caps bound the step and the
+  deadline bounds the sum (`CODE_COLOUR_LIMITS` in `interfaces/web/src/lib/server/limits.ts`, measured in
+  `apps/web/lib/editor/code-colours.ts`). Some parsers also throw.
 
 The paragraph below describes the React shell; the Svelte shell's Sign in is a link to /login with `next` set to
 the page (`signInHref`, `routes/+layout.server.ts`).

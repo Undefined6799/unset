@@ -13,6 +13,7 @@
     "./lib/components/settings/*": "./lib/components/settings/*",
     "./lib/components/notifications/*": "./lib/components/notifications/*",
     "./lib/profile/*": "./lib/profile/*",
+    "./lib/editor/code-colours.ts": "./lib/editor/code-colours.ts",
     "./lib/settings/*": "./lib/settings/*",
     "./lib/notifications/*": "./lib/notifications/*",
     "./lib/icons/*.png": "./lib/icons/*.png"

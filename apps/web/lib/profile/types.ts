@@ -2,6 +2,8 @@
 // fills its fields from `content`), and beside it what the card shows, built on the server: the README's blocks and
 // every address already through safeHref, so a component never decides whether a link is safe.
 
+import type { CodeColourLimits, CodeRun } from "../editor/code-colours.ts";
+
 export type CardLayout = "list" | "carousel" | "grid";
 /** How the avatar is cropped (sh.unset.profile avatarShape). */
 export type AvatarShape = "round" | "roundedSquare";
@@ -55,7 +57,12 @@ export type Block =
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
+  /**
+   * Code as plain `text`, or as coloured `runs` that join back to it (lib/editor/code-colours.ts) when its language
+   * is one CodeMirror knows and the page's limits allow; never both, which would send the code twice.
+   */
   | { readonly kind: "code"; readonly text: string }
+  | { readonly kind: "code"; readonly runs: readonly CodeRun[] }
   | { readonly kind: "rule" }
   | {
       readonly kind: "table";
@@ -141,6 +148,8 @@ export type CardEditLimits = {
   readonly text: number;
   /** The card form's body cap in bytes (interfaces/web policy.ts): the one Save checks it before sending (ADR 0074). */
   readonly formBytes: number;
+  /** The page's code colouring limits (interfaces/web limits.ts), so the Text editor's preview colours what it will. */
+  readonly codeColours: CodeColourLimits;
 };
 
 /**

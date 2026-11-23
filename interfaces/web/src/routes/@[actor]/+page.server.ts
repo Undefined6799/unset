@@ -26,6 +26,7 @@ import {
   type Viewer,
 } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
+import { CODE_COLOUR_LIMITS } from "../../lib/server/limits.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
 
@@ -82,9 +83,10 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     owner === null
       ? []
       : shownCards(
-          cardViews(
+          await cardViews(
             pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX),
             services().textReads.forPage(locals.deadlineAt),
+            CODE_COLOUR_LIMITS,
           ),
         );
   return {

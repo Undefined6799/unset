@@ -3,7 +3,9 @@
 // dropped unsafe ones (two layers for the output every visitor will see). Runs on the server; the components only
 // render what this returns.
 import { safeHref } from "@unset/shared-safe-href";
+import { type CodeColourBudget, type CodeColourLimits, codeColourBudget, colourCode } from "../editor/code-colours.ts";
 import { CARD_TEXT } from "./messages.ts";
+import type { Block as ParsedBlock } from "./parse.ts";
 import type {
   Block,
   CardContent,
@@ -16,10 +18,11 @@ import type {
 } from "./types.ts";
 
 /**
- * Reads a Text card's Markdown into the blocks it shows. The page's server passes one that stops a slow parse
- * (interfaces/web text-reader.ts); parse.ts parseReadme is the parse itself.
+ * Reads a Text card's Markdown into blocks. The page's server passes one that stops a slow parse and keeps what it
+ * read (interfaces/web text-reader.ts); parse.ts parseReadme is the parse itself. What it gives may be shared and
+ * frozen, so nothing here changes a block: colouring builds new ones.
  */
-export type TextReader = (text: string) => readonly Block[];
+export type TextReader = (text: string) => readonly ParsedBlock[];
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 
@@ -61,10 +64,23 @@ function shownButtons(buttons: Buttons): ShownButton[] {
   return shown;
 }
 
-function shownOf(content: CardContent, readText: TextReader): CardShown {
+/**
+ * README blocks as a card shows them: code in colours where its language is known and the page's colouring budget
+ * allows, else plain; the language itself is dropped. Every code block is a new object and no block is changed.
+ */
+export const colourBlocks = (blocks: readonly ParsedBlock[], budget: CodeColourBudget): Promise<Block[]> =>
+  Promise.all(
+    blocks.map(async (block): Promise<Block> => {
+      if (block.kind !== "code") return block;
+      const coloured = await colourCode(block.text, block.language, budget);
+      return "runs" in coloured ? { kind: "code", runs: coloured.runs } : { kind: "code", text: block.text };
+    }),
+  );
+
+async function shownOf(content: CardContent, readText: TextReader, budget: CodeColourBudget): Promise<CardShown> {
   switch (content.kind) {
     case "readme":
-      return { kind: "readme", blocks: readText(content.text) };
+      return { kind: "readme", blocks: await colourBlocks(readText(content.text), budget) };
     case "links":
       return {
         kind: "links",
@@ -103,7 +119,9 @@ function shownOf(content: CardContent, readText: TextReader): CardShown {
 
 /**
  * The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at.
- * `readText` reads every Text card of the page, so one reader can hold them all to one budget.
+ * `readText` reads every Text card of the page, in page order and before anything is awaited, so one reader can
+ * hold them all to one budget. `codeColours` (interfaces/web limits.ts) bounds the colouring of the whole page's
+ * code: one budget for all cards.
  */
 export const cardViews = (
   cards: readonly {
@@ -113,13 +131,18 @@ export const cardViews = (
     readonly content: CardContent;
   }[],
   readText: TextReader,
+  codeColours: CodeColourLimits,
   versions?: ReadonlyMap<string, string>,
-): CardView[] =>
-  cards.map(({ key, width, surface = "filled", content }) => {
-    const version = versions?.get(key);
-    const shown = { key, width, surface, content, shown: shownOf(content, readText) };
-    return version === undefined ? shown : { ...shown, version };
-  });
+): Promise<CardView[]> => {
+  const budget = codeColourBudget(codeColours);
+  return Promise.all(
+    cards.map(async ({ key, width, surface = "filled", content }) => {
+      const version = versions?.get(key);
+      const shown = { key, width, surface, content, shown: await shownOf(content, readText, budget) };
+      return version === undefined ? shown : { ...shown, version };
+    }),
+  );
+};
 
 /**
  * The cards for a page that edits nothing (the public profile): what each shows, without `content`, which only the

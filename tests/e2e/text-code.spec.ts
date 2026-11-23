@@ -3,8 +3,8 @@
 // are, with nothing refused. Code that looks like markup, a script, an event handler or a
 // javascript: link is only ever text: in the editor and on the page, with no element made from it and nothing run.
 // The cards added are deleted again.
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE, paceWrites, postedText } from "./cards.ts";
+import { type Browser, expect, type Locator, type Page, test } from "@playwright/test";
+import { addCard, OWN_PAGE, paceWrites, postedText, spendsWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 
 paceWrites(test);
@@ -126,6 +126,114 @@ test("markup_and_script_in_a_code_block_stay_text_on_the_page_and_in_the_editor"
   expect(watched.pageErrors).toEqual([]);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
   await deleteNewest(page);
+});
+
+/** The computed text colour of the first element `where` finds. */
+const colourOf = (where: Locator) =>
+  where
+    .first()
+    .evaluate(
+      (el) =>
+        (globalThis as unknown as { getComputedStyle: (e: unknown) => { color: string } }).getComputedStyle(el).color,
+    );
+
+/**
+ * The same page with script off, as the member: the owner's page draws a Text card in the editor when script runs, and
+ * the server-drawn card only without it. Its own context, counted against the write budget (cards.ts spendsWrites).
+ */
+async function withoutScript(browser: Browser, page: Page): Promise<Page> {
+  const context = await browser.newContext({
+    storageState: await page.context().storageState(),
+    javaScriptEnabled: false,
+  });
+  spendsWrites(context);
+  const quiet = await context.newPage();
+  expect((await quiet.goto(page.url()))?.status()).toBe(200);
+  return quiet;
+}
+
+// The newest card's code: a card's text sits beside its group of controls, not in it.
+const newestCode = (page: Page) => page.locator("main pre code").last();
+
+test("code_on_the_page_is_coloured_by_the_server_with_the_editors_colours", async ({ browser, page }) => {
+  const watched = watch(page);
+  await openStored(page, '```js\nconst a = "<b>x</b>"; // note\n```');
+  // Coloured as the server draws it, before any script; the string stays escaped text.
+  const html = await (await page.request.get(page.url())).text();
+  expect(html).toContain('<span class="code-keyword">const</span>');
+  expect(html).not.toContain("<b>x</b>");
+  const quiet = await withoutScript(browser, page);
+  const code = newestCode(quiet);
+  await expect(code).toHaveText('const a = "<b>x</b>"; // note');
+  const pageKeyword = await colourOf(code.locator(".code-keyword"));
+  const pageString = await colourOf(code.locator(".code-string"));
+  expect(pageKeyword).not.toBe(pageString);
+  expect(pageKeyword).not.toBe(await colourOf(code));
+  await quiet.context().close();
+  // The card in the editor, with script: the same text in the same two colours.
+  const content = page.locator("main .cm-editor .cm-content").last();
+  await expect(content).toHaveText('const a = "<b>x</b>"; // note');
+  expect(await colourOf(content.locator(".code-keyword"))).toBe(pageKeyword);
+  expect(await colourOf(content.locator(".code-string"))).toBe(pageString);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
+
+test("markup_coloured_as_html_on_the_page_stays_text", async ({ browser, page }) => {
+  const body = HOSTILE_LINES.join("\n");
+  await openStored(page, `\`\`\`html\n${body}\n\`\`\``);
+  const quiet = await withoutScript(browser, page);
+  const code = newestCode(quiet);
+  await expect(code.locator(".code-tag").first()).toBeVisible();
+  expect(await code.evaluate((el) => (el as unknown as { textContent: string }).textContent)).toBe(body);
+  expect(await madeFromCode(code)).toEqual(NOTHING_MADE);
+  await quiet.context().close();
+  await deleteNewest(page);
+});
+
+/**
+ * A new card's key, so the test can remove the card it added: a TID (atproto.com/specs/tid), the microseconds since
+ * 1970 and a random clock id in base32-sortable, as domains/profile parseNewCardKey accepts.
+ */
+function newCardKey(): string {
+  let value = (BigInt(Date.now()) * 1000n) << 10n;
+  value |= BigInt(Math.floor(Math.random() * 1024));
+  let key = "";
+  for (let i = 0; i < 13; i += 1) {
+    key = "234567abcdefghijklmnopqrstuvwxyz"[Number(value & 31n)] + key;
+    value >>= 5n;
+  }
+  return key;
+}
+
+// Review of #2004 at e36de8a: the server colours a member's code inside the page load, and one Textile line of "<a "
+// took minutes there, stalling the web process for every visitor. Within the colouring limits
+// (interfaces/web limits.ts CODE_COLOUR_LIMITS) the page answers at once and shows the code as plain text. The card is
+// added and removed by the form actions alone: the owner's page with script would draw it in the editor.
+test("hostile_code_on_the_page_is_plain_and_the_page_answers_quickly", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const key = newCardKey();
+  const line = "<a ".repeat(3_000);
+  await addCard(page, {
+    kind: "readme",
+    width: "full",
+    surface: "filled",
+    text: `\`\`\`textile\n${line}\n\`\`\``,
+    newKey: key,
+  });
+  const started = Date.now();
+  const answer = await page.request.get(page.url());
+  expect(answer.status()).toBe(200);
+  expect(Date.now() - started).toBeLessThan(5_000);
+  // The whole line as one run of escaped text: a coloured one would be split by spans.
+  expect(await answer.text()).toContain(line.replaceAll("<", "&lt;"));
+  const removed = await page.evaluate(async (card) => {
+    const body = new URLSearchParams({ key: card });
+    const init = { method: "POST", body, headers: { accept: "text/html" }, redirect: "manual" } as const;
+    return (await fetch("?/remove", init)).type;
+  }, key);
+  expect(removed).toBe("opaqueredirect");
 });
 
 test("a_script_pasted_into_a_code_block_stays_text", async ({ page }) => {

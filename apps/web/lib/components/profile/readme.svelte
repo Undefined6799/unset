@@ -87,7 +87,7 @@ const HEADING_LOOK = [
     {:else if block.kind === "list"}
       {@render list(block)}
     {:else if block.kind === "code"}
-      <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5"><code>{block.text}</code></pre>
+      <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5"><code>{#if "runs" in block}{#each block.runs as run, r (r)}{#if run.colour}<span class={run.colour}>{run.text}</span>{:else}{run.text}{/if}{/each}{:else}{block.text}{/if}</code></pre>
     {:else if block.kind === "table"}
       <!-- A wide table scrolls inside the card rather than widening it. -->
       <div class="overflow-x-auto">

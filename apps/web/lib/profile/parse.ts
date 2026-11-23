@@ -37,9 +37,15 @@ export type Block =
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
-  | { readonly kind: "code"; readonly text: string }
+  | CodeBlock
   | { readonly kind: "rule" }
   | TableBlock;
+
+/**
+ * A code block's text and its language: a fence's info string's first word (CommonMark 0.31.2, "Fenced code blocks";
+ * mdast `lang`), "" for none or an indented block. The language only picks the page's colours; it is never drawn.
+ */
+export type CodeBlock = { readonly kind: "code"; readonly text: string; readonly language: string };
 
 /** A table's column alignments, header cells and data rows, each row as wide as the header (GFM "Tables"). */
 export type TableBlock = {
@@ -306,7 +312,7 @@ function block(node: Flow, reading: Reading): Block[] {
     case "thematicBreak":
       return [{ kind: "rule" }];
     case "code":
-      return [{ kind: "code", text: shown(node.value) }];
+      return [{ kind: "code", text: shown(node.value), language: node.lang ?? "" }];
     case "blockquote": {
       const paragraphs = node.children.flatMap((child) => textLines(child, reading)).filter((line) => line.length > 0);
       return paragraphs.length === 0 ? [] : [{ kind: "quote", paragraphs }];

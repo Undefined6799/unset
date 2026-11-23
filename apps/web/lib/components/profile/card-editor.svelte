@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
 import { tick } from "svelte";
+import { type CodeColourLimits, codeColourBudget } from "../../editor/code-colours.ts";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
 import type {
@@ -25,6 +26,7 @@ import type {
   Enhance,
   SubmitHandler,
 } from "../../profile/types.ts";
+import { colourBlocks } from "../../profile/view.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
@@ -54,6 +56,7 @@ let {
   submit,
   max,
   textMax,
+  codeColours,
   enhance = () => undefined,
 }: {
   kind: Kind;
@@ -83,6 +86,8 @@ let {
   max: number;
   /** The README's maxlength (CardEditLimits text). */
   textMax?: number;
+  /** The page's code colouring limits (CardEditLimits codeColours): the preview colours what the page will. */
+  codeColours?: CodeColourLimits;
   enhance?: Enhance;
 } = $props();
 
@@ -202,22 +207,31 @@ async function addRow() {
 /**
  * The README editor's open tab, and what its preview shows: the field's text as the page will draw it, read when
  * Preview opens. The reader arrives with the first Preview, as the editor's own file does with the dialog (ADR 0069
- * split), so the page's first load carries no Markdown parser.
+ * split), so the page's first load carries no Markdown parser. The preview's code is plain at first and in the
+ * page's colours once its language has loaded. A read that an opening after it has overtaken shows nothing.
  */
 let tab = $state("write");
 let preview = $state.raw<{ readonly blocks: readonly Block[] } | "failed" | undefined>();
+let previewTurn = 0;
 async function showTab(value: string) {
   tab = value;
+  previewTurn += 1;
   if (value !== "preview") return;
+  const turn = previewTurn;
   const field = document.getElementById(formId)?.querySelector<HTMLTextAreaElement>('textarea[name="text"]');
   const text = field?.value ?? "";
   preview = undefined;
   try {
     const { parseReadme } = await import("../../profile/parse.ts");
-    preview = { blocks: parseReadme(text) };
+    const blocks = parseReadme(text);
+    if (turn !== previewTurn) return;
+    preview = { blocks };
+    if (codeColours === undefined) return;
+    const coloured = await colourBlocks(blocks, codeColourBudget(codeColours));
+    if (turn === previewTurn) preview = { blocks: coloured };
   } catch {
     // The reader's file did not arrive (a dropped connection): say so; the text is still on Write and still posts.
-    preview = "failed";
+    if (turn === previewTurn && preview === undefined) preview = "failed";
   }
 }
 const formId = $props.id();
