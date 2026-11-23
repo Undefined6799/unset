@@ -39,6 +39,16 @@
   --sidebar-accent: light-dark(#f7f5f6, #201f24);
   --sidebar-accent-foreground: light-dark(#0a090c, #f0edee);
   --sidebar-border: light-dark(#d6d2d4, #312f36);
+  /* Code colours (apps/web/lib/editor/code-colours.ts), for the page and the editor alike; each reads on --muted. */
+  --code-keyword: light-dark(#7a1fa2, #d7a6f2);
+  --code-string: light-dark(#1d6b2f, #9bd7a4);
+  --code-number: light-dark(#a04a00, #f2b77e);
+  --code-comment: light-dark(#5a575b, #a19ea2);
+  --code-type: light-dark(#0b5f8a, #8fcbea);
+  --code-function: light-dark(#2a4fb8, #a8bcf5);
+  --code-tag: light-dark(#a3143c, #f29bb3);
+  --code-attribute: light-dark(#6b4c00, #e6cf8a);
+  --code-invalid: light-dark(#b00020, #ff8a9a);
 }
 
 :root[data-theme="light"] {

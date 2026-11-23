@@ -2,6 +2,8 @@
 // fills its fields from `content`), and beside it what the card shows, built on the server: the README's blocks and
 // every address already through safeHref, so a component never decides whether a link is safe.
 
+import type { CodeRun } from "../editor/code-colours.ts";
+
 export type CardLayout = "list" | "carousel" | "grid";
 /** How the avatar is cropped (sh.unset.profile avatarShape). */
 export type AvatarShape = "round" | "roundedSquare";
@@ -55,7 +57,8 @@ export type Block =
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
-  | { readonly kind: "code"; readonly text: string }
+  /** `runs`: the code in colours, when its language is one CodeMirror knows (lib/editor/code-colours.ts). */
+  | { readonly kind: "code"; readonly text: string; readonly runs?: readonly CodeRun[] }
   | { readonly kind: "rule" }
   | {
       readonly kind: "table";

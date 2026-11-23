@@ -116,7 +116,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? cardViews(own.cards, own.versions) : [];
+  const cards = own.kind === "ok" ? await cardViews(own.cards, own.versions) : [];
   return {
     shell,
     account,

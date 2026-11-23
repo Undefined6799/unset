@@ -25,6 +25,7 @@ import type {
   Enhance,
   SubmitHandler,
 } from "../../profile/types.ts";
+import { colourBlocks } from "../../profile/view.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
@@ -210,6 +211,19 @@ function showTab(value: string) {
   tab = value;
 }
 const previewBlocks = $derived(tab === "preview" ? parseReadme(previewText) : []);
+// The preview's code in the page's colours once its language has loaded; plain until then.
+let colouredPreview = $state<Awaited<ReturnType<typeof colourBlocks>> | null>(null);
+$effect(() => {
+  const blocks = previewBlocks;
+  let current = true;
+  colouredPreview = null;
+  colourBlocks(blocks).then((coloured) => {
+    if (current) colouredPreview = coloured;
+  });
+  return () => {
+    current = false;
+  };
+});
 const formId = $props.id();
 /** The Text editor's dialog (P1.21u): wide on a desktop, the whole screen on a phone, by the stock Dialog's own classes. */
 const TEXT_DIALOG = "sm:max-w-3xl max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:rounded-none max-sm:border-0";
@@ -315,7 +329,7 @@ const buttonRows = $derived([
           <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
         </Tabs.Content>
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
-          {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={previewBlocks} />{/if}
+          {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={colouredPreview ?? previewBlocks} />{/if}
         </Tabs.Content>
       </Tabs.Root>
     {:else if kind === "readme"}

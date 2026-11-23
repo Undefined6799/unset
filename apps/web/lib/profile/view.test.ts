@@ -3,9 +3,9 @@
 import { describe, expect, test } from "vitest";
 import { cardViews, contactAction, shownCards } from "./view.ts";
 
-describe("card views", () => {
-  test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", () => {
-    const [card] = cardViews([
+describe("card views", async () => {
+  test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", async () => {
+    const [card] = await cardViews([
       {
         key: "k",
         width: "half",
@@ -29,9 +29,9 @@ describe("card views", () => {
     });
   });
 
-  test("a_card_carries_its_version_only_where_the_page_gave_one", () => {
+  test("a_card_carries_its_version_only_where_the_page_gave_one", async () => {
     const readme = { kind: "readme", text: "Hi" } as const;
-    const views = cardViews(
+    const views = await cardViews(
       [
         { key: "a", width: "full", content: readme },
         { key: "b", width: "full", content: readme },
@@ -39,14 +39,14 @@ describe("card views", () => {
       new Map([["a", "bafyv"]]),
     );
     expect(views.map((view) => view.version)).toEqual(["bafyv", undefined]);
-    expect("version" in (cardViews([{ key: "a", width: "full", content: readme }])[0] ?? {})).toBe(false);
+    expect("version" in ((await cardViews([{ key: "a", width: "full", content: readme }]))[0] ?? {})).toBe(false);
   });
 
   // Book P1.22h, rule SE-3: a page that edits nothing sends the browser what a card shows, never the record behind it.
-  test("a_card_for_a_page_that_edits_nothing_is_what_it_shows_and_no_more", () => {
+  test("a_card_for_a_page_that_edits_nothing_is_what_it_shows_and_no_more", async () => {
     const text = "Typed **as Markdown**";
     const [card] = shownCards(
-      cardViews(
+      await cardViews(
         [{ key: "k", width: "half", surface: "plain", content: { kind: "readme", text } }],
         new Map([["k", "v"]]),
       ),
@@ -56,8 +56,8 @@ describe("card views", () => {
     expect(JSON.stringify(card)).not.toContain(text);
   });
 
-  test("an_email_button_carries_its_address_and_a_link_button_none", () => {
-    const [card] = cardViews([
+  test("an_email_button_carries_its_address_and_a_link_button_none", async () => {
+    const [card] = await cardViews([
       {
         key: "k",
         width: "half",
@@ -84,13 +84,13 @@ describe("card views", () => {
   });
 });
 
-test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %s surface", (surface) => {
-  const [card] = cardViews([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
+test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %s surface", async (surface) => {
+  const [card] = await cardViews([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
   expect(card?.surface).toBe(surface);
 });
 
 // P1.21o: the header's About panel repeats the page's published contact action, never an account address.
-describe("contact action", () => {
+describe("contact action", async () => {
   const buttons = (key: string, list: readonly { uri: string; label: string }[]) => ({
     key,
     width: "full" as const,
@@ -102,8 +102,8 @@ describe("contact action", () => {
     },
   });
 
-  test("is the first button of the first Contact card", () => {
-    const cards = cardViews([
+  test("is the first button of the first Contact card", async () => {
+    const cards = await cardViews([
       { key: "t", width: "full", content: { kind: "readme", text: "Hi" } },
       buttons("a", [
         { uri: "https://cal.example/me", label: "Book a call" },
@@ -114,8 +114,10 @@ describe("contact action", () => {
     expect(contactAction(cards)).toEqual({ href: "https://cal.example/me", label: "Book a call" });
   });
 
-  test("is none with no Contact card, or one whose buttons have no safe address", () => {
-    expect(contactAction(cardViews([{ key: "t", width: "full", content: { kind: "readme", text: "Hi" } }]))).toBeNull();
-    expect(contactAction(cardViews([buttons("a", [{ uri: "javascript:alert(1)", label: "x" }])]))).toBeNull();
+  test("is none with no Contact card, or one whose buttons have no safe address", async () => {
+    expect(
+      contactAction(await cardViews([{ key: "t", width: "full", content: { kind: "readme", text: "Hi" } }])),
+    ).toBeNull();
+    expect(contactAction(await cardViews([buttons("a", [{ uri: "javascript:alert(1)", label: "x" }])]))).toBeNull();
   });
 });

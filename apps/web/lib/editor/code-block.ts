@@ -15,11 +15,10 @@
 // input's value, and the Copy button writes plain text to the clipboard.
 
 import { defaultKeymap } from "@codemirror/commands";
-import { HighlightStyle, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
+import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { Compartment } from "@codemirror/state";
 import { EditorView as CodeMirror, drawSelection, type KeyBinding, keymap, type ViewUpdate } from "@codemirror/view";
-import { tags } from "@lezer/highlight";
 import { codeBlockSchema } from "@milkdown/preset-commonmark";
 import { exitCode } from "@milkdown/prose/commands";
 import { redo, undo } from "@milkdown/prose/history";
@@ -27,6 +26,7 @@ import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView, NodeView } from "@milkdown/prose/view";
 import { $view } from "@milkdown/utils";
+import { CODE_COLOURS, codeHighlighter } from "./code-colours.ts";
 
 /** CodeMirror's look, drawn from the theme's colours (custom properties reach into the shadow root). */
 const look = CodeMirror.theme({
@@ -34,21 +34,10 @@ const look = CodeMirror.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-content": { fontFamily: "var(--font-mono)", lineHeight: "20px", caretColor: "var(--foreground)" },
   ".cm-scroller": { fontFamily: "inherit" },
+  // The page's code colours (code-colours.ts): each class drawn with its theme variable, as apps/web/app.css does.
+  ...Object.fromEntries(CODE_COLOURS.map(({ name }) => [`.code-${name}`, { color: `var(--code-${name})` }])),
+  ".code-comment": { color: "var(--code-comment)", fontStyle: "italic" },
 });
-
-// Code colours that read in both themes: light-dark() follows the page's color-scheme, which the shadow root inherits.
-// CodeMirror's defaultHighlightStyle is drawn for a light background only.
-const colours = HighlightStyle.define([
-  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], color: "light-dark(#7a1fa2, #d7a6f2)" },
-  { tag: [tags.string, tags.regexp, tags.special(tags.string)], color: "light-dark(#1d6b2f, #9bd7a4)" },
-  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: "light-dark(#a04a00, #f2b77e)" },
-  { tag: [tags.comment, tags.meta], color: "light-dark(#5a575b, #a19ea2)", fontStyle: "italic" },
-  { tag: [tags.typeName, tags.className, tags.namespace], color: "light-dark(#0b5f8a, #8fcbea)" },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: "light-dark(#2a4fb8, #a8bcf5)" },
-  { tag: [tags.tagName, tags.angleBracket], color: "light-dark(#a3143c, #f29bb3)" },
-  { tag: [tags.attributeName, tags.propertyName], color: "light-dark(#6b4c00, #e6cf8a)" },
-  { tag: tags.invalid, color: "light-dark(#b00020, #ff8a9a)" },
-]);
 
 class CodeBlockView implements NodeView {
   readonly dom: HTMLElement;
@@ -78,7 +67,7 @@ class CodeBlockView implements NodeView {
       extensions: [
         keymap.of([...this.codeMirrorKeymap(), ...defaultKeymap]),
         drawSelection(),
-        syntaxHighlighting(colours),
+        syntaxHighlighting(codeHighlighter),
         CodeMirror.lineWrapping,
         look,
         this.language.of([]),

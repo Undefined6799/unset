@@ -3,9 +3,19 @@
 // dropped unsafe ones (two layers for the output every visitor will see). Runs on the server; the components only
 // render what this returns.
 import { safeHref } from "@unset/shared-safe-href";
+import { colourCode } from "../editor/code-colours.ts";
 import { CARD_TEXT } from "./messages.ts";
-import { parseReadme } from "./parse.ts";
-import type { CardContent, CardShown, CardSurface, CardView, CardWidth, ShownButton, ShownCard } from "./types.ts";
+import { type Block as ParsedBlock, parseReadme } from "./parse.ts";
+import type {
+  Block,
+  CardContent,
+  CardShown,
+  CardSurface,
+  CardView,
+  CardWidth,
+  ShownButton,
+  ShownCard,
+} from "./types.ts";
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 
@@ -47,10 +57,20 @@ function shownButtons(buttons: Buttons): ShownButton[] {
   return shown;
 }
 
-function shownOf(content: CardContent): CardShown {
+/** README blocks as a card shows them: code in colours where its language is known, the language itself dropped. */
+export const colourBlocks = (blocks: readonly ParsedBlock[]): Promise<Block[]> =>
+  Promise.all(
+    blocks.map(async (block): Promise<Block> => {
+      if (block.kind !== "code") return block;
+      const runs = await colourCode(block.text, block.language);
+      return runs === null ? { kind: "code", text: block.text } : { kind: "code", text: block.text, runs };
+    }),
+  );
+
+async function shownOf(content: CardContent): Promise<CardShown> {
   switch (content.kind) {
     case "readme":
-      return { kind: "readme", blocks: parseReadme(content.text) };
+      return { kind: "readme", blocks: await colourBlocks(parseReadme(content.text)) };
     case "links":
       return {
         kind: "links",
@@ -96,12 +116,14 @@ export const cardViews = (
     readonly content: CardContent;
   }[],
   versions?: ReadonlyMap<string, string>,
-): CardView[] =>
-  cards.map(({ key, width, surface = "filled", content }) => {
-    const version = versions?.get(key);
-    const shown = { key, width, surface, content, shown: shownOf(content) };
-    return version === undefined ? shown : { ...shown, version };
-  });
+): Promise<CardView[]> =>
+  Promise.all(
+    cards.map(async ({ key, width, surface = "filled", content }) => {
+      const version = versions?.get(key);
+      const shown = { key, width, surface, content, shown: await shownOf(content) };
+      return version === undefined ? shown : { ...shown, version };
+    }),
+  );
 
 /**
  * The cards for a page that edits nothing (the public profile): what each shows, without `content`, which only the

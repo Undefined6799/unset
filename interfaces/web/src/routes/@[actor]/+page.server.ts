@@ -79,7 +79,7 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
   // What each card shows and no more (rule SE-3): the record's own fields are for the owner's editors, and this load's
   // whole result is sent to the viewer, at the page's data address too (book P1.22h).
   const cards =
-    owner === null ? [] : shownCards(cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX)));
+    owner === null ? [] : shownCards(await cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX)));
   return {
     shell: listed ? LISTED_SHELL : SHELL,
     // What search results and link previews show: only what the page itself shows, or the member's own overrides. A
