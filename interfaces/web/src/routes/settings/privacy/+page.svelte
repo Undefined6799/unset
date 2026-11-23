@@ -5,14 +5,14 @@
 -->
 <script lang="ts">
 import PrivacyForm from "@unset/apps-web/lib/components/settings/privacy-form.svelte";
-import type { ProfileVisibility } from "@unset/apps-web/lib/profile/types.ts";
+import type { PageVisibility } from "@unset/apps-web/lib/profile/types.ts";
 import { SETTINGS } from "@unset/apps-web/lib/settings/messages.ts";
 
 let {
   data,
 }: {
   data: {
-    visibility: ProfileVisibility | "noProfile" | "unreadable";
+    visibility: PageVisibility | "noProfile" | "unreadable";
     discoverability: { searchEngines: boolean; aiSearch: boolean; title: string; description: string };
     limits: { title: number; description: number };
     page: { url: string; name: string; headline: string; letter: string };

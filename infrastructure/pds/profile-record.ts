@@ -13,7 +13,7 @@ import {
 
 export const PROFILE_COLLECTION = "sh.unset.profile";
 export const PROFILE_RKEY = "self";
-const PROFILE = { collection: PROFILE_COLLECTION, rkey: PROFILE_RKEY } as const;
+export const PROFILE = { collection: PROFILE_COLLECTION, rkey: PROFILE_RKEY } as const;
 
 export function loadProfileRecord(
   pdsCall: PdsCall,

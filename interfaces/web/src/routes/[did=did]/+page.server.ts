@@ -22,6 +22,7 @@ import {
 import {
   latestCommit,
   listCardRecords,
+  loadPageRecord,
   loadProfileRecord,
   newCardKey,
   saveCardRecord,
@@ -33,6 +34,7 @@ import {
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
+import { ALLOW_PATH } from "../../lib/server/pds-failure.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
@@ -98,6 +100,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     accountView(services(), did, locals.issuerOrigin, locals.deadline),
     loadOwnProfile(owner, {
       profile: () => loadProfileRecord(pdsCall, ctx, did),
+      page: () => loadPageRecord(pdsCall, ctx, did),
       cards: () => listCardRecords(pdsCall, ctx, did),
     }),
   ]);
@@ -150,6 +153,7 @@ function writesFor(did: Did, locals: App.Locals) {
     list: () => listCardRecords(pdsCall, ctx, did),
     head: () => latestCommit(pdsCall, ctx, did),
     profile: () => loadProfileRecord(pdsCall, ctx, did),
+    page: () => loadPageRecord(pdsCall, ctx, did),
     newKey: () => newCardKey() as CardKey,
     write: (change, swapCommit) => writeCardAndList(pdsCall, ctx, did, change, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
@@ -306,6 +310,11 @@ async function write(
   } catch (cause) {
     if (!(cause instanceof AppError) || !isShown(cause.code)) throw cause;
     return refused(cause.code, { values: typed });
+  }
+  // A card editor's write the grant does not cover keeps the editor open with every field as typed and links to /allow
+  // in a new tab (card-editor.svelte), so nothing is lost while the member allows access; the other writes go there.
+  if (written.kind === "redirect" && echo && written.location === ALLOW_PATH) {
+    return refused("card.scope_missing", { values: typed });
   }
   if (written.kind === "redirect") redirect(303, written.location);
   if (written.kind === "failed") {

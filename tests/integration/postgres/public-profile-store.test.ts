@@ -39,7 +39,7 @@ const HIDDEN = [INACTIVE, DELISTED, SUSPENDED, NO_PROFILE];
 
 const store = () => createPublicProfileStore(web);
 
-/** An account row, its profile unless `profile` is false, and one card. */
+/** An account row, its profile unless `profile` is false, its main page (ADR 0091) and one card. */
 function account(did: string, handle: string, opts: { active?: boolean; status?: string; profile?: boolean } = {}) {
   const { active = true, status = "verified", profile = true } = opts;
   const profileRow = `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
@@ -49,6 +49,8 @@ function account(did: string, handle: string, opts: { active?: boolean; status?:
     `INSERT INTO idx.account (did, handle, handle_status, pds_active, updated_at)
        VALUES ('${did}', '${handle}', '${status}', ${active}, now());
      ${profile ? profileRow : ""}
+     INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', '{"cards":[]}', now());
      INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
        VALUES ('at://${did}/sh.unset.card/3k', '${did}', '3k', 'cid-s', '3l', '{"type":"x"}', 0, now());`,
   );
@@ -97,6 +99,7 @@ describe("public profile store", () => {
       handle: "alice.unset.test",
       cid: "cid-p",
       record: { displayName: "N" },
+      page: { cards: [] },
       sections: [{ key: "3k", cid: "cid-s", value: { type: "x" } }],
       discoverability: { searchEngines: false, aiSearch: false, title: "", description: "" },
     });
@@ -118,7 +121,7 @@ describe("public profile store", () => {
   test("web_sees_no_hidden_row_in_the_views", async () => {
     const dids = await withClient(web, null, (c) =>
       c.query<{ did: string }>(
-        "SELECT did FROM idx.public_profile UNION SELECT did FROM idx.public_section ORDER BY did",
+        "SELECT did FROM idx.public_profile UNION SELECT did FROM idx.public_section UNION SELECT did FROM idx.public_page ORDER BY did",
       ),
     );
     expect(dids.rows.map((r) => r.did)).toEqual([SHOWN, UNVERIFIED]);
@@ -157,13 +160,11 @@ describe("public profile store", () => {
     expect(await store().listed("searchEngines", 1, null)).toHaveLength(1);
   });
 
-  // ADR 0078: a page shown to fewer than everyone is never listed, whatever its switches say; unknown fails closed.
+  // ADR 0078: a page shown to fewer than everyone is never listed, whatever its switches say; unknown fails closed. The
+  // choice is the main page's (ADR 0091), and one left on the profile by the older shape no longer counts.
   test("a_page_that_is_not_public_is_never_listed", async () => {
     const setVisibility = (value: string) =>
-      postgres.sql(
-        "unset",
-        `UPDATE idx.profile SET record = record || '{"visibility":${value}}' WHERE did = '${SHOWN}'`,
-      );
+      postgres.sql("unset", `UPDATE idx.page SET record = record || '{"visibility":${value}}' WHERE did = '${SHOWN}'`);
     for (const value of ['"signed-in"', '"owner-only"', '"friends"', "null"]) {
       setVisibility(value);
       expect(await store().listed("searchEngines", 10, null), value).toEqual([{ did: UNVERIFIED, handle: null }]);
@@ -171,7 +172,23 @@ describe("public profile store", () => {
     }
     setVisibility('"public"');
     expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
+    postgres.sql("unset", `UPDATE idx.page SET record = record - 'visibility' WHERE did = '${SHOWN}'`);
+    postgres.sql(
+      "unset",
+      `UPDATE idx.profile SET record = record || '{"visibility":"owner-only"}' WHERE did = '${SHOWN}'`,
+    );
+    expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
     postgres.sql("unset", `UPDATE idx.profile SET record = record - 'visibility' WHERE did = '${SHOWN}'`);
+  });
+
+  test("an_account_with_no_main_page_has_made_no_choice_and_is_listed", async () => {
+    postgres.sql("unset", `DELETE FROM idx.page WHERE did = '${SHOWN}'`);
+    expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
+    postgres.sql(
+      "unset",
+      `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${SHOWN}', 'at://${SHOWN}/sh.unset.page/self', 'cid-g', '3l', '{"cards":[]}', now())`,
+    );
   });
 
   test("all_off_keeps_no_row", async () => {

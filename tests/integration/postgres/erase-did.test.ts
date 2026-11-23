@@ -68,6 +68,8 @@ function seedIndex(did: string): void {
      INSERT INTO idx.account_job (did, kind, due_at, first_queued_at) VALUES ('${did}', 'backfill', now(), now());
      INSERT INTO idx.profile (did, uri, cid, rev, record, discoverable, indexed_at)
        VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'bafyprofile', '3kaaaaaaaaaaa', '{}', true, now());
+     INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'bafypage', '3kaaaaaaaaaaa', '{}', now());
      INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
        VALUES ('${uri}', '${did}', '3kaaaaaaaaaaa', 'bafysection', '3kaaaaaaaaaaa', '{}', now());
      INSERT INTO idx.record_blob (uri, cid, did, mime, size) VALUES ('${uri}', 'bafyblob', '${did}', 'image/png', 1);

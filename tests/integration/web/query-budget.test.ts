@@ -24,10 +24,19 @@ import { readyMember } from "./members.ts";
 
 const BUDGET = 5;
 /**
- * The owner's page runs 6: the session, the account row, then the sealed grant read once to restore the OAuth session
- * and once more inside the restore lock for each of the page's PDS calls (measured 2026-11-18 on k2).
+ * The owner's page runs 7: the session, the account row, then the sealed grant read once to restore the OAuth session
+ * and once more inside the restore lock for each of the page's PDS calls (measured 2026-11-18 on k2). It was 6 until
+ * the main page became its own record (ADR 0091), a third PDS read after the profile and before the cards (CI run on
+ * #1952, 2026-11-21).
  */
-const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 6 };
+/**
+ * Settings › Privacy runs 6 (CI run on #1952, 2026-11-21). It was 5 until who sees the page moved to the main page
+ * record (ADR 0091): the page is read with the profile in one PDS call (loadProfileAndPage), which took it from 7 back
+ * to 6, and the second PDS request adds the one statement over the budget. Reading the choice from the index instead
+ * would keep 5, but the screen would then show the old choice while the index catches up after a save, and Public for
+ * an account the index does not have yet; the PDS record is what the member edits, so the read stays there.
+ */
+const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 7, "/settings/privacy": 6 };
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const ROUTES = join(REPO, "interfaces", "web", "src", "routes");
 const provided = inject("postgres");

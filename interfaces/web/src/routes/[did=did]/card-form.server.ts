@@ -125,8 +125,8 @@ export function readCardForm(form: URLSearchParams): {
   return { body, fieldName };
 }
 
-/** The most cards one Save carries: every card a page shows (LIMITS.profile.cardsMax). */
-const SAVE_CARDS_MAX = LIMITS.profile.cardsMax;
+/** The most cards one Save carries: every card a page shows (LIMITS.page.cardsMax). */
+const SAVE_CARDS_MAX = LIMITS.page.cardsMax;
 /** Each card's form, with its `key` and `version`. */
 const SAVE_FIELDS_MAX = SAVE_CARDS_MAX * (CARD_FORM_MAX_FIELDS + 2);
 const CARD_FIELD = /^cards\.(0|[1-9][0-9]*)\.(.+)$/;
