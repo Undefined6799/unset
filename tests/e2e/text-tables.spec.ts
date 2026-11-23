@@ -38,6 +38,10 @@ async function markdown(page: Page, word: string): Promise<string> {
 
 async function discardAndRemove(page: Page, word: string) {
   await page.locator("[data-unsaved-bar]").getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+}
+
+async function removeCard(page: Page, word: string) {
   const card = page.locator('[data-slot="card"]', { hasText: word });
   await card.getByRole("button", { name: /^More for / }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
@@ -185,20 +189,27 @@ test("a_cancelled_drag_or_a_press_in_the_menu_moves_nothing", async ({ page }) =
   await expect(line).toBeHidden();
   await expect(editor.locator("tr").nth(1)).toHaveText("12");
   await expect(editor.locator("tr").nth(2)).toHaveText("34");
-  // The second data row's menu: a press on Add row below that slides up over the first row adds a row, moving none.
-  await editor.getByRole("cell", { name: "3", exact: true }).hover();
-  await row.click();
-  const item = page.getByRole("menu", { name: "Row options" }).getByRole("menuitem", { name: "Add row below" });
+  // The second data row's menu: a press on Add row below that slides up over the first row moves no row.
+  // The test's own mouse release after the synthetic cancel is a click, which may have opened the menu already.
+  const menu = page.getByRole("menu", { name: "Row options" });
+  if (!(await menu.isVisible())) {
+    await editor.getByRole("cell", { name: "3", exact: true }).hover();
+    await row.click();
+  }
+  const item = menu.getByRole("menuitem", { name: "Add row below" });
   const box = await item.boundingBox();
   if (box === null) throw new Error("no box");
   await page.mouse.move(box.x + 8, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.move(box.x + 8, first.y + 2, { steps: 6 });
+  await expect(line).toBeHidden();
   await page.mouse.up();
-  await expect(editor.locator("tr")).toHaveCount(4);
+  await expect(editor.locator("tr")).toHaveCount(3);
   await expect(editor.locator("tr").nth(1)).toHaveText("12");
   await expect(editor.locator("tr").nth(2)).toHaveText("34");
-  await discardAndRemove(page, word);
+  // Nothing changed, so there is nothing to discard.
+  await expect(page.locator("[data-unsaved-bar]")).toBeHidden();
+  await removeCard(page, word);
 });
 
 // Codex on #1992: the tools follow the table as the words before it change, and a keyboard reaches them. Alt+F10
