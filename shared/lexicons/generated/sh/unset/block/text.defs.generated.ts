@@ -16,7 +16,7 @@ type Main = {
   $type?: "sh.unset.block.text";
 
   /**
-   * Markdown: CommonMark, which readers may extend with common syntax such as GFM tables, task lists and strikethrough. Syntax a reader does not support is shown as plain text. Readers never render raw HTML and keep only http and https links. Each reader chooses how to show a picture in the text, for example as a link, or loaded through its own proxy so the address never learns who reads it.
+   * Markdown: CommonMark, which readers may extend with common syntax such as GFM tables, task lists and strikethrough. Syntax a reader does not support is shown as plain text. Readers never render raw HTML and keep only http and https links. Code blocks are text too: a reader shows a code block's contents, and its language name if it shows it, only as escaped text, and never runs or evaluates them or fetches anything they name. An unknown or malformed language name shows the block as plain code. Each reader chooses how to show a picture in the text, for example as a link, or loaded through its own proxy so the address never learns who reads it.
    */
   text: string;
 
