@@ -357,6 +357,36 @@ test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
   await discardAndRemove(page, word);
 });
 
+// Codex on #1965 at 8acb2f1: Enter breaks a line inside its block, and the page shows no break inside a list item
+// (milkdown.ts pageShapes), so a block with broken lines turned into a list becomes one item a line; before, the list
+// was refused and a quote lost its formatting on the way.
+test("the_dots_turn_broken_lines_into_one_list_item_each", async ({ page }) => {
+  const word = `broken${Date.now()}`;
+  const { card, editor } = await cardWithCaret(
+    page,
+    word,
+    `${word} one\\\nline two\n\n> quoted\\\n> again\n\nto do\\\nto do too`,
+  );
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator(":scope > p").first().hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Bullet list" }).click();
+  await expect(editor.locator("ul li")).toHaveText([`${word} one`, "line two"]);
+  await editor.locator("blockquote").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Ordered list" }).click();
+  await expect(editor.locator("blockquote")).toHaveCount(0);
+  await expect(editor.locator("ol li")).toHaveText(["quoted", "again"]);
+  await editor.locator(":scope > p").last().hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Task list" }).click();
+  await expect(editor.locator('li[data-item-type="task"][data-checked="false"]')).toHaveText(["to do", "to do too"]);
+  await expect(editor.locator("[data-type='hardbreak'], br")).toHaveCount(0);
+  await discardAndRemove(page, word);
+});
+
 // A heading or a code block the dots turn into a quote or a list becomes its words first: a quote holds only
 // paragraphs on the page (milkdown.ts pageShapes), so wrapping the block as it is would be refused (Codex on #1965).
 test("the_dots_turn_a_heading_or_code_block_into_a_quote_or_list", async ({ page }) => {

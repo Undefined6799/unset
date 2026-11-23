@@ -35,6 +35,7 @@ import { findParent, posToDOMRect } from "@milkdown/prose";
 import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
 import type { NodeType, Node as ProseNode } from "@milkdown/prose/model";
+import { wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection } from "@milkdown/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
@@ -132,6 +133,47 @@ function unwrapBlock(view: EditorView) {
   const tr = view.state.tr.replaceWith(start, start + block.nodeSize, lines);
   const end = start + lines.reduce((size, line) => size + line.nodeSize, 0);
   view.dispatch(tr.setSelection(TextSelection.create(tr.doc, start + 1, end - 1)));
+}
+
+/** The items the page shows as lists: a list item holds no line break there (milkdown.ts pageShapes). */
+const LISTS: ReadonlySet<BlockItem> = new Set(["bullets", "numbers", "tasks"]);
+
+/**
+ * Splits each line break in the selected blocks into a block of its own and selects them all, so a list made of them
+ * has one item a line (Codex on #1965 at 8acb2f1): Enter breaks a line inside its block, and a list item holding the
+ * break would be refused, a quote already taken apart by then.
+ */
+function splitBreaks(view: EditorView) {
+  const { $from, $to } = view.state.selection;
+  const start = $from.before(1);
+  const end = $to.after(1);
+  const breaks: number[] = [];
+  view.state.doc.nodesBetween(start, end, (node, pos) => {
+    if (node.type.name === "hardbreak") breaks.push(pos);
+  });
+  if (breaks.length === 0) return;
+  const tr = view.state.tr;
+  for (const pos of breaks.reverse()) tr.delete(pos, pos + 1).split(pos);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, start + 1, tr.mapping.map(end) - 1)));
+}
+
+/**
+ * Turns the selected lines into a list of one item each. wrapInBlockTypeCommand wraps the whole range in one item
+ * (prosemirror-transform findWrapping); prosemirror-schema-list 1.6.0 wrapInList splits it into an item a block
+ * (dist/index.js doWrapInList). A task list is a bullet list whose items are unchecked (preset-gfm's task item).
+ */
+function listLines(ctx: Ctx, view: EditorView, item: BlockItem) {
+  splitBreaks(view);
+  const list = item === "numbers" ? orderedListSchema.type(ctx) : bulletListSchema.type(ctx);
+  if (!wrapInList(list)(view.state, view.dispatch)) return;
+  if (item !== "tasks") return;
+  const { $from } = view.state.selection;
+  const start = $from.before(1);
+  const tr = view.state.tr;
+  $from.node(1).forEach((child, offset) => {
+    tr.setNodeMarkup(start + 1 + offset, undefined, { ...child.attrs, checked: false });
+  });
+  view.dispatch(tr);
 }
 
 function blockCommand(ctx: Ctx, item: BlockItem): () => void {
@@ -328,7 +370,8 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
       unwrapBlock(view);
       if (WRAPS.has(item)) blockCommand(ctx, "text")();
     }
-    blockCommand(ctx, item)();
+    if (!typed && LISTS.has(item)) listLines(ctx, view, item);
+    else blockCommand(ctx, item)();
     if (!typed)
       view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, view.state.selection.to)));
     view.focus();
