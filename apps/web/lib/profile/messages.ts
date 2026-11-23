@@ -20,6 +20,9 @@ export const CARD_TEXT = {
   /** A carousel's buttons, which scroll it by one tile. */
   previous: (title: string) => `Previous in ${title || "Entries"}`,
   next: (title: string) => `Next in ${title || "Entries"}`,
+  /** A code block's button, drawn only with script; the name says what it copies, the button shows "Copy". */
+  copy: "Copy",
+  copyCode: "Copy code",
 } as const;
 
 /** The single Add picker (the profile-card mockup). */
