@@ -125,7 +125,7 @@ function react(key: QuickReaction) {
     </blockquote>
   {/if}
   {#if message.kind === "text"}
-    <p class="bg-muted rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap">{message.text}</p>
+    <p class={["rounded-md px-3 py-2 text-left text-sm break-words whitespace-pre-wrap", message.mine ? "bg-primary text-primary-foreground" : "bg-muted"]}>{message.text}</p>
   {:else if message.kind === "deleted"}
     <p class="text-muted-foreground text-sm italic" data-deleted>Message deleted</p>
   {:else}
