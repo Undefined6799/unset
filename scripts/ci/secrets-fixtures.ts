@@ -1,7 +1,7 @@
-// Proves the CI `secrets` job's scan scope and its one public-key exception on planted fixtures (P0.07a; ruling
-// 2026-10-06 secrets-scan-scope-and-public-keys). Runs in the `secrets` job, not in Vitest, because it needs the
-// gitleaks CLI. Every secret-shaped value is built here at run time and written only to a temporary directory, so
-// nothing secret-shaped is ever committed.
+// Proves the CI `secrets` job's scan scope, its one public-key exception (P0.07a; ruling 2026-10-06
+// secrets-scan-scope-and-public-keys) and the reach of an accepted finding (P0.07o) on planted fixtures. Runs in the
+// `secrets` job, not in Vitest, because it needs the gitleaks CLI. Every secret-shaped value is built here at run time
+// and written only to a temporary directory, so nothing secret-shaped is ever committed.
 //
 // Scope cases use a throwaway repository with a `main`, a pull request branch and an unrelated branch, and run the
 // two scan forms ci.yml uses: `git --log-opts=<base>..<head>` (a pull request's own commits) and `git` alone (the
@@ -136,8 +136,20 @@ function scopeRepo(work: string, prText: string, otherText: string): { base: str
   return { base, head };
 }
 
-const canary = (): string => `UNSET_CANARY_${pick("canary", ALNUM, 32)}`;
+const canary = (label = "canary"): string => `UNSET_CANARY_${pick(label, ALNUM, 32)}`;
 const prRange = (r: { base: string; head: string }): string[] => ["git", `--log-opts=${r.base}..${r.head}`, "."];
+
+/**
+ * Two commits put a different canary on the same line of the same file; the ignore file names the first commit's
+ * finding as `commit:file:rule:line`, the form .github/.gitleaksignore uses (P0.07o). The second must still be found.
+ */
+function oneCommitIgnored(work: string): Outcome {
+  git(work, "init", "-q", "-b", "main");
+  const first = commit(work, "key.ts", assigned(canary("first")), "first");
+  commit(work, "key.ts", assigned(canary("second")), "second");
+  writeFileSync(join(work, ".fixture-ignore"), `${first}:key.ts:unset-canary:1\n`);
+  return gitleaks(work, ["git", "--gitleaks-ignore-path", ".fixture-ignore", "."]);
+}
 
 /** A `dir` scan of one file holding `text`. */
 const content =
@@ -182,6 +194,7 @@ export const CASES: Case[] = [
     expect: ["unset-canary"],
     run: (work) => (scopeRepo(work, "clean\n", assigned(canary())), gitleaks(work, ["git", "."])),
   },
+  { name: "commit_fingerprint_hides_one_commit_only", expect: ["unset-canary"], run: oneCommitIgnored },
   { name: "public_did_key_vectors_pass", expect: [], run: (work) => content(publicVectors())(work) },
   {
     name: "public_vectors_fail_without_exception",
