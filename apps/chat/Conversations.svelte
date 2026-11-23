@@ -143,17 +143,20 @@ function leaveDraft() {
     {/if}
   </button>
 {:else if open !== null && dock?.mode !== "list"}
-  <Conversation
-    {conversations}
-    {names}
-    id={open}
-    typed={composerOnOpen(open, unsent, carried).text}
-    unsent={composerOnOpen(open, unsent, carried).failed}
-    onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
-    controls={dock === undefined ? undefined : conversationControls}
-    drafts={unsent}
-    inFlight={sending}
-  />
+  <!-- One composer per conversation: its state (its own id, draft, sending) starts again when another opens. -->
+  {#key open}
+    <Conversation
+      {conversations}
+      {names}
+      id={open}
+      typed={composerOnOpen(open, unsent, carried).text}
+      unsent={composerOnOpen(open, unsent, carried).failed}
+      onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
+      controls={dock === undefined ? undefined : conversationControls}
+      drafts={unsent}
+      inFlight={sending}
+    />
+  {/key}
 {:else if draft !== null && dock?.mode !== "list"}
   <section class="flex flex-col gap-4" data-screen="new-conversation">
     <div class="flex items-center gap-2">
