@@ -40,5 +40,11 @@
     "origin": "upstream",
     "upstreamSource": "docker.io/fosrl/newt:1.20.0@sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e",
     "verify": "cosign-keyless"
+  },
+  "mas": {
+    "ref": "ghcr.io/undefined6799/mirror/matrix-authentication-service@sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
+    "origin": "upstream",
+    "upstreamSource": "ghcr.io/element-hq/matrix-authentication-service:1.29.0@sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
+    "verify": "cosign-keyless"
   }
 }

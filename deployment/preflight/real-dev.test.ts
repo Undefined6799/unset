@@ -146,11 +146,12 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   test("preflight_passes_the_real_dev_file", async () => {
     const result = await preflight(args, deps);
     expect(result.lines.filter((line) => !line.startsWith("PASS "))).toEqual([]);
-    // Six first-party images (the PDS recipe joined them at P2.24y, objects at P2.18s) and newt the one upstream. While
+    // Six first-party images (the PDS recipe joined them at P2.24y, objects at P2.18s); newt and MAS (P6.02, for the
+    // source stack's chat) the two upstream. While
     // the count was 5 it equalled a configured value, so C3's reason was withheld (preflight/index.ts withheldIfValued);
     // at 6 it reads plainly, and the whole line is pinned.
     expect(result.lines).toContain("PASS C3 6 first-party images verified");
-    expect(result.lines).toContain("PASS C4 1 upstream images verified");
+    expect(result.lines).toContain("PASS C4 2 upstream images verified");
     // Waived under --env dev without a retirement report; only the verdict is pinned, not the reason text.
     expect(result.lines.filter((line) => line.startsWith("PASS C21"))).toHaveLength(1);
     expect(result.code).toBe(0);

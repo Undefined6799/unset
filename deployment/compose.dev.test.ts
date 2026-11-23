@@ -209,17 +209,17 @@ describe("compose.dev.yaml (P1.29)", () => {
 
   test("compose_dev_images_by_digest", () => {
     // P2.26b: the dev stack builds nothing; each service runs exactly the deploy lock's entry of its name, by digest,
-    // and the lock names nothing the stack does not run.
+    // and the lock names nothing a dev stack does not run. The source stack's one chat service run as shipped, MAS
+    // (ADR 0098 Decision 1), is locked too, as C2 admits it under --source only by a deploy-lock digest.
     const deploy = readDeployLock();
-    for (const s of dev().services) {
+    const runAsShipped = parseCompose(read(SOURCE_FILE), SOURCE_FILE).services.filter(
+      (s) => CHAT_SERVICES.has(s.name) && s.build === null,
+    );
+    for (const s of [...dev().services, ...runAsShipped]) {
       expect([s.build, s.image], s.name).toEqual([null, deploy[s.name]?.ref]);
       expect(s.image, s.name).toMatch(/^ghcr\.io\/undefined6799\/(?:unset|mirror)\/[a-z0-9-]+@sha256:[0-9a-f]{64}$/);
     }
-    expect(Object.keys(deploy).sort()).toEqual(
-      dev()
-        .services.map((s) => s.name)
-        .sort(),
-    );
+    expect(Object.keys(deploy).sort()).toEqual([...dev().services, ...runAsShipped].map((s) => s.name).sort());
     // A mirror entry keeps its upstream digest (mirror.yml copies by digest) and names the base lock's upstream image.
     const bases = new Set(Object.values(readLock()).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
     for (const [name, entry] of Object.entries(deploy).filter(([, e]) => e.origin === "upstream")) {

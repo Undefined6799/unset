@@ -206,6 +206,17 @@ describe("compose.dev.source.yaml against compose.dev.yaml (P1.37y)", () => {
     }
   });
 
+  test("source_images_are_in_the_deploy_lock", () => {
+    // C2 under --source admits a service that names an image only by a deploy-lock digest, so MAS (the one chat
+    // service run as shipped, ADR 0098 Decision 1) needs its mirror entry there or `dev:source:up` refuses it.
+    const lock = JSON.parse(read("images.lock.json")) as Record<string, { ref: string }>;
+    const locked = new Set(Object.values(lock).map((entry) => entry.ref));
+    const unlocked = parse(SOURCE)
+      .services.filter((s) => s.build === null && s.image !== null && !locked.has(s.image))
+      .map((s) => s.name);
+    expect(unlocked).toEqual([]);
+  });
+
   test("source_file_names_its_step_and_record", () => {
     const header = read(SOURCE).split("\n").slice(0, 5).join("\n");
     expect(header).toContain("P1.37y");
