@@ -20,6 +20,15 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text);
 /** The block's code as stored: a coloured block carries only its runs, which join back to it (code-colours.ts). */
 const codeText = (block: { readonly text: string } | { readonly runs: readonly { readonly text: string }[] }) =>
   "runs" in block ? block.runs.map((run) => run.text).join("") : block.text;
+/** A task's words as plain text, its checkbox's accessible name (WCAG 2.2 SC 4.1.2). */
+const plainText = (nodes: readonly Inline[]): string =>
+  nodes
+    .map((node) => {
+      if (node.kind === "text" || node.kind === "code") return node.text;
+      if (node.kind === "break") return " ";
+      return plainText(node.children);
+    })
+    .join("");
 // Six levels under the page's h1: # is an h2, and HTML stops at h6, so ##### and ###### share it.
 const HEADINGS = ["h2", "h3", "h4", "h5", "h6", "h6"] as const;
 // The playground's six steps (Crepe 7.23.0 theme/common/reset.css: 2.625em down to 1.125em), on the theme's type
@@ -56,6 +65,7 @@ const HEADING_LOOK = [
         type="checkbox"
         class="me-1.5 size-3.5 align-middle accent-primary"
         checked={entry.task === "done"}
+        aria-label={plainText(entry.text).trim() || undefined}
         disabled
       />{/if}{@render inline(entry.text)}{#each entry.lists as sub, k (k)}{@render list(sub)}{/each}</li
   >
