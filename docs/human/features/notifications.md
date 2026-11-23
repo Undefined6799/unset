@@ -40,8 +40,10 @@ The list, the detail, the badge and dismissing do not change. Removing a source 
   off is lifted over the detail after the pointer rests on it. On a phone the detail is its own screen.
 - The bell counts the entries waiting, up to "9+", and its rows link to their detail.
 - The count is of entries not yet seen: opening the bell or the page marks what it showed seen on every browser of the
-  member (ADR 0085, ADR 0090). A sign-in alert is the exception: each browser signed in before it counts it until that
-  browser has shown it, so whoever signed in cannot clear it anywhere.
+  member (ADR 0085, ADR 0090). A sign-in alert is seen everywhere once any browser signed in before it has shown it
+  (ADR 0108); the browser that signed in never sees its own alert, so it cannot clear it.
+- On a page that runs no script (home, a profile, the legal pages) the bell is a link to `/notifications`, whose visit
+  marks the list seen; only pages with script open the bell's panel (ADR 0108).
 - Every entry is deleted 30 days after it was sent, dismissed or not (web's sweep). No text a person typed is stored.
 - The bell's data comes with each page; there is no polling. Times show in UTC with no script and in the device's
   zone with it.

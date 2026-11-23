@@ -32,8 +32,11 @@ bearer-credential store. It moved here from the [[postgres]] package in P2.03c.
 - The session read brings the bell with it: the newest entries through `app.inbox`, each with `seen`: this
   browser's own mark (`app.session.notifications_seen_at`, migration 0039, ADR 0085) covers it, or the account's
   (`app.account.notifications_seen_at`, migration 0041, ADR 0090) does and it is not a sign-in alert
-  (`older_sessions_only`). So one look clears every browser's badge except for a sign-in alert, which each browser
-  clears for itself.
+  (`older_sessions_only`), or it is a sign-in alert whose own mark (`app.notification.seen_at`, migration 0043, ADR
+  0108) a browser signed in before it has set. So one look clears every browser's badge; the browser a sign-in is
+  about never sees that alert, so it cannot clear it.
+- Only pages in the CSP group `app` draw the bell's panel (`bellOpens`, +layout.server.ts); elsewhere the bell is a
+  link to `/notifications`, because a page with no script cannot post the mark (ADR 0108 point 3).
 - It never imports the driver or [[postgres]]: the composition root in [[web]] passes postgres's `withClient` over
   the web pool as `withDb`.
 
