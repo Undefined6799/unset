@@ -253,8 +253,11 @@ describe("licence", () => {
     ]);
   });
 
-  // The bound is about 3x the measured run (0.44 s on npm 11.19.1, down from 2.4 s with one npm ls per workspace).
-  test("repository_has_no_conflicts", { timeout: 1_500 }, () => {
+  // One `npm ls` over every workspace (it was 2.4 s with one call per workspace). On npm 11.20.0 the test took 0.7 to
+  // 0.8 s on an idle 4-core machine and 1.1 to 1.5 s with the CPU busy, and it grows with the tree, so the old 1.5 s
+  // bound failed it on a busy runner (#2005, job 138026026808). It gets the budget the other whole-tree checks have
+  // (specifiers.test.ts, real_tree_uses_only_allowed_specifiers).
+  test("repository_has_no_conflicts", { timeout: 30_000 }, () => {
     // The real tree through `npm ls`, as `node scripts/licence/check.ts` runs it.
     let calls = 0;
     expect(
