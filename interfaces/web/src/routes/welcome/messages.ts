@@ -24,6 +24,10 @@ export const WELCOME = {
   chatSetUp: "Set up messages",
   chatWaitTitle: "Your messages are getting ready",
   chatWaitLead: "This takes a moment for a new account. Try again in a minute.",
+  chatStalledTitle: "We could not set up your messages yet",
+  chatStalledLead:
+    "This usually means your handle could not be checked. We keep trying on our side. Try again later, and if this " +
+    "stays, contact us.",
   chatTryAgain: "Try again",
   chatDoneTitle: "Your messages are set up",
   chatDoneLead: "Your recovery key is saved. Continue to finish signing up.",

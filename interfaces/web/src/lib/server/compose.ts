@@ -211,6 +211,8 @@ export type Services = {
      */
     readonly endFor: ChatSessionEndStore;
     readonly readyUser: (did: Did, deadline: AbortSignal) => Promise<ChatUser | null>;
+    /** Whether the member's chat account is stuck (chatAccountStore stalled), for the signup step's page. */
+    readonly stalled: (did: Did, deadline: AbortSignal) => Promise<boolean>;
     readonly signTicket: SignInPorts["sign"];
     /** Build step 10 (ADR 0101 decision 2): the member's chat count from the door's count port, or null. */
     readonly count: ChatCountClient["count"];
@@ -565,6 +567,8 @@ async function build(): Promise<Services> {
         run: async () => {
           const counts = await createDueAccounts(chatPorts, CHAT_JOBS_PER_RUN);
           if (counts.failed > 0) log.error("chat.account_failed", { count: counts.failed });
+          // A handle that does not verify both ways keeps the member waiting; say so (Alex's staging list item 8).
+          if (counts.unverified > 0) log.warn("chat.account_handle_unverified", { count: counts.unverified });
         },
       },
       {
@@ -652,6 +656,7 @@ async function build(): Promise<Services> {
     chat: {
       endFor: chatSessionEnds,
       readyUser: (did, deadline) => chatAccounts.readyUser(did, deadline),
+      stalled: (did, deadline) => chatAccounts.stalled(did, deadline),
       signTicket: chatAdmin.signTicket,
       count: chatDoor.count,
       setUp: chatDoor.setUp,

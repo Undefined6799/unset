@@ -3,7 +3,13 @@
 // when the acceptance does (rule DA-2). A claim is one statement that locks due rows with SKIP LOCKED and gives each a
 // fresh lease; a settle writes only while that lease holds (rule DA-4). Every statement names the caller's DID.
 import type { Did } from "@unset/domains-identity";
-import { type ChatAccountJob, type ChatUser, type JobSettlement, parseChatUser } from "@unset/domains-messaging";
+import {
+  type ChatAccountJob,
+  type ChatUser,
+  type JobSettlement,
+  parseChatUser,
+  STALLED_AFTER_ATTEMPTS,
+} from "@unset/domains-messaging";
 import type { Pool, PoolClient } from "./pool.ts";
 import { withClient } from "./pool.ts";
 
@@ -14,6 +20,8 @@ export type ChatAccountStore = {
   settle(job: ChatAccountJob, settlement: JobSettlement): Promise<boolean>;
   /** The member's chat user once chat-admin has created it and while it is not locked, else null. */
   readyUser(did: Did, deadline: AbortSignal): Promise<ChatUser | null>;
+  /** Whether the member's account failed for good, or still waits after STALLED_AFTER_ATTEMPTS failed tries. */
+  stalled(did: Did, deadline: AbortSignal): Promise<boolean>;
 };
 
 export type ChatAccountStoreOptions = {
@@ -40,6 +48,9 @@ const SETTLE = `UPDATE app.chat_account SET state = $3, attempts = attempts + $4
 
 // A locked account gets no new ticket (ADR 0096 decision 1); chat-admin refuses its mint as well.
 const READY = "SELECT chat_user FROM app.chat_account WHERE did = $1 AND state = 'ready' AND NOT locked";
+
+const STALLED = `SELECT 1 FROM app.chat_account
+ WHERE did = $1 AND (state = 'failed' OR (state = 'pending' AND attempts >= $2))`;
 
 function jobOf(row: Record<string, unknown>): ChatAccountJob {
   const user = parseChatUser(row.chat_user);
@@ -69,6 +80,10 @@ export function createChatAccountStore(pool: Pool, options: ChatAccountStoreOpti
     async readyUser(did, deadline) {
       const { rows } = await withClient(pool, deadline, (db) => db.query<Record<string, unknown>>(READY, [did]));
       return rows[0] === undefined ? null : parseChatUser(rows[0].chat_user);
+    },
+    async stalled(did, deadline) {
+      const { rows } = await withClient(pool, deadline, (db) => db.query(STALLED, [did, STALLED_AFTER_ATTEMPTS]));
+      return rows.length > 0;
     },
   };
 }

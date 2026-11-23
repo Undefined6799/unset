@@ -1,5 +1,5 @@
 <script lang="ts">
-// The chat step of signup (book P6.17; ADR 0095 decision 2): +page.server.ts says which of its three cards shows.
+// The chat step of signup (book P6.17; ADR 0095 decision 2): +page.server.ts says which of its cards shows.
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { WELCOME as T } from "../messages.ts";
@@ -8,6 +8,7 @@ import SignOut from "../sign-out.svelte";
 let { data } = $props();
 const CARDS = {
   getting_ready: { title: T.chatWaitTitle, lead: T.chatWaitLead },
+  stalled: { title: T.chatStalledTitle, lead: T.chatStalledLead },
   set_up: { title: T.chatTitle, lead: T.chatLead },
   done: { title: T.chatDoneTitle, lead: T.chatDoneLead },
 } as const;

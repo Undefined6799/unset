@@ -12,13 +12,15 @@ import { config } from "../../../lib/server/runtime.ts";
 import { elsewhere, requireStep } from "../../../lib/server/welcome.ts";
 import { member, STEP_SHELL, stepPage } from "../onboarding.server.ts";
 
-/** What the step shows: chat still being created, the link to set it up, or Continue. */
-export type ChatStepView = "getting_ready" | "set_up" | "done";
+/** What the step shows: chat still being created (or stuck after a few tries), the link to set it up, or Continue. */
+export type ChatStepView = "getting_ready" | "stalled" | "set_up" | "done";
 
 const setUp = async (did: Did, deadline: AbortSignal) => (await services().chat.setUp(did, deadline)) === true;
 
 async function viewOf(did: Did, deadline: AbortSignal): Promise<ChatStepView> {
-  if ((await services().chat.readyUser(did, deadline)) === null) return "getting_ready";
+  if ((await services().chat.readyUser(did, deadline)) === null) {
+    return (await services().chat.stalled(did, deadline)) ? "stalled" : "getting_ready";
+  }
   return (await setUp(did, deadline)) ? "done" : "set_up";
 }
 

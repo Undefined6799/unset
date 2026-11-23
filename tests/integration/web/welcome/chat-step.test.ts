@@ -57,7 +57,7 @@ const deadline = () => AbortSignal.timeout(5000);
 let dids = 0;
 /** A signed-in member at the chat step (terms accepted), with the cached email answer, and their chat account ready
  * unless `chat` is "pending". */
-async function atChatStep(options: { chat?: "ready" | "pending"; emailConfirmed?: boolean } = {}) {
+async function atChatStep(options: { chat?: "ready" | "pending" | "stalled"; emailConfirmed?: boolean } = {}) {
   dids += 1;
   const did = parseDid(`did:plc:${"w".repeat(23)}${"abcdefghijklmnopqrstuvwxyz234567"[dids]}`) as Did;
   await tokenSets.set(did, {
@@ -76,7 +76,10 @@ async function atChatStep(options: { chat?: "ready" | "pending"; emailConfirmed?
   await accounts.confirmAdult(did, deadline());
   expect(await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, deadline())).toBe("chat");
   await withTransaction(pool, null, (tx) => sessions.setEmailConfirmed(tx, { did }, options.emailConfirmed ?? false));
-  if (options.chat !== "pending") {
+  if (options.chat === "stalled") {
+    // What the queued job leaves after a few failed tries, as when the handle cannot be checked.
+    await withClient(pool, null, (db) => db.query("UPDATE app.chat_account SET attempts = 3 WHERE did = $1", [did]));
+  } else if (options.chat !== "pending") {
     // What the queued job writes once chat-admin has created the account.
     await withClient(pool, null, (db) => db.query("UPDATE app.chat_account SET state = 'ready' WHERE did = $1", [did]));
   }
@@ -154,6 +157,14 @@ describe("the onboarding chat step", () => {
     expect(html).not.toContain(SET_UP_LINK);
     expect(html).toContain("getting ready");
     expect(html).toContain('href="/welcome/chat"');
+  });
+
+  test("chat_step.stalled: after a few failed tries the step says plainly that setup is stuck (staging list item 8)", async () => {
+    const { cookie } = await atChatStep({ chat: "stalled" });
+    const html = await (await get("/welcome/chat", cookie)).text();
+    expect(html).not.toContain(SET_UP_LINK);
+    expect(html).not.toContain("getting ready");
+    expect(html).toContain("could not set up your messages");
   });
 
   test("chat_step.continue_after_set_up: once a browser is set up the step offers Continue, which finishes signup", async () => {

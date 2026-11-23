@@ -109,6 +109,9 @@ const EVENTS = [
   // Build step 5, chat accounts: queued creations that stopped for good this run (`count`; a name MAS holds for someone
   // else, a request chat-admin refused, or too many attempts), for an operator. No DID or chat user.
   "chat.account_failed",
+  // Chat accounts waiting this run because the member's handle did not verify both ways (`count`; Alex's staging list
+  // 2026-11-23, item 8). No DID, handle or chat user.
+  "chat.account_handle_unverified",
   // Build step 11, erased members' chat accounts (ADR 0096 decision 3): deactivations still failing after about a day
   // this run (`count`), for an operator; they keep retrying. No DID or chat user.
   "chat.erasure_stuck",

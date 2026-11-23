@@ -80,6 +80,11 @@ export const CREATE_CALL_WITHIN_MS = 60_000;
 
 /** After this many failed attempts (about a day at the hourly step) the job stops and needs an operator. */
 export const MAX_ATTEMPTS = 24;
+/**
+ * After this many failed attempts (about 12 minutes at the first three steps) the signup step stops saying "getting
+ * ready" and says setup is stuck, while the job keeps trying (Alex's staging list, 2026-11-23, item 8).
+ */
+export const STALLED_AFTER_ATTEMPTS = 3;
 const BACKOFF_S = [30, 120, 600, 3600] as const;
 
 /** The wait after the `attempts`-th failure (1-based). */
@@ -90,19 +95,26 @@ function retry(job: ChatAccountJob): JobSettlement {
   return attempts >= MAX_ATTEMPTS ? { state: "failed" } : { state: "pending", retryInS: retryDelayS(attempts) };
 }
 
-/** What one job comes to. The display name is the verified handle; with none, nothing is sent and the job waits. */
-async function settlementFor(ports: ChatAccountPorts, job: ChatAccountJob): Promise<JobSettlement> {
+/**
+ * What one job comes to, and whether it waits for its handle. The display name is the verified handle; with none,
+ * nothing is sent and the job waits.
+ */
+async function settlementFor(
+  ports: ChatAccountPorts,
+  job: ChatAccountJob,
+): Promise<{ settlement: JobSettlement; unverified: boolean }> {
   const claimedAt = ports.nowMs();
   const handle = await ports.verifiedHandle(job.did);
-  if (handle === null) return retry(job);
-  if (ports.nowMs() - claimedAt > CREATE_CALL_WITHIN_MS) return retry(job);
+  if (handle === null) return { settlement: retry(job), unverified: true };
+  if (ports.nowMs() - claimedAt > CREATE_CALL_WITHIN_MS) return { settlement: retry(job), unverified: false };
   const answer = await ports.create(job.user, handle);
-  if (answer.kind === "created") return { state: "ready" };
-  if (answer.kind === "unavailable") return retry(job);
-  return { state: "failed" };
+  if (answer.kind === "created") return { settlement: { state: "ready" }, unverified: false };
+  if (answer.kind === "unavailable") return { settlement: retry(job), unverified: false };
+  return { settlement: { state: "failed" }, unverified: false };
 }
 
-export type CreationCounts = { ready: number; retry: number; failed: number; lost: number };
+/** Per run; `unverified` counts the jobs that waited because the member's handle did not verify both ways. */
+export type CreationCounts = { ready: number; retry: number; failed: number; lost: number; unverified: number };
 
 /**
  * Creates up to `limit` due chat accounts, one at a time. Each job is claimed just before its call, so a lease only
@@ -110,11 +122,12 @@ export type CreationCounts = { ready: number; retry: number; failed: number; los
  * lease still holds. An unexpected error is not caught: the job keeps its lease and is claimed again when it lapses.
  */
 export async function createDueAccounts(ports: ChatAccountPorts, limit: number): Promise<CreationCounts> {
-  const counts: CreationCounts = { ready: 0, retry: 0, failed: 0, lost: 0 };
+  const counts: CreationCounts = { ready: 0, retry: 0, failed: 0, lost: 0, unverified: 0 };
   for (let n = 0; n < limit; n++) {
     const job = await ports.claim();
     if (job === null) break;
-    const settlement = await settlementFor(ports, job);
+    const { settlement, unverified } = await settlementFor(ports, job);
+    if (unverified) counts.unverified += 1;
     if (!(await ports.settle(job, settlement))) counts.lost += 1;
     else if (settlement.state === "pending") counts.retry += 1;
     else counts[settlement.state] += 1;

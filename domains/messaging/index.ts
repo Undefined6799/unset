@@ -28,6 +28,7 @@ export {
   newChatUser,
   parseChatUser,
   retryDelayS,
+  STALLED_AFTER_ATTEMPTS,
 } from "./chat-account.ts";
 export {
   type ChatAccountChange,

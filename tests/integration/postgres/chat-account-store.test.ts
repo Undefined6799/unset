@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { relative } from "node:path";
 import { type Did, PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identity";
-import { type ChatUser, newChatUser } from "@unset/domains-messaging";
+import { type ChatUser, newChatUser, STALLED_AFTER_ATTEMPTS } from "@unset/domains-messaging";
 import {
   createAccountRepository,
   createChatAccountStore,
@@ -128,6 +128,24 @@ describe("chat account store", () => {
     expect(await store.settle(job, { state: "pending", retryInS: 600 })).toBe(true);
     expect(await rowOf(did)).toMatchObject({ state: "pending", attempts: 1, lease_token: null });
     expect((await store.claim(100)).some((other) => other.did === did)).toBe(false);
+  });
+
+  test("chat.stalled_after_tries: a job that failed a few times, or for good, reads as stalled", async () => {
+    const did = await member();
+    expect(await store.stalled(did, deadline())).toBe(false);
+    for (let n = 0; n < STALLED_AFTER_ATTEMPTS; n++) {
+      const job = await claimFor(did);
+      if (job === undefined) throw new Error("no claim");
+      expect(await store.stalled(did, deadline())).toBe(false);
+      await store.settle(job, { state: "pending", retryInS: 30 });
+    }
+    expect(await store.stalled(did, deadline())).toBe(true);
+    const failed = await member();
+    const job = await claimFor(failed);
+    if (job === undefined) throw new Error("no claim");
+    await store.settle(job, { state: "failed" });
+    expect(await store.stalled(failed, deadline())).toBe(true);
+    expect(await store.stalled(nextDid(), deadline())).toBe(false);
   });
 
   test("chat.stale_lease_writes_nothing: a worker whose lease was taken over settles nothing", async () => {

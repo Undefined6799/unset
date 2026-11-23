@@ -105,14 +105,15 @@ function ports(answers: Answers) {
 describe("createDueAccounts", () => {
   test("chat.create_ready: the stored user is created with the verified handle as its name, then ready", async () => {
     const { doubles, created, settled } = ports({});
-    expect(await createDueAccounts(doubles, 20)).toEqual({ ready: 1, retry: 0, failed: 0, lost: 0 });
+    expect(await createDueAccounts(doubles, 20)).toEqual({ ready: 1, retry: 0, failed: 0, lost: 0, unverified: 0 });
     expect(created).toEqual([{ user: `u${"c".repeat(20)}`, name: HANDLE }]);
     expect(settled).toEqual([{ state: "ready" }]);
   });
 
   test("chat.create_unverified_waits: with no verified handle nothing is created and the job waits", async () => {
     const { doubles, created, settled } = ports({ handle: null });
-    expect(await createDueAccounts(doubles, 20)).toMatchObject({ retry: 1 });
+    // Counted apart, so the runner can say why a member waits (Alex's staging list item 8).
+    expect(await createDueAccounts(doubles, 20)).toMatchObject({ retry: 1, unverified: 1 });
     expect(created).toEqual([]);
     expect(settled).toEqual([{ state: "pending", retryInS: 30 }]);
   });
@@ -159,7 +160,7 @@ describe("createDueAccounts", () => {
   test("chat.create_late_call_skipped: a job whose claim is too old by the call is not sent, and waits", async () => {
     // Bounds how late a creation can reach MAS after the member is erased (chat-lifecycle.ts CREATE_LANDS_WITHIN_S).
     const { doubles, created, settled } = ports({ slowMs: CREATE_CALL_WITHIN_MS + 1 });
-    expect(await createDueAccounts(doubles, 20)).toMatchObject({ retry: 1 });
+    expect(await createDueAccounts(doubles, 20)).toMatchObject({ retry: 1, unverified: 0 });
     expect(created).toEqual([]);
     expect(settled).toEqual([{ state: "pending", retryInS: 30 }]);
     const inTime = ports({ slowMs: CREATE_CALL_WITHIN_MS });
@@ -169,7 +170,7 @@ describe("createDueAccounts", () => {
   test("chat.create_lost_lease: a settle that finds the lease gone is counted, not retried", async () => {
     const { doubles } = ports({});
     const lost = { ...doubles, settle: async () => false };
-    expect(await createDueAccounts(lost, 20)).toEqual({ ready: 0, retry: 0, failed: 0, lost: 1 });
+    expect(await createDueAccounts(lost, 20)).toEqual({ ready: 0, retry: 0, failed: 0, lost: 1, unverified: 0 });
   });
 
   test("chat.create_throw_stands: an unexpected error is not swallowed", async () => {
