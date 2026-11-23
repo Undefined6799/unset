@@ -8,7 +8,7 @@
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { createClient, MatrixEvent, Room, RoomEvent } from "matrix-js-sdk/lib/matrix.js";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { ConversationId } from "../core/conversations.ts";
+import type { Conversation, ConversationId, ConversationView } from "../core/conversations.ts";
 import { createConversations, forgetLocalChoices, type LocalChoices } from "./conversation-service.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
@@ -20,6 +20,9 @@ const HIDDEN = "!h:unset.cc";
 const LEFT = "@ueeeeeeeeeeeeeeeeeeee:unset.cc";
 const LEAVES = "!l:unset.cc";
 const DELETES = "!d:unset.cc";
+/** A conversation this member started, read from a second browser: lazy loading sent none of the invitee's state. */
+const PENDING = "!p:unset.cc";
+const INVITED = "@ufffffffffffffffffffff:unset.cc";
 
 const FAILS = "$refused";
 const requests: { method: string; path: string }[] = [];
@@ -27,6 +30,19 @@ const fetchFn = async (input: RequestInfo | URL, init?: RequestInit) => {
   const path = new URL(String(input)).pathname;
   requests.push({ method: init?.method ?? "GET", path });
   const headers = { "content-type": "application/json" };
+  // GET /members (spec v1.18 #get_matrixclientv3roomsroomidmembers), as Room.loadMembersIfNeeded asks it.
+  if (path === `/_matrix/client/v3/rooms/${encodeURIComponent(PENDING)}/members`) {
+    const members = [
+      { type: "m.room.member", state_key: ME, sender: ME, content: { membership: "join" } },
+      {
+        type: "m.room.member",
+        state_key: INVITED,
+        sender: ME,
+        content: { membership: "invite", displayname: "claude-test" },
+      },
+    ].map((e, i) => ({ ...e, event_id: `$m${i}`, origin_server_ts: i, room_id: PENDING }));
+    return new Response(JSON.stringify({ chunk: members }), { status: 200, headers });
+  }
   if (path.includes("/receipt/")) return new Response("{}", { status: 200, headers });
   if (path.includes("/redact/") && path.includes(encodeURIComponent(FAILS)))
     return new Response(JSON.stringify({ errcode: "M_FORBIDDEN", error: "no" }), { status: 403, headers });
@@ -83,14 +99,46 @@ const receiptsIn = (roomId: string) =>
 const member = (userId: string) =>
   event({ type: "m.room.member", state_key: userId, sender: userId, content: { membership: "join" } });
 
+/**
+ * The room as a second browser's first sync builds it with lazy loading on (matrix/client.ts startClient): only the
+ * members who sent a timeline event come with it (spec v1.18 #lazy-loading-room-members), so the invitee, who sent
+ * nothing, is missing until the member list is loaded.
+ */
+async function storePendingRoom() {
+  const room = new Room(PENDING, client, ME, { lazyLoadMembers: true });
+  const inRoom = (e: MatrixEvent) => {
+    e.event.room_id = PENDING;
+    return e;
+  };
+  const encryption = inRoom(
+    event({ type: "m.room.encryption", state_key: "", content: { algorithm: "m.megolm.v1.aes-sha2" } }),
+  );
+  room.currentState.setStateEvents(
+    [encryption, event({ type: "m.room.join_rules", state_key: "", content: { join_rule: "invite" } }), member(ME)].map(
+      inRoom,
+    ),
+  );
+  // Sync hands each encryption event to the crypto (src/sync.ts onCryptoEvent); this room is stored by hand.
+  const crypto = client.getCrypto() as unknown as { onCryptoEvent(room: Room, event: MatrixEvent): Promise<void> };
+  await crypto.onCryptoEvent(room, encryption);
+  room.setSummary({ "m.heroes": [INVITED], "m.joined_member_count": 1, "m.invited_member_count": 1 });
+  room.updateMyMembership(KnownMembership.Join);
+  room.addLiveEvents([text("$hello", ME)].map(inRoom), { addToState: false });
+  client.store.storeRoom(room);
+}
+
 beforeAll(async () => {
   await client.initRustCrypto({ useIndexedDB: false });
   storeRoom(ROOM, THEM, [event({ type: "m.room.message", sender: THEM, content: { msgtype: "m.text", body: "hi" } })]);
   storeRoom(DELETES, OTHER, [text("$mine1", ME), text("$theirs1", OTHER), text(FAILS, ME)]);
   storeRoom(HIDDEN, AWAY, [text("$away1", AWAY)]);
   storeRoom(LEAVES, LEFT, [text("$left1", LEFT)]);
+  await storePendingRoom();
   client.store.storeAccountDataEvents([
-    event({ type: "m.direct", content: { [THEM]: [ROOM], [OTHER]: [DELETES], [AWAY]: [HIDDEN], [LEFT]: [LEAVES] } }),
+    event({
+      type: "m.direct",
+      content: { [INVITED]: [PENDING], [THEM]: [ROOM], [OTHER]: [DELETES], [AWAY]: [HIDDEN], [LEFT]: [LEAVES] },
+    }),
   ]);
 }, 20_000);
 afterAll(() => client.stopClient());
@@ -147,6 +195,34 @@ describe("watch", () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(views).toBe(0);
     expect(receiptsIn(LEAVES)).toBe(0);
+  });
+});
+
+describe("pending request", () => {
+  test("chat.pending_second_browser: a request not accepted yet reads as pending, named, from a second browser", async () => {
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    const conversations = createConversations(client, crypto, ME, memory(), page("hidden"));
+    const views: (ConversationView | null)[] = [];
+    const stop = conversations.watch(PENDING as ConversationId, (view) => void views.push(view));
+    await expect.poll(() => views.at(-1)?.composer).toBe("pending");
+    const view = views.at(-1);
+    expect(view?.conversation.with).toEqual({ id: INVITED, name: "claude-test" });
+    // Pending sends (core/conversations.ts canSend): the sender keeps writing while the request waits.
+    expect(views.every((v) => v?.composer !== "they_left")).toBe(true);
+    stop();
+  });
+
+  test("chat.pending_list_named: the list names the person a pending request went to, once the members are in", async () => {
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    const conversations = createConversations(client, crypto, ME, memory(), page("hidden"));
+    let latest: readonly Conversation[] = [];
+    const stop = conversations.watchList((list) => {
+      latest = list;
+    });
+    await expect.poll(() => latest.find((c) => c.id === PENDING)?.with.name).toBe("claude-test");
+    stop();
   });
 });
 

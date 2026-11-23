@@ -2,9 +2,9 @@
 // them from sync (no double: the SDK is in-process; only the homeserver is unmanaged, TE-1, and none is reached here).
 // The calls that need a homeserver run in tests/e2e/chat-page.chromium.spec.ts and in the step's live run.
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
-import { createClient, MatrixEvent, NotificationCountType, Room } from "matrix-js-sdk/lib/matrix.js";
+import { createClient, EventTimeline, MatrixEvent, NotificationCountType, Room } from "matrix-js-sdk/lib/matrix.js";
 import { describe, expect, test } from "vitest";
-import { directRooms, findDirect, otherMembership, toConversation, withDirect } from "./conversations.ts";
+import { directRooms, findDirect, hasOlder, otherMembership, toConversation, withDirect } from "./conversations.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
 const THEM = "@ubbbbbbbbbbbbbbbbbbbb:unset.cc";
@@ -151,6 +151,29 @@ describe("otherMembership", () => {
     expect(otherMembership(dm("!a:unset.cc", THEM, "leave"), THEM)).toBe("out");
     expect(otherMembership(dm("!a:unset.cc", THEM, "ban"), THEM)).toBe("out");
     expect(otherMembership(dm("!a:unset.cc", THEM), OTHER)).toBe("out");
+  });
+});
+
+describe("hasOlder", () => {
+  test("chat.has_older: older messages may load until the room's first event, m.room.create, is in the timeline", () => {
+    const create = () => event({ type: "m.room.create", state_key: "", content: { room_version: "12" } });
+    const message = () => event({ type: "m.room.message", content: { msgtype: "m.text", body: "hi" } });
+    const midway = dm("!a:unset.cc", THEM);
+    const later = message();
+    later.event.room_id = "!a:unset.cc";
+    midway.addLiveEvents([later], { addToState: false });
+    // Synapse sends a prev_batch with every room (spec v1.18 #_matrixclientv3sync), so a token alone says nothing.
+    midway.getLiveTimeline().setPaginationToken("t1", EventTimeline.BACKWARDS);
+    expect(hasOlder(midway)).toBe(true);
+    const whole = dm("!w:unset.cc", THEM);
+    const events = [create(), message()];
+    for (const e of events) e.event.room_id = "!w:unset.cc";
+    whole.addLiveEvents(events, { addToState: false });
+    whole.getLiveTimeline().setPaginationToken("t1", EventTimeline.BACKWARDS);
+    expect(hasOlder(whole)).toBe(false);
+    const ended = dm("!e:unset.cc", THEM);
+    ended.getLiveTimeline().setPaginationToken(null, EventTimeline.BACKWARDS);
+    expect(hasOlder(ended)).toBe(false);
   });
 });
 

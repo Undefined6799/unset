@@ -99,6 +99,20 @@ export function toConversation(room: Room, direct: ReadonlyMap<string, string>):
   };
 }
 
+/**
+ * Whether older messages may still be loaded: not once the room's first event, m.room.create (spec v1.18
+ * #mroomcreate), is in the live timeline, nor once client.scrollback has found no more (it clears the token on an
+ * empty or endless page, src/client.ts:4623-4626). The token alone says nothing: Synapse sends a prev_batch with every
+ * room (spec v1.18 #_matrixclientv3sync), and the SDK keeps it (src/sync.ts:1352-1357).
+ */
+export function hasOlder(room: Room): boolean {
+  if (room.oldState.paginationToken === null) return false;
+  return !room
+    .getLiveTimeline()
+    .getEvents()
+    .some((e) => e.getType() === EventType.RoomCreate);
+}
+
 /** Where the other person stands in the room: joined, invited, or out (left, refused, banned, or never there). */
 export function otherMembership(room: Room, other: string): "join" | "invite" | "out" {
   const membership = room.getMember(other)?.membership;

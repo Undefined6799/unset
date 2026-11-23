@@ -43,7 +43,14 @@
 // - confirmsDelete, stopConfirmingDelete: "Don't ask me again" lives in this browser's localStorage on the chat
 //   origin, under the account's own `unset-chat:` key, never on the server; Log out removes it (forgetLocalChoices,
 //   matrix/client.ts), as Element's clearStorage clears localStorage at log out (Lifecycle.ts:1208-1222).
-// - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
+// - older: client.scrollback (src/client.ts:4574-4650); no older messages once the room's start is loaded (hasOlder).
+// - members: the client lazy loads them (matrix/client.ts), so a browser whose first sync came after the invite has no
+//   m.room.member for an invitee who has sent nothing (spec v1.18 #lazy-loading-room-members) and would read them as
+//   gone. Before reading a joined room's people, Room.loadMembersIfNeeded loads them once (src/models/room.ts:
+//   1101-1155), as Element's RoomView.loadMembersIfJoined does on opening a room (element-web v1.12.35
+//   apps/web/src/components/structures/RoomView.tsx:1529-1545). A failed load is retried on the next read (the SDK
+//   clears its promise, room.ts:1117-1121); until then the room reads as sync left it, and the SDK sends nothing
+//   encrypted in it either, as it awaits the same members first (room.ts:530-534, getEncryptionTargetMembers).
 // - send: sendTextMessage (client.ts:3272-3294), or for a reply sendMessage with replyContent (matrix/conversations.ts;
 //   Element's makeReplyMixIn), only while the composer sends, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
@@ -79,6 +86,7 @@ import {
 import {
   directRooms,
   findDirect,
+  hasOlder,
   isAvailable,
   kindOf,
   otherMembership,
@@ -144,6 +152,19 @@ export function createConversations(
   const changes = changeFeed(client);
   const readSent = new Map<string, string>();
 
+  /** A joined room's full member list, loaded once (see members above); an invite cannot ask for it. */
+  const membersIn = async (room: Room): Promise<void> => {
+    if (room.getMyMembership() !== "join") return;
+    await room.loadMembersIfNeeded().catch(() => undefined);
+  };
+
+  /** Loads the members of each listed room still missing them; true when any was missing. */
+  const loadListedMembers = async (): Promise<boolean> => {
+    const missing = client.getVisibleRooms().filter((room) => !room.membersLoaded() && toConversation(room, direct()));
+    await Promise.all(missing.map(membersIn));
+    return missing.length > 0;
+  };
+
   const list = (): Conversation[] =>
     client
       .getVisibleRooms()
@@ -152,6 +173,7 @@ export function createConversations(
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
 
   const composerFor = async (room: Room, other: string): Promise<Composer> => {
+    await membersIn(room);
     const membership = room.getMyMembership();
     return composerOf({
       mine: membership === "join" || membership === "invite" ? membership : "leave",
@@ -180,6 +202,7 @@ export function createConversations(
 
   const viewOf = async (id: ConversationId): Promise<ConversationView | null> => {
     const room = client.getRoom(id);
+    if (room !== null) await membersIn(room);
     const conversation = room === null ? null : toConversation(room, direct());
     if (room === null || conversation === null || !conversation.available) return null;
     const events = room.getLiveTimeline().getEvents();
@@ -194,7 +217,7 @@ export function createConversations(
       conversation,
       messages,
       composer: await composerFor(room, other),
-      hasOlder: room.oldState.paginationToken !== null,
+      hasOlder: hasOlder(room),
       seen: seenOf(events, messages, room.getEventReadUpTo(other), receipt?.data.ts),
     };
   };
@@ -273,7 +296,10 @@ export function createConversations(
 
   return {
     watchList(onList) {
-      return changes.watch(() => onList(list()));
+      return changes.watch(() => {
+        onList(list());
+        void loadListedMembers().then((loaded) => loaded && onList(list()));
+      });
     },
     watch(id, onView) {
       let latest = 0;
