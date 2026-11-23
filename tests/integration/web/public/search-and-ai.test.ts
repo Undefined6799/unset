@@ -12,6 +12,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+import { DATA, dataAnswer, LAYOUT_ONLY, nodeData } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -147,6 +148,31 @@ describe("search and AI", () => {
     expect(await home.text()).not.toContain('content="noindex"');
   });
 
+  // Book P1.22h: the member's choice lists their page, never its data address (`<page>/__data.json`), which holds the
+  // same words as JSON. Every answer there says noindex, the layout-only one too, whose page load never runs.
+  test("a_listed_page_s_data_address_stays_out_of_search", async () => {
+    expect((await get(PAGE)).headers.get("x-robots-tag")).toBeNull();
+    const data = await get(`${PAGE}${DATA}`);
+    expect(data.status).toBe(200);
+    expect(data.headers.get("x-robots-tag")).toBe("noindex");
+    expect(data.headers.get("cache-control")).toBe("public, max-age=60");
+    // What search results may show is what the page publishes: the member's own title, here as data.
+    expect(nodeData(await dataAnswer(data), 1)).toMatchObject({
+      shell: { kind: "core", wide: true },
+      meta: { title: "Vera <the maker>", description: "Maker of <things>", url: `${ORIGIN}${PAGE}` },
+    });
+    for (const path of [
+      `${PAGE}${LAYOUT_ONLY}`,
+      DATA,
+      `/@nobody.unset.org${DATA}`,
+      `/@nobody.unset.org${LAYOUT_ONLY}`,
+    ]) {
+      expect((await get(path)).headers.get("x-robots-tag"), path).toBe("noindex");
+    }
+    // AI search crawlers are allowed the page's own address and nothing under it (the `$`).
+    expect(await (await get("/robots.txt")).text()).not.toContain(`${PAGE}/`);
+  });
+
   test("a_hidden_account_leaves_robots_and_the_sitemap", async () => {
     await withClient(indexer, null, (c) =>
       c.query("UPDATE idx.account SET pds_active = false WHERE did = $1", [MEMBER]),
@@ -180,17 +206,31 @@ describe("search and AI when the read fails", () => {
     const short = await startWeb(pg, { ...LISTING_ON, REQUEST_DEADLINE_MS: "5000" });
     try {
       const fetchShort = (path: string) => short.fetch(path, { headers: { "x-forwarded-for": clientAddress() } });
-      const [page, robots, sitemap] = await withClient(indexer, null, async (c) => {
+      const [page, robots, sitemap, data] = await withClient(indexer, null, async (c) => {
         await c.query("BEGIN");
         await c.query("LOCK TABLE idx.account IN ACCESS EXCLUSIVE MODE");
         try {
-          return await Promise.all([fetchShort(PAGE), fetchShort("/robots.txt"), fetchShort("/sitemap.xml")]);
+          return await Promise.all([
+            fetchShort(PAGE),
+            fetchShort("/robots.txt"),
+            fetchShort("/sitemap.xml"),
+            fetchShort(`${PAGE}${DATA}`),
+          ]);
         } finally {
           await c.query("ROLLBACK");
         }
       });
       expect(page?.status).toBeGreaterThanOrEqual(500);
       expect(await page?.text()).toContain('<meta name="robots" content="noindex"');
+      // The page's data address runs under the same deadline (book P1.22h): a code and the request id, nothing of the
+      // member, never stored and never indexed. SvelteKit sends a failed load as an error node under status 200.
+      expect(data?.headers.get("cache-control")).toBe("private, no-store");
+      expect(data?.headers.get("x-robots-tag")).toBe("noindex");
+      const answer = await dataAnswer(data as Response);
+      expect(answer.type === "data" && answer.nodes[1]).toEqual({
+        type: "error",
+        error: { status: 500, message: "internal.error", reqId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
+      });
       expect(robots?.status).toBeGreaterThanOrEqual(500);
       expect(sitemap?.status).toBeGreaterThanOrEqual(500);
     } finally {
