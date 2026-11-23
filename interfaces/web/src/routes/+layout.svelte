@@ -443,7 +443,7 @@ const row =
             <span class="sr-only">{T.accountMenu}</span>
           </Button>
         {:else}
-          <!-- A visitor signs in here and comes back to this page (signInHref, +layout.server.ts). -->
+          <!-- A visitor signs in here and comes back to this page (signInHref, lib/return-paths.ts). -->
           <Button variant="outline" size="icon-sm" href={data.signInHref} class={control}>
             <Icon name="profile" size={20} label={T.signIn} />
           </Button>

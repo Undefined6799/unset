@@ -9,7 +9,8 @@
 import type { Load } from "@sveltejs/kit";
 import type { NotificationsView } from "@unset/apps-web/lib/notifications/view.ts";
 import { readErrorParam } from "@unset/shared-errors";
-import type { ShellData } from "../lib/shell.ts";
+import { signInHref, themeReturn } from "../lib/return-paths.ts";
+import type { ShellData, ThemeChoice } from "../lib/shell.ts";
 
 export const csr = false;
 
@@ -18,25 +19,26 @@ export const load: Load = ({ url, data }) => {
     signedIn?: boolean;
     appOpen?: boolean;
     account?: ShellData["account"];
-    prefs?: ShellData["prefs"];
+    theme?: ThemeChoice | null;
     privacyNotice?: string | null;
     notifications?: NotificationsView;
     bellOpens?: boolean;
-    signInHref?: string;
     siteNoindex?: boolean;
   } | null;
   return {
     signedIn: server?.signedIn === true,
     appOpen: server?.appOpen === true,
     account: server?.account,
-    prefs: server?.prefs,
+    // The theme form, where the server says this page has one (+layout.server.ts), returning to this page.
+    prefs: typeof server?.theme === "string" ? { theme: server.theme, returnTo: themeReturn(url) } : undefined,
     // The privacy notice version the changed-notice banner names (P2.12b), or null when it does not show.
     privacyNotice: typeof server?.privacyNotice === "string" ? server.privacyNotice : null,
     // The bell's list and count (P2.27); undefined for a visitor.
     notifications: server?.notifications,
     // Whether the bell opens its panel (a page with script) or is a link to /notifications (ADR 0108 point 3).
     bellOpens: server?.bellOpens === true,
-    signInHref: server?.signInHref ?? "/login",
+    // The shell's Sign in link, back to this page (lib/return-paths.ts says why it is worked out here).
+    signInHref: signInHref(url.pathname),
     // Search and AI listing off on the whole site (P1.21b); without the server's word, noindex.
     siteNoindex: server?.siteNoindex !== false,
     error: readErrorParam(url.searchParams),
