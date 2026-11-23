@@ -78,8 +78,8 @@ async function saveKey(page: Page): Promise<string> {
   return key;
 }
 
-async function send(page: Page, text: string): Promise<void> {
-  await expect(conversation(page)).toHaveAttribute("data-composer", "on", { timeout: 60_000 });
+async function send(page: Page, text: string, composer: "on" | "pending" = "on"): Promise<void> {
+  await expect(conversation(page)).toHaveAttribute("data-composer", composer, { timeout: 60_000 });
   await page.locator("#message").fill(text);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(messages(page)).toContainText(text);
@@ -350,7 +350,8 @@ test("chat_e2e.first_message_no_browser: a request sent while the other has no b
   await a.page.locator("#message").fill("sent while you were away");
   await a.page.getByRole("button", { name: "Send" }).click();
   await expect(conversation(a.page)).toHaveAttribute("data-composer", "pending", { timeout: 60_000 });
-  await send(a.page, "and a second one");
+  // Alice keeps writing while the request waits (Alex, 2026-11-22).
+  await send(a.page, "and a second one", "pending");
   // A fresh browser of Bob's unlocks, accepts and reads both.
   const b2 = await browserFor(browser, bob.handle);
   await b2.page.goto("https://unset.cc/");
