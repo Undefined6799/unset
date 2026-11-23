@@ -257,6 +257,7 @@ test("gfm_in_the_text_opens_as_itself_and_an_edit_elsewhere_keeps_it", async ({ 
 
 // Alex 2026-11-21: "bare addresses become https". A bare address in the text is a link on the page and in the editor,
 // a www name over https in both; a bare address pasted is a link; one typed in the link editor without https:// gets it.
+// A link the member wrote out keeps its own address, http too (Codex on #1959).
 test("bare_addresses_are_links_and_a_www_name_opens_over_https", async ({ page }) => {
   const watched = watch(page);
   const word = `bare${Date.now()}`;
@@ -265,15 +266,17 @@ test("bare_addresses_are_links_and_a_www_name_opens_over_https", async ({ page }
     kind: "readme",
     width: "full",
     surface: "filled",
-    text: `${word} start\n\nsee https://example.com/a and www.example.org.`,
+    text: `${word} start\n\nsee https://example.com/a and www.example.org and [www.example.com](http://www.example.com).`,
   });
   const html = await (await page.request.get(page.url())).text();
   expect(html).toContain('href="https://example.com/a"');
   expect(html).toContain('href="https://www.example.org/"');
+  expect(html).toContain('href="http://www.example.com/"');
   const { editor } = await caretAtEnd(page, word);
   const links = editor.locator("a");
-  await expect(links).toHaveText(["https://example.com/a", "www.example.org"]);
-  await expect(links.last()).toHaveAttribute("href", "https://www.example.org");
+  await expect(links).toHaveText(["https://example.com/a", "www.example.org", "www.example.com"]);
+  await expect(links.nth(1)).toHaveAttribute("href", "https://www.example.org");
+  await expect(links.last()).toHaveAttribute("href", "http://www.example.com");
   await editor.getByText(`${word} start`).click();
   await page.keyboard.press("End");
   await page.keyboard.press("Shift+Enter");
@@ -293,7 +296,7 @@ test("bare_addresses_are_links_and_a_www_name_opens_over_https", async ({ page }
   await page.keyboard.press("Escape");
   const field = page.locator('textarea[aria-label^="Text of the"]');
   await expect(field).toHaveValue(
-    `${word} start\n\n[these](https://example.com/b) and <https://example.net/x>\n\nsee <https://example.com/a> and [www.example.org](https://www.example.org).`,
+    `${word} start\n\n[these](https://example.com/b) and <https://example.net/x>\n\nsee <https://example.com/a> and [www.example.org](https://www.example.org) and [www.example.com](http://www.example.com).`,
   );
   const shown = page.locator('[data-slot="card"]', { has: field });
   await shown.getByRole("button", { name: /^More for / }).click();

@@ -313,17 +313,40 @@ function headingLevel(value: string | undefined): number | undefined {
 }
 
 /** The parts of a Markdown tree (mdast) the www rewrite reads. */
-type MdNode = { type: string; url?: string; value?: string; children?: MdNode[] };
+type MdNode = {
+  type: string;
+  url?: string;
+  value?: string;
+  children?: MdNode[];
+  position?: { start: { offset?: number } };
+};
+
+/**
+ * Whether a link is a bare address rather than one the member wrote out: mdast-util-gfm-autolink-literal 2.1.0 builds
+ * a bare one either with no position (its findUrl transform) or with its text starting where it starts (the
+ * literalAutolink token), while `[name](url)` starts one character before its text, at the bracket.
+ */
+function isBare(link: MdNode, text: MdNode): boolean {
+  return link.position === undefined || text.position?.start.offset === link.position.start.offset;
+}
 
 /**
  * A bare `www.` name opens over https, as the page reads it (parse.ts; Alex 2026-11-21: "bare addresses become
  * https"): remark-gfm 4.0.1 gives one a link to `http://` and its name (mdast-util-gfm-autolink-literal), so that link
- * is pointed at https before the editor draws it.
+ * is pointed at https before the editor draws it. A link written out keeps its own address, http too.
  */
 const wwwOverHttps = $remark("wwwOverHttps", () => () => (tree: MdNode) => {
   const walk = (node: MdNode) => {
-    const name = node.children?.length === 1 ? node.children[0]?.value : undefined;
-    if (node.type === "link" && name !== undefined && /^www\./i.test(name) && node.url === `http://${name}`) {
+    const text = node.children?.length === 1 ? node.children[0] : undefined;
+    const name = text?.value;
+    if (
+      node.type === "link" &&
+      text !== undefined &&
+      name !== undefined &&
+      /^www\./i.test(name) &&
+      node.url === `http://${name}` &&
+      isBare(node, text)
+    ) {
       node.url = `https://${name}`;
     }
     node.children?.forEach(walk);

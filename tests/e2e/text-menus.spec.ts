@@ -318,6 +318,32 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #1965: the dots of a quote or a list change the whole block, its container too. Text takes a quote's
+// paragraphs out of it, and a list turned into a quote is a quote of its items' words.
+test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
+  const word = `whole${Date.now()}`;
+  const { card, editor } = await cardWithCaret(
+    page,
+    word,
+    `${word} one\n\n> a quote\n>\n> said twice\n\n- an item\n- another`,
+  );
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator("blockquote").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Text" }).click();
+  await expect(editor.locator("blockquote")).toHaveCount(0);
+  await expect(editor.locator(":scope > p")).toHaveText([`${word} one`, "a quote", "said twice"]);
+  await editor.locator("ul").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Quote" }).click();
+  await expect(editor.locator("ul, li")).toHaveCount(0);
+  await expect(editor.locator("blockquote p")).toHaveText(["an item", "another"]);
+  await expect(editor).toBeFocused();
+  await discardAndRemove(page, word);
+});
+
 test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_width", async ({ page }) => {
   // Alex 2026-11-22 00:12Z: the six dots and the + "outside of the card ... on the margin of the card instead of
   // inside", for a card on the right of a row too; with a mouse the owner's page keeps room for them.

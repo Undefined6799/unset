@@ -240,6 +240,19 @@ describe("parseReadme, adversarial input", () => {
     });
   });
 
+  // Codex on #1958: a wide header with thousands of one-character rows is a few bytes per row but fifty cells each,
+  // and the server renders every cell for each visitor. The card's tables share one budget of cells.
+  test("the tables of one card hold at most 10,000 cells, however short their rows", () => {
+    const head = `|${"h|".repeat(50)}\n|${"-|".repeat(50)}\n`;
+    const cells = (blocks: ReturnType<typeof parseReadme>) =>
+      blocks.reduce((n, b) => (b.kind === "table" ? n + (b.rows.length + 1) * b.head.length : n), 0);
+    const one = parseReadme(`${head}${"x\n".repeat(9_700)}`);
+    expect(cells(one)).toBeLessThanOrEqual(10_000);
+    const many = parseReadme(`${head}${"x\n".repeat(100)}\n`.repeat(200));
+    expect(cells(many)).toBeLessThanOrEqual(10_000);
+    expect(many[0]).toMatchObject({ kind: "table" });
+  });
+
   test("a longer fence holds a shorter one as code", () => {
     expect(parseReadme("````\n```js\nx\n```\n````\nafter")).toEqual([
       { kind: "code", text: "```js\nx\n```" },
