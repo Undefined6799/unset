@@ -63,7 +63,7 @@ Declared in `infrastructure/postgres/package.json`:
 | Compose | Service `migrate` in `deployment/compose.dev.yaml` and `deployment/compose.local.yaml`. `PG_USER` is `migrator`. |
 | Pools | `interfaces/web/src/lib/server/compose.ts` calls `createPool` and `createLockPool` |
 
-The Postgres server is Compose service `postgres`, image `deployment/images/postgres.Dockerfile` (`FROM docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336`). `deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates roles `migrator` and `tap`, databases `unset` and `tap`. `tap` is not in `roles.json`.
+The Postgres server is Compose service `postgres`, image `deployment/images/postgres.Dockerfile` (`FROM docker.io/library/postgres:18-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a`). `deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates roles `migrator` and `tap`, databases `unset` and `tap`. `tap` is not in `roles.json`.
 
 `unset-rewrap` is a bin in `package.json`. No Dockerfile `ENTRYPOINT` names `rewrap-cli.ts`.
 

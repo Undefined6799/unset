@@ -12,7 +12,7 @@
 # so the pair goes, and the subject-hash link to the certificate with it; bases.lock.json lists the two files as
 # stripped, and the mirror scan skips them (the link is not a secret, so it is not listed).
 
-FROM ghcr.io/undefined6799/mirror/postgres@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+FROM ghcr.io/undefined6799/mirror/postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND PostgreSQL"
 # Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
