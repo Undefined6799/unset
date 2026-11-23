@@ -274,11 +274,16 @@ describe("core.erase_did", () => {
            RETURNING 1`,
       ).filter((line) => line === "1").length;
     expect(add(`u${"a".repeat(20)}`, "e")).toBe(0);
-    postgres.sql("unset", `INSERT INTO app.chat_account (did, chat_user) VALUES ('${X}', 'u${"q".repeat(20)}')`);
+    postgres.sql(
+      "unset",
+      `INSERT INTO app.account (did, first_seen_at, privacy_notice_seen_version) VALUES ('${X}', now(), '2026-11-19');
+       INSERT INTO app.chat_account (did, chat_user) VALUES ('${X}', 'u${"q".repeat(20)}');`,
+    );
     expect(add(`u${"q".repeat(20)}`, "f")).toBe(1);
     postgres.sql(
       "unset",
-      `DELETE FROM door.browser WHERE did = '${X}'; DELETE FROM app.chat_account WHERE did = '${X}';`,
+      `DELETE FROM door.browser WHERE did = '${X}'; DELETE FROM app.chat_account WHERE did = '${X}';
+       DELETE FROM app.account WHERE did = '${X}';`,
     );
   });
 
