@@ -747,11 +747,13 @@ const LIMITED_FIELDS = [
 ];
 
 /** The root layout's data for a visitor: the shell's flags and the Sign in link, no one's account. */
-/** The root layout's data for a member: their own account link, their theme form and their bell. */
+/** The root layout's data for a member: their own account link, their theme form, their bell and their chat icon. */
 const MEMBER_SHELL_FIELDS = [
   "account.path",
   "appOpen",
   "bellOpens",
+  "chat.href",
+  "chat.unread",
   "notifications.count",
   "notifications.entries",
   "notifications.more",
