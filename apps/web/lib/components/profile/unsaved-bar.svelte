@@ -22,11 +22,28 @@ let {
   message?: string;
   /** Whether that message is a refusal. */
   refused: boolean;
-  onsave: () => void;
+  onsave: (event: MouseEvent) => void;
   ondiscard: () => void;
 } = $props();
 
 const shown = $derived(count > 0 || message !== undefined);
+
+let region: HTMLElement | undefined = $state();
+/**
+ * A Save made by keyboard (a click with detail 0) takes the focus onto the bar itself before Save goes, and lets go of
+ * the caret the words still hold. WebKit edits at the page's selection whatever has the focus: left as it was, a key
+ * pressed after the Save (a second Enter or Space, once the button is disabled or gone) went into the words where the
+ * caret was (#1981, CI run 44971445183; reproduced in Playwright's WebKit 1.64.1 with the bar focused). On the bar
+ * with no caret the key does nothing, and the Save's answer is read out where the member is. The editor puts its own
+ * caret back when it is next focused (prosemirror-view 1.42.9 EditorView.focus).
+ */
+function save(event: MouseEvent) {
+  if (event.detail === 0) {
+    region?.focus();
+    getSelection()?.removeAllRanges();
+  }
+  onsave(event);
+}
 
 /**
  * What the member is looking at: the field they type in, else the first card on the screen. The bar takes its room
@@ -61,10 +78,12 @@ $effect(() => {
 
 {#if shown}
   <div
+    bind:this={region}
     role="region"
     aria-label={UNSAVED_BAR.label}
+    tabindex="-1"
     data-unsaved-bar
-    class="sticky top-[var(--site-header-height)] z-20 flex flex-wrap items-center gap-3 rounded-sm border bg-background p-3 shadow-md"
+    class="outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sticky top-[var(--site-header-height)] z-20 flex flex-wrap items-center gap-3 rounded-sm border bg-background p-3 shadow-md"
   >
     <div class="min-w-0 flex-1 text-sm">
       {#if message !== undefined}
@@ -75,7 +94,7 @@ $effect(() => {
     {#if count > 0}
       <div class="flex gap-2">
         <Button type="button" variant="outline" disabled={saving} onclick={ondiscard}>{UNSAVED_BAR.discard}</Button>
-        <Button type="button" disabled={saving} aria-busy={saving} onclick={onsave}
+        <Button type="button" disabled={saving} aria-busy={saving} onclick={save}
           >{saving ? UNSAVED_BAR.saving : UNSAVED_BAR.save}</Button
         >
       </div>

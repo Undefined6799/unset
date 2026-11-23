@@ -473,15 +473,17 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       });
       // A heading shows one level down, as the page shows it (readme.svelte: # is an h2 under the page's own h1), and
       // carries no id: preset-commonmark 7.23.0 headingSchema.toDOM gives each one an id made from its words, which
-      // would repeat across cards and clash with the page's own anchors. parseDOM reads it back one level up, so a
-      // paste (plugin-clipboard 7.23.0 draws pasted Markdown with toDOM and parses that) or a copy between cards keeps
-      // its level; a pasted h1 is the top level, as an h2 is.
+      // would repeat across cards and clash with the page's own anchors. It says its level instead (data-level), so a
+      // paste of Markdown (plugin-clipboard 7.23.0 draws it with toDOM and parses that) or a copy between cards reads
+      // it back as it was; a heading pasted from another site keeps its own level, h1 as "#" and h2 as "##" (staging,
+      // 2026-11-21: reading every hN one level up made a pasted h1 and h2 both "#").
       ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
         ...prev(schemaCtx),
-        // HTML stops at h6, so levels 5 and 6 both draw one; data-level says which, and a copy keeps it.
+        // HTML stops at h6, so levels 5 and 6 both draw one; data-level says which, and a copy keeps it. A heading
+        // with none (pasted from another site) keeps its own level.
         parseDOM: [1, 2, 3, 4, 5, 6].map((shown) => ({
           tag: `h${shown}`,
-          getAttrs: (dom: HTMLElement) => ({ level: headingLevel(dom.dataset.level) ?? Math.max(shown - 1, 1) }),
+          getAttrs: (dom: HTMLElement) => ({ level: headingLevel(dom.dataset.level) ?? shown }),
         })),
         toDOM: (node) => [
           `h${Math.min(Number(node.attrs.level) + 1, 6)}`,

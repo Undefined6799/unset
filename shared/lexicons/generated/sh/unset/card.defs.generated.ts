@@ -16,7 +16,7 @@ type $nsid = typeof $nsid;
 
 export { $nsid };
 
-/** One card on an account's unset.sh profile page. It is shown only when the profile's cards list names it, in that order, and a block with nothing to show (an empty list, for example) is hidden. Readers apply the profile's visibility to its cards. */
+/** One card on an account's unset.sh profile page. It is shown only on a page (sh.unset.page) whose cards list names it, in that order, and a block with nothing to show (an empty list, for example) is hidden. Readers apply that page's visibility to it. */
 type Main = {
   $type: "sh.unset.card";
 
@@ -49,7 +49,7 @@ type Main = {
 
 export type { Main };
 
-/** One card on an account's unset.sh profile page. It is shown only when the profile's cards list names it, in that order, and a block with nothing to show (an empty list, for example) is hidden. Readers apply the profile's visibility to its cards. */
+/** One card on an account's unset.sh profile page. It is shown only on a page (sh.unset.page) whose cards list names it, in that order, and a block with nothing to show (an empty list, for example) is hidden. Readers apply that page's visibility to it. */
 const main = /*#__PURE__*/ l.record<"tid", Main>(
   "tid",
   $nsid,

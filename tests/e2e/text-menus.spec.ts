@@ -462,32 +462,89 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await expect(blocks).toHaveCount(3);
   await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(1);
   await page.keyboard.press("Enter");
-  await page.keyboard.type("- a");
-  await expect(blocks.nth(3)).toHaveText("a");
+  // In a list Enter makes another point, and Shift+Enter a new block after the list (Alex 2026-11-22 00:02Z).
+  await page.keyboard.type("- a1");
+  await expect(blocks.nth(3)).toHaveText("a1");
   await page.keyboard.press("Enter");
-  await page.keyboard.type("b");
-  await page.keyboard.press("Shift+Enter");
-  await page.keyboard.type("c");
-  await expect(editor.locator("ul > li")).toHaveText(["a", "b", "c"]);
+  await page.keyboard.type("b1b2");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("c1");
+  await expect(editor.locator("ul > li")).toHaveText(["a1", "b1b2", "c1"]);
   await expect(editor.locator("li [data-type='hardbreak']")).toHaveCount(0);
-  // Shift+Enter twice ends the list, as Enter twice did: the second, on an empty item, lifts it out.
   await page.keyboard.press("Shift+Enter");
-  await page.keyboard.press("Shift+Enter");
-  await page.keyboard.type("``` ");
+  await expect(editor.locator("ul > li")).toHaveText(["a1", "b1b2", "c1"]);
+  // Three backticks then Enter starts a code block, as in the playground (preset-commonmark's code fence rule), and
+  // Enter in it is a new line; Shift+Enter leaves it.
+  await page.keyboard.type("```");
+  await page.keyboard.press("Enter");
   await page.keyboard.type("x = 1");
   await page.keyboard.press("Enter");
   await page.keyboard.type("y = 2");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
   await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
-  await expect(editor.locator("ul > li")).toHaveCount(3);
   await expect(blocks.last()).toHaveText("after");
+  // Shift+Enter after three backticks too.
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("```");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("z");
+  await expect(editor.locator("pre")).toHaveText(["x = 1\ny = 2", "z"]);
+  await page.keyboard.press("Shift+Enter");
+  // In the middle of a point, Shift+Enter makes the words after the caret a block of their own between the two
+  // halves of the list.
+  const middle = editor.locator("li").nth(1);
+  await middle.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Shift+Enter");
+  await expect(blocks.nth(3)).toHaveText("a1b1");
+  await expect(blocks.nth(4)).toHaveText("b2");
+  await expect(blocks.nth(4)).toHaveJSProperty("tagName", "P");
+  await expect(blocks.nth(5)).toHaveText("c1");
+  // In a quote, Enter is another line and Shift+Enter a new block after the quote.
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("> said");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("more");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("outside");
+  await expect(editor.locator("blockquote")).toHaveText("saidmore");
+  await expect(blocks.last()).toHaveText("outside");
+  await expect(blocks.last()).toHaveJSProperty("tagName", "P");
   // The empty line's hint says how to start one.
   await page.keyboard.press("Shift+Enter");
   await expect(editor.locator("[data-placeholder]")).toHaveAttribute(
     "data-placeholder",
     "Type / to choose a block, Shift+Enter for a new one",
   );
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Review of #1969 (Codex, 2026-11-22 00:15Z): with words selected across two points, Shift+Enter found no split
+// (prosemirror-schema-list 1.6.0 splitListItem declines a selection that leaves its item) and lifted a point out of
+// the list with the words still selected. It now takes the selected words out first, as Enter does elsewhere.
+test("shift_enter_over_words_selected_across_two_points_replaces_them_with_a_new_block", async ({ page }) => {
+  const watched = watch(page);
+  const word = `across${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} start\n\n- one\n- two`);
+  const blocks = editor.locator(":scope > *");
+  await editor.locator("li").first().click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.up("Shift");
+  // From after "o" in "one" to after "t" in "two".
+  await expect
+    .poll(() => editor.evaluate((element) => element.ownerDocument.getSelection()?.toString().replace(/\s/g, "")))
+    .toBe("net");
+  await page.keyboard.press("Shift+Enter");
+  await expect(editor.locator("li")).toHaveText(["o"]);
+  await expect(blocks.last()).toHaveText("wo");
+  await expect(blocks.last()).toHaveJSProperty("tagName", "P");
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
@@ -540,6 +597,12 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
   expect((await lines.first().boundingBox())?.y).toBe(before.y);
   const point = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
   if (page.context().browser()?.browserType().name() !== "webkit") {
+    // A short move over the handle first starts the drag. Moving straight off it in steps lost the drag on a slow
+    // runner (CI on #1967, 2026-11-22; every run failed so under 20x CPU throttling, none since): Playwright 1.64.1 takes a
+    // move for a drag only if dragstart comes before a timer it sets on that move's first mousemove (coreBundle.js,
+    // crDragDrop interceptDragCausedByMove), and otherwise sends the moves as plain mouse moves.
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2 + 12);
+    await expect(editor).toHaveAttribute("data-dragging", "true");
     await page.mouse.move(point.x, point.y, { steps: 10 });
     await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
     await page.mouse.up();

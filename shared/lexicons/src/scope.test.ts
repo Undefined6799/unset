@@ -12,7 +12,9 @@ describe("scope strings", () => {
 
   test("scope_fallback_pinned", () => {
     // The permission set written out as granular scopes, for a PDS without permission-set support.
-    expect(scopeStringFallback()).toBe(`atproto repo:sh.unset.profile repo:sh.unset.card ${OUTSIDE_THE_SET}`);
+    expect(scopeStringFallback()).toBe(
+      `atproto repo:sh.unset.profile repo:sh.unset.page repo:sh.unset.card ${OUTSIDE_THE_SET}`,
+    );
   });
 
   test("scopes_request_no_bluesky_or_unused_scope", () => {
