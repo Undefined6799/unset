@@ -1,7 +1,8 @@
 import { createServer } from "node:http"; // guard-allow: egress test fake, loopback listener only
 import type { AddressInfo } from "node:net"; // guard-allow: egress test fake, a type only
+import { type Resolve, resolvesInternal } from "@unset/shared-admin-envelope";
 import { afterEach, describe, expect, test } from "vitest";
-import { createPds, PdsUnavailable, type Resolve, resolvesInternal } from "../../../interfaces/pds-admin/pds.ts";
+import { createPds, PdsUnavailable } from "../../../interfaces/pds-admin/pds.ts";
 import { ALICE, fakePds } from "./harness.ts";
 
 const timers: NodeJS.Timeout[] = [];

@@ -1,8 +1,8 @@
 import { mkdirSync, renameSync, rmdirSync } from "node:fs";
 import { join } from "node:path";
+import { readLines } from "@unset/shared-admin-envelope";
 import { expect, test } from "vitest";
 import { openRequestLog, verifyLog } from "../../../interfaces/pds-admin/log.ts";
-import { readLines } from "../../../interfaces/pds-admin/state-file.ts";
 import { tempDir } from "./harness.ts";
 
 test("log.failed_append_no_gap: an append that fails leaves the chain whole for the next one", () => {
