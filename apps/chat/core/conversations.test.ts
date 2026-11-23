@@ -5,9 +5,11 @@ import { describe, expect, test } from "vitest";
 import {
   actionsOf,
   availableOf,
+  type ConversationId,
   canSend,
   composerAfterStart,
   composerOf,
+  composerOnOpen,
   draftAfterSend,
   isQuickReaction,
   type Message,
@@ -191,5 +193,23 @@ describe("composerAfterStart", () => {
     expect(composerAfterStart("hello", "hello, and more", true)).toEqual({ text: "hello, and more", failed: false });
     expect(composerAfterStart("hello", "hello", false)).toEqual({ text: "hello", failed: true });
     expect(composerAfterStart("hello", "hello again", false)).toEqual({ text: "hello again", failed: true });
+  });
+});
+
+describe("composerOnOpen", () => {
+  const a = "!a:unset.test" as ConversationId;
+  const b = "!b:unset.test" as ConversationId;
+  test("chat.composer_keeps_unsent: a conversation opens with what was typed in it and not sent", () => {
+    expect(composerOnOpen(a, new Map([[a, "not sent yet"]]), null)).toEqual({ text: "not sent yet", failed: false });
+    expect(composerOnOpen(a, new Map(), { id: a, text: "hello", failed: true })).toEqual({
+      text: "hello",
+      failed: true,
+    });
+  });
+  test("chat.composer_never_moves: text typed for one person never opens in another's conversation", () => {
+    expect(composerOnOpen(b, new Map([[a, "for a"]]), { id: a, text: "first to a", failed: true })).toEqual({
+      text: "",
+      failed: false,
+    });
   });
 });

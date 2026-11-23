@@ -22,6 +22,7 @@ import { onMount } from "svelte";
 import { boot, bootDock, closeDock, dockLayout } from "./boot.ts";
 import Conversations, { type Dock } from "./Conversations.svelte";
 import type { ChatState, UnlockOutcome } from "./core/chat.ts";
+import type { ConversationId } from "./core/conversations.ts";
 import { type DockMode, isDock } from "./core/dock.ts";
 import { CHECK_LENGTH, KEY_FILE_NAME, keyFileText, matchesEnd } from "./core/recovery-key.ts";
 import { hopPath } from "./core/sign-in.ts";
@@ -144,6 +145,8 @@ async function tryKey(event: SubmitEvent) {
 const dock = isDock(window.location, window.parent !== window);
 /** Bumped when unset.sh asks the box to open a Message link's conversation: the list mounts again on the start route. */
 let opened = $state(0);
+/** What was typed and not sent, by conversation, kept across the list's remount (Conversations.svelte `unsent`). */
+const unsent = new Map<ConversationId, string>();
 let dockMode: DockMode = $state("list");
 /** What the list covers, to go back to when the icon is pressed again. */
 let covered: DockMode | null = null;
@@ -194,7 +197,7 @@ onMount(() => {
       </header>
     {/if}
     {#key opened}
-      <Conversations conversations={view.conversations} names={view.names} me={view.me} dock={dockParts} />
+      <Conversations conversations={view.conversations} names={view.names} me={view.me} dock={dockParts} {unsent} />
     {/key}
   </main>
 {:else}
@@ -293,7 +296,7 @@ onMount(() => {
     {:else if view.kind === "ready"}
       <Card.Content>
         {#key opened}
-          <Conversations conversations={view.conversations} names={view.names} me={view.me} />
+          <Conversations conversations={view.conversations} names={view.names} me={view.me} {unsent} />
         {/key}
       </Card.Content>
     {:else if view.kind === "open_elsewhere"}

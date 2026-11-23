@@ -21,6 +21,7 @@ import {
   type ConversationId,
   type Conversations,
   composerAfterStart,
+  composerOnOpen,
   type Conversation as Item,
   startTarget,
 } from "./core/conversations.ts";
@@ -41,11 +42,18 @@ let {
   names,
   me,
   dock,
+  unsent = new Map(),
 }: {
   conversations: Conversations;
   names: (chatId: string) => Promise<string | null>;
   me: string;
   dock?: Dock;
+  /**
+   * What was typed and not sent, by conversation, kept by the page above this list (App.svelte), which remounts the
+   * list for a Message link; a conversation is unmounted when the box is minimised or the list covers it (Codex review
+   * on e4620a92 and dedb86d1). Only in this page's memory. Read when a conversation opens, so it needs no reactivity.
+   */
+  unsent?: Map<ConversationId, string>;
 } = $props();
 
 let list: readonly Item[] = $state([]);
@@ -55,13 +63,8 @@ let draft: ChatId | null = $state(null);
 let first = $state("");
 let starting = $state(false);
 /** What the opened conversation's composer starts with, once a new conversation's first message was started. */
-let carried: { text: string; failed: boolean } | null = $state(null);
+let carried: { id: ConversationId; text: string; failed: boolean } | null = $state(null);
 let problem: string | null = $state(null);
-/**
- * What was typed and not sent, by conversation: the box unmounts a conversation when it is minimised or the list
- * covers it, and opens it with this again (Codex review on e4620a92). Kept only in this page's memory.
- */
-let unsentText: Record<string, string> = $state({});
 const requests = $derived(list.filter((c) => c.available && c.request));
 const talks = $derived(list.filter((c) => c.available && !c.request));
 const unavailable = $derived(list.filter((c) => !c.available));
@@ -105,7 +108,7 @@ async function startDraft(event: SubmitEvent) {
     return;
   }
   problem = null;
-  carried = composerAfterStart(sent, first, started.sent);
+  carried = { id: started.id, ...composerAfterStart(sent, first, started.sent) };
   first = "";
   draft = null;
   open = started.id;
@@ -137,11 +140,11 @@ function leaveDraft() {
     {conversations}
     {names}
     id={open}
-    typed={unsentText[open] ?? carried?.text ?? ""}
-    unsent={carried?.failed === true}
+    typed={composerOnOpen(open, unsent, carried).text}
+    unsent={composerOnOpen(open, unsent, carried).failed}
     onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
     controls={dock === undefined ? undefined : conversationControls}
-    onTyped={(id, text) => (unsentText[id] = text)}
+    onTyped={(id, text) => unsent.set(id, text)}
   />
 {:else if draft !== null && dock?.mode !== "list"}
   <section class="flex flex-col gap-4" data-screen="new-conversation">

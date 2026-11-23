@@ -148,6 +148,20 @@ export function composerAfterStart(sent: string, now: string, delivered: boolean
   return { text: draftAfterSend(sent, now, delivered), failed: !delivered };
 }
 
+/**
+ * What a conversation's composer opens with: what was typed in it and not sent, else, for the conversation a first
+ * message just started, what that left. Only ever that conversation's own text, so nothing typed for one person opens
+ * in another's (Codex review on dedb86d1).
+ */
+export function composerOnOpen(
+  id: ConversationId,
+  unsent: ReadonlyMap<ConversationId, string>,
+  started: { id: ConversationId; text: string; failed: boolean } | null,
+): { text: string; failed: boolean } {
+  const own = started?.id === id ? started : null;
+  return { text: unsent.get(id) ?? own?.text ?? "", failed: own?.failed === true };
+}
+
 /** The messages selection mode gives a checkbox: those Delete is offered on (actionsOf). */
 export function selectable(messages: readonly Message[], composer: Composer): string[] {
   return messages.filter((m) => actionsOf(m, composer).includes("delete")).map((m) => m.id);
