@@ -186,8 +186,9 @@ describe("synapse image", () => {
             { timeoutMs: CALL_MS },
           );
           expect(loopback.err).toContain("Connection refused");
-          // As 991, never root, and nothing it imports is the OIDC or JWT library.
-          expect(run(["exec", synapse, "id", "-u"])).toBe("991");
+          // As 991, never root, and nothing it imports is the OIDC or JWT library. The distroless runtime ships no
+          // `id` (ADR 0092: no shell or coreutils), so the venv's own Python reads the process's uid.
+          expect(run(["exec", synapse, "/opt/synapse/bin/python", "-c", "import os; print(os.getuid())"])).toBe("991");
           const authlib = docker(["exec", synapse, "/opt/synapse/bin/python", "-c", "import authlib"], {
             timeoutMs: CALL_MS,
           });
