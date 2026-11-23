@@ -37,6 +37,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { buildOnce, PDS_HOST, type Postgres, type RunningWeb, startWeb } from "../../integration/web/built-server.ts";
 import { readyMember } from "../../integration/web/members.ts";
+import { removeOrphans } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 import {
   ACCOUNT,
@@ -76,6 +77,10 @@ function scratch(): string {
 /** Postgres with the migrations applied, then `seed` run as the superuser, connected to as `web` for this run. */
 async function database(seed = ""): Promise<Postgres> {
   process.on("exit", () => stopAllPostgres());
+  // A run killed before its exit listener ran (SIGKILL, a lost machine) left its container; an integration run
+  // removes those too (setup/pg.setup.ts), but a run of only e2e specs would never reach that.
+  const orphans = removeOrphans(60_000);
+  if (orphans.length > 0) process.stderr.write(`Removed test containers an ended run left: ${orphans.join(", ")}\n`);
   const migratorPassword = randomPassword();
   const postgres = await startPostgres({
     initDir: join(ROOT, "deployment/postgres/init"),

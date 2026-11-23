@@ -22,6 +22,7 @@ let holder: (() => void) | undefined;
 import { flushSync, onDestroy, onMount, tick } from "svelte";
 import type { BlockItem, MenusState } from "../../editor/menus.ts";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
+import { type Place, placeIn } from "../../editor/place.ts";
 import type { TableState } from "../../editor/tables.ts";
 import { TEXT_IN_PLACE, TEXT_MENUS } from "../../profile/messages.ts";
 import type { Block } from "../../profile/types.ts";
@@ -72,7 +73,9 @@ let opening: Promise<void> | undefined;
  * `ended` is set by the first key it cannot replay; keys after that are not kept, so what reaches the editor is only
  * ever what the member typed, in order.
  */
-let early: { x: number; y: number; typed: string; ended: boolean } | undefined;
+let early: { x: number; y: number; place: Place | undefined; typed: string; ended: boolean } | undefined;
+/** The page's own drawing of the words, shown until the editor takes its place. */
+let drawn: HTMLElement | undefined = $state();
 
 /** Lets go of the early press: the member pressed or moved somewhere else, so nothing typed belongs to this card. */
 function letGo() {
@@ -81,10 +84,20 @@ function letGo() {
 }
 
 /** Takes the early press for this card, so that only the card pressed last keeps keys. */
-function hold(x: number, y: number) {
+function hold(x: number, y: number, place: Place | undefined) {
   if (holder !== letGo) holder?.();
   holder = letGo;
-  early = { x, y, typed: "", ended: false };
+  early = { x, y, place, typed: "", ended: false };
+}
+
+/** The words under the page point (x, y), as the browser finds them (CSSOM View caretPositionFromPoint). */
+function wordsAt(x: number, y: number): { node: Node; offset: number } | null {
+  if (typeof document.caretPositionFromPoint === "function") {
+    const found = document.caretPositionFromPoint(x, y);
+    return found === null ? null : { node: found.offsetNode, offset: found.offset };
+  }
+  const range = document.caretRangeFromPoint?.(x, y);
+  return range == null ? null : { node: range.startContainer, offset: range.startOffset };
 }
 
 /** A press or a move of focus outside this card ends its early press. */
@@ -163,9 +176,10 @@ const open = () => {
 
 function carryEarly(mounted: MarkdownEditor) {
   if (early === undefined) return;
-  const { x, y, typed } = early;
+  const { x, y, place, typed } = early;
   letGo();
-  mounted.focusAt(x, y);
+  // In the same words, wherever the editor draws them; the point only when the words could not be told.
+  if (place === undefined || !mounted.focusAtPlace(place)) mounted.focusAt(x, y);
   if (typed !== "") mounted.type(typed);
 }
 
@@ -179,7 +193,8 @@ function pressed(event: PointerEvent) {
   if (editor === undefined) {
     if (event.target.closest("a") !== null) return;
     event.preventDefault();
-    hold(event.clientX, event.clientY);
+    const at = wordsAt(event.clientX, event.clientY);
+    hold(event.clientX, event.clientY, at === null || drawn === undefined ? undefined : placeIn(drawn, at.node, at.offset));
     void open();
     return;
   }
@@ -224,7 +239,8 @@ function pressedBeforeScript() {
   if (element === null || element.closest(CONTROLS) !== null) return;
   const rects = caret.getRangeAt(0).getClientRects();
   const box = rects[0] ?? element.getBoundingClientRect();
-  hold(box.left, box.top + box.height / 2);
+  const place = drawn === undefined ? undefined : placeIn(drawn, at, caret.anchorOffset);
+  hold(box.left, box.top + box.height / 2, place);
   void open();
 }
 
@@ -258,7 +274,7 @@ onDestroy(() => {
 </script>
 
 <span id={labelId} class="sr-only">{TEXT_IN_PLACE.label(name)}</span>
-{#if editor === undefined}<Readme {blocks} />{/if}
+{#if editor === undefined}<div bind:this={drawn} class="contents"><Readme {blocks} /></div>{/if}
 {#if failed}<p role="alert" class="text-sm text-muted-foreground">{TEXT_IN_PLACE.failed}</p>{/if}
 <div class="relative">
 <TextMenus
