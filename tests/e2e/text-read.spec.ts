@@ -1,7 +1,8 @@
 // A Text card as the page reads it (P1.21k): the page reads Markdown with micromark, the reader the editor uses, so
-// what the editor writes is what the page draws, and a text written to stall the reader costs the page its limit and
-// no more. The owner's own page shows a Text card in the editor, so the card as the server draws it is read with
-// script off. The cards added are deleted again.
+// what the editor writes is what the page draws; a text written to stall the reader costs the page its limit and no
+// more; and reading in the browser (the editor, and its Preview tab) keeps the Trusted Types rule. The owner's own page
+// shows a Text card in the editor, so the card as the server draws it is read with script off. The cards added are
+// deleted again.
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import { addCard, OWN_PAGE, paceWrites, spendsWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
@@ -79,5 +80,29 @@ test("text_written_to_stall_the_reader_is_shown_as_written_and_the_page_answers_
   const quiet = await withoutScript(browser, page);
   await expect(textCards(quiet).last().locator("p")).toHaveText([stored]);
   await quiet.context().close();
+  await deleteNewest(page);
+});
+
+// Reading in the browser: micromark's browser build decodes a named character ("&amp;") by writing it into an
+// element, which the page's Trusted Types rule refuses, so the editor did not load on such a text. The build takes the
+// table lookup the server uses instead (interfaces/web/vite.config.ts).
+test("a_named_character_shows_on_the_page_in_the_editor_and_in_the_preview", async ({ browser, page }) => {
+  const watched = watch(page);
+  const shown = "Fish & chips \u00a9 2026";
+  await addStored(page, "Fish &amp; chips &copy; 2026");
+  const quiet = await withoutScript(browser, page);
+  await expect(textCards(quiet).last().locator("p")).toHaveText([shown]);
+  await quiet.context().close();
+  const card = textCards(page).last();
+  await expect(card.getByRole("textbox")).toHaveText(shown);
+  await card.getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox", { name: "Text" })).toHaveText(shown);
+  await dialog.getByRole("tab", { name: "Preview" }).click();
+  await expect(dialog.getByRole("textbox", { name: "Text" })).toBeHidden();
+  await expect(dialog.getByRole("tabpanel", { name: "Preview" }).getByText(shown)).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
   await deleteNewest(page);
 });
