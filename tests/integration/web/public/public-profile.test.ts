@@ -720,6 +720,7 @@ const WHOLE_PAGE_FIELDS = [
   "headline",
   "letter",
   "location",
+  "message",
   "meta.description",
   "meta.title",
   "meta.url",
