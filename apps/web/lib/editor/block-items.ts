@@ -14,6 +14,9 @@ export type BlockItem = (typeof BLOCK_GROUPS)[BlockGroup][number];
 
 export const BLOCK_ITEMS: readonly BlockItem[] = Object.values(BLOCK_GROUPS).flat();
 
+/** What a block already written can become, when its handle's dots are pressed: a divider or a table is only added. */
+export const CHANGE_ITEMS: readonly BlockItem[] = BLOCK_ITEMS.filter((item) => item !== "divider" && item !== "table");
+
 export function groupOf(item: BlockItem): BlockGroup {
   return (Object.keys(BLOCK_GROUPS) as BlockGroup[]).find((group) =>
     (BLOCK_GROUPS[group] as readonly BlockItem[]).includes(item),
