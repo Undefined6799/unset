@@ -2,7 +2,8 @@
 // and legal.test.ts check for the Hono server: home, the legal pages, security.txt and the error pages run no script,
 // carry the public or static CSP, and echo nothing sent. A visitor's home and legal pages are cached five minutes and
 // vary on Cookie; P1.20k reads a member's session there so the header shows them signed in, and a member's copy is
-// private and never stored, so no cache can hand it to anyone else.
+// private and never stored, so no cache can hand it to anyone else. Book P1.22h: SvelteKit also answers each page at
+// `<page>/__data.json` (../data-address.ts); that address is held to the page's own answers and is never a search result.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
@@ -14,6 +15,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+import { DATA, dataAnswer, LAYOUT_ONLY, nodeData, undrawn } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -269,6 +271,145 @@ describe("a signed-in member on public pages", () => {
     const response = await get("/legal/terms", { cookie });
     expect(response.status).toBe(200);
     expect(await response.text()).toContain(`href="/${did}"`);
+  });
+});
+
+/** The root layout's data for a visitor: the shell's flags and the Sign in link, no one's account. Listing is on here. */
+const VISITOR_SHELL = {
+  signedIn: false,
+  account: undefined,
+  appOpen: false,
+  prefs: undefined,
+  privacyNotice: null,
+  notifications: undefined,
+  bellOpens: false,
+  siteNoindex: false,
+};
+/** A field named `kind` is what a component branches on, never drawn as words. */
+const isKind = (path: string) => /(^|\.)kind$/.test(path);
+
+// Book P1.22h. A data address is not a page: it always says noindex, home's too, whose page search engines may list.
+describe("the data address of a public page", () => {
+  test("home_s_data_is_the_shell_alone_and_the_same_for_every_visitor", async () => {
+    const plain = await get(DATA);
+    expect(plain.status).toBe(200);
+    // Home's five-minute rule is set by its own load, which holds no data and does not run here: never stored.
+    expect(plain.headers.get("cache-control")).toBe("private, no-store");
+    expect(plain.headers.get("vary")).toBe("Cookie");
+    expect(plain.headers.get("x-robots-tag")).toBe("noindex");
+    expect(plain.headers.get("content-security-policy")).toBe((await get("/")).headers.get("content-security-policy"));
+    const body = await plain.clone().text();
+    const answer = await dataAnswer(plain);
+    expect(answer.type === "data" && answer.nodes).toHaveLength(2);
+    expect(nodeData(answer, 0)).toEqual({ ...VISITOR_SHELL, signInHref: "/login" });
+    expect(answer.type === "data" && answer.nodes[1]).toBeNull();
+    const supplied = await get(`${DATA}?active=account&accountName=Mallory&accountPath=/evil`, {
+      cookie: "__Host-theme=dark; accountName=Mallory",
+    });
+    expect(await supplied.text()).toBe(body);
+    expect(supplied.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("a_legal_page_s_data_is_what_the_page_shows_under_its_headers", async () => {
+    for (const path of LEGAL) {
+      const [page, data] = [await get(path), await get(`${path}${DATA}`)];
+      expect(data.status, path).toBe(200);
+      for (const name of ["cache-control", "vary", "x-robots-tag", "content-security-policy"]) {
+        expect(data.headers.get(name), `${path} ${name}`).toBe(page.headers.get(name));
+      }
+      expect(data.headers.get("cache-control"), path).toBe("public, max-age=300");
+      expect(data.headers.get("x-robots-tag"), path).toBe("noindex");
+      const body = await data.clone().text();
+      const answer = await dataAnswer(data);
+      const html = await page.text();
+      const document = nodeData(answer, 1) as Record<string, unknown>;
+      expect(Object.keys(document).sort(), path).toEqual(["sections", "shell", "title", "version"]);
+      expect(undrawn(document, html, isKind), path).toEqual([]);
+      expect(nodeData(answer, 0), path).toEqual({
+        ...VISITOR_SHELL,
+        signInHref: `/login?next=${encodeURIComponent(path)}`,
+      });
+      // Config is data here too: no `<` reaches the answer as typed (devalue 5.9.4 escapes it).
+      expect(body, path).not.toContain("<");
+    }
+    expect(JSON.stringify(nodeData(await dataAnswer(await get(`/legal/privacy${DATA}`)), 1))).toContain(TITLE);
+  });
+
+  test("a_member_s_data_is_their_own_shell_and_never_stored", async () => {
+    const { did, cookie } = await memberCookie();
+    for (const path of PUBLIC_PAGES) {
+      const address = path === "/" ? DATA : `${path}${DATA}`;
+      const data = await get(address, { cookie: `${cookie}; __Host-theme=dark` });
+      expect(data.headers.get("cache-control"), path).toBe("private, no-store");
+      expect(data.headers.get("vary"), path).toContain("Cookie");
+      expect(data.headers.get("x-robots-tag"), path).toBe("noindex");
+      expect(nodeData(await dataAnswer(data), 0), path).toMatchObject({
+        signedIn: true,
+        account: { path: `/${did}` },
+        prefs: { theme: "dark", returnTo: path },
+        bellOpens: false,
+      });
+      // Right after the member's request, a visitor's data carries no one.
+      const visitor = await get(address);
+      expect(await visitor.text(), path).not.toContain(did);
+    }
+  });
+
+  test("the_layout_alone_and_a_path_with_no_page_carry_no_one_and_noindex", async () => {
+    for (const path of ["", "/legal/terms"]) {
+      const layout = await get(`${path}${LAYOUT_ONLY}`);
+      expect(layout.headers.get("cache-control"), path).toBe("private, no-store");
+      expect(layout.headers.get("x-robots-tag"), path).toBe("noindex");
+      const answer = await dataAnswer(layout);
+      expect(answer.type === "data" && answer.nodes[1], path).toEqual({ type: "skip" });
+    }
+    // No page: SvelteKit's own 404, a code and no data. A route that is not a page has no data address at all.
+    for (const path of ["/nowhere", "/legal/other", "/robots.txt", "/health"]) {
+      const none = await get(`${path}${DATA}`);
+      expect(none.status, path).toBe(404);
+      expect(none.headers.get("x-robots-tag"), path).toBe("noindex");
+      expect(["", '{"status":404,"message":"http.not_found"}'], path).toContain(await none.text());
+    }
+    // The error page's client asks for the root layout alone; it gets the shell for the path, nothing sent echoed.
+    const shell = await get("/nowhere/__data.json?x-sveltekit-invalidated=1&accountName=Mallory");
+    expect(shell.headers.get("cache-control")).toBe("private, no-store");
+    expect(shell.headers.get("x-robots-tag")).toBe("noindex");
+    const answer = await dataAnswer(shell);
+    expect(nodeData(answer, 0)).toEqual({
+      ...VISITOR_SHELL,
+      signInHref: `/login?next=${encodeURIComponent("/nowhere")}`,
+    });
+  });
+
+  // The route's own limit at the gate: a page and its data address spend the same allowance for an address (60 at
+  // once, 5 a second back; lib/server/limits.ts `default`), and a refused data request gets the code, never a page.
+  test("a_page_and_its_data_address_spend_one_limit", async () => {
+    const from = clientAddress();
+    const ask = (path: string) => web.fetch(path, { headers: { "x-forwarded-for": from, accept: "text/html" } });
+    const started = performance.now();
+    let passed = 0;
+    let refused: Response | undefined;
+    while (refused === undefined && passed < 200) {
+      const response = await ask(passed % 2 === 0 ? "/legal/terms" : `/legal/terms${DATA}`);
+      if (response.status === 200) passed += 1;
+      else refused = response;
+    }
+    const refilled = Math.ceil(((performance.now() - started) / 1000) * 5);
+    expect(passed).toBeGreaterThanOrEqual(60);
+    expect(passed).toBeLessThanOrEqual(60 + refilled);
+    expect(refused?.status).toBe(429);
+    // Whichever kind was refused first, both are refused from the same address: ten at once, five of each kind, against
+    // a limit that gives back five a second, so some of each kind are turned away.
+    const kinds = Array.from({ length: 10 }, (_, at) => (at % 2 === 0 ? "/legal/terms" : `/legal/terms${DATA}`));
+    const answers = await Promise.all(kinds.map(ask));
+    const refusedAt = (path: string) => answers.filter((answer, at) => kinds[at] === path && answer.status === 429);
+    expect(refusedAt("/legal/terms").length).toBeGreaterThan(0);
+    const limited = refusedAt(`/legal/terms${DATA}`);
+    expect(limited.length).toBeGreaterThan(0);
+    const no = limited[0];
+    expect(no?.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(no?.headers.get("retry-after")).toMatch(/^\d+$/);
+    expect(await no?.text()).toBe("http.rate_limited\n");
   });
 });
 

@@ -1,7 +1,7 @@
 // What a card shows beside its own words (the profile-card mockup, Alex 2026-11-17): a labelled link names its site,
 // and an email button's address is shown under the buttons.
 import { describe, expect, test } from "vitest";
-import { cardViews, contactAction } from "./view.ts";
+import { cardViews, contactAction, shownCards } from "./view.ts";
 
 describe("card views", () => {
   test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", () => {
@@ -40,6 +40,20 @@ describe("card views", () => {
     );
     expect(views.map((view) => view.version)).toEqual(["bafyv", undefined]);
     expect("version" in (cardViews([{ key: "a", width: "full", content: readme }])[0] ?? {})).toBe(false);
+  });
+
+  // Book P1.22h, rule SE-3: a page that edits nothing sends the browser what a card shows, never the record behind it.
+  test("a_card_for_a_page_that_edits_nothing_is_what_it_shows_and_no_more", () => {
+    const text = "Typed **as Markdown**";
+    const [card] = shownCards(
+      cardViews(
+        [{ key: "k", width: "half", surface: "plain", content: { kind: "readme", text } }],
+        new Map([["k", "v"]]),
+      ),
+    );
+    expect(Object.keys(card ?? {}).sort()).toEqual(["key", "shown", "surface", "width"]);
+    expect(card).toMatchObject({ key: "k", width: "half", surface: "plain", shown: { kind: "readme" } });
+    expect(JSON.stringify(card)).not.toContain(text);
   });
 
   test("an_email_button_carries_its_address_and_a_link_button_none", () => {

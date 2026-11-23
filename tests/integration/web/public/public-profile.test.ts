@@ -3,20 +3,29 @@
 // network: the page never reads a PDS. Decision 35 D7 and rule SE-2: every account the page may not show, and every
 // path that is no actor, gets one 404 with the same bytes and headers. ADR 0078 (P1.22a): a page shown to signed-in
 // members only, or only to its member, gives anyone it leaves out the limited page, never the 404, and is never offered
-// to search engines; the session is read when a cookie is sent.
+// to search engines; the session is read when a cookie is sent. Book P1.22h: SvelteKit also answers each page at
+// `<page>/__data.json` (../data-address.ts), and that address gives every viewer the page's own answers and no more.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
-import { CARDS_MAX, toCardRecord } from "@unset/domains-profile";
+import { CARDS_MAX, type CardContent, toCardRecord } from "@unset/domains-profile";
 import type { SavedSession } from "@unset/infrastructure-pds";
-import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
+import {
+  createNotificationStore,
+  createOAuthSessionStore,
+  createPool,
+  withClient,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+import { DATA, dataAnswer, fieldsOf, LAYOUT_ONLY, nodeData, undrawn } from "../data-address.ts";
+import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
 const provided = inject("postgres");
@@ -46,6 +55,7 @@ const sessions = createSessionStore({
 const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }));
 if (keyring === undefined) throw new Error("test keyring did not parse");
 const tokenSets = createOAuthSessionStore<SavedSession>({ pool: webPool, sealer: createSealer(keyring), log: quiet });
+const inbox = createNotificationStore();
 
 /** A signed-in browser for `owner`, as gate.test.ts makes one: a stored grant, then a session; returns the cookie. */
 async function signedIn(owner: string): Promise<string> {
@@ -83,6 +93,7 @@ const MEMBERS = `did:plc:${"v".repeat(24)}`;
 const ONLY_ME = `did:plc:${"w".repeat(24)}`;
 const FUTURE = `did:plc:${"x".repeat(24)}`;
 const OTHER = `did:plc:${"y".repeat(24)}`;
+const WHOLE = `did:plc:${"d".repeat(24)}`;
 
 /** An account as the indexer leaves it once our PDS confirmed it, with a profile and one README card unless told. */
 async function indexed(
@@ -95,6 +106,8 @@ async function indexed(
     profile?: boolean;
     surface?: "plain";
     visibility?: string;
+    /** More fields of the profile record: its place and website. */
+    fields?: Readonly<Record<string, string>>;
   } = {},
 ) {
   const { handle = null, status = "unresolved", active = true, name = "Member", profile = true } = opts;
@@ -104,6 +117,7 @@ async function indexed(
     $type: "sh.unset.profile",
     displayName: name,
     headline: "<b>Head</b>",
+    ...opts.fields,
     createdAt: NOW,
   };
   await withClient(indexer, null, async (c) => {
@@ -140,19 +154,22 @@ async function indexed(
 }
 
 /**
- * `count` more README cards for `did`, keys after the first card's, each saying "Extra card", listed after it by the
- * main page as the indexer stores a list (each card's position is its place in the list).
+ * More cards for `did`, keys after the first card's, listed after it by the main page as the indexer stores a list
+ * (each card's position is its place in the list).
  */
-async function moreCards(did: string, count: number) {
-  const card = toCardRecord({ kind: "readme", text: "Extra card" }, "full", null, NOW);
-  if (!card.ok) throw new Error(`seed card did not build: ${card.code}`);
-  const rkeys = Array.from({ length: count }, (_, i) => `extra${String(i).padStart(3, "0")}`);
+async function moreCards(did: string, contents: readonly CardContent[]) {
+  const records = contents.map((content) => {
+    const card = toCardRecord(content, "full", null, NOW);
+    if (!card.ok) throw new Error(`seed card did not build: ${card.code}`);
+    return card.record;
+  });
+  const rkeys = records.map((_, i) => `extra${String(i).padStart(3, "0")}`);
   await withClient(indexer, null, async (c) => {
     for (const [i, rkey] of rkeys.entries()) {
       await c.query(
         `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
          VALUES ($1, $2, $3, 'cid-s', '3l', $4, $5, now())`,
-        [`at://${did}/sh.unset.card/${rkey}`, did, rkey, card.record, i + 1],
+        [`at://${did}/sh.unset.card/${rkey}`, did, rkey, records[i], i + 1],
       );
     }
     const extra = rkeys.map((rkey) => ({ uri: `at://${did}/sh.unset.card/${rkey}` }));
@@ -162,6 +179,35 @@ async function moreCards(did: string, count: number) {
     );
   });
 }
+
+/**
+ * One card of each kind, each with words of its own, so a word the data holds and the page does not show is seen. The
+ * Text card's Markdown marks are never shown as typed: the page draws what they mean.
+ */
+const EVERY_KIND: readonly CardContent[] = [
+  { kind: "readme", text: "Dana writes **boldly** and [links out](https://dana.example/readme)." },
+  {
+    kind: "links",
+    title: "Dana links",
+    layout: "list",
+    items: [{ uri: "https://dana.example/one", label: "Dana one", description: "First of Dana" }],
+  },
+  {
+    kind: "collection",
+    title: "Dana work",
+    layout: "grid",
+    items: [{ title: "Dana piece", tag: "Dana tag", description: "Made by Dana", uri: "https://dana.example/piece" }],
+  },
+  {
+    kind: "buttons",
+    heading: "Reach Dana",
+    text: "Dana answers",
+    buttons: [
+      { kind: "email", address: "dana@dana.example" },
+      { kind: "link", preset: "custom", uri: "https://dana.example/call", label: "Call Dana" },
+    ],
+  },
+];
 
 let web: RunningWeb;
 /** A server with invite requests on (ADR 0080), so the limited card offers Sign up. It never sends a mail here. */
@@ -175,10 +221,17 @@ beforeAll(async () => {
   await indexed(BARE, { profile: false, name: "Bare Member" });
   await indexed(UNVERIFIED, { handle: "mallory.unset.org", status: "invalid", name: "Mallory" });
   await indexed(MANY, { name: "Many" });
-  await moreCards(MANY, CARDS_MAX);
+  await moreCards(MANY, Array<CardContent>(CARDS_MAX).fill({ kind: "readme", text: "Extra card" }));
   await indexed(MEMBERS, { handle: "bea.unset.org", status: "verified", name: "Bea", visibility: "signed-in" });
   await indexed(ONLY_ME, { handle: "cy.unset.org", status: "verified", name: "Cy", visibility: "owner-only" });
   await indexed(FUTURE, { name: "Future", visibility: "friendsOfFriends" });
+  await indexed(WHOLE, {
+    handle: "dana.unset.org",
+    status: "verified",
+    name: "Dana",
+    fields: { location: "Dana town", website: "https://dana.example/home" },
+  });
+  await moreCards(WHOLE, EVERY_KIND);
   secrets = mkdtempSync(join(tmpdir(), "public-profile-"));
   const file = (name: string, text: string): string => {
     const path = join(secrets, name);
@@ -396,5 +449,323 @@ describe("page visibility (ADR 0078)", () => {
     const html = await (await get(`/@${FUTURE}`)).text();
     expectLimited(html, "Future");
     expect(html).toContain('data-limited="ownerOnly"');
+  });
+});
+
+/** A page and its data address as one viewer gets them, the answer's two nodes read back. */
+async function pageAndData(path: string, cookie?: string) {
+  const init = cookie === undefined ? {} : { cookie };
+  const page = await get(path, init);
+  const data = await get(`${path}${DATA}`, init);
+  const answer = await dataAnswer(data.clone());
+  return { page, data, html: await page.text(), layout: nodeData(answer, 0), leaf: nodeData(answer, 1) };
+}
+
+/** The headers a data address shares with its page: the cache rule, Vary, the robots word and the group's policy. */
+const SHARED_HEADERS = ["cache-control", "vary", "x-robots-tag", "content-security-policy"];
+const shared = (response: Response) => SHARED_HEADERS.map((name) => [name, response.headers.get(name)]);
+
+/**
+ * Fields a component only branches on: a kind, a layout, a card's key, width and avatar crop, whether the bell's read
+ * worked. Never drawn as words.
+ */
+const SWITCHES = new Set([
+  "avatarShape",
+  "cards[].key",
+  "cards[].width",
+  "cards[].shown.layout",
+  "notifications.state",
+]);
+const isSwitch = (path: string) => /(^|\.)kind$/.test(path) || SWITCHES.has(path);
+
+/** Everything the page's load sends a viewer shown the whole page: what each card shows, never the record behind it. */
+const WHOLE_PAGE_FIELDS = [
+  "audience",
+  "avatarShape",
+  "cards[].key",
+  "cards[].shown.blocks[].children[].children[].kind",
+  "cards[].shown.blocks[].children[].children[].text",
+  "cards[].shown.blocks[].children[].href",
+  "cards[].shown.blocks[].children[].kind",
+  "cards[].shown.blocks[].children[].text",
+  "cards[].shown.blocks[].kind",
+  "cards[].shown.buttons[].address",
+  "cards[].shown.buttons[].href",
+  "cards[].shown.buttons[].label",
+  "cards[].shown.heading",
+  "cards[].shown.items[].description",
+  "cards[].shown.items[].href",
+  "cards[].shown.items[].site",
+  "cards[].shown.items[].tag",
+  "cards[].shown.items[].text",
+  "cards[].shown.items[].title",
+  "cards[].shown.kind",
+  "cards[].shown.layout",
+  "cards[].shown.text",
+  "cards[].shown.title",
+  "cards[].surface",
+  "cards[].width",
+  "contact.href",
+  "contact.label",
+  "did",
+  "editHref",
+  "handle",
+  "headline",
+  "letter",
+  "location",
+  "meta.description",
+  "meta.title",
+  "meta.url",
+  "name",
+  "shell.kind",
+  "shell.noindex",
+  "shell.wide",
+  "website.href",
+  "website.text",
+];
+
+/** The limited page's data (ADR 0078): who the member is and the way in, nothing of the page. */
+const LIMITED_FIELDS = [
+  "avatarShape",
+  "did",
+  "handle",
+  "letter",
+  "limited.signIn",
+  "limited.signUp",
+  "name",
+  "shell.kind",
+  "shell.noindex",
+  "shell.wide",
+];
+
+/** The root layout's data for a visitor: the shell's flags and the Sign in link, no one's account. */
+/** The root layout's data for a member: their own account link, their theme form and their bell. */
+const MEMBER_SHELL_FIELDS = [
+  "account.path",
+  "appOpen",
+  "bellOpens",
+  "notifications.count",
+  "notifications.entries",
+  "notifications.more",
+  "notifications.state",
+  "prefs.returnTo",
+  "prefs.theme",
+  "privacyNotice",
+  "signInHref",
+  "signedIn",
+  "siteNoindex",
+];
+/** Each entry of a member's own bell, in place of the empty list. */
+const BELL_ENTRY_FIELDS = [
+  "notifications.entries[].id",
+  "notifications.entries[].reason",
+  "notifications.entries[].sentAt",
+];
+
+const VISITOR_SHELL = {
+  signedIn: false,
+  account: undefined,
+  appOpen: false,
+  prefs: undefined,
+  privacyNotice: null,
+  notifications: undefined,
+  bellOpens: false,
+  siteNoindex: true,
+};
+
+/** The one answer for an account the page may not show: the code alone, under status 200 (../data-address.ts). */
+const MISSING = { type: "error", error: { status: 404, message: "http.not_found" } };
+
+/** The shell's Sign in link returns to the path asked for, shown or not; set aside to compare two answers. */
+const unpathed = (body: string) => body.replace(/\/login\?next=[^"]*"/g, '/login?next="');
+/** A data answer's headers but its length, which follows the path in the Sign in link. */
+const dataHeaders = (response: Response) => kept(response);
+
+describe("the data address (book P1.22h)", () => {
+  test("a_visitor_s_data_is_what_their_page_shows_under_the_page_s_headers", async () => {
+    const { page, data, html, layout, leaf } = await pageAndData("/@dana.unset.org");
+    expect(data.status).toBe(200);
+    expect(data.headers.get("content-type")).toBe("application/json");
+    expect(shared(data)).toEqual(shared(page));
+    expect(data.headers.get("cache-control")).toBe("public, max-age=60");
+    expect(data.headers.get("vary")).toBe("Cookie");
+    expect(data.headers.get("x-robots-tag")).toBe("noindex");
+    expect(data.headers.get("set-cookie")).toBeNull();
+    expect(undrawn(leaf, html, isSwitch)).toEqual([]);
+    expect(fieldsOf(leaf)).toEqual(WHOLE_PAGE_FIELDS);
+    expect(leaf).toMatchObject({ editHref: null, audience: null });
+    expect(layout).toEqual({ ...VISITOR_SHELL, signInHref: `/login?next=${encodeURIComponent("/@dana.unset.org")}` });
+    expect(undrawn(layout, html, isSwitch)).toEqual([]);
+    // The answer is JSON under nosniff, and no `<` reaches it as typed (devalue 5.9.4 escapes it).
+    expect(data.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(await data.text()).not.toContain("<");
+  });
+
+  test("a_member_s_and_the_owner_s_data_is_their_own_copy_and_never_stored", async () => {
+    // A notification for a member with an account row, so their bell has an entry (notificationStore.ts INSERT).
+    const browser = await signedIn(OTHER);
+    await readyMember(webPool, parseDid(OTHER) as Did);
+    await withClient(webPool, null, (db) =>
+      inbox.insert(db, parseDid(OTHER) as Did, {
+        reason: "privacy_notice",
+        topic: "2026-11-19",
+        dedupeKey: "privacy_notice:data",
+      }),
+    );
+    const member = await pageAndData("/@dana.unset.org", browser);
+    const owner = await pageAndData("/@dana.unset.org", await signedIn(WHOLE));
+    for (const [who, copy] of Object.entries({ member, owner })) {
+      expect(shared(copy.data), who).toEqual(shared(copy.page));
+      expect(copy.data.headers.get("cache-control"), who).toBe("private, no-store");
+      expect(copy.data.headers.get("vary"), who).toBe("Cookie");
+      expect(undrawn(copy.leaf, copy.html, isSwitch), who).toEqual([]);
+      expect(fieldsOf(copy.leaf), who).toEqual(WHOLE_PAGE_FIELDS);
+    }
+    // Only the owner's copy carries the way back to the page they edit.
+    expect(member.leaf).toMatchObject({ editHref: null });
+    expect(owner.leaf).toMatchObject({ editHref: `/${WHOLE}` });
+    // The shell's part is the viewer's own: their account link, their theme form, their bell. No one else's.
+    expect(fieldsOf(owner.layout)).toEqual(MEMBER_SHELL_FIELDS);
+    expect(owner.layout).toMatchObject({ signedIn: true, account: { path: `/${WHOLE}` }, bellOpens: false });
+    expect(member.layout).toMatchObject({ signedIn: true, account: { path: `/${OTHER}` }, bellOpens: false });
+    // Two things reach a member that their page does not draw, both their own and in this never-stored copy alone.
+    // The Sign in link's address, which only a visitor's page uses: it holds this page's path and nothing else.
+    const signInHref = `signInHref: /login?next=${encodeURIComponent("/@dana.unset.org")}`;
+    expect(undrawn(owner.layout, owner.html, isSwitch)).toEqual([signInHref]);
+    // And the bell's entries (the id, reason and time of each of their own notifications): on a page whose bell is
+    // a link, only their count is drawn. They name no one else.
+    const withEntries = MEMBER_SHELL_FIELDS.filter((field) => field !== "notifications.entries");
+    expect(fieldsOf(member.layout)).toEqual([...withEntries, ...BELL_ENTRY_FIELDS].sort());
+    const beside = undrawn(member.layout, member.html, isSwitch).map((line) => line.split(": ")[0]);
+    expect(beside).toEqual([...BELL_ENTRY_FIELDS, "signInHref"]);
+    expect(member.layout).toMatchObject({ notifications: { count: 1, entries: [{ reason: "privacy_notice" }] } });
+    expect(JSON.stringify(member.layout)).not.toContain(WHOLE);
+  });
+
+  test("every_missing_or_hidden_actor_is_the_same_data_answer", async () => {
+    const path = `/@did:plc:${"z".repeat(24)}`;
+    const missing = await get(`${path}${DATA}`);
+    expect(missing.status).toBe(200);
+    expect(missing.headers.get("cache-control")).toBe("no-cache");
+    expect(missing.headers.get("x-robots-tag")).toBe("noindex");
+    expect(shared(missing)).toEqual(shared(await get(path)));
+    const body = unpathed(await missing.clone().text());
+    expect((await dataAnswer(missing)).type === "data").toBe(true);
+    for (const hidden of [
+      `/@${HIDDEN}`,
+      `/@${BARE}`,
+      "/@mallory.unset.org",
+      "/@nobody.unset.org",
+      "/@%3Cscript%3E",
+      `/@${SHOWN.toUpperCase()}`,
+    ]) {
+      const response = await get(`${hidden}${DATA}`);
+      expect(response.status, hidden).toBe(200);
+      expect(dataHeaders(response), hidden).toEqual(dataHeaders(missing));
+      expect(unpathed(await response.clone().text()), hidden).toBe(body);
+      const answer = await dataAnswer(response);
+      expect(answer.type === "data" && answer.nodes[1], hidden).toEqual(MISSING);
+    }
+    // A member is told no more than a visitor, in a copy of their own.
+    const asMember = await get(`/@${HIDDEN}${DATA}`, { cookie: await signedIn(OTHER) });
+    expect(asMember.headers.get("cache-control")).toBe("private, no-store");
+    const answer = await dataAnswer(asMember);
+    expect(answer.type === "data" && answer.nodes[1]).toEqual(MISSING);
+  });
+
+  test("a_page_that_leaves_the_viewer_out_gives_only_the_limited_data", async () => {
+    const member = await signedIn(OTHER);
+    const cases: [path: string, cookie: string | undefined, signIn: string | null][] = [
+      ["/@bea.unset.org", undefined, `/login?next=${encodeURIComponent("/@bea.unset.org")}`],
+      ["/@cy.unset.org", undefined, null],
+      ["/@cy.unset.org", member, null],
+      [`/@${FUTURE}`, undefined, null],
+    ];
+    for (const [path, cookie, signIn] of cases) {
+      const who = `${path} ${cookie === undefined ? "visitor" : "member"}`;
+      const { page, data, html, leaf } = await pageAndData(path, cookie);
+      expect(shared(data), who).toEqual(shared(page));
+      expect(data.headers.get("cache-control"), who).toBe(
+        cookie === undefined ? "public, max-age=60" : "private, no-store",
+      );
+      expect(data.headers.get("x-robots-tag"), who).toBe("noindex");
+      expect(fieldsOf(leaf), who).toEqual(LIMITED_FIELDS);
+      expect(leaf, who).toMatchObject({ limited: { signIn, signUp: null } });
+      expect(undrawn(leaf, html, isSwitch), who).toEqual([]);
+      const body = await data.text();
+      expect(body, who).not.toContain("Card of");
+      expect(body, who).not.toContain("Head");
+    }
+  });
+
+  test("a_page_for_fewer_than_everyone_gives_those_it_is_shown_to_the_whole_data_privately", async () => {
+    const cases: [path: string, viewer: string, audience: string, editHref: string | null][] = [
+      ["/@bea.unset.org", OTHER, "signedIn", null],
+      ["/@bea.unset.org", MEMBERS, "signedIn", `/${MEMBERS}`],
+      ["/@cy.unset.org", ONLY_ME, "ownerOnly", `/${ONLY_ME}`],
+    ];
+    for (const [path, viewer, audience, editHref] of cases) {
+      const who = `${path} ${viewer}`;
+      const { page, data, html, leaf } = await pageAndData(path, await signedIn(viewer));
+      expect(shared(data), who).toEqual(shared(page));
+      expect(data.headers.get("cache-control"), who).toBe("private, no-store");
+      expect(data.headers.get("x-robots-tag"), who).toBe("noindex");
+      // Not shown to everyone: link previews get nothing (the page's `meta`), here as on the page.
+      expect(leaf, who).toMatchObject({ audience, editHref, meta: null, headline: "<b>Head</b>" });
+      expect(undrawn(leaf, html, isSwitch), who).toEqual([]);
+    }
+  });
+
+  test("the_layout_alone_names_no_member_and_is_never_stored", async () => {
+    const answers: string[] = [];
+    for (const path of [`/@${SHOWN}`, `/@${HIDDEN}`, "/@nobody.unset.org", "/@cy.unset.org"]) {
+      const response = await get(`${path}${LAYOUT_ONLY}`);
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get("cache-control"), path).toBe("private, no-store");
+      expect(response.headers.get("x-robots-tag"), path).toBe("noindex");
+      const answer = await dataAnswer(response.clone());
+      expect(answer.type === "data" && answer.nodes[1], path).toEqual({ type: "skip" });
+      expect(nodeData(answer, 0), path).toEqual({
+        ...VISITOR_SHELL,
+        signInHref: `/login?next=${encodeURIComponent(path)}`,
+      });
+      answers.push(unpathed(await response.text()));
+    }
+    expect(new Set(answers).size).toBe(1);
+  });
+
+  test("a_path_that_is_not_canonical_answers_with_the_redirect_alone", async () => {
+    for (const path of [`/@${NAMED}`, "/@ALICE.unset.org"]) {
+      const response = await get(`${path}${DATA}`);
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get("cache-control"), path).toBe("private, no-store");
+      expect(await response.json(), path).toEqual({ type: "redirect", status: 301, location: "/@alice.unset.org" });
+    }
+  });
+
+  test("a_cookie_that_is_no_session_gets_the_visitor_s_data_never_stored", async () => {
+    const plain = await get(`/@${SHOWN}${DATA}`);
+    const withCookie = await get(`/@${SHOWN}${DATA}`, { cookie: "__Host-sid=untrusted" });
+    expect(withCookie.headers.get("cache-control")).toBe("private, no-store");
+    expect(withCookie.headers.get("set-cookie")).toMatch(/^__Host-sid=;/);
+    expect(await withCookie.text()).toBe(await plain.text());
+  });
+
+  test("the_data_address_only_reads_and_a_head_has_the_same_headers", async () => {
+    const post = await web.fetch(`/@${SHOWN}${DATA}`, {
+      method: "POST",
+      headers: {
+        "x-forwarded-for": clientAddress(),
+        origin: ORIGIN,
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": "1",
+      },
+      body: "a",
+    });
+    expect(post.status).toBe(405);
+    const head = await get(`/@${SHOWN}${DATA}`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe("");
+    expect(shared(head)).toEqual(shared(await get(`/@${SHOWN}${DATA}`)));
   });
 });
