@@ -19,6 +19,8 @@ const ROOM = "!a:unset.cc";
 const HIDDEN = "!h:unset.cc";
 const LEFT = "@ueeeeeeeeeeeeeeeeeeee:unset.cc";
 const LEAVES = "!l:unset.cc";
+const UP = "@uffffffffffffffffffff:unset.cc";
+const SCROLLED = "!s:unset.cc";
 const DELETES = "!d:unset.cc";
 /** A conversation this member started, read from a second browser: lazy loading sent none of the invitee's state. */
 const PENDING = "!p:unset.cc";
@@ -133,11 +135,19 @@ beforeAll(async () => {
   storeRoom(DELETES, OTHER, [text("$mine1", ME), text("$theirs1", OTHER), text(FAILS, ME)]);
   storeRoom(HIDDEN, AWAY, [text("$away1", AWAY)]);
   storeRoom(LEAVES, LEFT, [text("$left1", LEFT)]);
+  storeRoom(SCROLLED, UP, [text("$up1", UP)]);
   await storePendingRoom();
   client.store.storeAccountDataEvents([
     event({
       type: "m.direct",
-      content: { [INVITED]: [PENDING], [THEM]: [ROOM], [OTHER]: [DELETES], [AWAY]: [HIDDEN], [LEFT]: [LEAVES] },
+      content: {
+        [INVITED]: [PENDING],
+        [THEM]: [ROOM],
+        [OTHER]: [DELETES],
+        [AWAY]: [HIDDEN],
+        [LEFT]: [LEAVES],
+        [UP]: [SCROLLED],
+      },
     }),
   ]);
 }, 20_000);
@@ -182,6 +192,25 @@ describe("watch", () => {
     tab.dispatchEvent(new Event("visibilitychange"));
     await expect.poll(() => receiptsIn(HIDDEN)).toBe(1);
     expect(requests.findLast((r) => r.path.includes("/receipt/"))?.path).toContain(encodeURIComponent("$away2"));
+    stop();
+  });
+  test("chat.read_receipt_scrolled_up: nothing is marked read while the member reads older messages; the bottom marks it", async () => {
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    const conversations = createConversations(client, crypto, ME, memory(), page("visible"));
+    let views = 0;
+    let atNewest = false;
+    const stop = conversations.watch(
+      SCROLLED as ConversationId,
+      () => void views++,
+      () => atNewest,
+    );
+    await expect.poll(() => views).toBeGreaterThan(0);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(receiptsIn(SCROLLED)).toBe(0);
+    atNewest = true;
+    conversations.read(SCROLLED as ConversationId);
+    await expect.poll(() => receiptsIn(SCROLLED)).toBe(1);
     stop();
   });
   test("chat.read_after_stop: a read still under way when the member leaves paints nothing and marks nothing", async () => {

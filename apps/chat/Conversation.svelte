@@ -91,7 +91,10 @@ const sends = $derived(view !== null && canSend(view.composer));
 let scroller: HTMLElement | undefined = $state();
 let atBottom = true;
 function scrolled() {
-  if (scroller !== undefined) atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+  if (scroller === undefined) return;
+  const was = atBottom;
+  atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+  if (atBottom && !was) conversations.read(id);
 }
 $effect(() => {
   void view?.messages.length;
@@ -100,10 +103,14 @@ $effect(() => {
 });
 
 $effect(() =>
-  conversations.watch(id, (next) => {
-    view = next;
-    loaded = true;
-  }),
+  conversations.watch(
+    id,
+    (next) => {
+      view = next;
+      loaded = true;
+    },
+    () => atBottom,
+  ),
 );
 
 const WAITING: Record<Exclude<Composer, "on">, (name: string) => string> = {

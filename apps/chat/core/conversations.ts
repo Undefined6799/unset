@@ -170,8 +170,17 @@ export function selectable(messages: readonly Message[], composer: Composer): st
 export type Conversations = {
   /** Calls `onList` now and on every change, until the returned stop is called. */
   readonly watchList: (onList: (list: readonly Conversation[]) => void) => () => void;
-  /** Calls `onView` now and on every change of the conversation, marking it read as it is shown. */
-  readonly watch: (id: ConversationId, onView: (view: ConversationView | null) => void) => () => void;
+  /**
+   * Calls `onView` now and on every change of the conversation, marking it read as it is shown while `atNewest` says
+   * the newest message is on screen (Element marks read up to the last event displayed, TimelinePanel.tsx:1077).
+   */
+  readonly watch: (
+    id: ConversationId,
+    onView: (view: ConversationView | null) => void,
+    atNewest?: () => boolean,
+  ) => () => void;
+  /** The member has come back to the newest message of a watched conversation: marks it read if the page is shown. */
+  readonly read: (id: ConversationId) => void;
   /** The available conversation already had with this person, or null; it makes nothing. */
   readonly find: (with_: ChatId) => Promise<ConversationId | null>;
   /**

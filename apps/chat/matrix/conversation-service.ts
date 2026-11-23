@@ -236,6 +236,14 @@ export function createConversations(
     client.sendReadReceipt(last).catch(() => readSent.delete(room.roomId));
   };
 
+  /** Marks the newest message of `id` read, only while the page is shown. */
+  const readNewest = (id: string) => {
+    const room = client.getRoom(id);
+    if (room !== null && page.visibilityState === "visible") markRead(room);
+  };
+  /** Each watched conversation's own "read it if it is seen", for `read`. */
+  const watching = new Map<string, () => void>();
+
   /** Whether the composer sends in `roomId` now, looking again until `deadline` (Element's isRoomReady polling). */
   const whenSendable = async (roomId: string, other: string, deadline: number): Promise<boolean> => {
     for (;;) {
@@ -301,13 +309,15 @@ export function createConversations(
         void loadListedMembers().then((loaded) => loaded && onList(list()));
       });
     },
-    watch(id, onView) {
+    watch(id, onView, atNewest = () => true) {
       let latest = 0;
       let shown = false;
+      // Element sends the receipt for the last event displayed (TimelinePanel.tsx:1077, getLastDisplayedEventIndex,
+      // element-web v1.12.35); here only the newest counts, so a member reading older messages marks nothing.
       const readIfSeen = () => {
-        const room = client.getRoom(id);
-        if (shown && room !== null && page.visibilityState === "visible") markRead(room);
+        if (shown && atNewest()) readNewest(id);
       };
+      watching.set(id, readIfSeen);
       const stop = changes.watch(async () => {
         const mine = ++latest;
         const view = await viewOf(id);
@@ -320,9 +330,13 @@ export function createConversations(
       return () => {
         latest++; // a read still under way paints nothing and marks nothing once the member has left
         shown = false;
+        if (watching.get(id) === readIfSeen) watching.delete(id);
         stop();
         page.removeEventListener("visibilitychange", readIfSeen);
       };
+    },
+    read(id) {
+      watching.get(id)?.();
     },
     async find(other) {
       // findDirect counts who is in each room, so each direct room with them has its members first (members above).
