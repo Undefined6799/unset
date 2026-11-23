@@ -207,12 +207,11 @@ Services we run as shipped or without a settings schema: the keys each stack set
 | `HTTP_ALLOWED_HOSTS` | not in this stack | `staging.unset.cc` |
 | `LISTEN_ADDRESS` | not in this stack | `10.250.38.43` |
 | `LISTEN_PORT` | not in this stack | `8090` |
-| `NETGUARD_INTERNAL_HOSTS` | not in this stack | `chat-admin` |
 | `NODE_OPTIONS` | not in this stack | `--max-old-space-size=192` |
 | `PG_DATABASE` | not in this stack | `unset` |
 | `PG_HOST` | not in this stack | `postgres` |
 | `PG_PASSWORD_FILE` | not in this stack | file `/run/secrets/pg_chat_auth_password` |
-| `PG_POOL_MAX` | not in this stack | `5` |
+| `PG_POOL_MAX` | not in this stack | `3` |
 | `PG_SSLMODE` | not in this stack | `disable` |
 | `PG_USER` | not in this stack | `chat_auth` |
 | `PUBLIC_ORIGIN` | not in this stack | `https://staging.unset.cc` |
