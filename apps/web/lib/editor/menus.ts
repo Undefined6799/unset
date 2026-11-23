@@ -6,7 +6,7 @@
 // menu is a listbox the editor names as its active option and every control is a named button (ADR 0073 forbids
 // Crepe's Vue). This file holds no markup and the Svelte side no Milkdown.
 import { commandsCtx, type Editor, editorViewCtx } from "@milkdown/core";
-import { BlockProvider, block, blockConfig } from "@milkdown/plugin-block";
+import { BlockProvider, block, blockConfig, blockServiceInstance, defaultNodeFilter } from "@milkdown/plugin-block";
 import { SlashProvider, slashFactory } from "@milkdown/plugin-slash";
 import { TooltipProvider, tooltipFactory } from "@milkdown/plugin-tooltip";
 import {
@@ -34,13 +34,14 @@ import { createTable, toggleStrikethroughCommand } from "@milkdown/preset-gfm";
 import { findParent, posToDOMRect } from "@milkdown/prose";
 import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
-import type { NodeType } from "@milkdown/prose/model";
-import { type Command, type EditorState, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
+import type { NodeType, Node as ProseNode } from "@milkdown/prose/model";
+import { wrapInList } from "@milkdown/prose/schema-list";
+import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection } from "@milkdown/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 
-import { acrossGroups, BLOCK_ITEMS, type BlockItem } from "./block-items.ts";
+import { acrossGroups, BLOCK_ITEMS, type BlockItem, CHANGE_ITEMS } from "./block-items.ts";
 
 export type { BlockItem };
 export const BAR_ITEMS = ["strong", "emphasis", "strike", "code", "link"] as const;
@@ -66,6 +67,8 @@ export type MenusOptions = {
   /** The elements the plugins place: the handle (holding the add button and the grip), the block menu and the bar. */
   readonly handle: HTMLElement;
   readonly add: HTMLElement;
+  /** The handle's six dots: dragged, they move the block; pressed, they open the block menu to change it. */
+  readonly grip: HTMLElement;
   readonly menu: HTMLElement;
   readonly bar: HTMLElement;
   /** The link editor, holding its address field, and the preview a pointer over a link shows. */
@@ -105,6 +108,73 @@ const linkTips = tooltipFactory("UNSET_LINK");
 const WEB = ["http:", "https:"] as const;
 /** How long a pointer rests before the link preview follows it (Crepe's link-tooltip DELAY). */
 const HOVER_MS = 50;
+
+/**
+ * The dots change their whole block (Codex on #1965): a quote or a list is first taken apart into the lines it holds,
+ * left in place and selected, so Text leaves them plain and any other item turns or wraps them all, as the commands do
+ * over a selection of several lines. A block that is one line already is left as it is. Before a quote or a list wraps
+ * them, a heading or code block among them becomes plain text: the page shows a quote or a list item as words
+ * (milkdown.ts pageShapes), so a heading wrapped as it is would be refused.
+ */
+const WRAPS: ReadonlySet<BlockItem> = new Set(["quote", "bullets", "numbers", "tasks"]);
+
+function unwrapBlock(view: EditorView) {
+  const { $from } = view.state.selection;
+  if ($from.depth < 2) return;
+  const block = $from.node(1);
+  const start = $from.before(1);
+  const lines: ProseNode[] = [];
+  block.descendants((node) => {
+    if (!node.isTextblock) return true;
+    lines.push(node);
+    return false;
+  });
+  if (lines.length === 0) return;
+  const tr = view.state.tr.replaceWith(start, start + block.nodeSize, lines);
+  const end = start + lines.reduce((size, line) => size + line.nodeSize, 0);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, start + 1, end - 1)));
+}
+
+/** The items the page shows as lists: a list item holds no line break there (milkdown.ts pageShapes). */
+const LISTS: ReadonlySet<BlockItem> = new Set(["bullets", "numbers", "tasks"]);
+
+/**
+ * Splits each line break in the selected blocks into a block of its own and selects them all, so a list made of them
+ * has one item a line (Codex on #1965 at 8acb2f1): Enter breaks a line inside its block, and a list item holding the
+ * break would be refused, a quote already taken apart by then.
+ */
+function splitBreaks(view: EditorView) {
+  const { $from, $to } = view.state.selection;
+  const start = $from.before(1);
+  const end = $to.after(1);
+  const breaks: number[] = [];
+  view.state.doc.nodesBetween(start, end, (node, pos) => {
+    if (node.type.name === "hardbreak") breaks.push(pos);
+  });
+  if (breaks.length === 0) return;
+  const tr = view.state.tr;
+  for (const pos of breaks.reverse()) tr.delete(pos, pos + 1).split(pos);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, start + 1, tr.mapping.map(end) - 1)));
+}
+
+/**
+ * Turns the selected lines into a list of one item each. wrapInBlockTypeCommand wraps the whole range in one item
+ * (prosemirror-transform findWrapping); prosemirror-schema-list 1.6.0 wrapInList splits it into an item a block
+ * (dist/index.js doWrapInList). A task list is a bullet list whose items are unchecked (preset-gfm's task item).
+ */
+function listLines(ctx: Ctx, view: EditorView, item: BlockItem) {
+  splitBreaks(view);
+  const list = item === "numbers" ? orderedListSchema.type(ctx) : bulletListSchema.type(ctx);
+  if (!wrapInList(list)(view.state, view.dispatch)) return;
+  if (item !== "tasks") return;
+  const { $from } = view.state.selection;
+  const start = $from.before(1);
+  const tr = view.state.tr;
+  $from.node(1).forEach((child, offset) => {
+    tr.setNodeMarkup(start + 1 + offset, undefined, { ...child.attrs, checked: false });
+  });
+  view.dispatch(tr);
+}
 
 function blockCommand(ctx: Ctx, item: BlockItem): () => void {
   const commands = ctx.get(commandsCtx);
@@ -272,24 +342,38 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
   let barTip: ReturnType<typeof barView> | undefined;
   /** Where the handle's add button opened the menu: it stays open on that empty line until the caret leaves it. */
   let addedAt: number | null = null;
+  /** Where the caret was put when the dots opened the menu: it changes that block until the caret leaves. */
+  let changing: number | null = null;
   let slash: SlashProvider | undefined;
 
   const report = () => options.onState({ items, index, bar, on, link });
   const matching = () =>
-    BLOCK_ITEMS.filter((item) => options.labels[item].toLowerCase().includes(filter.toLowerCase()));
+    (changing === null ? BLOCK_ITEMS : CHANGE_ITEMS).filter((item) =>
+      options.labels[item].toLowerCase().includes(filter.toLowerCase()),
+    );
   const refresh = (view: EditorView) => view.dispatch(view.state.tr.setMeta("addToHistory", false));
 
   function close() {
     addedAt = null;
+    changing = null;
     slash?.hide();
   }
 
   const choose = (item: BlockItem) => {
     if (ctx === undefined) return;
     const view = ctx.get(editorViewCtx);
+    // The words typed after "/" go; a block changed from its dots keeps its words.
+    const typed = changing === null;
     close();
-    ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
-    blockCommand(ctx, item)();
+    if (typed) ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+    else {
+      unwrapBlock(view);
+      if (WRAPS.has(item)) blockCommand(ctx, "text")();
+    }
+    if (!typed && LISTS.has(item)) listLines(ctx, view, item);
+    else blockCommand(ctx, item)();
+    if (!typed)
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, view.state.selection.to)));
     view.focus();
   };
 
@@ -300,7 +384,7 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     // it is now: "/code" then Enter at once picks Code, never the first item of the list still shown.
     const typed = view.state.selection.$from.parent.textContent;
     const now = typed.startsWith("/") ? typed.slice(1) : typed;
-    if (now !== filter) {
+    if (changing === null && now !== filter) {
       filter = now;
       index = 0;
       items = matching();
@@ -321,11 +405,12 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
   editor
     .config((configured) => {
       ctx = configured;
-      // Not inside a quote, as Crepe: a quote's paragraphs move with it.
+      // Not inside a quote, as Crepe: a quote's paragraphs move with it; nor inside a table (plugin-block's default).
       configured.set(blockConfig.key, {
-        filterNodes: (pos) => findParent((node) => node.type.name === "blockquote")(pos) === undefined,
+        filterNodes: (pos, node) =>
+          defaultNodeFilter(pos, node) && findParent((each) => each.type.name === "blockquote")(pos) === undefined,
       });
-      configured.set(block.key, { view: () => handleView(configured, options, (pos) => openAt(pos)) });
+      configured.set(block.key, { view: () => handleView(configured, options, { openAt, openChange }) });
       configured.set(blockMenu.key, {
         props: {
           handleKeyDown: menuKey,
@@ -344,6 +429,10 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
             debounce: 20,
             offset: 10,
             shouldShow(this: SlashProvider, shown) {
+              if (changing !== null) {
+                if (shown.state.selection.empty && shown.state.selection.from === changing) return showChange();
+                changing = null;
+              }
               const text = this.getContent(shown, (node) => ["paragraph", "heading"].includes(node.type.name));
               if (text === undefined || !atEndOfBlock(shown.state)) return false;
               if (addedAt !== null && shown.state.selection.from !== addedAt) addedAt = null;
@@ -485,7 +574,22 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     barTip?.update(view);
   }
 
+  function showChange() {
+    filter = "";
+    const next = matching();
+    if (next.join() !== items.join()) index = 0;
+    items = next;
+    return true;
+  }
+
+  function openChange(pos: number) {
+    changing = pos;
+    addedAt = null;
+    if (ctx !== undefined) slash?.update(ctx.get(editorViewCtx));
+  }
+
   function openAt(pos: number) {
+    changing = null;
     addedAt = pos;
     filter = "";
     if (ctx !== undefined) slash?.update(ctx.get(editorViewCtx));
@@ -538,12 +642,27 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
 }
 
 /** The side handle: placed beside the block under the pointer; its add button puts an empty line below that block. */
-function handleView(ctx: Ctx, options: MenusOptions, openAt: (pos: number) => void) {
+/** The card the editor stands in, whose side the handle sits beside. */
+const cardOf = (dom: HTMLElement) => dom.closest<HTMLElement>('[data-slot="card"]');
+/** Blocks the dots cannot change: a divider has no words, and a table's cells are not blocks of the page. */
+const UNCHANGEABLE = new Set(["hr", "table"]);
+
+type Openers = { readonly openAt: (pos: number) => void; readonly openChange: (pos: number) => void };
+
+function handleView(ctx: Ctx, options: MenusOptions, { openAt, openChange }: Openers) {
   const provider = new BlockProvider({
     ctx,
     content: options.handle,
     root: options.handle.parentElement ?? undefined,
     getOffset: () => 8,
+    // Beside the card, in the page's margin (Alex 2026-11-21 18:48Z: "fully in the margin ... on the side"), level with
+    // its block; where the margin is too narrow to hold it, beside the words, as Crepe places it.
+    getPosition: ({ active, editorDom, blockDom }) => {
+      const at = active.el.getBoundingClientRect();
+      const card = cardOf(editorDom)?.getBoundingClientRect();
+      if (card === undefined || card.left < blockDom.getBoundingClientRect().width + 16) return at;
+      return new DOMRect(card.left, at.top, at.width, at.height);
+    },
     // A heading or a short block gets the handle at its middle, a long one at its first line (Crepe).
     getPlacement: ({ active, blockDom }) => {
       if (active.node.type.name === "heading") return "left";
@@ -567,14 +686,43 @@ function handleView(ctx: Ctx, options: MenusOptions, openAt: (pos: number) => vo
     provider.hide();
     openAt(view.state.selection.from);
   };
+  // Dots pressed, not dragged (a drag fires no click): the caret goes to the end of the block's words and the menu
+  // opens to change that block.
+  const change = () => {
+    const active = provider.active;
+    if (active === null || UNCHANGEABLE.has(active.node.type.name)) return;
+    const view = ctx.get(editorViewCtx);
+    const start = active.$pos.pos;
+    const end = Selection.findFrom(view.state.doc.resolve(start + active.node.nodeSize), -1, true);
+    if (end === null || end.from < start) return;
+    view.dispatch(view.state.tr.setSelection(end));
+    view.focus();
+    provider.hide();
+    openChange(end.from);
+  };
+  // A pointer along the card's side, in the handle's margin, shows the handle of the block level with it: the editor
+  // sees no pointer there, so plugin-block is told, as its own pointermove does (it reads only the pointer's height).
+  const side = (event: PointerEvent) => {
+    if (event.pointerType === "touch" || options.handle.contains(event.target as Node)) return;
+    const view = ctx.get(editorViewCtx);
+    const card = cardOf(view.dom)?.getBoundingClientRect();
+    if (card === undefined || event.clientY < card.top || event.clientY > card.bottom) return;
+    const reach = options.handle.getBoundingClientRect().width + 24;
+    if (event.clientX >= card.left || event.clientX < card.left - reach) return;
+    ctx.get(blockServiceInstance.key).mousemoveCallback(view, event);
+  };
   options.add.addEventListener("pointerdown", hold);
   options.add.addEventListener("pointerup", add);
+  options.grip.addEventListener("click", change);
+  window.addEventListener("pointermove", side, { passive: true });
   provider.update();
   return {
     update: () => provider.update(),
     destroy: () => {
       options.add.removeEventListener("pointerdown", hold);
       options.add.removeEventListener("pointerup", add);
+      options.grip.removeEventListener("click", change);
+      window.removeEventListener("pointermove", side);
       provider.destroy();
     },
   };
