@@ -11,6 +11,7 @@
 //   shell          frame.src = /chat/sign-in?state=…&dock   web's hop; 303 to <door>/?dock#ticket=…
 //   box -> door    POST /sign-in/redeem?dock        as the hop's redeem; the door matches the value in the cookie
 //   box -> shell   unset.dock.count { unread }      for the chat icon
+//   box -> shell   unset.dock.count_stopped         the box no longer counts; the shell polls again
 //   box -> shell   unset.dock.close                 the box's Close
 //   shell -> box   unset.dock.open { did }          a profile's Message link
 //   shell -> box   unset.dock.shown { shown }       with the hello and at each change: whether the box is open

@@ -253,11 +253,19 @@ export async function bootDock(
     return onState({ kind: "error", code: "chat.dock_no_shell" });
 
   let stopCount: (() => void) | null = null;
+  // A box that stops counting says so, so the shell polls the count again (Codex review on ad2dbf0e): chat taken over
+  // by another tab, signed out or failed leaves no client here to count.
+  const endCount = () => {
+    if (stopCount === null) return;
+    stopCount();
+    stopCount = null;
+    tell({ type: `${DOCK}count_stopped` });
+  };
   const report = (state: ChatState) => {
     if (state.kind === "ready") {
       stopCount?.();
       stopCount = state.conversations.watchList((list) => tell({ type: `${DOCK}count`, unread: unreadChats(list) }));
-    }
+    } else endCount();
     onState(state);
   };
   const elsewhere = new AbortController();
@@ -285,6 +293,7 @@ export async function bootDock(
   };
   const lost = () => {
     elsewhere.abort();
+    endCount();
     onState({ kind: "open_elsewhere", useHere: () => void useHere() });
   };
   const useHere = async () => {

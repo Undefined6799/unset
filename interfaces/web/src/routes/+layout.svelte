@@ -378,6 +378,9 @@ function dockMessage(event: MessageEvent) {
   ) {
     dockCounting = true;
     liveUnread = Math.max(0, message.unread);
+  } else if (message.type === `${DOCK}count_stopped`) {
+    // The box's client ended (chat taken over by another tab, signed out, failed): the poll takes the count back.
+    dockCounting = false;
   } else if (message.type === `${DOCK}close`) {
     dockShown = false;
   } else if (message.type === `${DOCK}layout` && typeof message.mode === "string" && message.mode in DOCK_PLACE) {
