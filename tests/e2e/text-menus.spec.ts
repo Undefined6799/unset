@@ -251,6 +251,9 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
 
   // Pressed, not dragged, the dots open the block menu to change their block, keeping its words.
   await editor.locator("p").nth(1).hover();
+  // The handle follows the pointer on its next frame; a click before it is level with the line presses the dots of
+  // the line it left (WebKit, CI 857ee3c).
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[1] as number))).toBeLessThan(8);
   const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
   await grip.click();
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
