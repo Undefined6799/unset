@@ -64,7 +64,7 @@ one budget across the page's cards and shows a stopped card with `plainText`. Th
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
 places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
-Preview, loaded when Preview opens, on the owner's own text. The reader's blocks are kept and frozen (text-reader.ts), so `colourBlocks` builds new code blocks and changes none. Vite's alias for `decode-named-character-reference`
+Preview, loaded when Preview opens, on the owner's own text; the Preview's code colouring (`colourBlocks`, with CodeMirror's language list) is loaded there too, never by a static import in a component: one in `card-editor.svelte` put 90 KiB gzip on the owner's first load (257.8 against 167.7, measured at the merge of #2008). The reader's blocks are kept and frozen (text-reader.ts), so `colourBlocks` builds new code blocks and changes none. Vite's alias for `decode-named-character-reference`
 (`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
 without it neither the Preview nor Milkdown reads a text holding `&amp;`.
 

@@ -14,7 +14,7 @@
 -->
 <script lang="ts">
 import { tick } from "svelte";
-import { type CodeColourLimits, codeColourBudget } from "../../editor/code-colours.ts";
+import type { CodeColourLimits } from "../../editor/code-colours.ts";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
 import type {
@@ -26,7 +26,6 @@ import type {
   Enhance,
   SubmitHandler,
 } from "../../profile/types.ts";
-import { colourBlocks } from "../../profile/view.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
@@ -207,8 +206,9 @@ async function addRow() {
 /**
  * The README editor's open tab, and what its preview shows: the field's text as the page will draw it, read when
  * Preview opens. The reader arrives with the first Preview, as the editor's own file does with the dialog (ADR 0069
- * split), so the page's first load carries no Markdown parser. The preview's code is plain at first and in the
- * page's colours once its language has loaded. A read that an opening after it has overtaken shows nothing.
+ * split), and so does the code colouring with its languages, so the page's first load carries neither. The preview's
+ * code is plain at first and in the page's colours once its language has loaded. A read that an opening after it
+ * has overtaken shows nothing.
  */
 let tab = $state("write");
 let preview = $state.raw<{ readonly blocks: readonly Block[] } | "failed" | undefined>();
@@ -227,10 +227,15 @@ async function showTab(value: string) {
     if (turn !== previewTurn) return;
     preview = { blocks };
     if (codeColours === undefined) return;
+    const [{ colourBlocks }, { codeColourBudget }] = await Promise.all([
+      import("../../profile/view.ts"),
+      import("../../editor/code-colours.ts"),
+    ]);
     const coloured = await colourBlocks(blocks, codeColourBudget(codeColours));
     if (turn === previewTurn) preview = { blocks: coloured };
   } catch {
-    // The reader's file did not arrive (a dropped connection): say so; the text is still on Write and still posts.
+    // A file did not arrive (a dropped connection). Without the reader, say so; the text is still on Write and still
+    // posts. Without the colours, the preview stays as it is, plain.
     if (turn === previewTurn && preview === undefined) preview = "failed";
   }
 }

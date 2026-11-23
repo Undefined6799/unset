@@ -111,8 +111,8 @@ test("a_named_character_shows_on_the_page_in_the_editor_and_in_the_preview", asy
   await deleteNewest(page);
 });
 
-// The Preview draws code in the page's colours (P1.21v): plain for a moment, then coloured once its language has
-// loaded, and nothing is refused on the way.
+// The Preview draws code in the page's colours (P1.21v). The colouring and its languages arrive with the first
+// Preview too, after the reader, so the code is plain for a moment and then coloured; nothing is refused on the way.
 test("the_preview_shows_code_in_the_pages_colours", async ({ page }) => {
   const watched = watch(page);
   await addStored(page, "```js\nconst a = 1;\n```");
