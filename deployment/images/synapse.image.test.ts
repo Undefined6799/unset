@@ -202,6 +202,9 @@ describe("synapse image", () => {
             "  - module: unset_chat_policy.RoomPolicy\n    config: { allow_plaintext: true }",
           );
           expect(refused).not.toBe(homeserver);
+          // The second start takes the same reviewed addresses, so the first container gives them back first.
+          run(["rm", "-f", synapse]);
+          started.splice(started.indexOf(synapse), 1);
           const broken = startSynapse(image, network, listenerNetworks, configDir(refused), secrets);
           started.push(broken);
           const stopped = exited(broken);
