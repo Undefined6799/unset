@@ -597,7 +597,7 @@ services:
       PG_USER: chat_auth
       PG_PASSWORD_FILE: /run/secrets/pg_chat_auth_password
       PG_SSLMODE: disable
-      PG_POOL_MAX: "5"
+      PG_POOL_MAX: "3"
       SEAL_KEYRING_FILE: /run/secrets/chat_auth_seal_keyring
       CHAT_ADMIN_URL: http://chat-admin:8080
       CHAT_ADMIN_DOOR_KEY_FILE: /run/secrets/chat_auth_chat_admin_key
