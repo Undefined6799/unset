@@ -67,6 +67,8 @@ const EVENTS = [
   // was not one of the expected ones. `kind` is the class name, never the message (it can carry a DID).
   "pds.401_with_live_set",
   "pds.unexpected",
+  // A call the member's grant does not cover (a session from before the app asked for a permission). No field.
+  "pds.scope_missing",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
   // P2.08j, signing out of every browser: a count with no DID, and the case where the grant was ended but the

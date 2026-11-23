@@ -158,6 +158,12 @@ export type PdsFixture = {
   readonly writesFile: string;
   /** XRPC methods that answer 503, to play an unavailable PDS. */
   readonly failing?: readonly string[];
+  /**
+   * XRPC methods (com.atproto.repo.*) the grant does not cover: they answer 403 as a PDS does for a session from before
+   * the app asked for a collection (@atproto/oauth-scopes 0.5.14 ScopeMissingError through @atproto/xrpc-server
+   * 0.13.10 errors.js: `{error: "ScopeMissingError", message: 'Missing required scope "<scope>"'}`).
+   */
+  readonly denied?: readonly string[];
   /** XRPC methods (com.atproto.repo.*) whose answer is held this many milliseconds, to line up two requests' calls. */
   readonly slow?: Readonly<Record<string, number>>;
   /** With it the stand-in answers com.atproto.server.getSession for `did` with this email state. */

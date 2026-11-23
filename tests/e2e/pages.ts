@@ -97,6 +97,7 @@ export const MEMBER_PAGES: readonly PageFixture[] = [
   signedIn("/welcome/terms", "terms"),
   signedIn("/welcome/chat", "chat"),
   signedIn("/verify-email", "verify"),
+  signedIn("/allow", "account"),
   signedIn(`/${ACCOUNT.did}`, "account", "/:did"),
   signedIn("/settings/profile", "account"),
   signedIn("/settings/privacy", "account"),
