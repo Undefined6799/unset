@@ -168,3 +168,42 @@ test("enter_in_the_language_field_sets_the_language_and_keeps_the_card_open", as
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
   await deleteNewest(page);
 });
+
+// Codex on #2003 at ae4c0d4: an arrow on a wrapped row of a code block's first or last line moves to the next row of
+// the code, as in any editor; it leaves the block only from the row at its top or bottom.
+test("an_arrow_on_a_wrapped_row_of_code_stays_in_the_code", async ({ page }) => {
+  const watched = watch(page);
+  const long = "word ".repeat(150).trim();
+  const card = await openStored(page, `above\n\n\`\`\`\n${long}\n\`\`\`\n\nbelow`);
+  const { dialog, editor } = await openEditor(page, card);
+  const code = editor.locator(".cm-content");
+  await code.click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("ArrowUp");
+  await expect(code).toBeFocused();
+  await page.keyboard.type("X");
+  await expect(postedText(dialog)).not.toHaveValue(/X\n```\n\nbelow/);
+  await expect(postedText(dialog)).toHaveValue(/^above\n\n```\nword .*X.*\n```\n\nbelow$/);
+  await page.keyboard.press("Escape");
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
+
+// Codex on #2003 at ae4c0d4: code selected backwards stays backwards in the outer editor, so a block change keeps the
+// end the keys move.
+test("code_selected_backwards_keeps_its_direction_when_the_block_changes", async ({ page }) => {
+  const watched = watch(page);
+  const card = await openStored(page, "```\nabcdef\n```");
+  const { dialog, editor } = await openEditor(page, card);
+  await editor.locator(".cm-content").click();
+  await page.keyboard.press("End");
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press("Shift+ArrowLeft");
+  await dialog.getByRole("button", { name: "Code block" }).click();
+  await expect(editor.locator("p")).toHaveText("abcdef");
+  await page.keyboard.press("Shift+ArrowLeft");
+  await page.keyboard.type("X");
+  await expect(postedText(dialog)).toHaveValue("abX");
+  await page.keyboard.press("Escape");
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
