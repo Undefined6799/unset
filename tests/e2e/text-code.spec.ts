@@ -236,6 +236,35 @@ test("hostile_code_on_the_page_is_plain_and_the_page_answers_quickly", async ({ 
   expect(removed).toBe("opaqueredirect");
 });
 
+// Alex 2026-11-23: "script adds Copy". The page draws no Copy button without script, since it could do nothing; with
+// script each code block gets one that copies the block's text as stored. The clipboard is stood in for, so every
+// engine can read back what was written (only Chromium grants clipboard reads, playwright.config.ts).
+test("a_code_block_copies_its_code_with_script_and_draws_no_button_without", async ({ browser, page }) => {
+  const watched = watch(page);
+  await page.addInitScript(() => {
+    const g = globalThis as unknown as { copied: string[]; navigator: { clipboard: unknown } };
+    g.copied = [];
+    Object.defineProperty(g.navigator, "clipboard", {
+      value: { writeText: async (text: string) => void g.copied.push(text) },
+    });
+  });
+  const card = await openStored(page, "```js\nconst a = 1;\n\n<b>x</b>\n```");
+  const quiet = await withoutScript(browser, page);
+  await expect(newestCode(quiet)).toHaveText("const a = 1;\n\n<b>x</b>");
+  await expect(quiet.getByRole("button", { name: "Copy code" })).toHaveCount(0);
+  await quiet.context().close();
+  const { dialog } = await openEditor(page, card);
+  await dialog.getByRole("tab", { name: "Preview" }).click();
+  await dialog.getByRole("button", { name: "Copy code" }).click();
+  expect(await page.evaluate(() => (globalThis as unknown as { copied: string[] }).copied)).toEqual([
+    "const a = 1;\n\n<b>x</b>",
+  ]);
+  await page.keyboard.press("Escape");
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
+
 test("a_script_pasted_into_a_code_block_stays_text", async ({ page }) => {
   const watched = watch(page);
   const card = await openStored(page, "```\nx\n```");
