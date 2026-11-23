@@ -19,8 +19,11 @@ route group at a time (step book P1.20b to P1.20k); until the switch-over (P1.20
 2. Put a `policy.ts` beside the `+page` or `+server` file:
    `export const policy = definePolicy({ group: "app", limit: "default" });`, imported by relative path from
    `src/lib/server/policy.ts` (no `$lib` or `#lib` alias: the repo allows only relative and package specifiers).
-   - `group`: `app` (runs SvelteKit's client: add `export const csr = true` in `+page.ts`), `public` or `profile`
-     (no script: the root layout's `csr = false` covers them), `static` (JSON, files).
+   - `group`: `app`, `public` or `static` (JSON, files). Every page says in its own `+page.ts` whether it runs
+     SvelteKit's client, `export const csr = true;` or `export const csr = false;`: an `app` page as a rule does, a
+     `public` page only when its policy also says `client: true`. Then name the route in
+     `tests/integration/web/every-answer.test.ts`, which pins what every route answers and fails on one it does not
+     name.
    - `limit`: a name from `src/lib/server/limits.ts`. A page that needs a new policy adds one there, copied from
      `interfaces/http/limits.ts`.
    - `session: "required"` for a signed-in page: a visitor goes to /login?next=<the page> (an enhanced
