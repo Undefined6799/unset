@@ -1,7 +1,8 @@
 <!--
   The chat page's shell (ADR 0099): one card for where the page stands. The words are ours alone; no screen names the
   servers or the protocol behind it. A new account saves its recovery key here before anything else (ADR 0095
-  decision 2, ADR 0100), and a new browser unlocks with it (decision 3); then the conversations (build step 9, Conversations.svelte). An error
+  decision 2, ADR 0100), and a new browser unlocks with it (decision 3) or skips it for now (Alex 2026-11-23,
+  core/key-skip.ts: new messages show, a note offers the key for older ones); then the conversations (build step 9, Conversations.svelte). An error
   shows only its fixed code. A second tab says the messages are open in the other one and offers to use them here
   (core/tab-lock.ts, as Element's ConfirmSessionLockTheftView does). There is no Log out here: unset.sh's Log out
   signs this browser out of messages too (Alex 2026-11-21), and this card only says so while it runs.
@@ -39,6 +40,10 @@ let endWrong = $state(false);
 let typedKey = $state("");
 let unlockProblem: Exclude<UnlockOutcome, "unlocked"> | null = $state(null);
 let unlocking = $state(false);
+/** The unlock card's "Skip for now" was pressed: its warning shows, with a way back (Element asks the same). */
+let confirmingSkip = $state(false);
+/** On a browser that skipped the key, the note's "Enter recovery key" opened the key field. */
+let enteringKey = $state(false);
 /** The key whose last characters are being asked (the second card); any other key, or none, shows the first. */
 let checkingKey: string | null = $state(null);
 // `view as ChatState`: read at the top level, TypeScript would narrow it to its first value.
@@ -69,6 +74,12 @@ const WORDS = {
     title: "Unlock your messages",
     text: "Enter your recovery key to read your messages in this browser.",
   },
+  // Alex 2026-11-23: without the key, chat still works; only older messages stay locked. Element's "I'll verify
+  // later" warns the same way (element-web v1.12.35 en_EN.json encryption.verification.verification_skip_warning).
+  skip: {
+    title: "Continue without your key?",
+    text: "This browser will get new messages, but you will not see your older messages until you enter your key. The people you chat with may see a mark that this browser is not confirmed, and messages from here may not show in browsers you add later.",
+  },
   ready: { title: "Your messages", text: "" },
   signing_out: {
     title: "Signing you out",
@@ -89,7 +100,20 @@ const WELCOME_WORDS = {
   title: "Your messages are set up",
   text: "Your recovery key is saved. Go back to unset.sh to finish signing up.",
 } as const;
-const words = $derived(checking ? CHECK_WORDS : welcoming ? WELCOME_WORDS : WORDS[view.kind]);
+const words = $derived(
+  checking
+    ? CHECK_WORDS
+    : welcoming
+      ? WELCOME_WORDS
+      : (view as ChatState).kind === "locked" && confirmingSkip
+        ? WORDS.skip
+        : WORDS[view.kind],
+);
+/** Present on a locked browser, and on one that skipped the key, until the key is given. */
+const unlockHere = $derived.by(() => {
+  const now = view as ChatState;
+  return now.kind === "locked" || now.kind === "ready" ? now.unlock : undefined;
+});
 
 const UNLOCK_PROBLEMS = {
   wrong_key: "That is not your recovery key. Check it and try again.",
@@ -128,12 +152,21 @@ function checkEnd(event: SubmitEvent) {
 
 async function tryKey(event: SubmitEvent) {
   event.preventDefault();
-  if (view.kind !== "locked" || unlocking) return;
+  const unlock = unlockHere;
+  if (unlock === undefined || unlocking) return;
   unlocking = true;
-  const outcome = await view.unlock(typedKey);
+  const outcome = await unlock(typedKey);
   unlocking = false;
   unlockProblem = outcome === "unlocked" ? null : outcome;
-  if (outcome === "unlocked") typedKey = "";
+  if (outcome !== "unlocked") return;
+  typedKey = "";
+  enteringKey = false;
+}
+
+function skipKeyHere() {
+  if (view.kind !== "locked") return;
+  confirmingSkip = false;
+  view.skip();
 }
 
 /**
@@ -189,6 +222,47 @@ onMount(() => {
 });
 </script>
 
+{#snippet keyForm()}
+  <form class="flex flex-col gap-4" onsubmit={tryKey}>
+    <input class="hidden" name="username" autocomplete="username" value={KEY_NAME} readonly tabindex="-1" />
+    <div class="flex flex-col gap-2">
+      <label class="text-sm font-medium" for="unlock-key">Recovery key</label>
+      <Input
+        id="unlock-key"
+        name="recovery-key"
+        type="password"
+        class="font-mono"
+        autocomplete="current-password"
+        spellcheck="false"
+        required
+        aria-invalid={unlockProblem === "wrong_key"}
+        bind:value={typedKey}
+      />
+    </div>
+    {#if unlockProblem !== null}
+      <Alert.Root>
+        <Alert.Description>{UNLOCK_PROBLEMS[unlockProblem]}</Alert.Description>
+      </Alert.Root>
+    {/if}
+    <Button type="submit" disabled={unlocking}>{unlocking ? "Unlocking…" : "Unlock"}</Button>
+  </form>
+{/snippet}
+
+{#snippet historyLocked()}
+  {#if unlockHere !== undefined}
+    <Alert.Root data-history-locked>
+      <Alert.Description class="flex flex-col items-start gap-3">
+        <span>Older messages are locked in this browser. Enter your recovery key to read them.</span>
+        {#if enteringKey}
+          {@render keyForm()}
+        {:else}
+          <Button variant="outline" size="sm" onclick={() => (enteringKey = true)}>Enter recovery key</Button>
+        {/if}
+      </Alert.Description>
+    </Alert.Root>
+  {/if}
+{/snippet}
+
 {#if dock && view.kind === "ready" && !welcoming}
   <main class="flex h-dvh flex-col gap-2 {dockMode === 'bubble' ? '' : 'p-3'}" data-state={view.kind} data-dock={dockMode}>
     {#if dockMode === "list"}
@@ -196,6 +270,7 @@ onMount(() => {
         <h1 class="flex-1 font-medium">Messages</h1>
         <DockControls onClose={closeBox} />
       </header>
+      {@render historyLocked()}
     {/if}
     {#key opened}
       <Conversations conversations={view.conversations} names={view.names} me={view.me} dock={dockParts} {unsent} />
@@ -264,46 +339,31 @@ onMount(() => {
           <Button type="button" variant="outline" onclick={() => (checkingKey = null)}>Show my key again</Button>
         </form>
       </Card.Content>
+    {:else if view.kind === "locked" && confirmingSkip}
+      <Card.Content class="flex flex-col gap-4">
+        <Button onclick={skipKeyHere}>Continue without my key</Button>
+        <Button variant="outline" onclick={() => (confirmingSkip = false)}>Go back</Button>
+      </Card.Content>
     {:else if view.kind === "locked"}
-      <Card.Content>
-        <form class="flex flex-col gap-4" onsubmit={tryKey}>
-          {#if dock}
-            <!-- The box keeps its own storage apart from a unset.cc tab (ADR 0115), so it asks once itself; Alex
-                 2026-11-23: keep it, and say so plainly (staging list item 3). -->
-            <p class="text-muted-foreground text-sm" data-dock-own-browser>
-              This chat box counts as its own browser, so it asks for your key once, even if you unlocked chat on
-              unset.cc.
-            </p>
-          {/if}
-          <input class="hidden" name="username" autocomplete="username" value={KEY_NAME} readonly tabindex="-1" />
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-medium" for="unlock-key">Recovery key</label>
-            <Input
-              id="unlock-key"
-              name="recovery-key"
-              type="password"
-              class="font-mono"
-              autocomplete="current-password"
-              spellcheck="false"
-              required
-              aria-invalid={unlockProblem === "wrong_key"}
-              bind:value={typedKey}
-            />
-          </div>
-          {#if unlockProblem !== null}
-            <Alert.Root>
-              <Alert.Description>{UNLOCK_PROBLEMS[unlockProblem]}</Alert.Description>
-            </Alert.Root>
-          {/if}
-          <Button type="submit" disabled={unlocking}>{unlocking ? "Unlocking…" : "Unlock"}</Button>
-        </form>
+      <Card.Content class="flex flex-col gap-4">
+        {#if dock}
+          <!-- The box keeps its own storage apart from a unset.cc tab (ADR 0115), so it asks once itself; Alex
+               2026-11-23: keep it, and say so plainly (staging list item 3). -->
+          <p class="text-muted-foreground text-sm" data-dock-own-browser>
+            This chat box counts as its own browser, so it asks for your key once, even if you unlocked chat on
+            unset.cc.
+          </p>
+        {/if}
+        {@render keyForm()}
+        <Button variant="ghost" onclick={() => (confirmingSkip = true)}>Skip for now</Button>
       </Card.Content>
     {:else if welcoming}
       <Card.Content>
         <Button href={WELCOME_DONE}>Continue</Button>
       </Card.Content>
     {:else if view.kind === "ready"}
-      <Card.Content>
+      <Card.Content class="flex flex-col gap-4">
+        {@render historyLocked()}
         {#key opened}
           <Conversations conversations={view.conversations} names={view.names} me={view.me} {unsent} />
         {/key}

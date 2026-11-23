@@ -19,6 +19,7 @@ import {
   SyncState,
 } from "matrix-js-sdk/lib/matrix.js";
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
+import { forgetKeySkip, keySkipped, skipKey } from "../core/key-skip.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
 import { createConversations, forgetLocalChoices, type PageVisibility } from "./conversation-service.ts";
@@ -225,6 +226,13 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     dehydrating = true;
     void dehydrate(crypto, DEHYDRATE_AT_LOAD);
   };
+  /** Set by "Skip for now" on this page, so the skip holds here even where storage refuses to keep it. */
+  let skippedHere = false;
+  const skipHere = () => {
+    skippedHere = true;
+    skipKey(globalThis.localStorage, session.userId);
+    void report();
+  };
   const report = serialReports(
     () => busy,
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
@@ -234,15 +242,20 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
       const phase = phaseOf(facts);
       // setUp holds the page (busy) before its first await, so no other report gets past `current` after this one.
       if (phase === "setup") return setUp(facts.hasIdentity);
-      if (phase === "ready") {
-        await registerOnce();
-        dehydrateOnce();
-      }
+      // A browser that skipped the key (core/key-skip.ts) is used as it is, as Element's "I'll verify later" leaves it
+      // (element-web v1.12.35 apps/web/src/stores/SetupEncryptionStore.ts:202-205): it gets new messages and the
+      // count, but makes no offline device, which needs the vault this browser cannot open.
+      const skipped = phase === "locked" && (skippedHere || keySkipped(globalThis.localStorage, session.userId));
+      if (phase === "ready" || skipped) await registerOnce();
+      if (phase === "ready") dehydrateOnce();
       if (!current()) return;
+      const ready = { kind: "ready", conversations, names: options.names, me: session.userId } as const;
       tell(
         phase === "ready"
-          ? { kind: "ready", conversations, names: options.names, me: session.userId }
-          : { kind: "locked", unlock: tryKey },
+          ? ready
+          : skipped
+            ? { ...ready, unlock: tryKey }
+            : { kind: "locked", unlock: tryKey, skip: skipHere },
       );
     },
   );
@@ -314,6 +327,7 @@ async function logOutOf({ client, backup, prefix, me, stop, takenOver, signOut }
   // This browser's own choices on the chat origin go with the stores, as Element clears localStorage
   // (element-web v1.12.35 apps/web/src/Lifecycle.ts:1208-1222).
   forgetLocalChoices(globalThis.localStorage, me);
+  forgetKeySkip(globalThis.localStorage, me);
   return "logged_out";
 }
 

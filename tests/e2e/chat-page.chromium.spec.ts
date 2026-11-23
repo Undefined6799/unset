@@ -3,7 +3,8 @@
 // What it proves: a load with no session runs the hop; the page redeems in its own context and, for an account with no
 // keys yet, shows "Save your recovery key" (build step 8; ADR 0095 decision 2, ADR 0100): the key in a field a
 // password manager can save, a Download built in the page, a check of its last characters, and only then the vault;
-// a second browser of the account is locked, refuses a wrong key plainly and unlocks with the saved one; the key is
+// a second browser of the account is locked, refuses a wrong key plainly and unlocks with the saved one, or skips the
+// key and still uses chat with its older messages locked (Alex 2026-11-23), unlocking later from a note; the key is
 // never in a request body except as the page's own encryption makes it, nor in storage;
 // after redeem neither web storage, cookies, IndexedDB nor the address holds the token, the lock key or the ticket;
 // the page runs under its CSP with no violation; renewal re-runs the hop for the same device and lock key; a token the
@@ -307,6 +308,40 @@ test("chat_page.second_browser_unlocks: another browser is locked, refuses a wro
   await field.fill(key);
   await second.page.getByRole("button", { name: "Unlock" }).click();
   await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("ready");
+  expect(second.problems).toEqual([]);
+});
+
+test("chat_page.skip_key: a browser without the key skips, uses chat, keeps the skip on reload and unlocks later", async ({
+  browser,
+}) => {
+  // Alex 2026-11-23: no key means no older messages, but chat is still usable; Element's "I'll verify later"
+  // (element-web v1.12.35 apps/web/src/components/structures/auth/SetupEncryptionBody.tsx:282-295).
+  test.setTimeout(120_000);
+  const first = await open(browser);
+  await first.page.goto("https://unset.cc/");
+  const key = await saveKey(first.page);
+  const second = await open(browser);
+  await second.page.goto("https://unset.cc/");
+  await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("locked");
+  await second.page.getByRole("button", { name: "Skip for now" }).click();
+  // The warning first, with a way back, as Element asks before it skips.
+  await expect(second.page.getByText("you will not see your older messages")).toBeVisible();
+  await second.page.getByRole("button", { name: "Go back" }).click();
+  expect(await state(second.page)).toBe("locked");
+  await second.page.getByRole("button", { name: "Skip for now" }).click();
+  await second.page.getByRole("button", { name: "Continue without my key" }).click();
+  await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("ready");
+  await expect(second.page.locator("[data-history-locked]")).toBeVisible();
+  // A reload keeps the choice: no unlock card again.
+  await second.page.reload();
+  await expect.poll(() => state(second.page), { timeout: 30_000 }).toBe("ready");
+  await expect(second.page.locator("[data-history-locked]")).toBeVisible();
+  // The key can still be given later, from the note.
+  await second.page.getByRole("button", { name: "Enter recovery key" }).click();
+  await second.page.locator("#unlock-key").fill(key);
+  await second.page.getByRole("button", { name: "Unlock" }).click();
+  await expect(second.page.locator("[data-history-locked]")).toHaveCount(0, { timeout: 30_000 });
+  expect(await state(second.page)).toBe("ready");
   expect(second.problems).toEqual([]);
 });
 

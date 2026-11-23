@@ -23,8 +23,10 @@ export type UnlockOutcome = "unlocked" | "wrong_key" | "unfinished" | "failed";
  * - setting_up: the account's keys are being made or stored (ADR 0100); nothing else is reachable.
  * - save_key: the new recovery key, to save and check; `save` stores it once the check has passed.
  * - setup_elsewhere: another browser of the account is setting up right now.
- * - locked: encryption runs, but this browser cannot read history yet; `unlock` tries a typed recovery key.
- * - ready: this browser is cross-signed and can read history; `conversations` is what the screens use (step 9).
+ * - locked: encryption runs, but this browser cannot read history yet; `unlock` tries a typed recovery key, and `skip`
+ *   goes on without it (core/key-skip.ts).
+ * - ready: chat is usable; `conversations` is what the screens use (step 9). With `unlock`, this browser skipped the
+ *   key: new messages show, older ones stay locked until the key is given.
  * - signing_out: unset.sh's Log out runs here (core/sign-out.ts signOutHere); the page then leaves for unset.sh.
  * - signed_out: the server no longer takes the token.
  * - open_elsewhere: another tab of this browser holds chat (core/tab-lock.ts); `useHere` takes it over.
@@ -35,9 +37,15 @@ export type ChatState =
   | { readonly kind: "setting_up" }
   | { readonly kind: "save_key"; readonly key: string; readonly save: () => void }
   | { readonly kind: "setup_elsewhere" }
-  | { readonly kind: "locked"; readonly unlock: (typed: string) => Promise<UnlockOutcome> }
+  | {
+      readonly kind: "locked";
+      readonly unlock: (typed: string) => Promise<UnlockOutcome>;
+      readonly skip: () => void;
+    }
   | {
       readonly kind: "ready";
+      /** Present while this browser goes on without the key (it skipped it): gives the key later. */
+      readonly unlock?: (typed: string) => Promise<UnlockOutcome>;
       readonly conversations: Conversations;
       /** A chat partner's public name, or null to show the handle alone (core/public-name.ts, ADR 0107). */
       readonly names: (chatId: string) => Promise<string | null>;
