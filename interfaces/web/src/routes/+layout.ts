@@ -3,8 +3,9 @@
 // and the changed privacy notice banner (P2.12b), the bell's notifications (P2.27), and whether listing is off on the whole site (P1.21b).
 // Every page says in its own +page.ts whether it runs SvelteKit's client (`csr`; book P1.22j), so the default here
 // decides one thing only, the error page: for a failed load and for a path no route matches SvelteKit takes `csr` from
-// the layouts alone (kit 3.2.0 src/runtime/server/page/index.js:272-291, page/respond_with_error.js:44-46). It ships
-// no script (kit docs, page options: https://svelte.dev/docs/kit/page-options#csr).
+// the layouts alone (kit 3.2.0 src/runtime/server/page/index.js:272-291, page/respond_with_error.js:44-46). It runs
+// the client like every other page (ADR 0116 point 1; kit docs, page options:
+// https://svelte.dev/docs/kit/page-options#csr); the server still draws it whole, so it reads the same with script off.
 
 import type { Load } from "@sveltejs/kit";
 import type { NotificationsView } from "@unset/apps-web/lib/notifications/view.ts";
@@ -12,7 +13,7 @@ import { readErrorParam } from "@unset/shared-errors";
 import { signInHref, themeReturn } from "../lib/return-paths.ts";
 import type { ShellData, ThemeChoice } from "../lib/shell.ts";
 
-export const csr = false;
+export const csr = true;
 
 export const load: Load = ({ url, data }) => {
   const server = data as {
