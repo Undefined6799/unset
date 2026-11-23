@@ -1128,6 +1128,7 @@ describe("base images", () => {
       "pds",
       "newt",
       "seaweedfs",
+      "seaweedfs-next",
       "python",
       "python3-debian13",
       "mas",
