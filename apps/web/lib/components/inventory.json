@@ -389,6 +389,10 @@
         "origin": "ours",
         "purpose": "The Text card's parsed blocks (the #readme kind) as plain escaped elements, on the page's type scale."
       },
+      "table-tools.svelte": {
+        "origin": "ours",
+        "purpose": "The editor's table tools: a handle above the column and beside the row under the pointer, each with a plain menu over Milkdown's own table commands, and the line that shows where a dragged row or column lands (P1.21v); not a shadcn component, since editor/tables.ts places and shows them inside the editor."
+      },
       "text-editor.svelte": {
         "origin": "ours",
         "purpose": "The Text card's field: the stock Label and Textarea the form posts, with the Milkdown editor and a formatting bar of stock Buttons drawn over it once script has loaded it (P1.21u)."

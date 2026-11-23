@@ -1019,6 +1019,138 @@
           }
         ]
       ]
+    },
+    "align-left": {
+      "iconoirName": "align-left",
+      "approval": "Alex 2026-11-22 00:31:10Z (\"yes all approved\", cmsg_01GKYqaAGu4Vob5JHVyDmG7AQcQmWvRiwekUTxrBro4e7r: the table column menu's Align left, centre and right, decision 7; Iconoir icons only, decision 33)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/align-left.svg",
+      "sourceSha256": "fb5d4bfc94ee5a0428439014401e2d94c800f00109bf1382bc91209caccc2c41",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M3 10L17 10",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 6H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 18L17 18",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 14H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "align-center": {
+      "iconoirName": "align-center",
+      "approval": "Alex 2026-11-22 00:31:10Z (\"yes all approved\", cmsg_01GKYqaAGu4Vob5JHVyDmG7AQcQmWvRiwekUTxrBro4e7r: the table column menu's Align left, centre and right, decision 7; Iconoir icons only, decision 33)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/align-center.svg",
+      "sourceSha256": "01023a0bebd3d03d27a53636bb2556d0d62ae79c6831052043c5744425c7e2c4",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M3 6H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 14H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M6 10L18 10",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M6 18L18 18",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "align-right": {
+      "iconoirName": "align-right",
+      "approval": "Alex 2026-11-22 00:31:10Z (\"yes all approved\", cmsg_01GKYqaAGu4Vob5JHVyDmG7AQcQmWvRiwekUTxrBro4e7r: the table column menu's Align left, centre and right, decision 7; Iconoir icons only, decision 33)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/align-right.svg",
+      "sourceSha256": "672d1c8e3adf6b1e288f2b282f8aed1a4009346906133113046a1ca00f9dc8d4",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M7 10L21 10",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 6H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M7 18L21 18",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 14H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
     }
   }
 }
