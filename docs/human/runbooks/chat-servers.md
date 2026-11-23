@@ -116,7 +116,9 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
 3. `staging.unset.cc` is published through Pangolin with a bypass for everyone (ADR 0115 decision 5; Alex's card
    2026-11-23 04:15Z, "Pangolin bypass for everyone"; before that ADR 0105 had it behind the login). The chat box
    framed on `staging.unset.sh` cannot carry Pangolin's `SameSite=Lax` login cookie, so chat's own sign-in through
-   unset.sh, which stays behind the login, is the only gate. The source stack's edge serves it from `deployment/edge/dev/chat.caddy`:
+   unset.sh is the only gate. `staging.unset.sh` and `staging.unset.ac` have no Pangolin login either (both "Not
+   Protected" in Pangolin, as Alex's staging check found on 2026-11-23), so staging chat is reachable by anyone who
+   can sign in to staging unset.sh. The source stack's edge serves it from `deployment/edge/dev/chat.caddy`:
    `/_matrix/client/` to Synapse's client listener, the door's routes to the door, the edge's 404 for anything else.
    Once, before the first start:
    1. **DNS.** Add a record for `staging.unset.cc` of the same type and value as the one `staging.unset.sh` has, so it

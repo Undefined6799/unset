@@ -69,7 +69,8 @@ staging the box would meet Pangolin's login page.
 4. **The count.** The icon's number comes from the box while it runs, and otherwise from `GET /chat/count`, read
    every 30 seconds while the page is visible. There are no browser pop-ups (Alex, 04:08Z).
 5. **Staging.** `staging.unset.cc` gets a Pangolin bypass for everyone (Alex's card). Chat's own sign-in through
-   unset.sh is the only gate there. Synapse's client API on staging answers only bearer tokens our servers mint.
+   unset.sh is the only gate there. `staging.unset.sh` and `staging.unset.ac` have no Pangolin login either (both "Not
+   Protected", Alex's staging check 2026-11-23), so anyone who can sign in to staging unset.sh can reach staging chat. Synapse's client API on staging answers only bearer tokens our servers mint.
 
 ## Alternatives
 - **A pop-up to unset.cc for sign-in or unlock.** The security pass had typed secrets only on top-level unset.cc. That
