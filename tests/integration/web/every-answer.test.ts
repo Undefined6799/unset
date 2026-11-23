@@ -6,9 +6,10 @@
 // merge. Every answer, whatever the tables say of it, is also held to the rules in `held` below.
 // The app policy is pinned in gate.test.ts too (ADR 0054); here it is one of the values an answer may carry.
 // Asked with GET, and POST for the forms; one of each kind again with HEAD, held to its GET. Not asked, because the
-// build cannot be made to give them: the gate's refusal of a route with no policy.ts (gate.test.ts every_route_has_a_policy keeps
-// one from existing) and of an error the gate itself catches (gate.test.ts a_session_store_outage_is_its_503). Both
-// leave the gate by the same `plain` refusal as the ones asked here (interfaces/web/src/hooks.server.ts).
+// build cannot be made to give them: the gate's refusal of a route with no policy.ts (gate.test.ts
+// every_route_has_a_policy keeps one from existing) and of an error the gate itself catches (gate.test.ts
+// a_session_store_outage_is_its_503). Both leave the gate by the same `plain` refusal as the ones asked here
+// (interfaces/web/src/hooks.server.ts).
 // Postgres as `web` and, for the one indexed profile, as `indexer` (TE-2); the PDS is stood in (TE-1).
 import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -757,7 +758,7 @@ describe("every answer", () => {
         const label = `${name}, a ${viewer}: HEAD`;
         expect(head.body, label).toBe("");
         expect(head.status, label).toBe(got.status);
-        // The policy by its pinned name: a member's start-up script, and so its hash, differs from one answer to the next.
+        // By its pinned name: a member's start-up script, and so its hash, differs from one answer to the next.
         const policy = policyOf(head.headers.get("content-security-policy"));
         expect(policy, label).toBe(policyOf(got.headers.get("content-security-policy")));
         expect(policy, label).toBeDefined();
