@@ -4,7 +4,7 @@
 // shows a Text card in the editor, so the card as the server draws it is read with script off. The cards added are
 // deleted again.
 import { type Browser, expect, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE, paceWrites, spendsWrites } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites, postedText, spendsWrites, writeText } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 
 paceWrites(test);
@@ -105,4 +105,22 @@ test("a_named_character_shows_on_the_page_in_the_editor_and_in_the_preview", asy
   expect(watched.pageErrors).toEqual([]);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
   await deleteNewest(page);
+});
+
+// The Preview's reader is its own file, asked for when Preview first opens, so the page's first load carries no
+// Markdown parser. When the file does not arrive the tab says so, and Write still holds the text.
+test("a_preview_whose_reader_does_not_arrive_says_so_and_write_keeps_the_text", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const dialog = page.getByRole("dialog");
+  await page.getByRole("link", { name: "Add card" }).click();
+  await dialog.getByRole("button", { name: /^Text/ }).click();
+  await writeText(dialog.getByRole("textbox", { name: "Text" }), ["kept words"]);
+  await page.route("**/_app/immutable/**", (route) => route.abort());
+  await dialog.getByRole("tab", { name: "Preview" }).click();
+  await expect(dialog.getByText("The preview could not load. Reload the page to see it.")).toBeVisible();
+  await dialog.getByRole("tab", { name: "Write" }).click();
+  await expect(postedText(dialog)).toHaveValue("kept words");
+  await page.unroute("**/_app/immutable/**");
+  await page.keyboard.press("Escape");
 });
