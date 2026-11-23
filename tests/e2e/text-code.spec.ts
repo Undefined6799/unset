@@ -192,6 +192,36 @@ test("markup_coloured_as_html_on_the_page_stays_text", async ({ browser, page })
   await deleteNewest(page);
 });
 
+// Review of #2004 at e36de8a: the server colours a member's code inside the page load, and one Textile line of "<a "
+// took minutes there, stalling the web process for every visitor. Within the colouring limits
+// (interfaces/web limits.ts CODE_COLOUR_LIMITS) the page answers at once and shows the code as plain text. The card is
+// added and removed by the form actions alone: the owner's page with script would draw it in the editor.
+test("hostile_code_on_the_page_is_plain_and_the_page_answers_quickly", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const key = /name="newKey" value="([^"]+)"/.exec(await (await page.request.get(page.url())).text())?.[1];
+  expect(key).toBeDefined();
+  const line = "<a ".repeat(3_000);
+  await addCard(page, {
+    kind: "readme",
+    width: "full",
+    surface: "filled",
+    text: `\`\`\`textile\n${line}\n\`\`\``,
+    newKey: key ?? "",
+  });
+  const started = Date.now();
+  const answer = await page.request.get(page.url());
+  expect(answer.status()).toBe(200);
+  expect(Date.now() - started).toBeLessThan(5_000);
+  // The whole line as one run of escaped text: a coloured one would be split by spans.
+  expect(await answer.text()).toContain(line.replaceAll("<", "&lt;"));
+  const removed = await page.evaluate(async (card) => {
+    const body = new URLSearchParams({ key: card });
+    const init = { method: "POST", body, headers: { accept: "text/html" }, redirect: "manual" } as const;
+    return (await fetch("?/remove", init)).type;
+  }, key ?? "");
+  expect(removed).toBe("opaqueredirect");
+});
+
 test("a_script_pasted_into_a_code_block_stays_text", async ({ page }) => {
   const watched = watch(page);
   const card = await openStored(page, "```\nx\n```");
