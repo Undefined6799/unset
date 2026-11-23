@@ -5364,6 +5364,9 @@ no-script page is the floor, not the ceiling. No code, header or test changes he
 control (ADR 0054 decision 4 kept the public group free of script), so its PR merges on Alex's typed line. Nothing
 below starts before that line. The letter is the next free id; the step is about the web shell, not base styles.
 
+Accepted: Alex's line "Merge 1962 at d7c6cd6 and 1994 at 18d5a0a", 2026-11-23 13:00Z, in the project chat; merged
+as 810d3dbb (#1994). The steps below may start.
+
 ### P1.22e — Run the client on the public profile under the app's script policy (added step, 2026-11-23)
 
 **Tags:** [SEC], trusted · **Depends on:** P1.22d (ADR 0114 accepted), P1.22h · **Plan:** §5.4, §6.1, §8 Phase 3
@@ -5391,7 +5394,9 @@ the owner and the limited page (ADR 0078), the test reads the serialised data ou
 card, no draft, nothing of the member's that the limited page leaves out, and for a signed-in viewer only their own
 shell data (account, bell). A load field the page does not draw is removed from the load, not hidden in the markup.
 The profile load calls no `fetch`, so SvelteKit inlines no fetched response (`data-sveltekit-fetched`); the test
-fails if one appears. P1.22h's data-address tests are re-run with the client on.
+fails if one appears. P1.22h's data-address tests are re-run with the client on: the "data address" blocks of
+`public-profile.test.ts`, `public-pages.test.ts` and `search-and-ai.test.ts` in `tests/integration/web/public/`,
+read back with `tests/integration/web/data-address.ts`.
 
 Docs in the same PR: the plan's §5.4 ("Zero JavaScript", the group's CSP line, the first Q5 reason), §6.1 (the
 `/@handle` budget row) and §8 (Phase 3 exit) say what ADR 0114 decided; the ASVS V3.4.3 row;
@@ -5449,6 +5454,14 @@ in the device's zone (ADR 0085 point 3), as it does in the app today; in a brows
 to `/notifications` (ADR 0108 point 3, now the fallback, ADR 0114). `notifications.test.ts` and `nojs.spec.ts` hold
 both. `/join`, `/request-invite`, `/login` and the refusal pages stay as they are until a step has a use for script
 there.
+
+What the shell sends a signed-in member (rule SE-3; asked by the review of P1.22h). On a page whose bell is only a
+link, the root layout's data still carries the member's own latest bell entries (`id`, `reason`, `sentAt`) and a
+`signInHref`, and the page draws neither. They are the member's own, in a private copy that is never stored, so
+nothing leaks; it is short of SE-3 all the same. P1.22h pins both by name in `public-profile.test.ts`
+(`BELL_ENTRY_FIELDS`, and `signInHref` as the one undrawn value). This step ends it: where the bell opens its panel
+the entries are drawn; where it stays a link the shell's view type holds the count and no entries; `signInHref`
+goes only to a visitor. The pins move with it, written first.
 
 ---
 
