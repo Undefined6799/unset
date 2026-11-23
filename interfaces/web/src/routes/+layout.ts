@@ -1,8 +1,10 @@
 // The root layout's load (P1.20d): the `?error=` code a redirect carried, only when it is a catalog code
 // (readErrorParam), so no request text reaches the page, and the server load's session flag and theme form (P1.20k)
 // and the changed privacy notice banner (P2.12b), the bell's notifications (P2.27), and whether listing is off on the whole site (P1.21b).
-// No script by default: a page that runs SvelteKit's client (group "app") says `export const csr = true` in its +page.ts; every other page, the error page for an unmatched
-// path included, ships none (kit docs, page options: https://svelte.dev/docs/kit/page-options#csr, kit 3.2.0).
+// Every page says in its own +page.ts whether it runs SvelteKit's client (`csr`; book P1.22j), so the default here
+// decides one thing only, the error page: for a failed load and for a path no route matches SvelteKit takes `csr` from
+// the layouts alone (kit 3.2.0 src/runtime/server/page/index.js:272-291, page/respond_with_error.js:44-46). It ships
+// no script (kit docs, page options: https://svelte.dev/docs/kit/page-options#csr).
 
 import type { Load } from "@sveltejs/kit";
 import type { NotificationsView } from "@unset/apps-web/lib/notifications/view.ts";
