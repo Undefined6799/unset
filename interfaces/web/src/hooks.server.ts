@@ -273,14 +273,16 @@ function withGroupHeaders(
     out.headers.append("vary", "Cookie");
   }
   const kit = out.headers.get("content-security-policy");
-  if (group === "app" && kit !== null) {
-    // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).
-    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN));
-  } else {
-    out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
-  }
+  const runsScript = group === "app";
+  out.headers.set("content-security-policy", kit !== null && runsScript ? kitPolicy(kit) : ZERO_SCRIPT[cspGroup]);
   return out;
 }
+
+/**
+ * SvelteKit's own policy for a page that runs its client, narrowed to our paths. Under `vite dev` Vite serves files
+ * from other paths, so 'self' stays (ADR 0054 decision 5).
+ */
+const kitPolicy = (kit: string): string => (dev ? kit : narrowed(kit, config.PUBLIC_ORIGIN));
 
 /**
  * An error a route did not answer itself. SvelteKit's own (a 404, a bad request) is shown by its code with nothing
