@@ -220,6 +220,12 @@ test("gfm_in_the_text_opens_as_itself_and_an_edit_elsewhere_keeps_it", async ({ 
   await page.keyboard.type(" more");
   // A task's box is shown where its bullet was, and a press on it ticks the task.
   const open = editor.locator("li[data-item-type='task']").first();
+  // On the line of the task's words, as the page draws its checkbox, not on a line of its own above them: the words
+  // start within the item's first line (24px).
+  const below = await open.evaluate(
+    (item) => (item.querySelector("p")?.getBoundingClientRect().top ?? 0) - item.getBoundingClientRect().top,
+  );
+  expect(below).toBeLessThan(12);
   const box = await open.boundingBox();
   if (box === null) throw new Error("no task");
   await page.mouse.click(box.x + 6, box.y + box.height / 2);
