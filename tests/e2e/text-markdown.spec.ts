@@ -200,3 +200,135 @@ test("headings_pasted_from_another_site_keep_their_level", async ({ page }) => {
   await removeCard(page, word);
   await giveBackWrites(page, 2);
 });
+
+// Alex, 2026-11-21: all of GFM. Struck words, tasks and tables stored in the card open as themselves in the editor
+// (Milkdown's preset-gfm 7.23.0), an edit elsewhere keeps their Markdown, and the page shows them.
+test("gfm_in_the_text_opens_as_itself_and_an_edit_elsewhere_keeps_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `gfm${Date.now()}`;
+  const gfm = "~~gone~~ kept\n\n- [ ] open\n- [x] done\n\n| a | b |\n| - | :-: |\n| 1 | 2 |";
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start\n\n${gfm}` });
+  const { editor } = await caretAtEnd(page, word);
+  await expect(editor.locator("del")).toHaveText("gone");
+  await expect(editor.locator("li[data-item-type='task']")).toHaveCount(2);
+  await expect(editor.locator("li[data-checked='true']")).toHaveText("done");
+  await expect(editor.locator("table td")).toHaveText(["1", "2"]);
+  // Aligned by a class, as the page is: the CSP refuses a style attribute (preset-gfm draws text-align in one).
+  await expect(editor.locator("table [style]")).toHaveCount(0);
+  await expect(editor.locator("table td").last()).toHaveCSS("text-align", "center");
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" more");
+  // A task's box is shown where its bullet was, and a press on it ticks the task.
+  const open = editor.locator("li[data-item-type='task']").first();
+  // On the line of the task's words, as the page draws its checkbox, not on a line of its own above them: the words
+  // start within the item's first line (24px).
+  const below = await open.evaluate(
+    (item) => (item.querySelector("p")?.getBoundingClientRect().top ?? 0) - item.getBoundingClientRect().top,
+  );
+  expect(below).toBeLessThan(12);
+  const box = await open.boundingBox();
+  if (box === null) throw new Error("no task");
+  await page.mouse.click(box.x + 6, box.y + box.height / 2);
+  await expect(open).toHaveAttribute("data-checked", "true");
+  const { card } = await saveAndReopen(page, word);
+  const html = await (await page.request.get(page.url())).text();
+  expect(html).toContain("<del");
+  expect(html).toContain('type="checkbox"');
+  expect(html).toContain("<table");
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await expect(field).toHaveValue(`${word} start more\n\n${gfm.replace("[ ] open", "[x] open")}`);
+  const shown = page.locator('[data-slot="card"]', { has: field });
+  await shown.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await removeCard(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await giveBackWrites(page, 3);
+});
+
+// Alex 2026-11-21: "bare addresses become https". A bare address in the text is a link on the page and in the editor,
+// a www name over https in both; a bare address pasted is a link; one typed in the link editor without https:// gets it.
+// A link the member wrote out keeps its own address, http too (Codex on #1959).
+test("bare_addresses_are_links_and_a_www_name_opens_over_https", async ({ page }) => {
+  const watched = watch(page);
+  const word = `bare${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, {
+    kind: "readme",
+    width: "full",
+    surface: "filled",
+    text: `${word} start\n\nsee https://example.com/a and www.example.org and [www.example.com](http://www.example.com).`,
+  });
+  const html = await (await page.request.get(page.url())).text();
+  expect(html).toContain('href="https://example.com/a"');
+  expect(html).toContain('href="https://www.example.org/"');
+  expect(html).toContain('href="http://www.example.com/"');
+  const { editor } = await caretAtEnd(page, word);
+  const links = editor.locator("a");
+  await expect(links).toHaveText(["https://example.com/a", "www.example.org", "www.example.com"]);
+  await expect(links.nth(1)).toHaveAttribute("href", "https://www.example.org");
+  await expect(links.last()).toHaveAttribute("href", "http://www.example.com");
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("these and ");
+  await paste(page, { "text/plain": "https://example.net/x" });
+  await expect(editor.locator("a[href='https://example.net/x']")).toHaveText("https://example.net/x");
+  await page.keyboard.press("Home");
+  for (const _ of "these") await page.keyboard.press("Shift+ArrowRight");
+  const floating = page.getByRole("toolbar", { name: "Format the selected words" }).filter({ visible: true });
+  await floating.getByRole("button", { name: "Link" }).click();
+  await page.getByRole("textbox", { name: "Link address" }).fill("example.com/b");
+  await page.keyboard.press("Enter");
+  await expect(editor.getByRole("link", { name: "these" })).toHaveAttribute("href", "https://example.com/b");
+  const { card } = await saveAndReopen(page, word);
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await expect(field).toHaveValue(
+    `${word} start\n\n[these](https://example.com/b) and <https://example.net/x>\n\nsee <https://example.com/a> and [www.example.org](https://www.example.org) and [www.example.com](http://www.example.com).`,
+  );
+  const shown = page.locator('[data-slot="card"]', { has: field });
+  await shown.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await removeCard(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await giveBackWrites(page, 3);
+});
+
+// The page reads no footnotes and no line break inside a table cell (GFM cells hold one line), so the editor takes
+// neither: a pasted footnote or a pasted table with a broken cell is refused whole, and Enter or Shift+Enter in a cell
+// adds no break. A pasted table is a table.
+test("a_pasted_table_is_a_table_and_what_the_page_cannot_show_is_refused", async ({ page }) => {
+  const word = `nofoot${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word);
+  await page.keyboard.press("Enter");
+  await paste(page, { "text/plain": "| x | y |\n| - | - |\n| 1 | 2 |" });
+  await expect(editor.locator("table td")).toHaveText(["1", "2"]);
+  await editor.locator("table td").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("z");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("w");
+  await expect(editor.locator("table td").first()).toHaveText("1zw");
+  await expect(editor.locator("table br")).toHaveCount(0);
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await paste(page, { "text/plain": "a[^1]\n\n[^1]: note" });
+  await expect(editor.locator("[data-type^='footnote']")).toHaveCount(0);
+  await expect(editor).not.toContainText("note");
+  await paste(page, { "text/html": "<table><tr><th>p</th></tr><tr><td>q<br>r</td></tr></table>" });
+  await expect(editor.locator("table")).toHaveCount(1);
+  await expect(editor.locator("table br")).toHaveCount(0);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+  await giveBackWrites(page, 2);
+});

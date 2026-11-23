@@ -63,7 +63,13 @@ const GROUPS: Record<BlockItem, keyof typeof TEXT_MENUS.groups> = {
   numbers: "list",
   codeBlock: "advanced",
 };
-const BAR_ICONS: Record<BarItem, IconName> = { strong: "bold", emphasis: "italic", code: "inline-code", link: "link" };
+const BAR_ICONS: Record<BarItem, IconName> = {
+  strong: "bold",
+  emphasis: "italic",
+  strike: "strikethrough",
+  code: "inline-code",
+  link: "link",
+};
 const refusedId = $props.id();
 
 let address = $state("");
@@ -126,7 +132,7 @@ const control =
 </div>
 
 <div bind:this={bar} data-show="false" role="toolbar" tabindex="-1" aria-label={TEXT_MENUS.bar} class="{floating} gap-0.5 rounded-md border bg-popover p-0.5 shadow-md" onpointerdown={keep}>
-  {#each ["strong", "emphasis", "code", "link"] as const as item (item)}
+  {#each ["strong", "emphasis", "strike", "code", "link"] as const as item (item)}
     <button
       type="button"
       class="{control} aria-pressed:bg-accent aria-pressed:text-accent-foreground"

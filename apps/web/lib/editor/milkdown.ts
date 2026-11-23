@@ -21,6 +21,7 @@ import {
 import { clipboard } from "@milkdown/plugin-clipboard";
 import { history } from "@milkdown/plugin-history";
 import { commonmark, emphasisSchema, headingSchema, imageSchema, strongSchema } from "@milkdown/preset-commonmark";
+import { gfm, remarkGFMPlugin, tableCellSchema, tableHeaderSchema } from "@milkdown/preset-gfm";
 import { lift, setBlockType, toggleMark, wrapIn } from "@milkdown/prose/commands";
 import { dropCursor } from "@milkdown/prose/dropcursor";
 import { gapCursor } from "@milkdown/prose/gapcursor";
@@ -29,7 +30,7 @@ import type { NodeType, Node as ProseNode, Schema } from "@milkdown/prose/model"
 import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
-import { $prose, getMarkdown } from "@milkdown/utils";
+import { $prose, $remark, getMarkdown } from "@milkdown/utils";
 import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
@@ -40,6 +41,7 @@ import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 export const EDITOR_COMMANDS = [
   "strong",
   "emphasis",
+  "strike",
   "code",
   "paragraph",
   "heading1",
@@ -104,6 +106,8 @@ function commandFor(name: EditorCommand, state: EditorState): Command {
       return toggleMark(schema.marks.strong as NonNullable<typeof schema.marks.strong>);
     case "emphasis":
       return toggleMark(schema.marks.emphasis as NonNullable<typeof schema.marks.emphasis>);
+    case "strike":
+      return toggleMark(schema.marks.strike_through as NonNullable<typeof schema.marks.strike_through>);
     case "code":
       return toggleMark(schema.marks.inlineCode as NonNullable<typeof schema.marks.inlineCode>);
     case "paragraph":
@@ -129,10 +133,11 @@ function commandFor(name: EditorCommand, state: EditorState): Command {
 function isActive(name: EditorCommand, state: EditorState): boolean {
   const { selection } = state;
   const parent = selection.$from.parent;
-  const mark = { strong: "strong", emphasis: "emphasis", code: "inlineCode" } as const;
+  const mark = { strong: "strong", emphasis: "emphasis", strike: "strike_through", code: "inlineCode" } as const;
   switch (name) {
     case "strong":
     case "emphasis":
+    case "strike":
     case "code": {
       const type = state.schema.marks[mark[name]];
       if (type === undefined) return false;
@@ -218,14 +223,15 @@ export type MountOptions = {
 // full one, so any stored text opens as it is; instead no edit (toolbar, shortcut or paste) may add a shape the saved
 // card would flatten: a heading, list or code block inside a quote, a second paragraph, quote, heading or code block
 // inside a list item, a line break inside a list, or a list nested deeper than the page's three levels (parse.ts
-// MAX_LIST_DEPTH), which it shows beside the third. Text already stored that way stays editable.
+// MAX_LIST_DEPTH), which it shows beside the third; nor, from GFM, a footnote. Text already stored that way stays
+// editable.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 const PAGE_LIST_DEPTH = 3;
 /**
- * How many flattened shapes `node` and what it holds carry, given its parent, its index there and how many lists hold
- * it: what the page would show differently from the editor.
+ * How many flattened shapes `node` and what it holds carry, given its parent, its index there, how many lists hold it
+ * and whether a table cell does: what the page would show differently from the editor.
  */
-function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number): number {
+function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number, cell = false): number {
   const holder = parent.type.name;
   const name = node.type.name;
   let count = 0;
@@ -233,10 +239,15 @@ function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: numb
   if (holder === "blockquote" && name !== "paragraph") count += 1;
   if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
   if (name === "hardbreak" && lists > 0) count += 1;
+  // GFM: the page reads no footnotes (preset-gfm's footnote_reference and footnote_definition), and a table cell
+  // holds one line. A cell holds a paragraph (preset-gfm 7.23.0 cellContent), so the break is the cell's grandchild.
+  if (name.startsWith("footnote_")) count += 1;
+  if (name === "hardbreak" && cell) count += 1;
   if (!node.isBlock) return count;
   const inner = lists + (ITEM_LISTS.has(name) ? 1 : 0);
+  const inCell = cell || name === "table_cell" || name === "table_header";
   node.forEach((child, _offset, at) => {
-    count += shapesIn(child, node, at, inner);
+    count += shapesIn(child, node, at, inner, inCell);
   });
   return count;
 }
@@ -266,6 +277,76 @@ function flattened(doc: ProseNode): number {
  */
 const dropLine = $prose(() => dropCursor({ width: 2, color: false, class: "rounded-full bg-ring" }));
 const gapCaret = $prose(() => gapCursor());
+
+const CELL_ALIGN: Readonly<Record<string, string>> = { left: "text-start", center: "text-center", right: "text-end" };
+const cellTag = (node: ProseNode) => (node.type.name === "table_header" ? "th" : "td");
+/** A cell's DOM attributes with its alignment as a class; GFM cells span one column and row. */
+function cellAttrs(node: ProseNode): Record<string, string> {
+  return { class: CELL_ALIGN[String(node.attrs.alignment)] ?? "text-start" };
+}
+
+/**
+ * A task's box is drawn where its bullet was (the editor's styles, from `data-checked`), and a press on it ticks or
+ * clears the task; preset-gfm 7.23.0 draws the item without a box of its own (task-list-item.ts toDOM).
+ */
+const TASK_BOX = 24;
+const taskBox = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleClickOn: (view, _pos, node, nodePos, event, direct) => {
+          if (!direct || node.type.name !== "list_item" || node.attrs.checked === null) return false;
+          const item = view.nodeDOM(nodePos);
+          if (!(item instanceof HTMLElement)) return false;
+          if (event.clientX - item.getBoundingClientRect().left > TASK_BOX) return false;
+          view.dispatch(view.state.tr.setNodeAttribute(nodePos, "checked", !node.attrs.checked));
+          return true;
+        },
+      },
+    }),
+);
+
+/** The parts of a Markdown tree (mdast) the www rewrite reads. */
+type MdNode = {
+  type: string;
+  url?: string;
+  value?: string;
+  children?: MdNode[];
+  position?: { start: { offset?: number } };
+};
+
+/**
+ * Whether a link is a bare address rather than one the member wrote out: mdast-util-gfm-autolink-literal 2.1.0 builds
+ * a bare one either with no position (its findUrl transform) or with its text starting where it starts (the
+ * literalAutolink token), while `[name](url)` starts one character before its text, at the bracket.
+ */
+function isBare(link: MdNode, text: MdNode): boolean {
+  return link.position === undefined || text.position?.start.offset === link.position.start.offset;
+}
+
+/**
+ * A bare `www.` name opens over https, as the page reads it (parse.ts; Alex 2026-11-21: "bare addresses become
+ * https"): remark-gfm 4.0.1 gives one a link to `http://` and its name (mdast-util-gfm-autolink-literal), so that link
+ * is pointed at https before the editor draws it. A link written out keeps its own address, http too.
+ */
+const wwwOverHttps = $remark("wwwOverHttps", () => () => (tree: MdNode) => {
+  const walk = (node: MdNode) => {
+    const text = node.children?.length === 1 ? node.children[0] : undefined;
+    const name = text?.value;
+    if (
+      node.type === "link" &&
+      text !== undefined &&
+      name !== undefined &&
+      /^www\./i.test(name) &&
+      node.url === `http://${name}` &&
+      isBare(node, text)
+    ) {
+      node.url = `https://${name}`;
+    }
+    node.children?.forEach(walk);
+  };
+  walk(tree);
+});
 
 const pageShapes = $prose(
   () =>
@@ -431,6 +512,10 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, options.value);
+      // GitHub Flavored Markdown as the page reads it (parse.ts): struck words need two tildes each side, so a single
+      // tilde stays text (remark-gfm 4.0.1 `singleTilde`, true by default).
+      // Cells are not padded to line up (`tablePipeAlign`), so a table opened and saved keeps the spacing it had.
+      ctx.set(remarkGFMPlugin.options.key, { singleTilde: false, tablePipeAlign: false });
       ctx.update(remarkStringifyOptionsCtx, (prev) => ({
         ...prev,
         bullet: "-" as const,
@@ -441,6 +526,14 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       // wrongly. Writing italic as "_" and bold as "**" always gives "**a _b_**" and "_**word**_", which it reads.
       // The runner returns nothing: a truthy return tells the serializer the mark wrote the text itself
       // (@milkdown/transformer 7.23.0 SerializerState, "every((mark) => !runProseMark(mark, node))").
+      // preset-gfm 7.23.0 draws a cell's alignment as a style attribute (table/schema.ts, cellAttributes.alignment),
+      // which the app's CSP refuses (style-src-attr); a class aligns it instead, as the page does (readme.svelte).
+      for (const cell of [tableCellSchema, tableHeaderSchema]) {
+        ctx.update(cell.key, (prev) => (schemaCtx) => {
+          const schema = prev(schemaCtx);
+          return { ...schema, toDOM: (node) => [cellTag(node), cellAttrs(node), 0] };
+        });
+      }
       ctx.update(emphasisSchema.key, (prev) => (schemaCtx) => {
         const schema = prev(schemaCtx);
         return {
@@ -505,6 +598,9 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       }));
     })
     .use(commonmark)
+    .use(gfm)
+    .use(wwwOverHttps)
+    .use(taskBox)
     .use(clipboard)
     .use(pageShapes)
     .use(history)

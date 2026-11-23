@@ -28,6 +28,7 @@ import {
   updateLinkCommand,
   wrapInBlockTypeCommand,
 } from "@milkdown/preset-commonmark";
+import { toggleStrikethroughCommand } from "@milkdown/preset-gfm";
 import { findParent, posToDOMRect } from "@milkdown/prose";
 import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
@@ -50,7 +51,7 @@ export const BLOCK_ITEMS = [
   "codeBlock",
 ] as const;
 export type BlockItem = (typeof BLOCK_ITEMS)[number];
-export const BAR_ITEMS = ["strong", "emphasis", "code", "link"] as const;
+export const BAR_ITEMS = ["strong", "emphasis", "strike", "code", "link"] as const;
 export type BarItem = (typeof BAR_ITEMS)[number];
 
 export type MenusState = {
@@ -136,7 +137,12 @@ function blockCommand(ctx: Ctx, item: BlockItem): () => void {
   }
 }
 
-const BAR_COMMANDS = { strong: toggleStrongCommand, emphasis: toggleEmphasisCommand, code: toggleInlineCodeCommand };
+const BAR_COMMANDS = {
+  strong: toggleStrongCommand,
+  emphasis: toggleEmphasisCommand,
+  strike: toggleStrikethroughCommand,
+  code: toggleInlineCodeCommand,
+};
 
 function hasLink(ctx: Ctx, state: EditorState): boolean {
   return state.doc.rangeHasMark(state.selection.from, state.selection.to, linkSchema.type(ctx));
@@ -236,6 +242,15 @@ const moveKeys = $prose(() =>
 );
 
 /** Adds the handle, the block menu and the bar to `editor`, drawn in the elements `options` names. */
+/** A scheme before a colon; one followed by a digit is a port (`example.com:8080`), not a scheme. */
+const SCHEME = /^[a-z][a-z\d+.-]*:(?!\d)/i;
+
+/**
+ * An address typed with no scheme, `example.com/a`, opens over https (Alex 2026-11-21: "bare addresses become
+ * https"); one with a scheme is left for safeHref to take or refuse, so `javascript:` is still refused.
+ */
+const withScheme = (address: string) => (address === "" || SCHEME.test(address) ? address : `https://${address}`);
+
 export function withMenus(editor: Editor, options: MenusOptions): Menus {
   let ctx: Ctx | undefined;
   let filter = "";
@@ -483,7 +498,7 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     confirmLink: (address) => {
       if (ctx === undefined || linked === null) return;
       // Only what the page shows as a link (safeHref, http and https): anything else would be saved as plain words.
-      const href = safeHref(address.trim(), WEB);
+      const href = safeHref(withScheme(address.trim()), WEB);
       if (href === null) {
         link = { mode: "edit", value: address, refused: true };
         report();

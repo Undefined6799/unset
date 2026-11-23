@@ -129,6 +129,13 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   await bold.click();
   await expect(editor.locator("strong")).toHaveText(`${word} start`);
   await expect(bold).toHaveAttribute("aria-pressed", "true");
+  // The playground's bar, in its order: Strikethrough after Italic (Crepe 7.23.0 toolbar).
+  const names = await floating.getByRole("button").evaluateAll((all) => all.map((b) => b.getAttribute("aria-label")));
+  expect(names).toEqual(["Bold", "Italic", "Strikethrough", "Inline code", "Link"]);
+  const strike = floating.getByRole("button", { name: "Strikethrough" });
+  await strike.click();
+  await expect(editor.locator("strong del, del strong")).toHaveText(`${word} start`);
+  await expect(strike).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("ArrowRight");
   await expect(floating).toBeHidden();
   await discardAndRemove(page, word);
