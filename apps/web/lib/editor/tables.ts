@@ -277,6 +277,15 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
           // pointer opens; Tab there goes on to the row's (Alt+F10 reaches an editor's toolbar, as in CKEditor 5:
           // https://ckeditor.com/docs/ckeditor5/latest/features/accessibility.html).
           props: {
+            // A press back in the words closes an open menu, so the caret it puts in a cell keeps the keys.
+            handleDOMEvents: {
+              pointerdown: (view) => {
+                if (open === null) return false;
+                open = null;
+                update(view);
+                return false;
+              },
+            },
             handleKeyDown: (view, event) => {
               if (event.key !== "F10" || !event.altKey) return false;
               const cell = cellAt(view.state.selection.$from);

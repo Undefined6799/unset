@@ -51,9 +51,11 @@ const rows = $derived(shown?.row === 0 ? ROW.filter((item) => item.action === "a
 
 let columnMenu: HTMLElement | undefined = $state();
 let rowMenu: HTMLElement | undefined = $state();
-// The open menu takes the focus on its first item, so its keys work at once.
+// A menu takes the focus on its first item as it opens, so its keys work at once; a later update of the same open
+// menu (the caret moving, an edit) leaves the focus where it is, since `open` is unchanged.
+const open = $derived(shown?.open ?? null);
 $effect(() => {
-  const menu = shown?.open === "column" ? columnMenu : shown?.open === "row" ? rowMenu : undefined;
+  const menu = open === "column" ? columnMenu : open === "row" ? rowMenu : undefined;
   menu?.querySelector<HTMLElement>("[role='menuitem']")?.focus();
 });
 
