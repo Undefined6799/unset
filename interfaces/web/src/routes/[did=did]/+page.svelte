@@ -392,6 +392,7 @@ function dropDrafts() {
                 onedit={(markdown) => change(card.key, { fields: { text: markdown } })}
                 {flushes}
                 onfocus={(focus) => (lastWords = focus)}
+                codeColours={data.cardEditLimits.codeColours}
               />
             {/key}
           {/if}

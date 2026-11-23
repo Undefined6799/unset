@@ -15,9 +15,9 @@
 // input's value, and the Copy button writes plain text to the clipboard.
 
 import { defaultKeymap } from "@codemirror/commands";
-import { LanguageDescription, syntaxHighlighting } from "@codemirror/language";
+import { LanguageDescription, type LanguageSupport, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { Compartment } from "@codemirror/state";
+import { Compartment, EditorState, type Extension, type Text, type Transaction } from "@codemirror/state";
 import { EditorView as CodeMirror, drawSelection, type KeyBinding, keymap, type ViewUpdate } from "@codemirror/view";
 import { codeBlockSchema } from "@milkdown/preset-commonmark";
 import { exitCode } from "@milkdown/prose/commands";
@@ -26,7 +26,7 @@ import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView, NodeView } from "@milkdown/prose/view";
 import { $view } from "@milkdown/utils";
-import { CODE_COLOURS, codeHighlighter } from "./code-colours.ts";
+import { CODE_COLOURS, type CodeColourLimits, codeHighlighter, colourable } from "./code-colours.ts";
 
 /** CodeMirror's look, drawn from the theme's colours (custom properties reach into the shadow root). */
 const look = CodeMirror.theme({
@@ -39,18 +39,24 @@ const look = CodeMirror.theme({
   ".code-comment": { color: "var(--code-comment)", fontStyle: "italic" },
 });
 
+/** No language: the code shows as plain text. One value, so the compartment's content can be compared with it. */
+const NONE: Extension = [];
+
 class CodeBlockView implements NodeView {
   readonly dom: HTMLElement;
   private readonly cm: CodeMirror;
   private readonly language = new Compartment();
   private readonly languageField: HTMLInputElement;
   private loaded = "";
+  /** The loaded language, kept while the code is past the limits so it comes back once the code fits again. */
+  private found: { readonly name: string; readonly support: LanguageSupport } | null = null;
   private updating = false;
 
   constructor(
     private node: ProseNode,
     private readonly view: EditorView,
     private readonly getPos: () => number | undefined,
+    private readonly limits: CodeColourLimits | undefined,
   ) {
     this.dom = document.createElement("div");
     this.dom.className = "code-block flex flex-col gap-2 rounded-sm bg-muted px-4 py-3";
@@ -70,7 +76,9 @@ class CodeBlockView implements NodeView {
         syntaxHighlighting(codeHighlighter),
         CodeMirror.lineWrapping,
         look,
-        this.language.of([]),
+        this.language.of(NONE),
+        // In the change's own transaction, before CodeMirror parses the new text with the old language.
+        EditorState.transactionExtender.of((tr) => this.followLimits(tr)),
         CodeMirror.updateListener.of((update) => this.forwardUpdate(update)),
         CodeMirror.domEventHandlers({ keydown: (event) => this.outerKey(event) }),
       ],
@@ -119,14 +127,35 @@ class CodeBlockView implements NodeView {
   private loadLanguage(name: string) {
     if (name === this.loaded) return;
     this.loaded = name;
+    this.found = null;
     const found = LanguageDescription.matchLanguageName(languages, name, true);
     if (found === null) {
-      this.cm.dispatch({ effects: this.language.reconfigure([]) });
+      this.cm.dispatch({ effects: this.language.reconfigure(NONE) });
       return;
     }
     void found.load().then((support) => {
-      if (this.loaded === name) this.cm.dispatch({ effects: this.language.reconfigure(support) });
+      if (this.loaded !== name) return;
+      this.found = { name: found.name, support };
+      this.cm.dispatch({ effects: this.language.reconfigure(this.languageFor(this.cm.state.doc)) });
     });
+  }
+
+  /**
+   * The language only while the page would colour the code too (code-colours.ts colourable): past its limits a stream
+   * parser takes one long line in a step nothing interrupts, which would freeze the member's tab as it types. Without
+   * the page's limits nothing is coloured.
+   */
+  private languageFor(doc: Text): Extension {
+    const { found, limits } = this;
+    if (found === null || limits === undefined) return NONE;
+    return colourable(found.name, doc.toString(), limits) ? found.support : NONE;
+  }
+
+  /** Turns the language off in the change that takes the code past the limits, and back on in the one that ends it. */
+  private followLimits(tr: Transaction) {
+    if (!tr.docChanged || this.found === null) return null;
+    const wanted = this.languageFor(tr.newDoc);
+    return this.language.get(tr.startState) === wanted ? null : { effects: this.language.reconfigure(wanted) };
   }
 
   private forwardUpdate(update: ViewUpdate) {
@@ -274,8 +303,6 @@ class CodeBlockView implements NodeView {
   }
 }
 
-/** The code_block node drawn as CodeMirror. */
-export const codeBlockView = $view(
-  codeBlockSchema.node,
-  () => (node, view, getPos) => new CodeBlockView(node, view, getPos),
-);
+/** The code_block node drawn as CodeMirror, coloured within the page's limits (`undefined`: never coloured). */
+export const codeBlockView = (limits: CodeColourLimits | undefined) =>
+  $view(codeBlockSchema.node, () => (node, view, getPos) => new CodeBlockView(node, view, getPos, limits));
