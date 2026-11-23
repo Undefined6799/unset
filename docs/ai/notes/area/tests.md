@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-11-21
+checked: 2026-11-23
 ---
 # tests
 
@@ -82,6 +82,11 @@ handle, "/" menu, floating bar, link editor and empty-line hint. Playwright's We
 mouse press, so its `drag()` sends the browser's own drag events there. Select words with `selectText()`, not a
 double click at a paragraph's centre (it hits empty space, and Firefox selects differently). A card whose edits
 end where they began has no unsaved changes: delete it without Discard (`discardAndRemove(..., { changed: false })`).
+
+**A Text card as the server draws it (P1.21k).** With script, the owner's page replaces a Text card's drawn words
+with the in-place editor, and they sit beside the card's group of controls, not in it. A spec that checks what
+visitors get opens the same page for the same member with script off (`withoutScript` in `text-read.spec.ts`) and
+reads `[data-slot='card']`.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

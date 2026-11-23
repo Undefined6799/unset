@@ -5062,6 +5062,15 @@ line, so `- one\n\n- two` is drawn as two lists, where CommonMark 0.31.2 §5.3 m
 does); the page must draw one. Ownership: apps/web/lib/profile
 (parser) → apps/web (Text card). Styles build only after this merges.
 
+As built (2026-11-23): "safe and cheap" above did not hold for text written to hurt. micromark's readme (Security,
+read at 4.0.3) says a small text can crash it; measured at the text block's 20,000 characters, `_*` repeated takes
+about 5 s and `+ ` repeated about 10 s before the stack runs out, and a normal card costs 1 to 4 ms for each 1,000
+characters, where the old reader took about 0.1 ms. So a page load reads each card under a deadline
+(`interfaces/web/src/lib/server/text-reader.ts`, limits.ts `TEXT_READ_LIMITS`: 150 ms a card, 300 ms a page) and shows
+a stopped card as plain escaped text. Strikethrough, task items and bare addresses ride on the page's parse (they
+change no top-level block); the count itself is `topBlocks`, table-only as decided. The dialog's Preview loads the
+reader when it opens, so the owner's page carries no parser at first load either.
+
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1
