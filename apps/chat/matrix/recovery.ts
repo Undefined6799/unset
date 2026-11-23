@@ -185,14 +185,18 @@ export async function dehydrate(crypto: CryptoApi, opts: StartDehydrationOpts): 
  * Setup, once the person has saved the key: a new vault under it, a new backup and the offline device with a new key
  * (CreateSecretStorageDialog.tsx:241); true when the vault and the backup are confirmed.
  */
-export async function storeKey({ crypto, holder }: Keys, key: GeneratedSecretStorageKey): Promise<boolean> {
+export async function storeKey(
+  { crypto, holder }: Keys,
+  key: GeneratedSecretStorageKey,
+  onStarted: () => void = () => undefined,
+): Promise<boolean> {
   await holder.during(null, key.privateKey, async () => {
     await crypto.bootstrapSecretStorage({
       createSecretStorageKey: async () => key,
       setupNewSecretStorage: true,
       setupNewKeyBackup: true,
     });
-    await dehydrate(crypto, DEHYDRATE_AT_SETUP);
+    if ((await dehydrate(crypto, DEHYDRATE_AT_SETUP)) === "started") onStarted();
   });
   return (await crypto.isSecretStorageReady()) && (await crypto.getActiveSessionBackupVersion()) !== null;
 }
@@ -202,9 +206,15 @@ export async function storeKey({ crypto, holder }: Keys, key: GeneratedSecretSto
  * (secretStorage.checkKey, as Element's AccessSecretStorageDialog.tsx:85-124 does), so a wrong one writes nothing. Then
  * a /keys/query for ourselves, which the 2026-11-20 spike needed, the signing keys from the vault (bootstrapCrossSigning
  * imports them and signs this device, CrossSigningIdentity.ts:88-118), the backup key, the backup turned on here, and
- * the offline device (dehydrate).
+ * the offline device (dehydrate); `onStarted` hears when the offline device started, so a failed start is tried
+ * again at the next ready report.
  */
-export async function unlock(keys: Keys, userId: string, typed: string): Promise<UnlockOutcome> {
+export async function unlock(
+  keys: Keys,
+  userId: string,
+  typed: string,
+  onStarted: () => void = () => undefined,
+): Promise<UnlockOutcome> {
   const { client, crypto, holder } = keys;
   let key: Uint8Array<ArrayBuffer>;
   try {
@@ -233,7 +243,7 @@ export async function unlock(keys: Keys, userId: string, typed: string): Promise
       await crypto.checkKeyBackupAndEnable();
       // The offline device's messages, sent while the account had no browser open, and a new one (Element's
       // SetupEncryptionStore.ts:141, after the unlock).
-      await dehydrate(crypto, DEHYDRATE_AT_UNLOCK);
+      if ((await dehydrate(crypto, DEHYDRATE_AT_UNLOCK)) === "started") onStarted();
     });
   } catch {
     return "failed";

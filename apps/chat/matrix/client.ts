@@ -246,9 +246,9 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   );
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;
-    const outcome = await unlock(keys, session.userId, typed).finally(() => (busy = false));
+    // A started offline device is not started again on the ready report; a failed one is (DEHYDRATE_AT_LOAD).
+    const outcome = await unlock(keys, session.userId, typed, () => (dehydrating = true)).finally(() => (busy = false));
     if (outcome !== "unlocked") return outcome;
-    dehydrating = true; // the unlock started it
 
     // Keys the account's other browsers had not uploaded yet are read once more, when they have (RESTORE_AGAIN_MS).
     restoreAgain = setTimeout(() => void restoreBackup(crypto), RESTORE_AGAIN_MS);
@@ -270,8 +270,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     // The claim may have run out while the key was being saved; it is taken again before the vault is written.
     const claimed = await options.setup.claim();
     if (claimed !== "claimed") return claimed === "elsewhere" ? tell({ kind: "setup_elsewhere" }) : fail(UNAVAILABLE);
-    if (!(await storeKey(keys, key).catch(() => false))) return fail(SETUP_FAILED);
-    dehydrating = true; // the setup started it
+    if (!(await storeKey(keys, key, () => (dehydrating = true)).catch(() => false))) return fail(SETUP_FAILED);
     await options.setup.release();
     busy = false;
     await report();
