@@ -262,6 +262,26 @@ describe("core.erase_did", () => {
     });
   });
 
+  test("a_browser_entry_after_erasure_is_refused", () => {
+    // Codex review on ad2dbf0e (migration 0056): a first sign-in whose device was minted before the erasure committed
+    // must not write the erased person's DID and lock key back. A member who signs up again gets a new chat user, and
+    // that entry is taken.
+    const add = (user: string, fill: string) =>
+      lines(
+        `INSERT INTO door.browser (id, browser_hash, did, chat_user, web_session, device_id, lock_key)
+           VALUES (repeat('${fill}', 32)::uuid, decode(repeat('${fill}', 64), 'hex'), '${X}', '${user}',
+                   repeat('s', 43), 'DEVICE0009', 's1.k1.made-up')
+           RETURNING 1`,
+      ).filter((line) => line === "1").length;
+    expect(add(`u${"a".repeat(20)}`, "e")).toBe(0);
+    postgres.sql("unset", `INSERT INTO app.chat_account (did, chat_user) VALUES ('${X}', 'u${"q".repeat(20)}')`);
+    expect(add(`u${"q".repeat(20)}`, "f")).toBe(1);
+    postgres.sql(
+      "unset",
+      `DELETE FROM door.browser WHERE did = '${X}'; DELETE FROM app.chat_account WHERE did = '${X}';`,
+    );
+  });
+
   test("the_tombstone_marks_only_the_erased_person", async () => {
     // P3.07s (migration 0028): idx.is_erased answers for the indexer from a keyed HMAC, never the DID itself.
     const erased = async (did: string) =>
