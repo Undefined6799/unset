@@ -17,7 +17,7 @@
 -->
 <script lang="ts">
 import { type Snippet, tick } from "svelte";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import ConversationMessage from "./ConversationMessage.svelte";
 import {
   actionsOf,
@@ -48,6 +48,7 @@ let {
   unsent = false,
   controls,
   drafts = new SvelteMap(),
+  inFlight = new SvelteSet(),
 }: {
   conversations: Conversations;
   id: ConversationId;
@@ -64,6 +65,11 @@ let {
    * still clears what it sent (Codex review on e4620a92, dedb86d1, bbf29338). Only in this page's memory.
    */
   drafts?: SvelteMap<ConversationId, string>;
+  /**
+   * The conversations whose Send is still going, owned by the page like `drafts`: a composer opened again while its
+   * message goes keeps Send off, so the same text is not sent twice (Codex review on ad2dbf0e).
+   */
+  inFlight?: SvelteSet<ConversationId>;
 } = $props();
 
 let view = $state<ConversationView | null>(null);
@@ -75,7 +81,7 @@ const own = id;
 // svelte-ignore state_referenced_locally
 if (!drafts.has(own)) drafts.set(own, typed);
 const text = $derived(drafts.get(own) ?? "");
-let sending = $state(false);
+const sending = $derived(inFlight.has(own));
 // svelte-ignore state_referenced_locally
 let failed = $state(unsent);
 const sends = $derived(view !== null && canSend(view.composer));
@@ -120,12 +126,12 @@ function startReply(message: Message) {
 async function send(event: SubmitEvent) {
   event.preventDefault();
   if (sending || text.trim() === "") return;
-  sending = true;
+  inFlight.add(own);
   // The field stays open while the send goes: only what was sent is cleared, so text typed meanwhile is kept, and a
   // reply started meanwhile stays too.
   const [draft, answering] = [text, replyingTo];
   const sent = await conversations.send(id, draft, answering?.id);
-  sending = false;
+  inFlight.delete(own);
   failed = !sent;
   drafts.set(own, draftAfterSend(draft, drafts.get(own) ?? "", sent));
   if (sent && replyingTo === answering) replyingTo = null;

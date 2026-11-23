@@ -20,7 +20,7 @@
 -->
 <script lang="ts">
 import { onMount } from "svelte";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { boot, bootDock, closeDock, dockLayout } from "./boot.ts";
 import Conversations, { type Dock } from "./Conversations.svelte";
 import type { ChatState, UnlockOutcome } from "./core/chat.ts";
@@ -181,6 +181,8 @@ const dock = isDock(window.location, window.parent !== window);
 let opened = $state(0);
 /** What was typed and not sent, by conversation, kept across the list's remount (Conversations.svelte `unsent`). */
 const unsent = new SvelteMap<ConversationId, string>();
+/** Conversations whose Send is still going, kept with `unsent` so a remounted composer cannot send it again. */
+const sending = new SvelteSet<ConversationId>();
 let dockMode: DockMode = $state("list");
 /** What the list covers, to go back to when the icon is pressed again. */
 let covered: DockMode | null = null;
@@ -273,7 +275,7 @@ onMount(() => {
       {@render historyLocked()}
     {/if}
     {#key opened}
-      <Conversations conversations={view.conversations} names={view.names} me={view.me} dock={dockParts} {unsent} />
+      <Conversations conversations={view.conversations} names={view.names} me={view.me} dock={dockParts} {unsent} {sending} />
     {/key}
   </main>
 {:else}
@@ -365,7 +367,7 @@ onMount(() => {
       <Card.Content class="flex flex-col gap-4">
         {@render historyLocked()}
         {#key opened}
-          <Conversations conversations={view.conversations} names={view.names} me={view.me} {unsent} />
+          <Conversations conversations={view.conversations} names={view.names} me={view.me} {unsent} {sending} />
         {/key}
       </Card.Content>
     {:else if view.kind === "open_elsewhere"}

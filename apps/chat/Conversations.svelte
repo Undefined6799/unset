@@ -15,7 +15,7 @@
 -->
 <script lang="ts">
 import { onMount } from "svelte";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import Conversation from "./Conversation.svelte";
 import {
   type ChatId,
@@ -45,6 +45,7 @@ let {
   me,
   dock,
   unsent = new SvelteMap(),
+  sending = new SvelteSet(),
 }: {
   conversations: Conversations;
   names: (chatId: string) => Promise<string | null>;
@@ -56,6 +57,8 @@ let {
    * on e4620a92 and dedb86d1). Only in this page's memory. Conversation.svelte keeps its own entry.
    */
   unsent?: SvelteMap<ConversationId, string>;
+  /** The conversations whose Send is still going (Conversation.svelte `inFlight`), owned by the page with `unsent`. */
+  sending?: SvelteSet<ConversationId>;
 } = $props();
 
 let list: readonly Item[] = $state([]);
@@ -147,6 +150,7 @@ function leaveDraft() {
     onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
     controls={dock === undefined ? undefined : conversationControls}
     drafts={unsent}
+    inFlight={sending}
   />
 {:else if draft !== null && dock?.mode !== "list"}
   <section class="flex flex-col gap-4" data-screen="new-conversation">
