@@ -344,6 +344,27 @@ test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
   await discardAndRemove(page, word);
 });
 
+// A heading or a code block the dots turn into a quote or a list becomes its words first: a quote holds only
+// paragraphs on the page (milkdown.ts pageShapes), so wrapping the block as it is would be refused (Codex on #1965).
+test("the_dots_turn_a_heading_or_code_block_into_a_quote_or_list", async ({ page }) => {
+  const word = `wrapped${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\n## a title\n\n\`\`\`\nsome code\n\`\`\``);
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator("h3").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Quote" }).click();
+  await expect(editor.locator("h3")).toHaveCount(0);
+  await expect(editor.locator("blockquote p")).toHaveText(["a title"]);
+  await editor.locator("pre").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Bullet list" }).click();
+  await expect(editor.locator("pre")).toHaveCount(0);
+  await expect(editor.locator("ul li")).toHaveText(["some code"]);
+  await discardAndRemove(page, word);
+});
+
 test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_width", async ({ page }) => {
   // Alex 2026-11-22 00:12Z: the six dots and the + "outside of the card ... on the margin of the card instead of
   // inside", for a card on the right of a row too; with a mouse the owner's page keeps room for them.
