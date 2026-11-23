@@ -1,11 +1,16 @@
 // What a card shows beside its own words (the profile-card mockup, Alex 2026-11-17): a labelled link names its site,
 // and an email button's address is shown under the buttons.
 import { describe, expect, test } from "vitest";
+import { parseReadme } from "./parse.ts";
 import { cardViews, contactAction, shownCards } from "./view.ts";
+
+type Cards = Parameters<typeof cardViews>[0];
+/** The page's cards with the parser itself as their reader, as a page with no limits would read them. */
+const views = (cards: Cards, versions?: ReadonlyMap<string, string>) => cardViews(cards, parseReadme, versions);
 
 describe("card views", () => {
   test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", () => {
-    const [card] = cardViews([
+    const [card] = views([
       {
         key: "k",
         width: "half",
@@ -31,25 +36,22 @@ describe("card views", () => {
 
   test("a_card_carries_its_version_only_where_the_page_gave_one", () => {
     const readme = { kind: "readme", text: "Hi" } as const;
-    const views = cardViews(
+    const both = views(
       [
         { key: "a", width: "full", content: readme },
         { key: "b", width: "full", content: readme },
       ],
       new Map([["a", "bafyv"]]),
     );
-    expect(views.map((view) => view.version)).toEqual(["bafyv", undefined]);
-    expect("version" in (cardViews([{ key: "a", width: "full", content: readme }])[0] ?? {})).toBe(false);
+    expect(both.map((view) => view.version)).toEqual(["bafyv", undefined]);
+    expect("version" in (views([{ key: "a", width: "full", content: readme }])[0] ?? {})).toBe(false);
   });
 
   // Book P1.22h, rule SE-3: a page that edits nothing sends the browser what a card shows, never the record behind it.
   test("a_card_for_a_page_that_edits_nothing_is_what_it_shows_and_no_more", () => {
     const text = "Typed **as Markdown**";
     const [card] = shownCards(
-      cardViews(
-        [{ key: "k", width: "half", surface: "plain", content: { kind: "readme", text } }],
-        new Map([["k", "v"]]),
-      ),
+      views([{ key: "k", width: "half", surface: "plain", content: { kind: "readme", text } }], new Map([["k", "v"]])),
     );
     expect(Object.keys(card ?? {}).sort()).toEqual(["key", "shown", "surface", "width"]);
     expect(card).toMatchObject({ key: "k", width: "half", surface: "plain", shown: { kind: "readme" } });
@@ -57,7 +59,7 @@ describe("card views", () => {
   });
 
   test("an_email_button_carries_its_address_and_a_link_button_none", () => {
-    const [card] = cardViews([
+    const [card] = views([
       {
         key: "k",
         width: "half",
@@ -85,8 +87,30 @@ describe("card views", () => {
 });
 
 test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %s surface", (surface) => {
-  const [card] = cardViews([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
+  const [card] = views([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
   expect(card?.surface).toBe(surface);
+});
+
+// P1.21k: the page's server passes a reader that stops a slow parse, so every Text card must go through it.
+test("every Text card is read by the reader the page passes, in page order", () => {
+  const read: string[] = [];
+  const cards = cardViews(
+    [
+      { key: "a", width: "full", content: { kind: "readme", text: "one" } },
+      { key: "b", width: "full", content: { kind: "buttons", heading: "", text: "not Markdown", buttons: [] } },
+      { key: "c", width: "full", content: { kind: "readme", text: "two" } },
+    ],
+    (text) => {
+      read.push(text);
+      return [{ kind: "rule" }];
+    },
+  );
+  expect(read).toEqual(["one", "two"]);
+  expect(cards.map((card) => card.shown)).toMatchObject([
+    { kind: "readme", blocks: [{ kind: "rule" }] },
+    { kind: "buttons" },
+    { kind: "readme", blocks: [{ kind: "rule" }] },
+  ]);
 });
 
 // P1.21o: the header's About panel repeats the page's published contact action, never an account address.
@@ -103,7 +127,7 @@ describe("contact action", () => {
   });
 
   test("is the first button of the first Contact card", () => {
-    const cards = cardViews([
+    const cards = views([
       { key: "t", width: "full", content: { kind: "readme", text: "Hi" } },
       buttons("a", [
         { uri: "https://cal.example/me", label: "Book a call" },
@@ -115,7 +139,7 @@ describe("contact action", () => {
   });
 
   test("is none with no Contact card, or one whose buttons have no safe address", () => {
-    expect(contactAction(cardViews([{ key: "t", width: "full", content: { kind: "readme", text: "Hi" } }]))).toBeNull();
-    expect(contactAction(cardViews([buttons("a", [{ uri: "javascript:alert(1)", label: "x" }])]))).toBeNull();
+    expect(contactAction(views([{ key: "t", width: "full", content: { kind: "readme", text: "Hi" } }]))).toBeNull();
+    expect(contactAction(views([buttons("a", [{ uri: "javascript:alert(1)", label: "x" }])]))).toBeNull();
   });
 });

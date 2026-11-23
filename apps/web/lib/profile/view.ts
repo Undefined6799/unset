@@ -4,8 +4,22 @@
 // render what this returns.
 import { safeHref } from "@unset/shared-safe-href";
 import { CARD_TEXT } from "./messages.ts";
-import { parseReadme } from "./parse.ts";
-import type { CardContent, CardShown, CardSurface, CardView, CardWidth, ShownButton, ShownCard } from "./types.ts";
+import type {
+  Block,
+  CardContent,
+  CardShown,
+  CardSurface,
+  CardView,
+  CardWidth,
+  ShownButton,
+  ShownCard,
+} from "./types.ts";
+
+/**
+ * Reads a Text card's Markdown into the blocks it shows. The page's server passes one that stops a slow parse
+ * (interfaces/web text-reader.ts); parse.ts parseReadme is the parse itself.
+ */
+export type TextReader = (text: string) => readonly Block[];
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 
@@ -47,10 +61,10 @@ function shownButtons(buttons: Buttons): ShownButton[] {
   return shown;
 }
 
-function shownOf(content: CardContent): CardShown {
+function shownOf(content: CardContent, readText: TextReader): CardShown {
   switch (content.kind) {
     case "readme":
-      return { kind: "readme", blocks: parseReadme(content.text) };
+      return { kind: "readme", blocks: readText(content.text) };
     case "links":
       return {
         kind: "links",
@@ -87,7 +101,10 @@ function shownOf(content: CardContent): CardShown {
   }
 }
 
-/** The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at. */
+/**
+ * The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at.
+ * `readText` reads every Text card of the page, so one reader can hold them all to one budget.
+ */
 export const cardViews = (
   cards: readonly {
     readonly key: string;
@@ -95,11 +112,12 @@ export const cardViews = (
     readonly surface?: CardSurface;
     readonly content: CardContent;
   }[],
+  readText: TextReader,
   versions?: ReadonlyMap<string, string>,
 ): CardView[] =>
   cards.map(({ key, width, surface = "filled", content }) => {
     const version = versions?.get(key);
-    const shown = { key, width, surface, content, shown: shownOf(content) };
+    const shown = { key, width, surface, content, shown: shownOf(content, readText) };
     return version === undefined ? shown : { ...shown, version };
   });
 

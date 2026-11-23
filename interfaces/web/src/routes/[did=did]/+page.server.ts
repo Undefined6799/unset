@@ -5,6 +5,7 @@
 // the PDS. A write that succeeds sends the browser back to the page (303); a refusal shows the page again with its
 // code and status.
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
+import { parseReadme } from "@unset/apps-web/lib/profile/parse.ts";
 import type { CardPanelRequest, CardView } from "@unset/apps-web/lib/profile/types.ts";
 import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -116,7 +117,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? cardViews(own.cards, own.versions) : [];
+  const cards = own.kind === "ok" ? cardViews(own.cards, parseReadme, own.versions) : [];
   return {
     shell,
     account,

@@ -13,6 +13,7 @@
 // or AI search, whatever the Search and AI choices say. The session is read when a cookie is sent (policy.ts), and a
 // page rendered for a member is private and never stored (hooks.server.ts), so a visitor's copy is never theirs.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
+import { parseReadme } from "@unset/apps-web/lib/profile/parse.ts";
 import { cardViews, contactAction, shownCards, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { canonicalActorPath, type Did, parseActor, parseDid, parseHandle } from "@unset/domains-identity";
 import {
@@ -79,7 +80,9 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
   // What each card shows and no more (rule SE-3): the record's own fields are for the owner's editors, and this load's
   // whole result is sent to the viewer, at the page's data address too (book P1.22h).
   const cards =
-    owner === null ? [] : shownCards(cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX)));
+    owner === null
+      ? []
+      : shownCards(cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX), parseReadme));
   return {
     shell: listed ? LISTED_SHELL : SHELL,
     // What search results and link previews show: only what the page itself shows, or the member's own overrides. A
