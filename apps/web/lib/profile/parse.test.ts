@@ -281,6 +281,12 @@ describe("what the in-place editor writes (P1.21s)", () => {
     expect(parseInline("~one~ and ~~ two")).toEqual([text("~one~ and ~~ two")]);
   });
 
+  // GFM 0.29 example 493: a run of three or more tildes neither opens nor closes strikethrough.
+  test("a run of three or more tildes is text, not strikethrough", () => {
+    expect(parseInline("This will ~~~not~~~ strike.")).toEqual([text("This will ~~~not~~~ strike.")]);
+    expect(parseInline("~~a~~~ and ~~~b~~")).toEqual([{ kind: "del", children: [text("a~~~ and ~~~b")] }]);
+  });
+
   test("a struck run does not reach past the paragraph it opens in", () => {
     expect(parseReadme("This ~~has a\n\nnew paragraph~~.")).toEqual([
       { kind: "paragraph", children: [text("This ~~has a")] },
