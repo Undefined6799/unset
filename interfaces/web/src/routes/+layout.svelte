@@ -329,8 +329,10 @@ let loggingOut: (() => void) | undefined;
 const DOCK_LOG_OUT_MS = 20_000;
 function logOutDock(event: SubmitEvent) {
   const form = event.currentTarget as HTMLFormElement;
-  if (dockFrame?.contentWindow == null || !dockGreeted || loggingOut !== undefined) return;
+  if (dockFrame?.contentWindow == null || !dockGreeted) return;
+  // A second Log out while the box is still backing up waits with the first; posting now would unload the box.
   event.preventDefault();
+  if (loggingOut !== undefined) return;
   const done = () => form.submit();
   const timer = window.setTimeout(done, DOCK_LOG_OUT_MS);
   loggingOut = () => {
