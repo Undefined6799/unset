@@ -32,6 +32,26 @@ describe("tests/support/docker.ts", () => {
     expect(Date.now() - started).toBeLessThan(TEST_MS);
   });
 
+  test("killed_call_keeps_its_last_output", { timeout: TEST_MS }, () => {
+    // A killed image build named only itself, so a build hung on one step left no trace of which (#1992's
+    // image-tests run, job 137719574414). BuildKit's plain progress goes to stderr; the kill keeps its last lines.
+    const steps =
+      'for i in $(seq 1 400); do echo "#7 step line $i" >&2; done; echo "#8 [build 2/2] RUN xcaddy build" >&2';
+    const hangs = `${steps}; exec sleep ${SLEEP_MS / 1000}`;
+    const failure = (() => {
+      try {
+        runOrKill("/bin/sh", ["-c", hangs], { timeoutMs: 1_000 });
+      } catch (error) {
+        return error as Error;
+      }
+    })();
+    expect(failure?.message).toMatch(/^sh killed after 1000 ms; its last output:\n/);
+    expect(failure?.message).toMatch(/#8 \[build 2\/2\] RUN xcaddy build\n?$/);
+    // Only the tail: the first step lines are cut, so the message stays readable.
+    expect(failure?.message).not.toContain("#7 step line 1\n");
+    expect(failure?.message.length).toBeLessThan(2_200);
+  });
+
   test("call_ignoring_sigterm_is_still_killed", { timeout: TEST_MS }, () => {
     // The docker CLI forwards SIGTERM to the daemon and waits, so only SIGKILL ends a hung call promptly (N4). The
     // stand-in ignores SIGTERM, then writes a marker; `exec` keeps the ignore for the sleep. A stand-in descheduled

@@ -38,6 +38,28 @@ describe("edge test docker calls", () => {
     expect(Date.now() - started).toBeLessThan(10_000);
   });
 
+  test("a_killed_call_keeps_its_last_output", () => {
+    // A killed image build named only itself, so a build hung on one step left no trace of which (#1992's
+    // image-tests run, job 137719574414). BuildKit's plain progress goes to stderr; the kill keeps its last lines.
+    const docker = standIn(
+      "for (let i = 1; i <= 400; i++) process.stderr.write('#7 step line ' + i + '\\n');" +
+        "process.stderr.write('#8 [build 2/2] RUN xcaddy build\\n');" +
+        "process.on('SIGTERM', () => {}); setTimeout(() => {}, 20_000);",
+    );
+    const failure = (() => {
+      try {
+        runOrKill(spawnSync, docker, ["run", "busybox"], 1_000);
+      } catch (error) {
+        return error as Error;
+      }
+    })();
+    expect(failure?.message).toMatch(/^docker run killed after 1000 ms; its last output:\n/);
+    expect(failure?.message).toMatch(/#8 \[build 2\/2\] RUN xcaddy build\n?$/);
+    // Only the tail: the first step lines are cut, so the message stays readable.
+    expect(failure?.message).not.toContain("#7 step line 1\n");
+    expect(failure?.message.length).toBeLessThan(2_200);
+  });
+
   test("a_call_inside_its_budget_returns_what_it_printed", () => {
     const docker = standIn("process.stdout.write('out'); process.stderr.write('err'); process.exitCode = 3;");
     expect(runOrKill(spawnSync, docker, ["rmi", "unset-test-abcdef"], 5_000)).toEqual({
