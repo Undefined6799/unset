@@ -280,7 +280,12 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.22h | Test what a public page's data address answers, tests only (added 2026-11-23) | — | — | `phase-1.md` |
 | P1.22e | Run the client on the public profile under the app's script policy (added 2026-11-23) | [SEC], trusted | P1.22d, P1.22h | `phase-1.md` |
 | P1.22f | Check that visitors who share an address fit the edge's file allowance, tests only (added 2026-11-23) | — | P1.22e | `phase-1.md` |
-| P1.22g | Open the bell's panel on every page that runs the client (added 2026-11-23) | trusted | P1.22e | `phase-1.md` |
+| P1.22g | Open the bell's panel on every page that runs the client (added 2026-11-23) | [SEC], trusted | P1.22k | `phase-1.md` |
+| P1.22i | Record that every page runs our script, the error page included, ADR 0116 (added 2026-11-23) | — | P1.22d | `phase-1.md` |
+| P1.22j | Name every page's script setting and pin every answer's header, no behaviour change (added 2026-11-23) | trusted | P1.22e | `phase-1.md` |
+| P1.22k | Turn the default round: the error page runs the client (added 2026-11-23) | [SEC], trusted | P1.22i, P1.22j | `phase-1.md` |
+| P1.22l | Run the client on the sign-in, join and welcome pages (added 2026-11-23) | [SEC], trusted | P1.22k | `phase-1.md` |
+| P1.22m | Move the navbar's controls to the stock components (added 2026-11-23) | — | P1.22g | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
