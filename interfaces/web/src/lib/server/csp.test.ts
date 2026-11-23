@@ -27,10 +27,20 @@ describe("web csp", () => {
   });
 
   test("narrowed_frames_only_the_chat_door", () => {
-    // The chat box (ADR 0115): app pages may frame the chat door's origin, and nothing else.
-    expect(narrowed(KIT, ORIGIN, "https://unset.cc")).toBe(
-      "default-src 'none'; script-src https://unset.sh/_app/ 'sha256-abc='; style-src https://unset.sh/_app/; font-src https://unset.sh/fonts/; img-src 'self'; connect-src 'self'; frame-src https://unset.cc",
+    // The chat box (ADR 0115): app pages may frame the chat door's origin and web's own chat sign-in, which the shell
+    // points the box's frame at, and nothing else.
+    const frames = "https://unset.cc https://unset.sh/chat/sign-in";
+    expect(narrowed(KIT, ORIGIN, frames)).toBe(
+      "default-src 'none'; script-src https://unset.sh/_app/ 'sha256-abc='; style-src https://unset.sh/_app/; font-src https://unset.sh/fonts/; img-src 'self'; connect-src 'self'; frame-src https://unset.cc https://unset.sh/chat/sign-in",
     );
+  });
+
+  test("narrowed_keeps_frame_ancestors_none", () => {
+    // After a redirect frame-src checks no path (CSP3 "Paths and Redirects"), so when the box's hop ends on another
+    // web page (/login, /welcome/chat) only that page's own frame-ancestors 'none' and X-Frame-Options: DENY keep it
+    // out of the frame (gate.test.ts every_response_carries_the_security_headers). Never relax either.
+    const kit = `${KIT}; frame-ancestors 'none'`;
+    expect(narrowed(kit, ORIGIN, "https://unset.cc")).toContain("frame-ancestors 'none'");
   });
 
   test("no_unsafe_tokens", () => {

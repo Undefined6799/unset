@@ -113,8 +113,10 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
 1. The mirror must hold the Python base and MAS (`deployment/mirror.list.json`; `mirror.yml` copies and signs them on a
    push to main), and `deployment/images.lock.json` must name MAS's mirror digest, or C2 refuses `mas`.
 2. The files above and the two databases exist.
-3. `staging.unset.cc` is published through Pangolin behind the same login as `staging.unset.sh` (ADR 0105; Alex
-   2026-11-21, "Yes, behind Pangolin"). The source stack's edge serves it from `deployment/edge/dev/chat.caddy`:
+3. `staging.unset.cc` is published through Pangolin with a bypass for everyone (ADR 0115 decision 5; Alex's card
+   2026-11-23 04:15Z, "Pangolin bypass for everyone"; before that ADR 0105 had it behind the login). The chat box
+   framed on `staging.unset.sh` cannot carry Pangolin's `SameSite=Lax` login cookie, so chat's own sign-in through
+   unset.sh, which stays behind the login, is the only gate. The source stack's edge serves it from `deployment/edge/dev/chat.caddy`:
    `/_matrix/client/` to Synapse's client listener, the door's routes to the door, the edge's 404 for anything else.
    Once, before the first start:
    1. **DNS.** Add a record for `staging.unset.cc` of the same type and value as the one `staging.unset.sh` has, so it
@@ -122,9 +124,8 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
       records (ADR 0025), so Pangolin can get its own certificate for it.
    2. **Pangolin.** Add a resource `staging.unset.cc` on the staging site, set up like `staging.unset.sh`
       (`dev-stack-secrets.md`, "Newt's env file"): one target, `https` to `10.250.37.3` port 443, certificate check off
-      for the target, **TLS Server Name** `staging.unset.cc`, and the resource's login **on**, with the same users or
-      roles as `staging.unset.sh`. Add no bypass rule: the chat page sends its Matrix calls with
-      the login's cookie too (ADR 0105 decision 6), so everything on the name stays behind the login.
+      for the target, **TLS Server Name** `staging.unset.cc`, and a bypass rule for everyone on the resource. The edge
+      routes only the door's paths and `/_matrix/client/` on this name; everything else is the edge's 404.
    3. **The dev leaf.** Remake the edge's self-signed leaf with `staging.unset.cc` as its fourth name
       (`dev-stack-secrets.md`, "The dev edge's self-signed leaf"); a site name the leaf does not cover would make the
       edge ask a public CA.
