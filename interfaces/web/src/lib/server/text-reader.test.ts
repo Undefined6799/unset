@@ -240,6 +240,22 @@ describe("what is remembered between page loads", () => {
     expect(seen.calls).toBe(2);
   });
 
+  // A text nobody asks for again would otherwise stay until newer ones pushed it out. The process sweeps on a timer
+  // (compose.ts), so a text a member changed or deleted is gone from this memory soon after keptForMs.
+  test("a sweep drops what is past its time, asked for again or not", () => {
+    let now = 1_000;
+    const reads = createTextReads({ ...GENEROUS, keptForMs: 500 }, parseReadme, () => now);
+    const page = reads.forPage(Number.POSITIVE_INFINITY);
+    page("first");
+    now += 300;
+    page("second");
+    expect(reads.sweep()).toBe(2);
+    now += 200;
+    expect(reads.sweep()).toBe(1);
+    now += 300;
+    expect(reads.sweep()).toBe(0);
+  });
+
   // Each text below reads to 100 paragraphs of one run each, 200 nodes, so three fit in 800 and four do not.
   test("at most keptNodes are kept, and the text read longest ago is dropped first", () => {
     const { seen, read } = counted(parseReadme);
