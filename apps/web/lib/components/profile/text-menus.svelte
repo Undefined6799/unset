@@ -42,11 +42,17 @@ let {
   };
 } = $props();
 
-const BLOCK_ICONS: Partial<Record<BlockItem, IconName>> = {
-  heading1: "heading",
-  heading2: "heading",
-  heading3: "heading",
+/** Each item's icon, as Crepe draws one for each: Iconoir, and Lucide's numbered headings (ADR 0109). */
+const BLOCK_ICONS: Record<BlockItem, IconName> = {
+  text: "text",
+  heading1: "h1",
+  heading2: "h2",
+  heading3: "h3",
+  heading4: "h4",
+  heading5: "h5",
+  heading6: "h6",
   quote: "quote",
+  divider: "remove",
   bullets: "list",
   numbers: "numbered-list",
   codeBlock: "code-block",
@@ -57,13 +63,22 @@ const GROUPS: Record<BlockItem, keyof typeof TEXT_MENUS.groups> = {
   heading1: "text",
   heading2: "text",
   heading3: "text",
+  heading4: "text",
+  heading5: "text",
+  heading6: "text",
   quote: "text",
   divider: "text",
   bullets: "list",
   numbers: "list",
   codeBlock: "advanced",
 };
-const BAR_ICONS: Record<BarItem, IconName> = { strong: "bold", emphasis: "italic", code: "inline-code", link: "link" };
+const BAR_ICONS: Record<BarItem, IconName> = {
+  strong: "bold",
+  emphasis: "italic",
+  strike: "strikethrough",
+  code: "inline-code",
+  link: "link",
+};
 const refusedId = $props.id();
 
 let address = $state("");
@@ -118,7 +133,7 @@ const control =
         onclick={() => onchoose(item)}
         onkeydown={() => undefined}
       >
-        {#if BLOCK_ICONS[item] !== undefined}<Icon name={BLOCK_ICONS[item]} size={16} />{:else}<span class="size-4"></span>{/if}
+        <Icon name={BLOCK_ICONS[item]} size={16} />
         {TEXT_MENUS.items[item]}
       </li>
     {/each}
@@ -126,7 +141,7 @@ const control =
 </div>
 
 <div bind:this={bar} data-show="false" role="toolbar" tabindex="-1" aria-label={TEXT_MENUS.bar} class="{floating} gap-0.5 rounded-md border bg-popover p-0.5 shadow-md" onpointerdown={keep}>
-  {#each ["strong", "emphasis", "code", "link"] as const as item (item)}
+  {#each ["strong", "emphasis", "strike", "code", "link"] as const as item (item)}
     <button
       type="button"
       class="{control} aria-pressed:bg-accent aria-pressed:text-accent-foreground"

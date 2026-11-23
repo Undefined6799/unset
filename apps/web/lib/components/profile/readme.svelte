@@ -8,16 +8,20 @@
 import type { Block, Inline, ListBlock } from "../../profile/types.ts";
 
 let { blocks }: { blocks: readonly Block[] } = $props();
-const HEADINGS = ["h2", "h3", "h4"] as const;
-// The page's own type scale, not a document's (approved notebook direction, 2026-11-19): a first-level heading a step
-// above a card title, the next at a card title's size, the last as bold body text. No rules underneath.
+// Six levels under the page's h1: # is an h2, and HTML stops at h6, so ##### and ###### share it.
+const HEADINGS = ["h2", "h3", "h4", "h5", "h6", "h6"] as const;
+// The playground's six steps (Crepe 7.23.0 theme/common/reset.css: 2.625em down to 1.125em), on the theme's type
+// scale; # is the display heading (Alex 2026-11-21 18:48:10Z, "a bit bigger"). No rules underneath.
 /** A column's alignment as a class: the CSP allows no style attribute. */
 const ALIGN = { left: "text-start", center: "text-center", right: "text-end" } as const;
 const aligned = (align: "left" | "center" | "right" | null | undefined) => (align ? ALIGN[align] : "text-start");
 const HEADING_LOOK = [
-  "text-2xl leading-8 font-bold tracking-tight",
-  "mt-2 text-xl font-semibold",
-  "mt-1 font-semibold",
+  "mt-2 text-4xl leading-tight font-bold tracking-tight",
+  "mt-2 text-3xl leading-tight font-bold tracking-tight",
+  "mt-1 text-2xl leading-snug font-semibold",
+  "mt-1 text-xl font-semibold",
+  "text-lg font-semibold",
+  "font-bold",
 ] as const;
 </script>
 
@@ -61,7 +65,7 @@ const HEADING_LOOK = [
 <div class="flex flex-col gap-3 *:first:mt-0 *:last:mb-0">
   {#each blocks as block, i (i)}
     {#if block.kind === "heading"}
-      <svelte:element this={HEADINGS[block.level - 1] ?? "h4"} class={HEADING_LOOK[block.level - 1] ?? "font-semibold"}>
+      <svelte:element this={HEADINGS[block.level - 1] ?? "h6"} class={HEADING_LOOK[block.level - 1] ?? "font-bold"}>
         {@render inline(block.children)}
       </svelte:element>
     {:else if block.kind === "paragraph"}

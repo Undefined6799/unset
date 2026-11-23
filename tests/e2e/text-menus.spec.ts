@@ -4,8 +4,10 @@
 // "+" adds a line with the block menu open and whose grip drags the block. All under the app's real CSP. Each card
 // added is deleted again, and nothing is saved.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
+
+paceWrites(test);
 
 // A large screen, tall enough that a card's blocks and its handle are all in view while one is dragged.
 test.use({ viewport: { width: 1280, height: 1400 } });
@@ -90,7 +92,16 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
   await expect(menu).toBeVisible();
   await page.keyboard.type("head");
-  await expect(menu.getByRole("option")).toHaveText(["Heading 1", "Heading 2", "Heading 3"]);
+  // Six levels, each with its numbered icon, as the playground's menu has them (Crepe 7.23.0 block-edit menu).
+  await expect(menu.getByRole("option")).toHaveText([
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+  ]);
+  await expect(menu.getByRole("option").locator("svg")).toHaveCount(6);
   await expect(menu.getByRole("option", { name: "Heading 1" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowDown");
   const second = menu.getByRole("option", { name: "Heading 2" });
@@ -127,6 +138,13 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   await bold.click();
   await expect(editor.locator("strong")).toHaveText(`${word} start`);
   await expect(bold).toHaveAttribute("aria-pressed", "true");
+  // The playground's bar, in its order: Strikethrough after Italic (Crepe 7.23.0 toolbar).
+  const names = await floating.getByRole("button").evaluateAll((all) => all.map((b) => b.getAttribute("aria-label")));
+  expect(names).toEqual(["Bold", "Italic", "Strikethrough", "Inline code", "Link"]);
+  const strike = floating.getByRole("button", { name: "Strikethrough" });
+  await strike.click();
+  await expect(editor.locator("strong del, del strong")).toHaveText(`${word} start`);
+  await expect(strike).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("ArrowRight");
   await expect(floating).toBeHidden();
   await discardAndRemove(page, word);

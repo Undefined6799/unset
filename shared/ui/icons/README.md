@@ -32,6 +32,11 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   `inline-code` (`code`), `code-block` (`code-brackets`), `undo` and `redo` for the Text editor's formatting bar, as
   Alex asked on 2026-11-20 (03:18:34Z, "use the iconoir icons as replacement", after the list was named), same commit
   and pins: 59 names. `list` and `link` are reused for bullets and links.
+- P1.21v adds `strikethrough` (regular `strikethrough`) for the Text editor's selection bar, as the playground's bar
+  has it, after Alex asked on 2026-11-21 (18:52:12Z) to "match everything that they have"; same commit and pins: 60
+  names.
+- P1.21v adds `text` (regular `text`) for the block menu's Text item, after Alex asked on 2026-11-21 (18:51:14Z) to
+  "add an icon for text"; same commit and pins: 61 names. The Divider item reuses `remove` (regular `minus`).
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.
 - ADR 0087 adds one icon from outside Iconoir: `grip` is Lucide 1.72.0's `icons/grip-vertical.svg` (ISC licence,
   `LICENSE-lucide.txt`, © 2026 Lucide Icons and Contributors), copied byte for byte from
@@ -39,3 +44,6 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   editor's drag handle (Crepe's six dots; Iconoir has none). `LUCIDE` in `shared/ui-build/icons.ts` pins the version
   and sha256; no other file may sit in `lucide/`. Its circles are drawn as paths at the Icon's 1.5 stroke, and
   `icons.json` records it under `lucide`, apart from the Iconoir maps. No Lucide package is installed.
+- ADR 0109 adds six more the same way: `h1` to `h6` are Lucide 1.72.0's `icons/heading-1.svg` to `heading-6.svg`,
+  copied byte for byte to `lucide/h1.svg.txt` to `h6.svg.txt`, for the block menu's Heading 1 to Heading 6 (Iconoir
+  has no numbered heading). Each is pinned in `LUCIDE`; their paths are kept and h6's circle is drawn as two arcs.

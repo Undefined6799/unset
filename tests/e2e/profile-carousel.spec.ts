@@ -4,9 +4,11 @@
 // motion is reduced; a grid of three or more fills its row, one or two keep the tile width. In its own file, apart
 // from cards.spec.ts, so their card writes do not crowd the member's 30 a minute.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, deleteCard, OWN_PAGE } from "./cards.ts";
+import { addCard, deleteCard, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage } from "./observe.ts";
 import { phone, phoneContext } from "./phone.ts";
+
+paceWrites(test);
 
 /** Opens the member page with a full-width collection card of `titles`, laid out as `layout`. */
 async function withCollection(page: Page, title: string, layout: string, titles: string[]) {

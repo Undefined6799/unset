@@ -65,7 +65,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(59);
+  expect(Object.keys(json.icons)).toHaveLength(61);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -87,6 +87,12 @@ test("icon_lucide_grip_is_six_dots_at_iconoirs_stroke", () => {
     version: "1.72.0",
     icons: {
       grip: { lucideName: "grip-vertical", sha256: "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5" },
+      h1: { lucideName: "heading-1", sha256: "d5920a0a7182751a071374f9c4dad0519afe4ca509da1e893cb09deba52d5c8f" },
+      h2: { lucideName: "heading-2", sha256: "a1fc4240bad7d883433927faca643b346e148ef721a571f95043be085555ae05" },
+      h3: { lucideName: "heading-3", sha256: "32d24e7734fc9bdba2c64f42c34761781249599364417c14b5cd06fa19c87551" },
+      h4: { lucideName: "heading-4", sha256: "33141a2aa843631f9a850cf867aa44c94e6289ba7438870bd661e60aebe03d79" },
+      h5: { lucideName: "heading-5", sha256: "f2e3885ab0c15dd3f037c047fa8b7229d316b920849cd77e275b96702c0cd994" },
+      h6: { lucideName: "heading-6", sha256: "cbad3fe7096b0431777ae07ff87fd61ac952aaa53f3ce626c6d46dcfc70f757e" },
     },
   });
   expect(json.lucide).toEqual(LUCIDE);
@@ -96,6 +102,22 @@ test("icon_lucide_grip_is_six_dots_at_iconoirs_stroke", () => {
   const licence = readFileSync(join(UI, "icons/LICENSE-lucide.txt"), "utf8");
   expect(licence).toContain("ISC License");
   expect(licence).toContain("Copyright (c) 2026 Lucide Icons and Contributors");
+});
+
+// ADR 0109: the block menu's Heading 1 to 6 are Lucide heading-1 to heading-6 at 1.72.0, Crepe's numbered headings;
+// Iconoir 7.12.1 has none. Their paths are kept as Lucide writes them and their circle drawn as two arcs.
+test("icon_lucide_headings_keep_their_paths_at_iconoirs_stroke", () => {
+  const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
+  const line = (d: string) => ({ d, stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" });
+  expect(json.drawings.h1).toEqual([line("M4 12h8"), line("M4 18V6"), line("M12 18V6"), line("m17 12 3-2v8")]);
+  expect(json.drawings.h6).toEqual([
+    line("M4 12h8"),
+    line("M4 18V6"),
+    line("M12 18V6"),
+    line("M17 16a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"),
+    line("M20 10c-2 2-3 3.5-3 6"),
+  ]);
+  for (const name of ["h1", "h2", "h3", "h4", "h5", "h6"]) expect(json.icons).not.toHaveProperty(name);
 });
 
 test("icon_lucide_changed_or_extra_file_fails_closed", () => {
@@ -112,20 +134,22 @@ test("icon_lucide_changed_or_extra_file_fails_closed", () => {
 
   // With no Lucide file the build draws no grip, so a page naming it fails the typecheck and the ui-inventory guard.
   const gone = copy();
-  rmSync(join(gone, GRIP));
+  rmSync(join(gone, "icons/lucide"), { recursive: true, force: true });
   expect(run(gone, []).code).toBe(0);
   const json = JSON.parse(readFileSync(join(gone, "icons/icons.json"), "utf8"));
   expect(json).not.toHaveProperty("lucide");
   expect(json.drawings).not.toHaveProperty("grip");
 });
 
-test("icon_lucide_parser_admits_only_its_circles", () => {
+test("icon_lucide_parser_admits_only_its_paths_and_circles", () => {
   const svg = readFileSync(join(UI, GRIP), "utf8");
   expect(parseLucide("grip", svg)).toHaveLength(6);
   for (const [from, to] of [
-    ['<circle cx="9" cy="12" r="1" />', '<path d="M0 0" />'],
+    ['<circle cx="9" cy="12" r="1" />', '<path d="M0 0" onload="x" />'],
+    ['<circle cx="9" cy="12" r="1" />', '<path d="M0 0" stroke="red" />'],
+    ['<circle cx="9" cy="12" r="1" />', '<path d="url(#x)" />'],
     ['<circle cx="9" cy="12" r="1" />', '<circle cx="9" cy="12" r="1" onload="x" />'],
-    ['<circle cx="9" cy="12" r="1" />', '<circle cx="9" cy="12" r="2" />'],
+    ['<circle cx="9" cy="12" r="1" />', '<circle cx="9" cy="12" r="2" fill="red" />'],
     ['<circle cx="9" cy="12" r="1" />', "<script>alert(1)</script>"],
     ['stroke-width="2"', 'stroke-width="2"\n  style="x"'],
     ["<svg\n", '<svg onload="x"\n'],
@@ -261,6 +285,9 @@ const ADDITIONS: Record<string, string> = {
     '<svg width="24" stroke-width="1.5" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M9.00001 21L8.00001 21C6.89544 21 6.00001 20.1057 6.00001 19.0011C6.00001 17.4501 6.00001 15.3443 6 14C6 13 4.5 12 4.5 12C4.5 12 6.00001 11 6.00001 10C6.00001 8.827 6.00001 6.62207 6.00001 4.99914C6.00001 3.89457 6.89544 3 8.00001 3L9.00001 3" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M15 21L16 21C17.1046 21 18 20.1057 18 19.0011C18 17.4501 18 15.3443 18 14C18 13 19.5 12 19.5 12C19.5 12 18 11 18 10C18 8.827 18 6.62207 18 4.99914C18 3.89457 17.1046 3 16 3L15 3" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   undo: '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M4.5 8C8.5 8 11 8 15 8C15 8 15 8 15 8C15 8 20 8 20 12.7059C20 18 15 18 15 18C11.5714 18 9.71429 18 6.28571 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M7.5 11.5C6.13317 10.1332 5.36683 9.36683 4 8C5.36683 6.63317 6.13317 5.86683 7.5 4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   redo: '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M19.5 8C15.5 8 13 8 9 8C9 8 9 8 9 8C9 8 4 8 4 12.7059C4 18 9 18 9 18C12.4286 18 14.2857 18 17.7143 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M16.5 11.5C17.8668 10.1332 18.6332 9.36683 20 8C18.6332 6.63317 17.8668 5.86683 16.5 4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  strikethrough:
+    '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M3 12L21 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M16.2857 3L10.068 3C7.82129 3 6 4.82129 6 7.06797C6 8.81895 7.12044 10.3735 8.78157 10.9272L12 12M6 21H13.932C16.1787 21 18 19.1787 18 16.932C18 16.2409 17.8255 15.5804 17.512 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  text: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M19 7V5L5 5V7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M12 5L12 19M12 19H10M12 19H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -290,7 +317,9 @@ const REGISTRATION = JSON.parse(APPROVED_TEXT) as {
     | "inline-code"
     | "code-block"
     | "undo"
-    | "redo",
+    | "redo"
+    | "strikethrough"
+    | "text",
     { sourceSha256: string; drawings: [string, Record<string, string>][] }
   >;
 };
@@ -314,7 +343,7 @@ function baseFiles(): Map<string, string> {
   const json = JSON.parse(files.get("icons/icons.json") as string);
   delete json.extensionProvenance;
   delete json.lucide;
-  delete json.drawings.grip;
+  for (const name of Object.keys(LUCIDE.icons)) delete json.drawings[name];
   for (const alias of Object.keys(ADDITIONS)) {
     files.delete(`icons/svg/${alias}.svg.txt`);
     for (const field of ["icons", "iconoir", "drawings"]) delete json[field][alias];
@@ -392,14 +421,14 @@ test("icon_absent_extension_preserves_every_output_byte", () => {
   expect(writes).toEqual([]);
 });
 
-test("icon_approved_extension_generates_only_the_59_registered_icons", () => {
+test("icon_approved_extension_generates_only_the_61_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
   const baseText = baseFiles().get("icons/icons.json") as string;
   expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
   const base = JSON.parse(baseText);
-  expect(Object.keys(json.icons)).toHaveLength(59);
+  expect(Object.keys(json.icons)).toHaveLength(61);
   expect(json.icons).toEqual({
     ...base.icons,
     devices: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
@@ -425,6 +454,8 @@ test("icon_approved_extension_generates_only_the_59_registered_icons", () => {
     "code-block": REGISTRATION.icons["code-block"].sourceSha256,
     undo: REGISTRATION.icons.undo.sourceSha256,
     redo: REGISTRATION.icons.redo.sourceSha256,
+    strikethrough: REGISTRATION.icons.strikethrough.sourceSha256,
+    text: REGISTRATION.icons.text.sourceSha256,
   });
   expect(json.sheetVersion).toBe("1792621080-00d4");
   expect(json.iconoir).toEqual({
@@ -452,6 +483,8 @@ test("icon_approved_extension_generates_only_the_59_registered_icons", () => {
     "code-block": "code-brackets",
     undo: "undo",
     redo: "redo",
+    strikethrough: "strikethrough",
+    text: "text",
   });
   expect(json.drawings.devices).toEqual(REGISTRATION.icons.devices.drawings.map(([, attributes]) => attributes));
   expect(json.drawings.apps).toEqual(REGISTRATION.icons.apps.drawings.map(([, attributes]) => attributes));
