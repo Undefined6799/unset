@@ -3,8 +3,10 @@
 // when the page opens, never merged on their own; Discard throws them away. All under the app's real CSP. The card
 // added is deleted again.
 import { expect, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites, spendsWrites } from "./cards.ts";
 import { addPageCookies, openPage, pageNoise, watch } from "./observe.ts";
+
+paceWrites(test);
 
 /** The in-place editor of the Text card that holds `word`, once the page has loaded it. */
 async function editorHolding(page: Page, word: string) {
@@ -388,7 +390,9 @@ async function untilStyled(page: Page) {
 async function freshPage(page: Page): Promise<Page> {
   const browser = page.context().browser();
   if (browser === null) throw new Error("no browser");
-  return (await browser.newContext()).newPage();
+  const context = await browser.newContext();
+  spendsWrites(context);
+  return context.newPage();
 }
 
 /**
@@ -685,15 +689,6 @@ for (const { name, within, has, piece, at, up, expected, text: words } of [
   });
 }
 
-/**
- * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
- * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
- * after this one (text-markdown.spec.ts) is not refused.
- */
-async function giveBackWrites(page: Page, used: number) {
-  await page.waitForTimeout(used * 2_000 + 1_000);
-}
-
 /** The own page opened while the editor's script is held, with every Text card listening and none drawn yet. */
 async function openHeld(page: Page): Promise<Page> {
   const held = await holdEditorScript(page, { ms: 1500 });
@@ -733,7 +728,6 @@ test("keys_typed_before_the_editor_opens_go_only_to_the_card_pressed_last", asyn
   await closeHeld(again);
   await removeCard(page, first);
   await removeCard(page, second);
-  await giveBackWrites(page, 4);
 });
 
 // Codex on 46550e5: a key the card cannot replay (Backspace, Enter, an arrow) ends the keys it keeps, so the words
@@ -753,7 +747,6 @@ test("a_key_typed_before_the_editor_opens_that_cannot_be_replayed_ends_the_kept_
   await bar(held).getByRole("button", { name: "Discard" }).click();
   await closeHeld(held);
   await removeCard(page, word);
-  await giveBackWrites(page, 2);
 });
 
 test("a_click_on_the_card_around_the_words_puts_the_caret_in_them", async ({ page }) => {
@@ -893,9 +886,13 @@ test("enter_or_space_pressed_again_after_a_keyboard_save_answered_leaves_the_wor
     await editor.press("End");
     await page.keyboard.type(typed);
     const saved = page.waitForResponse(/\?\/saveAll$/);
+    // The bar says Saved. only once the page has read the cards back (refreshAll after the Save's answer), so the
+    // test waits for that read too and names its status should it fail (CI run 45111322551: no Saved. within 5 s).
+    const reread = page.waitForResponse((answer) => answer.url().includes("/__data.json"));
     await bar(page).getByRole("button", { name: "Save" }).focus();
     await page.keyboard.press(key);
     await saved;
+    expect((await reread).status()).toBe(200);
     await expect(bar(page).getByRole("status")).toHaveText("Saved.");
     await expect(editor).not.toBeFocused();
     await page.keyboard.press(key);
@@ -941,7 +938,6 @@ test("after_a_save_from_the_markdown_field_typing_goes_on_there", async ({ page 
   await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
   await page.keyboard.press("Escape");
   await removeCard(page, word);
-  await giveBackWrites(page, 3);
 });
 
 test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) => {

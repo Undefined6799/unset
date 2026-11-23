@@ -3,8 +3,10 @@
 // CommonMark allows and the page shows them, and pasted HTML loads nothing from elsewhere.
 // All under the app's real CSP. Each card added is deleted again.
 import { expect, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
+
+paceWrites(test);
 
 async function openOwnPage(page: Page) {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);

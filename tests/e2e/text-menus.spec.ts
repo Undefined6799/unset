@@ -4,8 +4,10 @@
 // "+" adds a line with the block menu open and whose grip drags the block. All under the app's real CSP. Each card
 // added is deleted again, and nothing is saved.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
+
+paceWrites(test);
 
 // A large screen, tall enough that a card's blocks and its handle are all in view while one is dragged.
 test.use({ viewport: { width: 1280, height: 1400 } });

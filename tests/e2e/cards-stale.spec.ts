@@ -1,7 +1,9 @@
 // A member's own page left open in one tab while another tab changes the cards (P1.20p).
 import { expect, test } from "@playwright/test";
-import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE } from "./cards.ts";
+import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage } from "./observe.ts";
+
+paceWrites(test);
 
 /** The card writes this test makes: two adds, one move, two deletes. */
 const WRITES_USED = 5;
