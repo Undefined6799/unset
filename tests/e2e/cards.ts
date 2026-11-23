@@ -68,9 +68,11 @@ export async function writeText(editor: Locator, blocks: readonly string[]) {
  * writes as this member shares it, one worker after another (playwright.config.ts `workers: 1`), so this module, loaded
  * once for the worker, follows it across specs: each POST a page sends spends one (more than the limiter counts, never
  * fewer), and a test starts only once the budget holds what a test can spend. A spec then never meets a 429 for what
- * the tests before it wrote, whatever their speed. It starts empty, as nothing says what ran before.
+ * the tests before it wrote, whatever their speed. It starts empty, as nothing says what ran before. `perTest` is the
+ * most one test spends, with room: all_card_kinds_save_reload_and_restore_their_surface and
+ * a_save_while_a_move_is_on_its_way_does_not_send_the_next_press_early each send 11 (Codex on #1966).
  */
-const BUDGET = { capacity: 30, perSecond: 30 / 60, perTest: 8 } as const;
+const BUDGET = { capacity: 30, perSecond: 30 / 60, perTest: 12 } as const;
 const budget = { tokens: 0, at: Date.now() };
 
 function refill(): number {
