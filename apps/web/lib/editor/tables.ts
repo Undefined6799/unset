@@ -82,11 +82,18 @@ function cellUnder(view: EditorView, x: number, y: number): Cell | null {
   return cellAt(view.state.doc.resolve(found.inside));
 }
 
-/** A cell's table moved by a change, or null when the change deleted it. */
-function mapCell(cell: Cell | null, mapping: Mappable): Cell | null {
+/**
+ * A cell's table moved by a change, or null when the change deleted it. A cell past the table's last row or column
+ * (the change deleted it) becomes the last one, so the tools stay on cells that are there.
+ */
+function mapCell(cell: Cell | null, mapping: Mappable, doc: ProseNode): Cell | null {
   if (cell === null) return null;
   const moved = mapping.mapResult(cell.table, 1);
-  return moved.deleted ? null : { ...cell, table: moved.pos };
+  const table = moved.deleted ? null : doc.nodeAt(moved.pos);
+  if (table === null || table.type.name !== "table" || table.childCount === 0) return null;
+  const row = Math.min(cell.row, table.childCount - 1);
+  const column = Math.min(cell.column, table.child(row).childCount - 1);
+  return column < 0 ? null : { table: moved.pos, row, column };
 }
 
 const sameCell = (a: Cell | null, b: Cell | null) =>
@@ -266,9 +273,9 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
             init: () => null,
             apply: (tr) => {
               if (tr.docChanged) {
-                hovered = mapCell(hovered, tr.mapping);
-                shown = mapCell(shown, tr.mapping);
-                keyed = mapCell(keyed, tr.mapping);
+                hovered = mapCell(hovered, tr.mapping, tr.doc);
+                shown = mapCell(shown, tr.mapping, tr.doc);
+                keyed = mapCell(keyed, tr.mapping, tr.doc);
               }
               return null;
             },
