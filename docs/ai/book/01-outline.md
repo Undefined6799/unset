@@ -277,7 +277,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.22a | Who sees your page: Public, Signed-in members only, Only me; the limited page, ADR 0078 (added 2026-11-20) | trusted | P1.21y | `phase-1.md` |
 | P1.22c | Say "Privacy saved" once the public page follows | — | P1.22a | `phase-1.md` |
 | P1.22d | Record that our own script may run on every page, with a plain fallback, ADR 0114 (added 2026-11-23) | — | — | `phase-1.md` |
-| P1.22e | Run the client on the public profile under the app's script policy (added 2026-11-23) | [SEC], trusted | P1.22d | `phase-1.md` |
+| P1.22h | Test what a public page's data address answers, tests only (added 2026-11-23) | — | — | `phase-1.md` |
+| P1.22e | Run the client on the public profile under the app's script policy (added 2026-11-23) | [SEC], trusted | P1.22d, P1.22h | `phase-1.md` |
 | P1.22f | Check that visitors who share an address fit the edge's file allowance, tests only (added 2026-11-23) | — | P1.22e | `phase-1.md` |
 | P1.22g | Open the bell's panel on every page that runs the client (added 2026-11-23) | trusted | P1.22e | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |

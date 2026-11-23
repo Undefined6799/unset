@@ -120,10 +120,16 @@ some pages, at the price above, and it could never cover the pages where members
   only) would run script as the visitor. The session cookie stays unreadable (`HttpOnly`), but such a script could
   send same-origin requests for a signed-in visitor, which the Origin gate accepts.
 - **A new encoder carries member text.** SvelteKit writes a page's data into its start-up script
-  (`@sveltejs/kit` 3.2.0, `src/runtime/server/page/render.js:552` and `data_serializer.js:99`), encoded by
-  `devalue.uneval` (5.9.4, `src/utils.js:5`: `<` is written as its Unicode escape), and hashes that script for
-  each response (`csp.js`, `add_script` in hash mode). The owner's page does this today with the owner's own text;
-  on a public page it is another member's.
+  (`@sveltejs/kit` 3.2.0, `src/runtime/server/page/data_serializer.js:99`), encoded by `devalue.uneval` (5.9.4,
+  `src/utils.js:5`: `<` is written as its Unicode escape), and hashes that script for each response
+  (`render.js:552`, `csp.js` `add_script` in hash mode). The owner's page does this today with the owner's own
+  text; on a public page it is another member's.
+- **A page's data becomes something the browser holds.** Once a page runs the client, SvelteKit sends the whole
+  result of its loads, the root layout's included, in the start-up script, drawn or not. It also answers
+  `<page>/__data.json` with the same result, and by its source does so for every page route already, whatever `csr`
+  says (`src/runtime/server/respond.js:648`, `data/index.js`). So a load on a page other people can open returns
+  only what that viewer may see (rule SE-3), and the data address must give the page's own answers on visibility,
+  caching and indexing.
 - **Budgets.** `/@handle` leaves "0 bytes of JS" for the app pages' 120 KiB warning line once it is switched on;
   its HTML budget stays.
 - **The edge.** Visitors' browsers start asking for build files. Whether several visitors behind one address fit
@@ -137,10 +143,12 @@ some pages, at the price above, and it could never cover the pages where members
 
 ## Compliance
 
-This record changes no code, header or test. The steps that follow it are in the step book: P1.22e (the script
-policy on a page that runs the client; the public profile first, with a Threats section, the pinned header tests
-changed for that page only, and a browser test that a profile holding `</script><script>` and an `onerror`
-attribute as text runs nothing with script on), P1.22f (the edge's file allowance measured for visitors who share
+This record changes no code, header or test. The steps that follow it are in the step book: P1.22h (tests only,
+needs no acceptance: what a public page's data address answers today), P1.22e (the script policy on a page that
+runs the client; the public profile first, with a Threats section, the pinned header tests changed for that page
+only, a test that the data sent to each kind of viewer holds nothing the page does not show them, and a browser
+test that a profile holding `</script><script>` and an `onerror` attribute as text runs nothing with script on),
+P1.22f (the edge's file allowance measured for visitors who share
 an address, with a test) and P1.22g (the bell's panel on every page that runs the client). The app header pinned
 by value in `tests/integration/web/gate.test.ts` keeps holding point 2; `scripts/guards/inner-html.ts` keeps holding
 point 4; `tests/e2e/nojs.spec.ts` and `cards-nojs.spec.ts` keep holding point 5. Acceptance is Alex's line on the

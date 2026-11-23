@@ -5366,7 +5366,7 @@ below starts before that line. The letter is the next free id; the step is about
 
 ### P1.22e — Run the client on the public profile under the app's script policy (added step, 2026-11-23)
 
-**Tags:** [SEC], trusted · **Depends on:** P1.22d (ADR 0114 accepted) · **Plan:** §5.4, §6.1, §8 Phase 3
+**Tags:** [SEC], trusted · **Depends on:** P1.22d (ADR 0114 accepted), P1.22h · **Plan:** §5.4, §6.1, §8 Phase 3
 
 `interfaces/web/src/lib/server/csp.ts`, `hooks.server.ts`, `routes/@[actor]`. The first page ADR 0114 switches on is
 the one it is about: `/@handle`, where another member's text is shown. The page sets `csr = true`, and the hook sends
@@ -5384,6 +5384,15 @@ titles and text hold `</script><script>`, an `onerror` attribute and a `javascri
 reports no CSP violation and shows the words; the same page with script off and with its script files refused
 still reads whole (`nojs.spec.ts` keeps it). `csp.test.ts` `zero_script_groups_pinned` still pins the other groups.
 
+What the browser is sent (rule SE-3), also new and written first. With the client on, the whole result of the page
+load and of the root layout load goes into the start-up script, drawn or not. For a visitor, a signed-in member,
+the owner and the limited page (ADR 0078), the test reads the serialised data out of the HTML and out of
+`/@handle/__data.json` and holds that every value in it is one the page shows that viewer: no field of a hidden
+card, no draft, nothing of the member's that the limited page leaves out, and for a signed-in viewer only their own
+shell data (account, bell). A load field the page does not draw is removed from the load, not hidden in the markup.
+The profile load calls no `fetch`, so SvelteKit inlines no fetched response (`data-sveltekit-fetched`); the test
+fails if one appears. P1.22h's data-address tests are re-run with the client on.
+
 Docs in the same PR: the plan's §5.4 ("Zero JavaScript", the group's CSP line, the first Q5 reason), §6.1 (the
 `/@handle` budget row) and §8 (Phase 3 exit) say what ADR 0114 decided; the ASVS V3.4.3 row;
 `features/profile-and-cards.md`; the notes `area/web` and `area/profile`; and the fallback rule (ADR 0114 points 5
@@ -5394,9 +5403,29 @@ through as markup: before, nothing could run; now `script-src` (our `/_app/` fil
 and Trusted Types are what stop it, and the new browser test holds both with hostile text. Member text inside the
 start-up script: SvelteKit encodes it with `devalue.uneval`, which writes `<` as an escape (kit 3.2.0
 `data_serializer.js:99`, devalue 5.9.4 `utils.js:5`); the hostile-text test covers the route parameter and every
-field the page loads. A script on the page acting for a signed-in visitor: only our own files can run, the session
-cookie stays `HttpOnly`, and the page still writes nothing. A page switched on by mistake: the header is pinned per
-route, and a route that runs the client without saying so fails a test.
+field the page loads. A load field that was returned but never drawn: once the client runs it is in every
+visitor's browser and at `__data.json`, so the load returns explicit view types only and the data test above holds
+each viewer's copy to what their page shows. The data address answering differently from the page (a hidden
+profile found, a member's copy stored by a shared cache, a page kept out of search engines indexed through its
+data): P1.22h's tests, re-run here. A script on the page acting for a signed-in visitor: only our own files can
+run, the session cookie stays `HttpOnly`, and the page still writes nothing. A page switched on by mistake: the
+header is pinned per route, and a route that runs the client without saying so fails a test.
+
+### P1.22h — Test what a public page's data address answers (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.4
+
+Tests only, and independent of ADR 0114: it can be built now. SvelteKit answers `<page>/__data.json` for every page
+route with the result of its loads, whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js:648`,
+`data/index.js`), so `/@handle/__data.json`, `/__data.json` and `/legal/<document>/__data.json` are answered today
+and no test names them. In `tests/integration/web/public/`, against the built server, hold for each that the data
+address gives the page's own answers: the same result for a missing, hidden, erased or unknown profile (rule SE-2)
+and the limited page's data for a viewer the member's choice leaves out; `cache-control` `public, max-age=60` only
+on a visitor's copy, a member's copy private and never stored, `Vary: Cookie` as the page; the page's
+`x-robots-tag`; the route's own policy, limits and deadline at the gate; and that the data holds nothing the page
+does not show that viewer (rule SE-3). A failing case is a bug on main: fix it in this step's PR if it is a
+header or a field to drop, and stop for Alex if it shows anything a viewer should not have seen. The letter is the
+next free id; the step comes before P1.22e in build order.
 
 ### P1.22f — Check that visitors who share an address fit the edge's file allowance (added step, 2026-11-23)
 
