@@ -151,6 +151,77 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+test("the_block_menu_has_the_playgrounds_tabs_and_makes_task_lists_and_tables", async ({ page }) => {
+  const watched = watch(page);
+  const word = `tabs${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} start`);
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("/");
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await expect(menu).toBeVisible();
+  // Crepe 7.23.0's items in its order, less Image and Math (block-edit/menu/config.ts), each with its icon.
+  await expect(menu.getByRole("option")).toHaveText([
+    "Text",
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+    "Quote",
+    "Divider",
+    "Bullet list",
+    "Ordered list",
+    "Task list",
+    "Code",
+    "Table",
+  ]);
+  await expect(menu.getByRole("option").locator("svg")).toHaveCount(14);
+  // The tabs above it name the groups; the one holding the active item is current (Crepe's tab-group).
+  const tabs = page.getByRole("group", { name: "Block groups" }).filter({ visible: true });
+  await expect(tabs.getByRole("button")).toHaveText(["Text", "List", "Advanced"]);
+  const current = () => tabs.locator("[aria-current=true]");
+  await expect(current()).toHaveText("Text");
+  const active = () => menu.getByRole("option", { selected: true });
+  // Right and left jump between groups: right to the next group's first item, left to the previous one's last.
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Bullet list");
+  await expect(current()).toHaveText("List");
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Code");
+  await expect(current()).toHaveText("Advanced");
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Code");
+  await page.keyboard.press("ArrowLeft");
+  await expect(active()).toHaveText("Task list");
+  // A press on a tab moves to its first item and keeps the menu open and the editor focused.
+  await tabs.getByRole("button", { name: "Text" }).click();
+  await expect(active()).toHaveText("Text");
+  await expect(current()).toHaveText("Text");
+  await expect(editor).toBeFocused();
+  await tabs.getByRole("button", { name: "List" }).click();
+  await expect(active()).toHaveText("Bullet list");
+  // Task list makes an unticked task (preset-gfm's task list item).
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  await page.keyboard.type("todo");
+  await expect(editor.locator('li[data-item-type="task"][data-checked="false"]')).toHaveText("todo");
+  // Table makes three rows of three cells, the caret in the first (preset-gfm insertTableCommand).
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("/table");
+  await expect(menu.getByRole("option")).toHaveText(["Table"]);
+  await page.keyboard.press("Enter");
+  await expect(editor.locator("table tr")).toHaveCount(3);
+  await expect(editor.locator("table tr").first().locator("th, td")).toHaveCount(3);
+  await page.keyboard.type("cell");
+  await expect(editor.locator("table th, table td").first()).toHaveText("cell");
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async ({ page }) => {
   const watched = watch(page);
   const word = `handle${Date.now()}`;
