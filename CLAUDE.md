@@ -68,8 +68,7 @@ Every change:
   from the design sheet (a reference). A stock one needs no approval; changing one or adding a non-shadcn one is called
   out in the PR; `inventory.json` lists all. Tailwind classes only there and in the shell, never in pages.
   `shared/ui` keeps only the theme, the sheet's tokens, fonts and icon data. The 0x40 "v2e" look is superseded.
-- **Script (ADR 0114):** our own script may run on any page. The page without script is the floor, never the ceiling:
-  it still reads and saves by plain links and forms, and no feature is thinned for it. Stock controls first.
+- **Script (ADR 0114):** our own script may run on any page. Without it a page still reads and saves by plain links and forms: the floor, never the ceiling.
 - **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in
   `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm package
   (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG (exceptions: ADR 0087's Lucide `grip` and ADR 0109's `h1` to `h6`, pinned the same way).
@@ -78,8 +77,7 @@ Every change:
 - AT Protocol: the specs at atproto.com/specs and the `@atproto/*` source for the pinned version. Pin `@atproto/*`
   exactly and cite the spec URL in code that depends on it.
 - Matrix (chat module): read how Element (`apps/web/src`), cinny or hydrogen does it, confirm in spec.matrix.org, read
-  the pinned `matrix-js-sdk` source, then implement our way. Cite client file:line and spec URL in the comment and the
-  commit.
+  the pinned `matrix-js-sdk` source, then implement our way. Cite client file:line and spec URL in the comment and the commit.
 
 ## Delivery (decision 35: rules DL-1, DL-2, DL-6, DO-1, DO-2, DC-1)
 - **D2 Commits:** subject = step id + capitalised imperative summary, no trailing period, at most 50 characters
