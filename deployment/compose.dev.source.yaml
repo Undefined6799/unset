@@ -599,7 +599,6 @@ services:
       PG_SSLMODE: disable
       PG_POOL_MAX: "5"
       SEAL_KEYRING_FILE: /run/secrets/chat_auth_seal_keyring
-      NETGUARD_INTERNAL_HOSTS: chat-admin
       CHAT_ADMIN_URL: http://chat-admin:8080
       CHAT_ADMIN_DOOR_KEY_FILE: /run/secrets/chat_auth_chat_admin_key
       CHAT_ADMIN_DOOR_KID: door-chat

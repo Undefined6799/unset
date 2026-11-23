@@ -786,6 +786,12 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress", "objects_pds"]);
     expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress", "objects_web"]);
     expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
+    // The source stack too (C17's devTunnelProblems reads it under --source): chat-auth reaches chat-admin by net-guard's
+    // internal chatAdmin policy, whose exact origin needs no internal host.
+    const named = parseCompose(read(SOURCE_FILE), SOURCE_FILE).services.filter((s) =>
+      s.environment.some(([key]) => key === "NETGUARD_INTERNAL_HOSTS"),
+    );
+    expect(named.map((s) => s.name)).toEqual([]);
   });
 
   test("no_dev_service_trusts_a_dev_root", () => {
