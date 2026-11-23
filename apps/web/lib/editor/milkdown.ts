@@ -306,6 +306,12 @@ const taskBox = $prose(
     }),
 );
 
+/** A drawn heading's own level, 1 to 6, from its data-level; anything else is none. */
+function headingLevel(value: string | undefined): number | undefined {
+  const level = Number(value);
+  return Number.isInteger(level) && level >= 1 && level <= 6 ? level : undefined;
+}
+
 /** The parts of a Markdown tree (mdast) the www rewrite reads. */
 type MdNode = {
   type: string;
@@ -566,10 +572,12 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       // 2026-11-21: reading every hN one level up made a pasted h1 and h2 both "#").
       ctx.update(headingSchema.key, (prev) => (schemaCtx) => ({
         ...prev(schemaCtx),
-        parseDOM: [
-          ...[1, 2, 3, 4, 5].map((level) => ({ tag: `h${level + 1}[data-level="${level}"]`, attrs: { level } })),
-          ...[1, 2, 3, 4, 5, 6].map((level) => ({ tag: `h${level}`, attrs: { level } })),
-        ],
+        // HTML stops at h6, so levels 5 and 6 both draw one; data-level says which, and a copy keeps it. A heading
+        // with none (pasted from another site) keeps its own level.
+        parseDOM: [1, 2, 3, 4, 5, 6].map((shown) => ({
+          tag: `h${shown}`,
+          getAttrs: (dom: HTMLElement) => ({ level: headingLevel(dom.dataset.level) ?? shown }),
+        })),
         toDOM: (node) => [
           `h${Math.min(Number(node.attrs.level) + 1, 6)}`,
           { "data-level": String(node.attrs.level) },

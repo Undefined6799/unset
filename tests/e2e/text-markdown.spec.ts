@@ -140,6 +140,10 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   // An empty line.
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.press("Shift+Enter");
+  // A sixth-level heading, the deepest the playground offers, stays sixth: the editor draws it as an h6 that says so.
+  await page.keyboard.type("###### six");
+  await expect(editor.locator("h6[data-level='6']")).toHaveText("six");
+  await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
   // Enter breaks the line inside the paragraph.
   await page.keyboard.press("Enter");
@@ -159,6 +163,8 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   // The page as the server draws it, the words every visitor sees before any script.
   const html = await (await page.request.get(page.url())).text();
   expect(html).toContain("after");
+  // Svelte's hydration marks sit around the words.
+  expect(html.replace(/<!--[^>]*-->/g, "")).toMatch(/<h6[^>]*>six<\/h6>/);
   expect(html).not.toContain("&lt;br");
   // And the Markdown as stored.
   await card.getByRole("button", { name: /^More for / }).click();
@@ -166,7 +172,7 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   await page.keyboard.press("Escape");
   // A field's value is no text the card's filter finds, so the card is found by its field.
   const field = page.locator('textarea[aria-label^="Text of the"]');
-  await expect(field).toHaveValue(`${word} start\n\nafter\\\nnext line\n\n> first\n>\n> second`);
+  await expect(field).toHaveValue(`${word} start\n\n###### six\n\nafter\\\nnext line\n\n> first\n>\n> second`);
   const shown = page.locator('[data-slot="card"]', { has: field });
   await shown.getByRole("button", { name: /^More for / }).click();
   await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();

@@ -860,6 +860,32 @@
           }
         ]
       ]
+    },
+    "text": {
+      "iconoirName": "text",
+      "approval": "Alex 2026-11-21 18:51:14Z (\"add an icon for text\", the block menu's Text item, which the playground draws with one)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/text.svg",
+      "sourceSha256": "e334a56aefdd7379a6f4ea07e9e48f2efdbd69e57bcc4cd19211b8e585b4c0d3",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M19 7V5L5 5V7",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M12 5L12 19M12 19H10M12 19H14",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
     }
   }
 }
