@@ -280,7 +280,11 @@ async function build(): Promise<Services> {
     maxKeys: config.RATE_LIMIT_MAX_KEYS,
     onError: () => log.error("ratelimit.error", {}),
   });
-  const sweeper = setInterval(() => limiter.sweep(), SWEEP_MS);
+  const textReads = createTextReads(TEXT_READ_LIMITS);
+  const sweeper = setInterval(() => {
+    limiter.sweep();
+    textReads.sweep();
+  }, SWEEP_MS);
   sweeper.unref();
 
   const guard = createNetGuard({
@@ -455,7 +459,7 @@ async function build(): Promise<Services> {
     pool,
     sessions,
     limiter,
-    textReads: createTextReads(TEXT_READ_LIMITS),
+    textReads,
     health,
     oauth,
     issuerOf,

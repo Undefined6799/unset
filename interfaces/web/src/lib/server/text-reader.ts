@@ -19,7 +19,8 @@
 // What a read gave is remembered for the process (review of #2013): without that a page of two stalling cards cost
 // its whole budget on every load, and one address may load a page five times a second (limits.ts `default`). A text
 // is now parsed once in `keptForMs`, whoever asks and however often, and a stalling one costs its limit once in that
-// time. Nothing is kept longer, so a text a member changed or deleted leaves this memory by itself.
+// time. Nothing is kept longer: the process sweeps on a timer (compose.ts), so a text a member changed or deleted
+// leaves this memory by itself.
 import { createHash } from "node:crypto";
 import { createContext, Script } from "node:vm";
 import { type Block, MAX_CHARS, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
@@ -83,8 +84,14 @@ function frozen<T>(value: T): T {
 /** One text's name in what is kept: the parser reads no further than MAX_CHARS, so neither does the name. */
 const keyOf = (text: string): string => createHash("sha256").update(text.slice(0, MAX_CHARS)).digest("base64url");
 
-/** The process's reader of Text cards: `forPage` gives one page load its reader. */
-export type TextReads = { readonly forPage: (deadlineAt: number) => (text: string) => readonly Block[] };
+/**
+ * The process's reader of Text cards. `forPage` gives one page load its reader. `sweep` drops every kept result past
+ * its time, asked for again or not, and says how many texts are still kept.
+ */
+export type TextReads = {
+  readonly forPage: (deadlineAt: number) => (text: string) => readonly Block[];
+  readonly sweep: () => number;
+};
 
 /**
  * The reader a process keeps (compose.ts builds the one). `forPage` gives a page load its reader: each call reads a
@@ -127,6 +134,11 @@ export function createTextReads(
   };
 
   return {
+    sweep() {
+      const at = now();
+      for (const [key, entry] of kept) if (entry.until <= at) forget(key);
+      return kept.size;
+    },
     forPage(deadlineAt) {
       let left = limits.pageMs;
       // A page that holds one text twice gets a copy of its own for each further use: SvelteKit writes a load's

@@ -62,7 +62,7 @@ no server code calls `parseReadme` bare: a page load takes `services().textReads
 (`lib/server/text-reader.ts`), which stops each read with node:vm's `timeout` at `TEXT_READ_LIMITS` (limits.ts), shares
 one budget across the page's cards and shows a stopped card with `plainText`. The process keeps what each read gave
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
-page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
+page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
 places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
 Preview, loaded when Preview opens, on the owner's own text. Vite's alias for `decode-named-character-reference`
 (`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
