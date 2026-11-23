@@ -14,6 +14,9 @@
 //   box -> shell   unset.dock.close                 the box's Close
 //   shell -> box   unset.dock.open { did }          a profile's Message link
 //   shell -> box   unset.dock.shown { shown }       with the hello and at each change: whether the box is open
+//   shell -> box   unset.dock.log_out               unset.sh's Log out, before it posts /logout: the box logs out
+//                                                   in its own partition (backup wait, device ended, stores cleared)
+//   box -> shell   unset.dock.logged_out            done, whatever the outcome; the shell then posts /logout
 //
 // The box takes a message only from its parent window (MessageEvent.source), whose origin the page's frame-ancestors
 // pins to unset.sh (interfaces/chat-auth door.ts rootDocument), and after the hello only from that origin
@@ -28,7 +31,8 @@ const DID = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2048}$/;
 export type DockMessage =
   | { readonly kind: "hello"; readonly origin: string }
   | { readonly kind: "open"; readonly did: string }
-  | { readonly kind: "shown"; readonly shown: boolean };
+  | { readonly kind: "shown"; readonly shown: boolean }
+  | { readonly kind: "log_out" };
 
 /** The box: the page's root with `?dock`, in a frame. */
 export const isDock = (location: { pathname: string; search: string }, framed: boolean): boolean =>
@@ -53,6 +57,7 @@ export function dockMessage(
     return { kind: "open", did: data.did };
   }
   if (data.type === `${DOCK}shown` && typeof data.shown === "boolean") return { kind: "shown", shown: data.shown };
+  if (data.type === `${DOCK}log_out`) return { kind: "log_out" };
   return null;
 }
 

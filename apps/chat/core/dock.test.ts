@@ -40,6 +40,7 @@ describe("dockMessage", () => {
     expect(known({ type: "unset.dock.shown", shown: true })).toEqual({ kind: "shown", shown: true });
     expect(known({ type: "unset.dock.shown", shown: false })).toEqual({ kind: "shown", shown: false });
     expect(known({ type: "unset.dock.shown", shown: "yes" })).toBeNull();
+    expect(known({ type: "unset.dock.log_out" })).toEqual({ kind: "log_out" });
     expect(known("unset.dock.hello")).toBeNull();
     expect(known(null)).toBeNull();
     expect(known({ type: "something.else" })).toBeNull();

@@ -287,6 +287,26 @@ function messageLinkClick(event: MouseEvent) {
   if (openDock(decodeURIComponent(url.pathname.slice("/dm/".length)))) event.preventDefault();
 }
 
+/**
+ * Log out with a box running (chat box review D3): the box logs out in its own storage first (its backup catches up,
+ * its device ends, its stores go), since the chat page's own Log out runs on unset.cc's top level, which cannot reach
+ * the box's partition. Then the form is posted as usual; web's queued end is the fallback if the box does not answer.
+ */
+let loggingOut: (() => void) | undefined;
+const DOCK_LOG_OUT_MS = 20_000;
+function logOutDock(event: SubmitEvent) {
+  const form = event.currentTarget as HTMLFormElement;
+  if (dockFrame?.contentWindow == null || loggingOut !== undefined) return;
+  event.preventDefault();
+  const done = () => form.submit();
+  const timer = window.setTimeout(done, DOCK_LOG_OUT_MS);
+  loggingOut = () => {
+    window.clearTimeout(timer);
+    done();
+  };
+  toDock({ type: `${DOCK}log_out` });
+}
+
 /** The box's page has loaded (again, after a renewal): say hello first, so the box learns this origin from us. */
 function dockLoaded() {
   toDock({ type: `${DOCK}hello` });
@@ -316,6 +336,8 @@ function dockMessage(event: MessageEvent) {
     liveUnread = Math.max(0, message.unread);
   } else if (message.type === `${DOCK}close`) {
     dockShown = false;
+  } else if (message.type === `${DOCK}logged_out`) {
+    loggingOut?.();
   }
 }
 
@@ -736,7 +758,7 @@ const row =
           {@render themePicker()}
         </div>
       {/if}
-      <form method="post" action="/logout" class="mt-1 border-t pt-1">
+      <form method="post" action="/logout" class="mt-1 border-t pt-1" onsubmit={logOutDock}>
         <Button type="submit" variant="ghost" class="h-auto w-full justify-start gap-3 px-3 py-2 font-normal">
           <Icon name="signout" size={20} /><span>{T.signOut}</span>
         </Button>

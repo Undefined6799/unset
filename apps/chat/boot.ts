@@ -24,7 +24,7 @@ import {
   signOutHere,
 } from "./core/sign-out.ts";
 import { announceHop, HOP_CHANNEL, holdTabLock } from "./core/tab-lock.ts";
-import { type ChatOptions, openChat, openToLogOut } from "./matrix/client.ts";
+import { type Chat, type ChatOptions, openChat, openToLogOut } from "./matrix/client.ts";
 
 const DOOR_DEADLINE_MS = 10_000;
 const TOO_SOON_MS = 60_000;
@@ -78,6 +78,8 @@ type Renewal = {
   readonly onSession?: (session: ChatSession) => void;
   /** Whether the member sees the chat: the box's own, as the shell can hide it (core/dock.ts boxVisibility). */
   readonly page?: ChatOptions["page"];
+  /** The open chat, once there is one: the chat box logs it out when unset.sh's Log out asks (core/dock.ts). */
+  readonly onChat?: (chat: Chat) => void;
 };
 const TAB: Renewal = { renew: () => hop() };
 
@@ -116,7 +118,7 @@ async function signIn(
   window.setTimeout(renew, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
   const door = window.fetch.bind(window);
   const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);
-  await openChat(session, {
+  const chat = await openChat(session, {
     baseUrl: window.location.origin,
     takenOver: gone,
     setup: {
@@ -135,6 +137,7 @@ async function signIn(
       renewal.renew();
     },
   });
+  renewal.onChat?.(chat);
 }
 
 /**
@@ -185,6 +188,7 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
   const parent = window.parent;
   let origin: string | null = null;
   let session: ChatSession | null = null;
+  let chat: Chat | null = null;
   let asked: string | null = null;
   let hello: () => void = () => undefined;
   const helloed = new Promise<void>((resolve) => (hello = resolve));
@@ -210,10 +214,18 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
       return hello();
     }
     if (message.kind === "shown") return seen.setShown(message.shown);
+    if (message.kind === "log_out") return void logOut();
     void openWith(message.did);
   });
   const tell = (data: Record<string, unknown>) => origin !== null && parent.postMessage(data, origin);
   closeDock = () => tell({ type: `${DOCK}close` });
+  // unset.sh's Log out (chat box review D3): the tab's own Log out happens on unset.cc's top level, which cannot reach
+  // this partition, so the box runs it here, as the tab's /sign-out/return does: the backup catches up, the door ends
+  // the device, the stores go. The queued end web makes at /logout stays the fallback.
+  const logOut = async () => {
+    await chat?.logOut().catch(() => undefined);
+    tell({ type: `${DOCK}logged_out` });
+  };
   // The shell speaks first, once the frame has loaded (core/dock.ts), so the box never posts to an origin it has not
   // been told: the listener above is in place before the page's load event.
   const timeout = new Promise<"late">((resolve) => window.setTimeout(() => resolve("late"), DOCK_WAIT_MS));
@@ -244,6 +256,7 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
       redeemPath: DOCK_REDEEM_PATH,
       renew: () => window.location.replace(DOCK_PATH),
       page: seen,
+      onChat: (opened) => (chat = opened),
       onSession: (s) => {
         session = s;
         if (asked !== null) void openWith(asked);
