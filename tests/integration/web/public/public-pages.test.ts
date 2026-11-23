@@ -4,7 +4,7 @@
 // vary on Cookie; P1.20k reads a member's session there so the header shows them signed in, and a member's copy is
 // private and never stored, so no cache can hand it to anyone else. Book P1.22h: SvelteKit also answers each page at
 // `<page>/__data.json` (../data-address.ts); that address is held to the page's own answers and is never a search result.
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -15,7 +15,16 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
-import { DATA, dataAnswer, LAYOUT_ONLY, nodeData, undrawn } from "../data-address.ts";
+import {
+  DATA,
+  dataAnswer,
+  inlineScripts,
+  LAYOUT_ONLY,
+  nodeData,
+  startup,
+  startupData,
+  undrawn,
+} from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -274,12 +283,16 @@ describe("a signed-in member on public pages", () => {
   });
 });
 
-/** The root layout's data for a visitor: the shell's flags and the Sign in link, no one's account. Listing is on here. */
+/**
+ * The root layout's data for a visitor: the shell's flags, no one's account, and nothing of the address asked for (ADR
+ * 0116 point 6: the Sign in link and the theme form's way back are worked out where they are drawn). So it is the same
+ * for every address. Listing is on here.
+ */
 const VISITOR_SHELL = {
   signedIn: false,
   account: undefined,
   appOpen: false,
-  prefs: undefined,
+  theme: null,
   privacyNotice: null,
   notifications: undefined,
   bellOpens: false,
@@ -301,7 +314,7 @@ describe("the data address of a public page", () => {
     const body = await plain.clone().text();
     const answer = await dataAnswer(plain);
     expect(answer.type === "data" && answer.nodes).toHaveLength(2);
-    expect(nodeData(answer, 0)).toEqual({ ...VISITOR_SHELL, signInHref: "/login" });
+    expect(nodeData(answer, 0)).toEqual(VISITOR_SHELL);
     expect(answer.type === "data" && answer.nodes[1]).toBeNull();
     const supplied = await get(`${DATA}?active=account&accountName=Mallory&accountPath=/evil`, {
       cookie: "__Host-theme=dark; accountName=Mallory",
@@ -325,10 +338,7 @@ describe("the data address of a public page", () => {
       const document = nodeData(answer, 1) as Record<string, unknown>;
       expect(Object.keys(document).sort(), path).toEqual(["sections", "shell", "title", "version"]);
       expect(undrawn(document, html, isKind), path).toEqual([]);
-      expect(nodeData(answer, 0), path).toEqual({
-        ...VISITOR_SHELL,
-        signInHref: `/login?next=${encodeURIComponent(path)}`,
-      });
+      expect(nodeData(answer, 0), path).toEqual(VISITOR_SHELL);
       // Config is data here too: no `<` reaches the answer as typed (devalue 5.9.4 escapes it).
       expect(body, path).not.toContain("<");
     }
@@ -346,7 +356,7 @@ describe("the data address of a public page", () => {
       expect(nodeData(await dataAnswer(data), 0), path).toMatchObject({
         signedIn: true,
         account: { path: `/${did}` },
-        prefs: { theme: "dark", returnTo: path },
+        theme: "dark",
         bellOpens: false,
       });
       // Right after the member's request, a visitor's data carries no one.
@@ -375,10 +385,7 @@ describe("the data address of a public page", () => {
     expect(shell.headers.get("cache-control")).toBe("private, no-store");
     expect(shell.headers.get("x-robots-tag")).toBe("noindex");
     const answer = await dataAnswer(shell);
-    expect(nodeData(answer, 0)).toEqual({
-      ...VISITOR_SHELL,
-      signInHref: `/login?next=${encodeURIComponent("/nowhere")}`,
-    });
+    expect(nodeData(answer, 0)).toEqual(VISITOR_SHELL);
   });
 
   // The route's own limit at the gate: a page and its data address spend the same allowance for an address (60 at
@@ -491,16 +498,110 @@ describe("security.txt", () => {
   });
 });
 
+/** The one script hash a policy names in script-src, or undefined when it names none. */
+const scriptHash = (policy: string | null): string | undefined =>
+  /(?:^|; )script-src [^;]*'sha256-([A-Za-z0-9+/]{43}=)'/.exec(policy ?? "")?.[1];
+const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("base64");
+/** The error page's one script, as the browser would run it. */
+function startUpScript(html: string, who: string): string {
+  const scripts = inlineScripts(html);
+  expect(scripts, who).toHaveLength(1);
+  expect(startup(html), who).not.toBeNull(); // throws unless it is SvelteKit's start-up script, and the only script
+  return scripts[0] ?? "";
+}
+
+// ADR 0116 points 1 and 6 (book P1.22k). The error page runs SvelteKit's client like every page, so it carries the
+// start-up script, and SvelteKit hashes that script itself: the policy allows whatever is in it. So nothing of the
+// request may be in it, and these tests hold that on the bytes. An address no route matches is whatever a link's
+// author chose, sent to anyone.
 describe("error pages", () => {
-  test("not_found_echoes_nothing_and_runs_no_script", async () => {
+  /** Text a link's author would use to end the script early or start a comment, as a browser sends it in a path. */
+  const HOSTILE = [
+    "/%3C%2Fscript%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E",
+    "/%3C!--%3Cscript%3E",
+    "/x%22%27%60%3E",
+    "/%E2%80%A8%E2%80%A9x",
+    "/javascript:alert(1)",
+  ];
+
+  test("not_found_echoes_nothing_and_runs_only_the_start_up_script", async () => {
     const response = await get("/%3Cscript%3Ex");
     expect(response.status).toBe(404);
     const html = await response.text();
     expect(html).toContain("That page does not exist.");
     expect(html).not.toContain("script>x");
     expect(html).not.toContain("%3Cscript");
-    expect(html).not.toContain("<script");
     expect(html.match(/<main id="main"/g)).toHaveLength(1);
+    // One script, SvelteKit's own, and the policy names it by its hash: no other inline script could run.
+    const script = startUpScript(html, "visitor");
+    expect(scriptHash(response.headers.get("content-security-policy"))).toBe(sha256(script));
+    expect(response.headers.get("content-security-policy")).not.toContain("unsafe-inline");
+    expect(script).not.toContain("script");
+    expect(script).not.toContain("3C");
+  });
+
+  test("the_start_up_script_is_the_same_for_every_address_of_one_depth", async () => {
+    // One path segment: a plain word, and each hostile one. SvelteKit writes the build's files relative to the address
+    // (kit 3.2.0 page/render.js:120-126), so the script depends on how deep the address is and on nothing else of it.
+    const plain = await get("/nowhere-at-all");
+    expect(plain.status).toBe(404);
+    const script = startUpScript(await plain.text(), "/nowhere-at-all");
+    const policy = plain.headers.get("content-security-policy");
+    for (const path of [...HOSTILE, "/nowhere?next=javascript:alert(1)&x=%3C/script%3E", "/Nowhere-At-All"]) {
+      const response = await get(path);
+      expect([400, 404], path).toContain(response.status);
+      const html = await response.text();
+      if (response.status === 404) expect(startUpScript(html, path), path).toBe(script);
+      if (response.status === 404) expect(response.headers.get("content-security-policy"), path).toBe(policy);
+      // Whatever the status, nothing of the address is in the script, as written or decoded.
+      const own = startUpScript(html, path);
+      for (const part of ["alert", "javascript", "nowhere", "Nowhere", "\u2028", "\\u2028", "%E2", "%3C", "<!--"]) {
+        expect(own, `${path}: ${part}`).not.toContain(part);
+      }
+    }
+    // Two segments deep: another script (the files are one folder further up), again the same for both.
+    const deep = startUpScript(await (await get("/no/where")).text(), "/no/where");
+    expect(deep).not.toBe(script);
+    expect(startUpScript(await (await get("/%3C%2Fscript%3E/%3Cscript%3E")).text(), "deep hostile")).toBe(deep);
+  });
+
+  test("the_start_up_data_names_no_address_and_only_the_member_s_own_shell", async () => {
+    const visitor = await (await get("/nowhere-at-all")).text();
+    expect(startup(visitor)).toMatchObject({ form: null, error: { message: "http.not_found" } });
+    expect(startupData(visitor, 0)).toEqual(VISITOR_SHELL);
+
+    const { did, cookie } = await memberCookie();
+    const first = await get("/nowhere-at-all", { cookie: `${cookie}; __Host-theme=dark` });
+    expect(first.headers.get("cache-control")).toBe("private, no-store");
+    const member = await first.text();
+    // The member's script differs from the visitor's by their own shell data and by nothing of the address.
+    const shell = startupData(member, 0) as Record<string, unknown>;
+    expect({ ...shell, account: undefined, notifications: undefined }).toEqual({
+      ...VISITOR_SHELL,
+      signedIn: true,
+      appOpen: true,
+      theme: "dark",
+    });
+    expect(shell.account).toMatchObject({ path: `/${did}` });
+    expect(startUpScript(member, "member")).not.toContain("nowhere");
+    const other = await get("/%3C%2Fscript%3E%3Cscript%3E", { cookie: `${cookie}; __Host-theme=dark` });
+    expect(startUpScript(await other.text(), "member, hostile")).toBe(startUpScript(member, "member"));
+  });
+
+  // What the address is still drawn into: the Sign in link and the theme form's way back, as attribute values the
+  // server escapes, each checked on the server where it is used (/login's `next`, /prefs/theme's `return`).
+  test("the_address_is_drawn_only_as_escaped_attribute_values", async () => {
+    for (const path of HOSTILE) {
+      const html = await (await get(path)).text();
+      const next = `/login?next=${encodeURIComponent(new URL(path, ORIGIN).pathname)}`;
+      expect(html, path).toContain(`href="${next.replaceAll("&", "&amp;")}"`);
+      expect(html, path).not.toContain("<script>alert");
+      expect(html, path).not.toContain("<!--<script");
+    }
+    const { cookie } = await memberCookie();
+    const member = await (await get("/x%22%3E%3Cb%3E", { cookie })).text();
+    expect(member).toContain('<input type="hidden" name="return" value="/x%22%3E%3Cb%3E"/>');
+    expect(member).not.toMatch(/href="\/login/);
   });
 });
 

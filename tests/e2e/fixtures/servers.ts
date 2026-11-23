@@ -42,6 +42,7 @@ import { randomPassword, startPostgres, stopAllPostgres } from "../../support/po
 import {
   ACCOUNT,
   BELL_SIZE,
+  HIDDEN,
   HOST,
   HOSTILE,
   INBOX_SIZE,
@@ -237,7 +238,13 @@ function quoted(text: string): string {
  * A member as the indexer leaves one with a profile, a main page and its cards (P3.12s), so the public profile page at
  * /@did is a page under test. Constants only; names and records are dollar-quoted.
  */
-function indexedMember(did: string, name: string, headline: string, contents: readonly CardContent[]): string {
+function indexedMember(
+  did: string,
+  name: string,
+  headline: string,
+  contents: readonly CardContent[],
+  active = true,
+): string {
   const profile = { $type: "sh.unset.profile", displayName: name, headline, createdAt: INDEXED_AT };
   const uris = contents.map((_, at) => `at://${did}/sh.unset.card/${CARD_KEYS[at]}`);
   // The main page lists each card, so it shows (ADR 0086 point 3, ADR 0091).
@@ -252,7 +259,7 @@ function indexedMember(did: string, name: string, headline: string, contents: re
   });
   return `
     INSERT INTO idx.account (did, handle_status, pds_active, track_requested_at, updated_at)
-      VALUES ('${did}', 'unresolved', true, now(), now());
+      VALUES ('${did}', 'unresolved', ${active}, now(), now());
     INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
       VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', ${quoted(JSON.stringify(profile))},
         ${quoted(name)}, false, now());
@@ -292,13 +299,18 @@ const HOSTILE_CARDS: readonly CardContent[] = [
   },
 ];
 
-/** The production server's two indexed members: INDEXED, a plain page under test, and HOSTILE. */
+/** HIDDEN (pages.ts): a whole page in the index that no one is shown, because the account is not active. */
+const hiddenMember = (): string =>
+  indexedMember(HIDDEN.did, "Hidden Member", "Not shown", [{ kind: "readme", text: "A card no one reads." }], false);
+
+/** The production server's indexed members: INDEXED, a plain page under test, HOSTILE, and HIDDEN. */
 function indexedMembers(): string {
   return [
     indexedMember(INDEXED.did, "Public Member", "On the open web", [
       { kind: "readme", text: "A card on a public page." },
     ]),
     indexedMember(HOSTILE.did, HOSTILE.close, HOSTILE.handler, HOSTILE_CARDS),
+    hiddenMember(),
   ].join("\n");
 }
 
@@ -418,7 +430,7 @@ async function seedMembers(pg: Postgres, keyring: string): Promise<Record<Member
 }
 
 async function serveTest(): Promise<void> {
-  const pg = await database();
+  const pg = await database(hiddenMember());
   const dir = scratch();
   const keyring = JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } });
   const keyringFile = join(dir, "seal_keyring");

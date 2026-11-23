@@ -12,7 +12,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
-import { DATA, dataAnswer, LAYOUT_ONLY, nodeData, startupData } from "../data-address.ts";
+import { DATA, dataAnswer, LAYOUT_ONLY, nodeData, startup, startupData } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -224,7 +224,19 @@ describe("search and AI when the read fails", () => {
         }
       });
       expect(page?.status).toBeGreaterThanOrEqual(500);
-      expect(await page?.text()).toContain('<meta name="robots" content="noindex"');
+      const html = (await page?.text()) ?? "";
+      expect(html).toContain('<meta name="robots" content="noindex"');
+      // The error page runs the client like every other (ADR 0116 point 1; book P1.22k) and still shows its request
+      // id: the start-up script carries the code and the id the server made for this request (server.ts, a random
+      // UUID, never the caller's text), so the client draws the same line the server did.
+      expect(page?.headers.get("content-security-policy")).toMatch(/script-src [^;]*'sha256-/);
+      const failed = startup(html)?.error as { message?: string; reqId?: string } | undefined;
+      expect(failed).toEqual({
+        status: 500,
+        message: "internal.error",
+        reqId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      });
+      expect(html).toContain(`Request id, if you contact us: <code>${failed?.reqId}</code>`);
       // The page's data address runs under the same deadline (book P1.22h): a code and the request id, nothing of the
       // member, never stored and never indexed. SvelteKit sends a failed load as an error node under status 200.
       expect(data?.headers.get("cache-control")).toBe("private, no-store");
