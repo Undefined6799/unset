@@ -19,7 +19,7 @@ The layout files are [`interfaces/web/src/routes/+layout.svelte`](../../../inter
 
 ## The three shells
 
-`+layout.ts` sets `csr` to false ([SvelteKit page options](https://svelte.dev/docs/kit/page-options#csr)). A page ships no client script unless its own `+page.ts` sets `csr` to true. The same load passes through an `?error=` code only when it is a catalog code.
+`+layout.ts` sets `csr` to false ([SvelteKit page options](https://svelte.dev/docs/kit/page-options#csr)). A page ships no client script unless its own `+page.ts` sets `csr` to true. A public page that does so also says `client: true` in its `policy.ts`, which is what gives it the app's script policy; `gate.test.ts` names every such page and fails when the two disagree ([ADR 0114](../decisions/0114-script-on-every-page-with-a-plain-fallback.md)). The public profile is the first. The same load passes through an `?error=` code only when it is a catalog code.
 
 The site shell is a skip link, a header with the wordmark and Sign in, the main region and a footer. A signed-in member sees no Sign in button. The footer lists Home, Sign in, and the legal links (terms, privacy, domains). When `prefs` is set it also holds the theme form. The welcome steps use this shell, signed in.
 
@@ -47,4 +47,6 @@ The page scrolls as one document. The header and main share a column with `min-h
 
 Below the `sm` breakpoint the search field and the Create, Messages and Notifications buttons are hidden. A search button and a More actions button take their place and open the same panels. On a coarse pointer the icon controls use a larger target (`pointer-coarse:size-11`). The Notifications button carries the unread count, and so does More actions on a phone ([notifications](notifications.md)).
 
-Links, forms and these popovers work with no script. The member's own page, settings, the welcome steps, confirm-email, the invite page and the signed-out page set `csr` to true and add the client on top. The theme picker then saves in place and leaves the menu open. The form still posts when that save does not come back as the usual redirect.
+The page without script is the floor, not the ceiling ([ADR 0114](../decisions/0114-script-on-every-page-with-a-plain-fallback.md) points 5 and 6). The server draws every page whole, and it stays usable when the browser runs no script or a script file does not arrive: everything can be read, and everything a person can do there can be done through a plain link or form. The fallback may be plainer than the scripted page, and no feature is thinned to match it. Where a stock control needs script, use it and give the page a plain fallback; a feature that cannot work without script says so on the page.
+
+Links, forms and these popovers work with no script. The member's own page, the public profile, settings, the welcome steps, confirm-email, the invite page and the signed-out page set `csr` to true and add the client on top. The theme picker then saves in place and leaves the menu open. The form still posts when that save does not come back as the usual redirect.

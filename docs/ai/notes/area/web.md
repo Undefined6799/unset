@@ -31,13 +31,18 @@ screens, `render.tsx`, the island runtime and Hono are deleted; nothing in the r
 
 **How data flows.** Request → `server.ts` → `hooks.server.ts` gate → a `+page.server.ts` load or form action, which
 calls a domain (and infrastructure through `lib/server`) → a plain view object → the Svelte page. Pages that need
-script set `csr = true` in their `+page.ts`; the root layout sets `csr = false`, so public pages ship no script.
+script set `csr = true` in their `+page.ts`; the root layout sets `csr = false`, so a page ships no script unless it
+asks. A public page that asks also says `client: true` in its `policy.ts` (ADR 0114, P1.22e): the hook then keeps
+SvelteKit's own CSP, narrowed, on that page's 200 answer only. The public profile is the first; its 404 runs no
+script (for a failed load kit takes `csr` from the layouts alone, 3.2.0 `page/index.js:276`) and keeps the fixed
+policy, as do its refusals and its data address. `gate.test.ts` names the pages switched on.
 
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
-`is_data_request`, `data/index.js`). So a load on a script-free page is still sent to anyone who asks: return only
-what the page draws for that viewer (rule SE-3), which is why the public profile sends `shownCards`, not the card
-records. The gate sees the page's own route there, so policy, limit, deadline, session and the member's
+`is_data_request`, `data/index.js`). So a load on a script-free page is still sent to anyone who asks, and a page
+that runs the client carries the same result in its start-up script (`data-address.ts` `startupData` reads it back
+without running it): return only what the page draws for that viewer (rule SE-3), which is why the public profile
+sends `shownCards`, not the card records. The gate sees the page's own route there, so policy, limit, deadline, session and the member's
 `private, no-store` hold; `setHeaders` in a page load applies to the data answer too, but a universal load (`+page.ts`,
 home's cache rule) and a skipped page load (`?x-sveltekit-invalidated=10`) set nothing, so `server.ts` says `noindex`
 on every data address itself. A missing page is an error node under status 200. The tests are the "data address"

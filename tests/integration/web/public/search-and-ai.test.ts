@@ -12,7 +12,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
-import { DATA, dataAnswer, LAYOUT_ONLY, nodeData } from "../data-address.ts";
+import { DATA, dataAnswer, LAYOUT_ONLY, nodeData, startupData } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -157,10 +157,13 @@ describe("search and AI", () => {
     expect(data.headers.get("x-robots-tag")).toBe("noindex");
     expect(data.headers.get("cache-control")).toBe("public, max-age=60");
     // What search results may show is what the page publishes: the member's own title, here as data.
-    expect(nodeData(await dataAnswer(data), 1)).toMatchObject({
+    const leaf = nodeData(await dataAnswer(data), 1);
+    expect(leaf).toMatchObject({
       shell: { kind: "core", wide: true },
       meta: { title: "Vera <the maker>", description: "Maker of <things>", url: `${ORIGIN}${PAGE}` },
     });
+    // The listed page runs the client (book P1.22e): its start-up script carries the same data, and no more.
+    expect(startupData(await (await get(PAGE)).text(), 1)).toEqual(leaf);
     for (const path of [
       `${PAGE}${LAYOUT_ONLY}`,
       DATA,
