@@ -102,14 +102,19 @@ export type CardShown =
       readonly buttons: readonly ShownButton[];
     };
 
-export type CardView = {
+/** A card as a page that edits nothing draws it: what it shows, never the record's fields behind it (rule SE-3). */
+export type ShownCard = {
   readonly key: string;
-  /** On the owner's page, the record CID the card was read at: what an edit of it names (ADR 0074). */
-  readonly version?: string;
   readonly width: CardWidth;
   readonly surface: CardSurface;
-  readonly content: CardContent;
   readonly shown: CardShown;
+};
+
+/** A card on the owner's page: what it shows, and `content`, the record's fields its editor fills from. */
+export type CardView = ShownCard & {
+  /** The record CID the card was read at: what an edit of it names (ADR 0074). */
+  readonly version?: string;
+  readonly content: CardContent;
 };
 
 /**

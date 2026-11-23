@@ -12,7 +12,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { CARD_TEXT } from "../../profile/messages.ts";
-import type { CardLayout, CardSurface, CardView } from "../../profile/types.ts";
+import type { CardLayout, CardSurface, ShownCard } from "../../profile/types.ts";
 import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
@@ -25,7 +25,7 @@ let {
   add,
   text,
 }: {
-  cards: readonly CardView[];
+  cards: readonly ShownCard[];
   controls?: Snippet<[number]>;
   add?: Snippet;
   text?: Snippet<[number]>;
@@ -87,7 +87,7 @@ const CONTACT_FILLED =
 const PLAIN_FOCUS =
   "outline-offset-2 has-focus-visible:outline has-focus-visible:outline-1 has-focus-visible:outline-ring";
 /** The outer card's surface classes; Contact's Filled keeps its own tint and edge. */
-function outer(shown: CardView): string {
+function outer(shown: ShownCard): string {
   const surface =
     shown.surface === "filled" && shown.shown.kind === "buttons" ? CONTACT_FILLED : SURFACE[shown.surface];
   return shown.surface === "plain" && controls !== undefined ? `${surface} ${PLAIN_FOCUS}` : surface;
