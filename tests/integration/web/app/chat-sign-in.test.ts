@@ -198,7 +198,7 @@ describe("GET /chat/sign-in", () => {
     const location = new URL(response.headers.get("location") ?? "");
     expect(`${location.origin}${location.pathname}${location.search}`).toBe(`${DOOR}/sign-in/return`);
     const fragment = new URLSearchParams(location.hash.slice(1));
-    expect([...fragment.keys()]).toEqual(["ticket"]);
+    expect([...fragment.keys()]).toEqual(["ticket", "theme"]);
     const envelope = JSON.parse(Buffer.from(fragment.get("ticket") ?? "", "base64url").toString("utf8"));
     const [{ chat_user: user }] = await withClient(pool, null, async (db) => {
       const { rows } = await db.query("SELECT chat_user FROM app.chat_account WHERE did = $1", [did]);
