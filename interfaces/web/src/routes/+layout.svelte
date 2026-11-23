@@ -207,9 +207,9 @@ const panel =
 const account = $derived(shell.account ?? data.account);
 // The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
 const notes = $derived(data.notifications);
-// Opening the bell marks what it shows seen in this browser (ADR 0085, Alex 2026-11-21 05:16Z): the badge goes at once
-// and comes back only with a newer entry. The hidden form posts it in the background; with no script the page's own
-// load marks it instead.
+// Opening the bell marks what it shows seen (ADR 0085, 0090 and 0108): the badge goes at once and comes back only with
+// a newer entry. The hidden form posts it in the background. A page that runs no script has no panel: its bell is a
+// link to /notifications, whose own load marks it (ADR 0108 point 3).
 const newest = $derived(notes?.state === "ready" ? notes.entries[0]?.id : undefined);
 let seenUpTo = $state<string | undefined>(undefined);
 const waiting = $derived(notes?.state === "ready" && newest !== seenUpTo ? notes.count : 0);
@@ -395,16 +395,24 @@ const row =
           <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
         </Button>
         {#each PANEL_BUTTONS as button (button.id)}
-          <Button
-            variant="outline"
-            size="icon-sm"
-            popovertarget={button.id}
-            popovertargetaction="toggle"
-            class="{control} relative max-sm:hidden"
-          >
-            <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
-            {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
-          </Button>
+          {#if button.id === NOTIFICATIONS && !data.bellOpens}
+            <!-- ADR 0108 point 3: with no script on this page, the bell is the way to the page, whose visit marks it seen. -->
+            <Button variant="outline" size="icon-sm" href="/notifications" class="{control} relative max-sm:hidden">
+              <Icon name={button.icon} size={20} label={N.bell(waiting)} />
+              {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+            </Button>
+          {:else}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              popovertarget={button.id}
+              popovertargetaction="toggle"
+              class="{control} relative max-sm:hidden"
+            >
+              <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
+              {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+            </Button>
+          {/if}
         {/each}
         <Button
           variant="outline"
@@ -527,7 +535,7 @@ const row =
       </li>
     </ul>
   </section>
-  {#each PANEL_BUTTONS as button (button.id)}
+  {#each PANEL_BUTTONS.filter((b) => b.id !== NOTIFICATIONS || data.bellOpens) as button (button.id)}
     <section
       id={button.id}
       popover="auto"
@@ -567,12 +575,21 @@ const row =
       </li>
       {#each PANEL_BUTTONS as button (button.id)}
         <li>
-          <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
-            <Icon name={button.icon} size={20} /><span>{button.label}</span>
-            {#if button.id === NOTIFICATIONS && waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
-                ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
-              >{/if}
-          </button>
+          {#if button.id === NOTIFICATIONS && !data.bellOpens}
+            <a href="/notifications" class="{row} w-full">
+              <Icon name={button.icon} size={20} /><span>{button.label}</span>
+              {#if waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
+                  ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
+                >{/if}
+            </a>
+          {:else}
+            <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
+              <Icon name={button.icon} size={20} /><span>{button.label}</span>
+              {#if button.id === NOTIFICATIONS && waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
+                  ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
+                >{/if}
+            </button>
+          {/if}
         </li>
       {/each}
     </ul>
