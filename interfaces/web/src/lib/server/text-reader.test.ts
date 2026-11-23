@@ -55,7 +55,7 @@ describe("within", () => {
 });
 
 /** Room to remember every text a test reads, for ten minutes. */
-const KEPT = { keptNodes: 100_000, keptForMs: 600_000 } as const;
+const KEPT = { keptBytes: 50_000_000, keptForMs: 600_000 } as const;
 const GENEROUS: TextReadLimits = { textMs: 10_000, pageMs: 10_000, ...KEPT };
 
 describe("one page's reader", () => {
@@ -230,7 +230,7 @@ describe("what is remembered between page loads", () => {
   ])("%s is read afresh once keptForMs has passed", (_name, parser) => {
     let now = 1_000;
     const { seen, read } = counted(parser);
-    const reads = createTextReads({ textMs: 20, pageMs: 100, keptNodes: 100_000, keptForMs: 500 }, read, () => now);
+    const reads = createTextReads({ textMs: 20, pageMs: 100, keptBytes: 50_000_000, keptForMs: 500 }, read, () => now);
     const first = reads.forPage(LATER)("some *text*");
     now += 499;
     expect(reads.forPage(LATER)("some *text*")).toEqual(first);
@@ -256,10 +256,11 @@ describe("what is remembered between page loads", () => {
     expect(reads.sweep()).toBe(0);
   });
 
-  // Each text below reads to 100 paragraphs of one run each, 200 nodes, so three fit in 800 and four do not.
-  test("at most keptNodes are kept, and the text read longest ago is dropped first", () => {
+  // What a text weighs is the reader's own upper estimate (text-reader.ts `bytesIn`). Each text below reads to 100
+  // paragraphs of one run each and weighs about 42,000 bytes by it, so three fit in 150,000 and four do not.
+  test("at most keptBytes are kept, and the text read longest ago is dropped first", () => {
     const { seen, read } = counted(parseReadme);
-    const reads = createTextReads({ ...GENEROUS, keptNodes: 800 }, read);
+    const reads = createTextReads({ ...GENEROUS, keptBytes: 150_000 }, read);
     const page = reads.forPage(LATER);
     const text = (name: string) => `${"word\n\n".repeat(99)}${name}`;
     for (const name of ["one", "two", "three"]) page(text(name));
@@ -274,13 +275,43 @@ describe("what is remembered between page loads", () => {
     expect(seen.calls).toBe(5);
   });
 
-  test("a result larger than keptNodes is given but not kept", () => {
+  test("a result larger than keptBytes is given but not kept", () => {
     const { seen, read } = counted(parseReadme);
-    const reads = createTextReads({ ...GENEROUS, keptNodes: 50 }, read);
+    const reads = createTextReads({ ...GENEROUS, keptBytes: 20_000 }, read);
     const long = "word\n\n".repeat(60);
     expect(reads.forPage(LATER)(long)).toEqual(parseReadme(long));
     reads.forPage(LATER)(long);
     expect(seen.calls).toBe(2);
+  });
+
+  // A full card that is one paragraph is two objects and 20,000 characters: counted by its objects alone it weighed
+  // nothing, and thousands of them were kept (Codex on #2013). At two bytes a character, for the text and again for
+  // the string in the result, each weighs about 81,500 bytes, so three fit in 250,000.
+  test("a kept result weighs its strings, not only its objects", () => {
+    const reads = createTextReads({ ...GENEROUS, keptBytes: 250_000 });
+    const page = reads.forPage(LATER);
+    for (let card = 0; card < 10; card += 1) page(`${"a".repeat(19_990)} ${card}`);
+    expect(reads.sweep()).toBe(3);
+  });
+
+  // A short string in a result can be a slice that holds the whole text it was cut from in memory (measured: 57
+  // characters of result held 39 KB). So the text counts too: these read to one short paragraph, the link
+  // definitions after it are dropped, and each still weighs about 41,000 bytes, so two fit in 100,000.
+  test("a kept result weighs the text it was read from", () => {
+    const reads = createTextReads({ ...GENEROUS, keptBytes: 100_000 });
+    const page = reads.forPage(LATER);
+    const definitions = "[x]: <y> 'z'\n\n".repeat(1_400);
+    for (let card = 0; card < 5; card += 1) {
+      expect(page(`fourteen chars ${card}\n\n${definitions}`)).toEqual(parseReadme(`fourteen chars ${card}`));
+    }
+    expect(reads.sweep()).toBe(2);
+  });
+
+  test("a stopped text weighs next to nothing, however long it is", () => {
+    const reads = createTextReads({ ...GENEROUS, textMs: 20, pageMs: 10_000, keptBytes: 20_000 }, forever);
+    const page = reads.forPage(LATER);
+    for (let card = 0; card < 5; card += 1) page(`${"a".repeat(19_990)} ${card}`);
+    expect(reads.sweep()).toBe(5);
   });
 
   test("texts that differ only past the reader's 20,000 characters are one text", () => {
@@ -317,13 +348,15 @@ describe("the page's limits", () => {
     expect(TEXT_READ_LIMITS.pageMs).toBeLessThanOrEqual(300);
   });
 
-  // The densest full card reads to about 15,000 nodes (20,000 characters of "*a* "), a dense list or table to about
-  // 3,300: the reader keeps a page of 50 dense full cards, and keeps a result between one minute and an hour.
-  test("what is kept holds a page of full cards, and is kept for minutes", () => {
-    const densest = parseReadme(repeated("*a* "));
-    expect(JSON.stringify(densest).split("{").length - 1).toBeLessThan(TEXT_READ_LIMITS.keptNodes / 10);
-    expect(TEXT_READ_LIMITS.keptNodes).toBeGreaterThanOrEqual(50 * 3_300);
-    expect(TEXT_READ_LIMITS.keptNodes).toBeLessThanOrEqual(400_000);
+  // What is kept is tens of megabytes, never hundreds, and a result is kept between one minute and an hour. A full
+  // card as a dense list weighs about 660,000 bytes by the reader's estimate, so ten of them are all kept.
+  test("what is kept is tens of megabytes, holds full cards, and is kept for minutes", () => {
+    expect(TEXT_READ_LIMITS.keptBytes).toBeGreaterThanOrEqual(16_000_000);
+    expect(TEXT_READ_LIMITS.keptBytes).toBeLessThanOrEqual(128_000_000);
+    const reads = createTextReads({ ...GENEROUS, keptBytes: TEXT_READ_LIMITS.keptBytes });
+    const page = reads.forPage(LATER);
+    for (let card = 0; card < 10; card += 1) page(`${repeated(formatted).slice(0, -3)}${card}`);
+    expect(reads.sweep()).toBe(10);
     expect(TEXT_READ_LIMITS.keptForMs).toBeGreaterThanOrEqual(60_000);
     expect(TEXT_READ_LIMITS.keptForMs).toBeLessThanOrEqual(3_600_000);
   });
