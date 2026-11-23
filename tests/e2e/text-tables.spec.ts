@@ -164,3 +164,72 @@ test("dragging_a_handle_moves_its_row_or_column_and_never_above_the_header", asy
   expect(await markdown(page, word)).toBe(`${word} start\n\n| b | a |\n| - | - |\n| 2 | 1 |\n| 4 | 3 |`);
   await discardAndRemove(page, word);
 });
+
+// Codex on #1992: a drag the browser cancels (a touch taken over for scrolling) moves nothing; a press on a menu
+// item is never a drag of its handle.
+test("a_cancelled_drag_or_a_press_in_the_menu_moves_nothing", async ({ page }) => {
+  const word = `cancel${Date.now()}`;
+  const { card, editor } = await tableCard(page, word);
+  const row = card.getByRole("button", { name: "Row options" });
+  const line = card.locator("[data-table-drop]");
+  await editor.getByRole("cell", { name: "3", exact: true }).hover();
+  const first = await editor.getByRole("cell", { name: "1", exact: true }).boundingBox();
+  const handle = await row.boundingBox();
+  if (first === null || handle === null) throw new Error("no box");
+  await drag(page, handle, first.x + 4, first.y + 2);
+  await expect(line).toBeVisible();
+  await row.evaluate((button) =>
+    button.parentElement?.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1 })),
+  );
+  await page.mouse.up();
+  await expect(line).toBeHidden();
+  await expect(editor.locator("tr").nth(1)).toHaveText("12");
+  await expect(editor.locator("tr").nth(2)).toHaveText("34");
+  // The second data row's menu: a press on Add row below that slides up over the first row adds a row, moving none.
+  await editor.getByRole("cell", { name: "3", exact: true }).hover();
+  await row.click();
+  const item = page.getByRole("menu", { name: "Row options" }).getByRole("menuitem", { name: "Add row below" });
+  const box = await item.boundingBox();
+  if (box === null) throw new Error("no box");
+  await page.mouse.move(box.x + 8, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(editor.locator("tr")).toHaveCount(4);
+  await expect(editor.locator("tr").nth(1)).toHaveText("12");
+  await expect(editor.locator("tr").nth(2)).toHaveText("34");
+  await discardAndRemove(page, word);
+});
+
+// Codex on #1992: the tools follow the table as the words before it change, and a keyboard reaches them. Alt+F10
+// in a cell shows the handles for the caret's cell and puts the focus on the column's, as Alt+F10 reaches an editor's
+// toolbar (CKEditor 5 keyboard support: https://ckeditor.com/docs/ckeditor5/latest/features/accessibility.html).
+test("the_handles_follow_edits_before_the_table_and_alt_f10_reaches_them", async ({ page }) => {
+  const word = `keys${Date.now()}`;
+  const { card, editor } = await tableCard(page, word);
+  const column = card.getByRole("button", { name: "Column options" });
+  const row = card.getByRole("button", { name: "Row options" });
+  await editor.getByText(`${word} start`).click();
+  await page.keyboard.press("End");
+  await editor.getByRole("cell", { name: "4", exact: true }).hover();
+  await expect(row).toBeVisible();
+  await page.keyboard.type(" and more");
+  await expect(row).toBeVisible();
+  await expect(column).toBeVisible();
+  await page.mouse.move(2, 2);
+  await expect(row).toBeHidden();
+  await editor.getByRole("cell", { name: "2", exact: true }).click();
+  await page.mouse.move(2, 2);
+  await expect(column).toBeHidden();
+  await page.keyboard.press("Alt+F10");
+  await expect(column).toBeFocused();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu", { name: "Column options" });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(editor.getByRole("columnheader")).toHaveCount(3);
+  await expect(editor.locator("tr").first()).toHaveText("ab");
+  await discardAndRemove(page, word);
+});
