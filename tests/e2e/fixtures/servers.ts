@@ -218,7 +218,7 @@ function connectProxy(): Promise<void> {
 }
 
 /**
- * INDEXED as the indexer leaves a member with a profile and one card (P3.12s), so the public profile page at /@did
+ * INDEXED as the indexer leaves a member with a profile, a main page and one card (P3.12s), so the public profile page at /@did
  * is a page under test. Constants only; the records are dollar-quoted JSON.
  */
 function indexedMember(): string {
@@ -230,8 +230,12 @@ function indexedMember(): string {
     displayName: "Public Member",
     headline: "On the open web",
     createdAt: at,
-    // The profile lists its card, so it shows (ADR 0086 point 3).
+  };
+  // The main page lists the card, so it shows (ADR 0086 point 3, ADR 0091).
+  const page = {
+    $type: "sh.unset.page",
     cards: [{ uri: `at://${INDEXED.did}/sh.unset.card/3jzfcijpj2z2a` }],
+    createdAt: at,
   };
   const did = INDEXED.did;
   return `
@@ -240,6 +244,8 @@ function indexedMember(): string {
     INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
       VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', $j$${JSON.stringify(profile)}$j$,
         'Public Member', false, now());
+    INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+      VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', $j$${JSON.stringify(page)}$j$, now());
     INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
       VALUES ('at://${did}/sh.unset.card/3jzfcijpj2z2a', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l',
         $j$${JSON.stringify(card.record)}$j$, 0, now());`;

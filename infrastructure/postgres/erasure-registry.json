@@ -41,6 +41,10 @@
     "strategy": "delete_row",
     "reason": "the person's indexed public profile record; removed with their index row"
   },
+  "idx.page.did": {
+    "strategy": "delete_row",
+    "reason": "the person's indexed public page record; removed with their index row"
+  },
   "idx.section.did": {
     "strategy": "delete_row",
     "reason": "the person's indexed public card records; removed with their index row"
@@ -58,6 +62,10 @@
     "reason": "a moderator's delist or suspension state for the person; the decision itself stays in the audit mod lane"
   },
   "idx.profile.uri": {
+    "strategy": "delete_row",
+    "reason": "the AT-URI of the person's own indexed record; it names their DID and goes with their index row"
+  },
+  "idx.page.uri": {
     "strategy": "delete_row",
     "reason": "the AT-URI of the person's own indexed record; it names their DID and goes with their index row"
   },

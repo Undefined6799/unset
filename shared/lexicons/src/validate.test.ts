@@ -80,9 +80,14 @@ describe("validateRecord", () => {
       avatar: blob,
       avatarShape: "rounded-square",
       listed: true,
-      cards: [{ uri: `at://${DID}/sh.unset.card/3jzfcijpj2z2a` }],
     };
     expect(validateRecord("sh.unset.profile", full, "write")).toEqual({ ok: true, value: full });
+    const page = {
+      $type: "sh.unset.page",
+      cards: [{ uri: `at://${DID}/sh.unset.card/3jzfcijpj2z2a` }],
+      createdAt: CREATED,
+    };
+    expect(validateRecord("sh.unset.page", page, "write")).toEqual({ ok: true, value: page });
     for (const value of [
       { ...card("text", { text: "# Hi" }), width: "half" },
       links([{ uri: ORIGIN, label: "Site", description: "Mine" }], { title: "Elsewhere", layout: "grid" }),

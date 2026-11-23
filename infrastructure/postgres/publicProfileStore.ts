@@ -1,6 +1,6 @@
-// The public profile page's one read (book P3.12s; migration 0030). It reads only the two views 0030 grants `web`,
+// The public profile page's one read (book P3.12s; migration 0030). It reads only the views 0030 and 0042 grant `web`,
 // which show visible accounts alone, so every state that hides an account (deactivated, deleted, erased, delisted,
-// suspended) reads here as no row. The profile and its cards come back in one statement, so the page never shows
+// suspended) reads here as no row (the main page too, migration 0042). The profile, its page and its cards come back in one statement, so the page never shows
 // cards from a different moment than the profile. The member's Search and AI choices (migration 0034) come with it. Records come back as stored; domains/profile reads them again.
 // Each card is its own row, in page order, and the read stops at MAX_PAGE_BYTES of cards (migration 0040), so one
 // page never makes web hold more than that, whatever the index holds (review of #1911).
@@ -16,9 +16,11 @@ export type PublicProfile = {
   readonly handle: string | null;
   readonly cid: string;
   readonly record: unknown;
+  /** The member's main page record (ADR 0091), which lists the cards it shows; null when they have none. */
+  readonly page: unknown;
   /**
-   * The member's cards, at most MAX_SECTIONS_PER_ACCOUNT and MAX_PAGE_BYTES together: the ones the profile lists, in
-   * its order, then the rest by record key, cut where the next would pass the budget. `pageCards` sets the page's order.
+   * The member's cards, at most MAX_SECTIONS_PER_ACCOUNT and MAX_PAGE_BYTES together: the ones the main page lists,
+   * in its order, then the rest by record key, cut where the next would pass the budget. `pageCards` sets the page's order.
    */
   readonly sections: readonly { readonly key: string; readonly cid: string; readonly value: unknown }[];
   /** The member's Search and AI choices (ADR 0062); all off when they made none. */
@@ -49,6 +51,7 @@ type Row = {
   handle: string | null;
   cid: string;
   record: unknown;
+  page_record: unknown;
   rkey: string | null;
   search_engines: boolean | null;
   ai_search: boolean | null;
@@ -62,8 +65,10 @@ type Row = {
 // as the indexer stored them) stays within $3.
 const pageOf = (where: string) => `
   WITH page AS (
-    SELECT p.did, p.handle, p.cid, p.record, d.search_engines, d.ai_search, d.search_title, d.search_description
+    SELECT p.did, p.handle, p.cid, p.record, g.record AS page_record,
+           d.search_engines, d.ai_search, d.search_title, d.search_description
       FROM idx.public_profile p
+      LEFT JOIN idx.public_page g USING (did)
       LEFT JOIN app.discoverability d USING (did)
      WHERE ${where} LIMIT 2),
   cards AS (
@@ -72,23 +77,26 @@ const pageOf = (where: string) => `
       FROM idx.public_section s
      WHERE s.did IN (SELECT did FROM page) AND (SELECT count(*) FROM page) = 1
     WINDOW w AS (ORDER BY s.position NULLS LAST, s.rkey))
-  SELECT 0::bigint AS n, did, handle, cid, record, NULL::text AS rkey,
+  SELECT 0::bigint AS n, did, handle, cid, record, page_record, NULL::text AS rkey,
          search_engines, ai_search, search_title, search_description
     FROM page
   UNION ALL
-  SELECT n, NULL, NULL, cid, record, rkey, NULL, NULL, NULL, NULL
+  SELECT n, NULL, NULL, cid, record, NULL, rkey, NULL, NULL, NULL, NULL
     FROM cards WHERE n <= $2 AND total <= $3
   ORDER BY n`;
 const BY_DID = pageOf("p.did = $1");
 const BY_HANDLE = pageOf("p.handle = $1");
-// A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a record with no
-// visibility, or "public", counts, as domains/profile readProfileVisibility reads it (anything else fails closed).
-const PUBLIC_PAGE = `(NOT p.record ? 'visibility' OR p.record->'visibility' = '"public"'::jsonb)`;
+// A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a main page with no
+// visibility, or "public", or no main page at all (no choice made), counts, as domains/profile readPageVisibility
+// reads it (anything else fails closed). The choice is the main page's (ADR 0091).
+const PUBLIC_PAGE = `(g.record IS NULL OR NOT g.record ? 'visibility' OR g.record->'visibility' = '"public"'::jsonb)`;
 // The column is chosen from two fixed names, never from input.
 const LISTED = {
   searchEngines: `SELECT p.did, p.handle FROM idx.public_profile p JOIN app.discoverability d USING (did)
+                    LEFT JOIN idx.public_page g USING (did)
                    WHERE d.search_engines AND ${PUBLIC_PAGE} ORDER BY p.did LIMIT $1`,
   aiSearch: `SELECT p.did, p.handle FROM idx.public_profile p JOIN app.discoverability d USING (did)
+               LEFT JOIN idx.public_page g USING (did)
               WHERE d.ai_search AND ${PUBLIC_PAGE} ORDER BY p.did LIMIT $1`,
 } as const;
 
@@ -112,6 +120,7 @@ export function createPublicProfileStore(pool: Pool): PublicProfileStore {
           handle: row.handle,
           cid: row.cid,
           record: row.record,
+          page: row.page_record ?? null,
           sections: cards.map((r) => ({ key: r.rkey as string, cid: r.cid, value: r.record })),
           discoverability: {
             searchEngines: row.search_engines === true,

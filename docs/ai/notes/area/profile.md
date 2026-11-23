@@ -20,7 +20,8 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 
 **Files.**
 - `profile.ts`: the four profile fields (`PROFILE_FIELDS`), `parseProfileFields`, `readProfileRecord` and
-  `toProfileRecord` for the `sh.unset.profile` record, and `withCardOrder` for its `cards` list. `APP_LIMITS` sit
+  `toProfileRecord` for the `sh.unset.profile` record (identity only, ADR 0091). `page.ts`: the main page
+  `sh.unset.page/self` and its `cards` list (`withList`, `withCardListed`, `withCardUnlisted`, `withCardOrder`). `APP_LIMITS` sit
   under the lexicon's limits, which are permanent once published (ADR 0051 point 5).
 - One page layout (ADR 0077, superseding 0072's choice): apps/web draws `profile-header.svelte` above the cards, the
   avatar opening a native popover About panel (handle, details) with no hover, so it works the same on the
@@ -53,8 +54,11 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
 (`profile.*`, `card.*`), becomes a record validated against [[lexicons]] (`validateRecord`, `LIMITS`), and
 [[http]] writes it to the member's PDS through [[pds]]. Reads go the other way through the lenient readers.
 
-**Who sees the page (ADR 0078).** `visibility.ts` reads `visibility` from the record (absent public, unknown
-ownerOnly, fail closed) and `pageShownTo` is the one table of who sees what. The listing SQL in
-`infrastructure/postgres/publicProfileStore.ts` must read the field the same way; change both together.
+**Who sees the page (ADR 0078, ADR 0091).** `visibility.ts` reads `visibility` from the main page record
+`sh.unset.page/self`, not the profile (absent or no page public, unknown ownerOnly, fail closed), and `pageShownTo`
+is the one table of who sees what. `page.ts` `withVisibility` writes it; a first choice creates the page. The listing
+SQL in `infrastructure/postgres/publicProfileStore.ts` must read the field the same way; change both together. The
+index keeps a main page it refuses as `REFUSED_PAGE` (no cards, owner-only), never drops it, since a dropped page
+would read as public.
 
 **Links.** [[identity]], [[lexicons]], [[http]], [[pds]]; ADR 0037 and ADR 0051.
