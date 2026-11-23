@@ -27,9 +27,29 @@ const FILE_DIRECTIVES: Readonly<Record<string, string>> = {
   "font-src": "/fonts/",
 };
 
-/** SvelteKit's header with 'self' in the file directives replaced by `${origin}<path>`; every other source kept. */
-export function narrowed(header: string, origin: string): string {
-  return header
+const parts = (header: string): string[] =>
+  header
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+
+/**
+ * The header with the media origin added to `img-src` (book P2.19; ADR 0070 point 5): the owner's draft previews load
+ * from there through short-lived signed links, and from nowhere else. A header with no `img-src` gains one.
+ */
+export function withMediaImages(header: string, mediaOrigin: string): string {
+  const list = parts(header);
+  const at = list.findIndex((part) => part.split(/\s+/)[0] === "img-src");
+  if (at < 0) return [...list, `img-src ${mediaOrigin}`].join("; ");
+  return list.map((part, i) => (i === at ? `${part} ${mediaOrigin}` : part)).join("; ");
+}
+
+/**
+ * SvelteKit's header with 'self' in the file directives replaced by `${origin}<path>`, and the media origin in
+ * `img-src`; every other source kept.
+ */
+export function narrowed(header: string, origin: string, mediaOrigin: string): string {
+  return withMediaImages(header, mediaOrigin)
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part !== "")

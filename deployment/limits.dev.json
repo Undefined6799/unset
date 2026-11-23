@@ -8,6 +8,7 @@
   "pds-admin": { "mem_limit": "128m", "cpus": 0.25, "pids_limit": 32 },
   "indexer": { "mem_limit": "512m", "cpus": 0.5, "pids_limit": 64 },
   "review": { "mem_limit": "2g", "cpus": 2, "pids_limit": 128 },
+  "media": { "mem_limit": "256m", "cpus": 0.5, "pids_limit": 64 },
   "newt": { "mem_limit": "128m", "cpus": 0.5, "pids_limit": 64 },
   "pds-token-reader": { "mem_limit": "128m", "cpus": 0.25, "pids_limit": 32 }
 }

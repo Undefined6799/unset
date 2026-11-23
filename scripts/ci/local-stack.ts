@@ -41,6 +41,7 @@ export const SERVICES = [
   "pds-admin",
   "indexer",
   "review",
+  "media",
 ] as const;
 const ONE_SHOT = "migrate";
 
@@ -48,12 +49,19 @@ const ROOT = resolve(import.meta.dirname, "../..");
 const PARENT = dirname(ROOT);
 /** Web's key id in objects_s3, the literal compose gives web as OBJECT_STORE_ACCESS_ID (P2.21a). */
 export const WEB_STORE_KEY_ID = "unset-web";
+/** Media's key id in objects_s3, the literal compose gives media as OBJECT_STORE_ACCESS_ID (book P2.19). */
+export const MEDIA_STORE_KEY_ID = "unset-media";
 /**
  * The object store's identities (runbook "The object store's identities"), never an Admin one: the PDS's, with the
  * three actions docs/human/runbooks/pds-blobstore-move.md writes and tests/integration/storage/pds-key.test.ts proves
- * (P2.18p), and web's, on members' drafts only, as tests/integration/storage/object-store.test.ts proves (P2.21a).
+ * (P2.18p), web's, on members' drafts only, as tests/integration/storage/object-store.test.ts proves (P2.21a), and
+ * media's, which may only read those drafts (book P2.19).
  */
-export const objectsIdentities = (pds: { keyId: string; secret: string }, webSecret: string): string =>
+export const objectsIdentities = (
+  pds: { keyId: string; secret: string },
+  webSecret: string,
+  mediaSecret: string,
+): string =>
   JSON.stringify({
     identities: [
       {
@@ -70,6 +78,11 @@ export const objectsIdentities = (pds: { keyId: string; secret: string }, webSec
           "Tagging:unset-private/drafts/*",
           "List:unset-private",
         ],
+      },
+      {
+        name: "media",
+        credentials: [{ accessKey: MEDIA_STORE_KEY_ID, secretKey: mediaSecret }],
+        actions: ["Read:unset-private/drafts/*"],
       },
     ],
   });
@@ -215,8 +228,14 @@ function folders(): void {
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
   const webStoreSecret = randomBytes(32).toString("hex");
-  secret(1000, "objects_s3", objectsIdentities({ keyId: v.pdsStoreKeyId, secret: v.pdsStoreSecret }, webStoreSecret));
+  const mediaStoreSecret = randomBytes(32).toString("hex");
+  const pdsStore = { keyId: v.pdsStoreKeyId, secret: v.pdsStoreSecret };
+  secret(1000, "objects_s3", objectsIdentities(pdsStore, webStoreSecret, mediaStoreSecret));
   secret(65532, "objects_web", webStoreSecret);
+  secret(65532, "objects_media", mediaStoreSecret);
+  // P2.19: the draft link keys, never a seal key (web refuses to boot otherwise).
+  const draftKey = randomBytes(32).toString("base64");
+  secret(65532, "draft_url_keyring", JSON.stringify({ active: "d1", keys: { d1: draftKey } }));
   // pds-admin's copy of the PDS admin password is pds.env's, so its boot probe passes (runbook "pds-admin's files").
   secret(65532, "pds_admin_password", v.adminPassword);
   secret(65532, "pds_admin_keys", v.pdsAdminKeys);

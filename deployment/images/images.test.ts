@@ -22,6 +22,8 @@ const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
 const INDEXER_DOCKERFILE = "images/indexer.Dockerfile";
 /** The review process's image (ADR 0070 point 2.2). */
 const REVIEW_DOCKERFILE = "images/review.Dockerfile";
+/** The media process's image (book P2.19; ADR 0070 point 5). */
+const MEDIA_DOCKERFILE = "images/media.Dockerfile";
 /** Our gosu-free Postgres image (P1.29d). */
 const POSTGRES_DOCKERFILE = "images/postgres.Dockerfile";
 
@@ -2498,6 +2500,30 @@ describe("review image", () => {
     expect(libvips).toBeDefined();
     expect(source).toContain(`sharp-libvips-linux-x64-${libvips}.tgz`);
     expect(source).toContain(`lovell/sharp-libvips/tree/v${libvips}`);
+  });
+});
+
+// The media image (book P2.19): as the indexer, a long-running process that copies what `node interfaces/media/main.ts`
+// loads and nothing else. media.image.test.ts builds it and proves it boots to its config check.
+describe("media image", () => {
+  const media = runtimeStage(read(MEDIA_DOCKERFILE));
+
+  test("media_image_copies_only_its_paths", () => {
+    expect(fromImages(read(MEDIA_DOCKERFILE))).toEqual([pinnedNode, pinnedNode]);
+    expect(media.filter((line) => /^(?:COPY|ADD) /.test(line))).toEqual([
+      "COPY --from=deps /app/package.json /app/package.json",
+      "COPY --from=deps /app/node_modules /app/node_modules",
+      "COPY --from=deps /app/shared /app/shared",
+      "COPY --from=deps /app/domains/content /app/domains/content",
+      "COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard",
+      "COPY --from=deps /app/infrastructure/seal /app/infrastructure/seal",
+      "COPY --from=deps /app/infrastructure/storage /app/infrastructure/storage",
+      "COPY --from=deps /app/interfaces/media /app/interfaces/media",
+    ]);
+    expect(media).toContain('ENTRYPOINT ["node", "interfaces/media/main.ts"]');
+    expect(media).toContain("USER 65532:65532");
+    expect(media.filter((line) => /^(?:EXPOSE|CMD) /.test(line))).toEqual(["EXPOSE 8083"]);
+    expect(media.some((line) => line.startsWith("HEALTHCHECK ") && line.includes("/health"))).toBe(true);
   });
 });
 

@@ -4169,6 +4169,13 @@ second half, one pull request on Alex's line because `img-src` widens: web's min
 app CSP's `img-src` gaining `MEDIA_ORIGIN`, the `media` image, its compose service and store identity (read-only on
 `drafts/*`), the edge route for the media domain, and the runbook's new secret.
 
+P2.19, second half, split in three to stay reviewable (2026-11-20): (1) #1849, web's minting, `DRAFT_URL_KEYRING`
+(boot refuses a key shared with `SEAL_KEYRING`) and the CSP's `img-src`, on Alex's line; (2) the `media` image
+(`deployment/images/media.Dockerfile`, port 8083) and its compose service on the stacks built from source only
+(`SOURCE_ONLY_SERVICES`, like review), on `objects_media` alone with the store, as the identity `unset-media` whose one
+action is `Read:unset-private/drafts/*` (secret `objects_media`); (3) the edge site for the media domain, which needs
+the domain's DNS and Pangolin resource from Alex.
+
 Inputs: P2.18 object store and key convention (`media` gets **read-only** credentials on `drafts/` only); P1.08 header
   helpers (the `media` group); config shared by `web` and `media`: `DRAFT_URL_KEYS` (secret, JSON `[{kid, key: base64 ≥
   32 bytes}]`), `DRAFT_URL_ACTIVE_KID`; `web`: `MEDIA_ORIGIN`; `media`: `OBJECT_STORE_URL`, `OBJECT_STORE_MEDIA_KEY_ID`,

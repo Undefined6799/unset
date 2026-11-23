@@ -68,3 +68,11 @@ test("review_image_copies_every_workspace_the_process_reaches", () => {
   const missing = [...needed].filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
   expect(missing).toEqual([]);
 });
+
+test("media_image_copies_every_workspace_the_process_reaches", () => {
+  const copied = copiedBy("deployment/images/media.Dockerfile");
+  const needed = runtimeClosure("interfaces/media", workspaceFolders());
+  expect(needed.size).toBeGreaterThan(1);
+  const missing = [...needed].filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
+  expect(missing).toEqual([]);
+});

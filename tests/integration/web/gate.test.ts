@@ -181,7 +181,8 @@ describe("csp", () => {
   test("app_page_has_the_adr_0054_policy_with_path_sources", async () => {
     const csp = (await web.fetch("/test-routes/form-post")).headers.get("content-security-policy") ?? "";
     expect(csp.replace(/'sha256-[A-Za-z0-9+/=]+'/, "'sha256-<startup script>'")).toBe(
-      "default-src 'none'; connect-src 'self'; font-src https://unset.test/fonts/; img-src 'self'; " +
+      // img-src names the media origin too, for the five-minute draft previews (book P2.19; ADR 0070 point 5).
+      "default-src 'none'; connect-src 'self'; font-src https://unset.test/fonts/; img-src 'self' https://unset-media.test; " +
         "manifest-src 'self'; object-src 'none'; script-src https://unset.test/_app/ 'sha256-<startup script>'; " +
         "style-src https://unset.test/_app/; style-src-attr 'unsafe-hashes' " +
         "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +

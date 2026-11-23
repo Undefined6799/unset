@@ -211,6 +211,8 @@ services:
       OBJECT_STORE_BUCKET: unset-private
       OBJECT_STORE_ACCESS_ID: unset-web
       OBJECT_STORE_SECRET_FILE: /run/secrets/objects_web
+      # The draft link keys (book P2.19): web signs the owner's preview links, media checks them; no seal key among them.
+      DRAFT_URL_KEYRING_FILE: /run/secrets/draft_url_keyring
       # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
       # page says noindex and robots.txt names no member. A literal, so turning it on is a reviewed change.
       SEARCH_LISTING: "off"
@@ -223,7 +225,7 @@ services:
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web, draft_url_keyring]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -252,10 +254,44 @@ services:
     volumes:
       - objectsdata:/data
     secrets: [objects_s3]
-    networks: [objects, objects_pds, objects_web]
+    networks: [objects, objects_pds, objects_web, objects_media]
     mem_limit: 512m
     cpus: 0.5
     pids_limit: 256
+    restart: unless-stopped
+
+  # The media process (book P2.19; ADR 0070 point 5): answers a signed draft preview link with the one object it names.
+  # Built from the checkout only, until its image is locked for production (local-only.ts SOURCE_ONLY_SERVICES). It
+  # reads the store as its own identity, which may only read unset-private/drafts/* (runbook "The object store's
+  # identities"), on objects_media, internal and shared only with the store. It holds no database role and no route
+  # out. The edge's site for the media domain comes with the step that serves previews.
+  media:
+    build:
+      context: ..
+      dockerfile: deployment/images/media.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: media
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8083"
+      DRAFT_URL_KEYRING_FILE: /run/secrets/draft_url_keyring
+      OBJECT_STORE_URL: http://objects:8333
+      OBJECT_STORE_BUCKET: unset-private
+      OBJECT_STORE_ACCESS_ID: unset-media
+      OBJECT_STORE_SECRET_FILE: /run/secrets/objects_media
+      NODE_OPTIONS: --max-old-space-size=192
+    # Each file owned by 65532 (docs/human/runbooks/dev-stack-secrets.md).
+    secrets: [draft_url_keyring, objects_media]
+    networks: [objects_media]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
     restart: unless-stopped
 
   # The review process (P2.21a; ADR 0070 point 2.2): decodes members' pictures in killable child processes and sends
@@ -406,6 +442,9 @@ networks:
   # Web's way to the store's S3 port and nothing else (P2.21a): internal, the two of them only.
   objects_web:
     internal: true
+  # Media's way to the store's S3 port and nothing else (book P2.19): internal, the two of them only.
+  objects_media:
+    internal: true
   # web's way to pds-admin (P2.10) and nothing else: internal, web and pds-admin only.
   pds_admin:
     internal: true
@@ -468,6 +507,11 @@ secrets:
   # Web's secret key for its identity in objects_s3 (P2.21a): 64 hex characters; read by web (uid 65532) only.
   objects_web:
     file: ../../unset-dev-secrets/objects_web
+  draft_url_keyring:
+    file: ../../unset-dev-secrets/draft_url_keyring
+  # Media's secret key for its read-only identity in objects_s3 (book P2.19): 64 hex characters; read by media only.
+  objects_media:
+    file: ../../unset-dev-secrets/objects_media
   # pds-admin's files (P2.09e), read by 65532 only: the PDS admin password, web's public key, the request log's key.
   pds_admin_password:
     file: ../../unset-dev-secrets/pds_admin_password
