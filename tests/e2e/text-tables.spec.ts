@@ -111,3 +111,56 @@ test("a_row_handle_adds_and_deletes_rows_and_never_the_header_row", async ({ pag
   expect(await markdown(page, word)).toBe(`${word} start\n\n| a | b |\n| - | - |\n| 1 | 2 |\n| | |`);
   await discardAndRemove(page, word);
 });
+
+/** Drags `handle` to the point (x, y) in small steps, as a hand does, so the drop line follows it. */
+async function drag(page: Page, handle: { x: number; y: number; width: number; height: number }, x: number, y: number) {
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x, y, { steps: 8 });
+}
+
+// Decision 7: dragging a handle moves its column or row, with a line where it lands; the header row is never moved
+// and nothing lands above it. The move is preset-gfm 7.23.0's moveRowCommand / moveColCommand (prosemirror-tables
+// 1.8.5 moveTableRow / moveTableColumn), so the words stay plain GFM.
+test("dragging_a_handle_moves_its_row_or_column_and_never_above_the_header", async ({ page }) => {
+  const word = `drag${Date.now()}`;
+  const { card, editor } = await tableCard(page, word);
+  const row = card.getByRole("button", { name: "Row options" });
+  const column = card.getByRole("button", { name: "Column options" });
+  const line = card.locator("[data-table-drop]");
+  // The last row's handle, dragged up over the first data row's top half: it lands above it, under the header.
+  await editor.getByRole("cell", { name: "3", exact: true }).hover();
+  const first = await editor.getByRole("cell", { name: "1", exact: true }).boundingBox();
+  const rowHandle = await row.boundingBox();
+  if (first === null || rowHandle === null) throw new Error("no box");
+  await drag(page, rowHandle, first.x + 4, first.y + 2);
+  await expect(line).toBeVisible();
+  await page.mouse.up();
+  await expect(line).toBeHidden();
+  await expect(editor.locator("tr").nth(1)).toHaveText("34");
+  // Dragged on up over the header: it still lands under it.
+  await editor.getByRole("cell", { name: "1", exact: true }).hover();
+  const head = await editor.getByRole("columnheader", { name: "a" }).boundingBox();
+  const again = await row.boundingBox();
+  if (head === null || again === null) throw new Error("no box");
+  await drag(page, again, head.x + 4, head.y + 2);
+  await page.mouse.up();
+  await expect(editor.locator("tr").first()).toHaveText("ab");
+  await expect(editor.locator("tr").nth(1)).toHaveText("12");
+  // The second column's handle, dragged over the first column's left half: the columns swap.
+  await editor.getByRole("cell", { name: "2", exact: true }).hover();
+  const left = await editor.getByRole("columnheader", { name: "a" }).boundingBox();
+  const columnHandle = await column.boundingBox();
+  if (left === null || columnHandle === null) throw new Error("no box");
+  await drag(page, columnHandle, left.x + 2, left.y + left.height / 2);
+  await expect(line).toBeVisible();
+  await page.mouse.up();
+  await expect(editor.locator("tr").first()).toHaveText("ba");
+  // A press with no drag still opens the menu.
+  await editor.getByRole("cell", { name: "2", exact: true }).hover();
+  await row.click();
+  await expect(page.getByRole("menu", { name: "Row options" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(await markdown(page, word)).toBe(`${word} start\n\n| b | a |\n| - | - |\n| 2 | 1 |\n| 4 | 3 |`);
+  await discardAndRemove(page, word);
+});
