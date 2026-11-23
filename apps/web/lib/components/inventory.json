@@ -52,6 +52,18 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
+    "badge": {
+      "badge.svelte": {
+        "sha256": "1f6bdb721d559e445a48041fde6afe394b6e44adadcd612dff706b9038d2bcef",
+        "registrySha256": "f4b320ce68d01279f43c72eb27ef73cf0a536fc9ae315c7f1009425a780bcce6",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "index.ts": {
+        "sha256": "9089779c564afa9ac17e196c5654bc5ca790a29d0d8ffd727c7293d3391faadb",
+        "registrySha256": "1dc9eba432869188db370b8e984ca8ff97430c609746a8274a0edecc0d55b765",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
     "button": {
       "button.svelte": {
         "sha256": "77cec1004d4c5b41e947029f8533db673ab7478d4a810cb697dfa479a5ea2be4",

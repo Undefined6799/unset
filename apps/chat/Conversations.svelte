@@ -30,6 +30,7 @@ import type { DockMode } from "./core/dock.ts";
 import DockControls from "./DockControls.svelte";
 import { Icon } from "./lib/components/icon/index.js";
 import * as Alert from "./lib/components/ui/alert/index.js";
+import { Badge } from "./lib/components/ui/badge/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
 import PersonAvatar from "./PersonAvatar.svelte";
@@ -131,9 +132,9 @@ function leaveDraft() {
     <PersonAvatar handle={openItem?.with.name ?? ""} class="size-full text-xl" />
     <span class="sr-only">Open the chat with {openItem?.with.name ?? "them"}</span>
     {#if (openItem?.unread ?? 0) > 0}
-      <span class="bg-background text-foreground absolute bottom-1 rounded-full px-1.5 text-xs" data-unread={openItem?.unread}>
+      <Badge variant="outline" class="bg-background absolute bottom-1" data-unread={openItem?.unread}>
         {openItem?.unread}<span class="sr-only"> new</span>
-      </span>
+      </Badge>
     {/if}
   </button>
 {:else if open !== null && dock?.mode !== "list"}
@@ -216,9 +217,9 @@ function leaveDraft() {
                 <PersonName chatId={talk.with.id} handle={talk.with.name} {names} />
               </span>
               {#if talk.unread > 0}
-                <span class="bg-primary text-primary-foreground rounded-full px-2 text-xs" data-unread={talk.unread}>
+                <Badge data-unread={talk.unread}>
                   {talk.unread}<span class="sr-only"> unread</span>
-                </span>
+                </Badge>
               {/if}
             </Button>
           </li>

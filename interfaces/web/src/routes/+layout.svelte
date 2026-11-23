@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
 import DismissAll from "@unset/apps-web/lib/components/notifications/dismiss-all.svelte";
 import NotificationList from "@unset/apps-web/lib/components/notifications/notification-list.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
+import { Badge } from "@unset/apps-web/lib/components/ui/badge";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
 import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
@@ -402,9 +403,9 @@ $effect(() => {
 });
 const panelButtons = $derived(chat === undefined ? PANEL_BUTTONS : PANEL_BUTTONS.filter((b) => b.id !== MESSAGES));
 // The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
-// drawn as a small badge.
+// drawn as shadcn's stock Badge, made small and pinned to the button's corner.
 const badge =
-  "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.6875rem] leading-4.5 font-semibold text-primary-foreground";
+  "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 px-1 py-0 text-[0.6875rem] leading-4 font-semibold";
 const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
@@ -582,7 +583,7 @@ const row =
             aria-expanded={dockMade ? dockShown : undefined}
           >
             <Icon name="comment" size={20} label={T.chat(unread)} />
-            {#if unread > 0}<span aria-hidden="true" class={badge}>{N.badge(unread)}</span>{/if}
+            {#if unread > 0}<Badge aria-hidden="true" class={badge}>{N.badge(unread)}</Badge>{/if}
           </Button>
         {/if}
         {#each panelButtons as button (button.id)}
@@ -594,7 +595,7 @@ const row =
             class="{control} relative max-sm:hidden"
           >
             <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
-            {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+            {#if button.id === NOTIFICATIONS && waiting > 0}<Badge aria-hidden="true" class={badge}>{N.badge(waiting)}</Badge>{/if}
           </Button>
         {/each}
         <Button
@@ -605,7 +606,7 @@ const row =
           class="{control} relative sm:hidden"
         >
           <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
-          {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+          {#if waiting > 0}<Badge aria-hidden="true" class={badge}>{N.badge(waiting)}</Badge>{/if}
         </Button>
         {#if account !== undefined}
           <Button
