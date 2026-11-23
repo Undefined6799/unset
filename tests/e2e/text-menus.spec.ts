@@ -670,6 +670,31 @@ test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ pag
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #2003 at fcac4c8: the keys move a code block too with the caret in its code, which CodeMirror now holds,
+// and the caret stays there.
+test("the_move_keys_move_a_code_block_with_the_caret_in_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `codemoves${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} above\n\n\`\`\`\nx = 1\n\`\`\``);
+  const blocks = () =>
+    editor.evaluate((root) => {
+      // The spec's types have no DOM, so the browser's own nodes are named by their shape.
+      type Child = { classList: { contains: (name: string) => boolean }; textContent: string | null };
+      const children = (root as unknown as { children: Iterable<Child> }).children;
+      return Array.from(children, (child) => (child.classList.contains("code-block") ? "code" : child.textContent));
+    });
+  await editor.locator(".cm-content").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect.poll(blocks).toEqual(["code", `${word} above`]);
+  await page.keyboard.type("y");
+  await expect(editor.locator(".cm-content")).toHaveText("x = 1y");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+  await expect.poll(blocks).toEqual([`${word} above`, "code"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 // Staging, 2026-11-21: pressing the grip gave its paragraph a class, so the page's margin for a bare paragraph (main
 // :where(p):not([class])) went and the words jumped up 24 px under the pointer; dropped on the lower half of the last
 // block, the pointer was then below the editor and nothing moved. The tester's gesture: the first block, pressed and

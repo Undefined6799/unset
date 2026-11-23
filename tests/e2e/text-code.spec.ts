@@ -151,3 +151,20 @@ test("a_script_pasted_into_a_code_block_stays_text", async ({ page }) => {
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
   await deleteNewest(page);
 });
+
+// Codex on #2003 at fcac4c8: the language field sits in the card's form, so Enter there saved the card; it only sets the
+// language and goes back to the code.
+test("enter_in_the_language_field_sets_the_language_and_keeps_the_card_open", async ({ page }) => {
+  const watched = watch(page);
+  const card = await openStored(page, "```\nx = 1\n```");
+  const { dialog, editor } = await openEditor(page, card);
+  const language = editor.getByRole("textbox", { name: "Code language" });
+  await language.fill("py");
+  await language.press("Enter");
+  await expect(postedText(dialog)).toHaveValue("```py\nx = 1\n```");
+  await expect(dialog).toBeVisible();
+  await expect(editor.locator(".cm-content")).toBeFocused();
+  await page.keyboard.press("Escape");
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
