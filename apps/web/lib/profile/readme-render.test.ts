@@ -50,8 +50,11 @@ describe("Readme", () => {
   test("struck words are a del, and a task's box is shown ticked or not and cannot be changed", () => {
     expect(html("~~gone~~ kept")).toBe("<p><del>gone</del> kept</p>");
     expect(html("- [x] done\n- [ ] open\n- plain")).toBe(
-      '<ul><li><input type="checkbox" checked="" disabled=""/>done</li><li><input type="checkbox" disabled=""/>open</li><li>plain</li></ul>',
+      '<ul><li><input type="checkbox" checked="" aria-label="done" disabled=""/>done</li><li><input type="checkbox" aria-label="open" disabled=""/>open</li><li>plain</li></ul>',
     );
+    // A task with no words gets no empty name: an empty aria-label names nothing.
+    // A task whose words are only spaces gets no empty name (review of #2006): an empty aria-label names nothing.
+    expect(html("- [ ] ``   ``")).toBe('<ul><li><input type="checkbox" disabled=""/><code>   </code></li></ul>');
   });
 
   test("a table has a header row and is aligned per column", () => {
