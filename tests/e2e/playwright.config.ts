@@ -5,12 +5,17 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+import { STOP_ALL_MS } from "../support/postgres.ts";
 import { INNER, PROD_ORIGIN, PROXY } from "./pages.ts";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const chrome = { ...devices["Desktop Chrome"] };
 const firefox = { ...devices["Desktop Firefox"] };
 const webkit = { ...devices["Desktop Safari"] };
+// Each server removes its Postgres container as it exits on SIGTERM (fixtures/servers.ts). Without gracefulShutdown
+// Playwright 1.64.1 SIGKILLs the process group (types/test.d.ts, TestConfigWebServer gracefulShutdown), no exit
+// listener runs and the container stays; the timeout gives the removal its full budget before the SIGKILL.
+const gracefulShutdown = { signal: "SIGTERM", timeout: STOP_ALL_MS } as const;
 
 export default defineConfig({
   testDir: ".",
@@ -52,6 +57,7 @@ export default defineConfig({
       // tests/support/postgres.ts waits up to 90s for init. The book's 30s health timeout is shorter than that.
       timeout: 180_000,
       reuseExistingServer: true,
+      gracefulShutdown,
     },
     {
       command: "node tests/e2e/fixtures/servers.ts test",
@@ -59,6 +65,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${INNER.test}/health`,
       timeout: 180_000,
       reuseExistingServer: true,
+      gracefulShutdown,
     },
   ],
 });
