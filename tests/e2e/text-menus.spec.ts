@@ -442,10 +442,11 @@ test("the_dots_turn_a_heading_or_code_block_into_a_quote_or_list", async ({ page
   await menu.getByRole("option", { name: "Quote" }).click();
   await expect(editor.locator("h3")).toHaveCount(0);
   await expect(editor.locator("blockquote p")).toHaveText(["a title"]);
-  await editor.locator("pre").hover();
+  // A code block is drawn by CodeMirror (code-block.ts), in an element of its own.
+  await editor.locator(".code-block").hover();
   await grip.click();
   await menu.getByRole("option", { name: "Bullet list" }).click();
-  await expect(editor.locator("pre")).toHaveCount(0);
+  await expect(editor.locator(".code-block")).toHaveCount(0);
   await expect(editor.locator("ul li")).toHaveText(["some code"]);
   await discardAndRemove(page, word);
 });
@@ -618,14 +619,15 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await page.keyboard.type("y = 2");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
-  await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
+  // CodeMirror draws each line of a code block as an element of its own (code-block.ts).
+  await expect(editor.locator(".cm-line")).toHaveText(["x = 1", "y = 2"]);
   await expect(blocks.last()).toHaveText("after");
   // Shift+Enter after three backticks too.
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("```");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("z");
-  await expect(editor.locator("pre")).toHaveText(["x = 1\ny = 2", "z"]);
+  await expect(editor.locator(".code-block .cm-content")).toHaveText(["x = 1y = 2", "z"]);
   await page.keyboard.press("Shift+Enter");
   // In the middle of a point, Shift+Enter makes the words after the caret a block of their own between the two
   // halves of the list.
@@ -706,6 +708,31 @@ test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ pag
   // At the top there is nowhere to go, and nothing changes.
   await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
   await expect(editor.locator("li")).toHaveText(["second item", "first item"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Codex on #2003 at fcac4c8: the keys move a code block too with the caret in its code, which CodeMirror now holds,
+// and the caret stays there.
+test("the_move_keys_move_a_code_block_with_the_caret_in_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `codemoves${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} above\n\n\`\`\`\nx = 1\n\`\`\``);
+  const blocks = () =>
+    editor.evaluate((root) => {
+      // The spec's types have no DOM, so the browser's own nodes are named by their shape.
+      type Child = { classList: { contains: (name: string) => boolean }; textContent: string | null };
+      const children = (root as unknown as { children: Iterable<Child> }).children;
+      return Array.from(children, (child) => (child.classList.contains("code-block") ? "code" : child.textContent));
+    });
+  await editor.locator(".cm-content").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect.poll(blocks).toEqual(["code", `${word} above`]);
+  await page.keyboard.type("y");
+  await expect(editor.locator(".cm-content")).toHaveText("x = 1y");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+  await expect.poll(blocks).toEqual([`${word} above`, "code"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
@@ -807,7 +834,7 @@ test("the_bar_skips_a_space_the_menu_marks_its_row_no_ring_and_an_arrow_leaves_a
   await page.keyboard.press("ArrowDown");
   await page.keyboard.type("after");
   await expect(editor.locator(":scope > *").last()).toHaveText("after");
-  await expect(editor.locator("pre")).toHaveText("x = 1");
+  await expect(editor.locator(".cm-line")).toHaveText(["x = 1"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });

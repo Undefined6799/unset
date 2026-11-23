@@ -11,7 +11,7 @@ paceWrites(test);
 /** The in-place editor of the Text card that holds `word`, once the page has loaded it. */
 async function editorHolding(page: Page, word: string) {
   const card = page.locator('[data-slot="card"]', { hasText: word });
-  const editor = card.locator("[data-text-in-place] [contenteditable]");
+  const editor = card.locator("[data-text-in-place] .ProseMirror");
   await expect(editor).toHaveAttribute("contenteditable", "true");
   return { card, editor };
 }
@@ -426,7 +426,7 @@ test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }
   expect((await openPage(held, OWN_PAGE))?.status()).toBe(200);
   // A press before the page's own script runs is the browser's alone; from the moment it runs, the card listens.
   await expect(held.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
-  await expect(held.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  await expect(held.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
   const card = held.locator('[data-slot="card"]', { hasText: word });
   await card.getByText(`${word} start`).click();
   await held.keyboard.type("Q");
@@ -522,7 +522,7 @@ test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_d
   await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
   clicked.resolve();
   await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
-  await expect(cold.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  await expect(cold.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
   await cold.keyboard.type("EARLY");
   typed.resolve();
   const { editor } = await editorHolding(cold, word);
@@ -672,17 +672,18 @@ for (const { name, within, has, piece, at, up, expected, text: words } of [
     await cold.mouse.click(point.x, point.y);
     clicked.resolve();
     await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
-    await expect(cold.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+    await expect(cold.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
     await cold.keyboard.type("EARLY");
     typed.resolve();
     const { editor } = await editorHolding(cold, word);
-    await expect(editor).toBeFocused();
-    // As drawn, so the side of a line break shows (innerText writes it as a new line).
+    // The caret is in the editor: in its own text, or in a code block's CodeMirror, which takes the focus inside it.
     await expect
-      .poll(() =>
-        editor.locator(within, { hasText: has }).evaluate((element) => (element as { innerText: string }).innerText),
-      )
-      .toBe(expected);
+      .poll(() => editor.evaluate((element) => element.contains(element.ownerDocument.activeElement)))
+      .toBe(true);
+    // As drawn, so the side of a line break shows (innerText writes it as a new line). The editor draws a code block's
+    // text in CodeMirror (code-block.ts), the page in a pre.
+    const drawn = editor.locator(within === "pre" ? ".cm-content" : within, { hasText: has });
+    await expect.poll(() => drawn.evaluate((element) => (element as { innerText: string }).innerText)).toBe(expected);
     await bar(cold).getByRole("button", { name: "Discard" }).click();
     await removeCard(cold, word);
     await closeHeld(cold);
@@ -695,7 +696,7 @@ async function openHeld(page: Page): Promise<Page> {
   // Not openOwnPage: its wait for a quiet network would wait out the held script.
   expect((await openPage(held, OWN_PAGE))?.status()).toBe(200);
   await expect(held.locator("[data-text-in-place]:not([data-listening])")).toHaveCount(0);
-  await expect(held.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  await expect(held.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
   return held;
 }
 
