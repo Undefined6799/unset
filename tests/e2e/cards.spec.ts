@@ -14,6 +14,7 @@ import {
   OWN_PAGE,
   paceWrites,
   postedText,
+  spendsWrites,
   writeText,
 } from "./cards.ts";
 import { openPage } from "./observe.ts";
@@ -549,6 +550,7 @@ test("a_card_is_dragged_into_place_on_a_large_screen", async ({ browser, browser
     await expect(titles).toHaveText(["Gamma", "Alpha", "Beta"]);
     // The same cards on a touch phone do not drag; their menu reorders them with a tap.
     const context = await browser.newContext(phoneContext(browserName, { width: 390, height: 900 }));
+    spendsWrites(context);
     try {
       const phonePage = await context.newPage();
       expect((await openPage(phonePage, OWN_PAGE))?.status()).toBe(200);

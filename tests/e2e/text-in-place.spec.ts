@@ -3,7 +3,7 @@
 // when the page opens, never merged on their own; Discard throws them away. All under the app's real CSP. The card
 // added is deleted again.
 import { expect, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE, paceWrites } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites, spendsWrites } from "./cards.ts";
 import { addPageCookies, openPage, pageNoise, watch } from "./observe.ts";
 
 paceWrites(test);
@@ -390,7 +390,9 @@ async function untilStyled(page: Page) {
 async function freshPage(page: Page): Promise<Page> {
   const browser = page.context().browser();
   if (browser === null) throw new Error("no browser");
-  return (await browser.newContext()).newPage();
+  const context = await browser.newContext();
+  spendsWrites(context);
+  return context.newPage();
 }
 
 /**

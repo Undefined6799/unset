@@ -1,7 +1,7 @@
 // What the card specs share: the member's own page, and adding and deleting cards. The cards a spec adds are deleted
 // again, so the member page is as the other specs expect it. Card writes count against the member's 30 a minute
 // (interfaces/web/src/lib/server/limits.ts), so specs keep their writes few.
-import { expect, type Locator, type Page, type test } from "@playwright/test";
+import { type BrowserContext, expect, type Locator, type Page, type test } from "@playwright/test";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
 
 export const OWN_PAGE: PageFixture = {
@@ -85,10 +85,20 @@ export function paceWrites(on: typeof test): void {
   on.beforeEach(async ({ page }) => {
     const short = BUDGET.perTest - refill();
     if (short > 0) await page.waitForTimeout(Math.ceil((short / BUDGET.perSecond) * 1000));
-    page.context().on("request", (request) => {
-      if (request.method() !== "POST") return;
-      refill();
-      budget.tokens -= 1;
-    });
+    spendsWrites(page.context());
+  });
+}
+
+/**
+ * Counts the POSTs a browser context sends against the member's write budget. paceWrites counts the test's own page;
+ * a test that opens another context as the member (browser.newContext) counts it here too, or its writes go unseen
+ * and a later test meets a 429 (CI #1966 at debb665: addCard refused after the fresh-context tests in
+ * text-in-place.spec.ts; Codex on #1966).
+ */
+export function spendsWrites(context: BrowserContext): void {
+  context.on("request", (request) => {
+    if (request.method() !== "POST") return;
+    refill();
+    budget.tokens -= 1;
   });
 }
