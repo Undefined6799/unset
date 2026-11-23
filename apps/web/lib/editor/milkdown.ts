@@ -31,6 +31,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, $remark, getMarkdown } from "@milkdown/utils";
+import { codeBlockView } from "./code-block.ts";
 import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
@@ -622,6 +623,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .use(dropLine)
     .use(gapCaret)
     .use(enterKeys)
+    .use(codeBlockView)
     .create();
   return {
     run: (command) =>
