@@ -266,3 +266,29 @@ test("a_press_in_the_words_closes_a_table_menu_and_keeps_the_caret", async ({ pa
   await expect(editor.getByRole("cell", { name: "3x", exact: true })).toBeVisible();
   await discardAndRemove(page, word);
 });
+
+// Codex on #1992: after the last column is deleted, the handles move to the column now last, so its menu works on a
+// column that is there, with no fresh hover needed. The menu is driven by its keys, so the pointer stays over the card
+// (a pointer that leaves it hides the tools, decision 10).
+test("deleting_the_last_column_moves_the_handles_to_the_one_now_last", async ({ page }) => {
+  const word = `lastcolumn${Date.now()}`;
+  const { card, editor } = await tableCard(page, word);
+  const column = card.getByRole("button", { name: "Column options" });
+  const menu = page.getByRole("menu", { name: "Column options" });
+  await editor.getByRole("cell", { name: "2", exact: true }).hover();
+  await column.click();
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(menu.getByRole("menuitem", { name: "Delete column" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(editor.getByRole("columnheader")).toHaveCount(1);
+  await expect(column).toBeVisible();
+  const head = await editor.getByRole("columnheader", { name: "a" }).boundingBox();
+  const handle = await column.boundingBox();
+  if (head === null || handle === null) throw new Error("no box");
+  expect(Math.abs(handle.x + handle.width / 2 - (head.x + head.width / 2))).toBeLessThanOrEqual(2);
+  await column.click();
+  await menu.getByRole("menuitem", { name: "Align right" }).click();
+  await expect(editor.getByRole("columnheader", { name: "a" })).toHaveClass(/text-end/);
+  await discardAndRemove(page, word);
+});
