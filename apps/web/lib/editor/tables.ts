@@ -18,6 +18,7 @@ import {
 } from "@milkdown/preset-gfm";
 import type { Node as ProseNode, ResolvedPos } from "@milkdown/prose/model";
 import { Plugin, PluginKey } from "@milkdown/prose/state";
+import type { Mappable } from "@milkdown/prose/transform";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
 
@@ -79,6 +80,13 @@ function cellUnder(view: EditorView, x: number, y: number): Cell | null {
   const found = view.posAtCoords({ left: x, top: y });
   if (found === null || found.inside < 0) return null;
   return cellAt(view.state.doc.resolve(found.inside));
+}
+
+/** A cell's table moved by a change, or null when the change deleted it. */
+function mapCell(cell: Cell | null, mapping: Mappable): Cell | null {
+  if (cell === null) return null;
+  const moved = mapping.mapResult(cell.table, 1);
+  return moved.deleted ? null : { ...cell, table: moved.pos };
 }
 
 const sameCell = (a: Cell | null, b: Cell | null) =>
@@ -163,12 +171,15 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
   let shown: Cell | null = null;
   /** A press on a handle that moved far enough to be a drag; its click then opens no menu. */
   let dragged = false;
+  /** The caret's cell, once Alt+F10 has shown its handles; until the caret or the pointer leaves it. */
+  let keyed: Cell | null = null;
 
   const update = (view: EditorView) => {
     // On a screen with no pointer that hovers, the caret's cell: a touch puts the caret there.
     const touch = window.matchMedia("(hover: none)").matches;
     const caret = touch ? cellAt(view.state.selection.$from) : null;
-    const cell = open !== null ? shown : (hovered ?? caret);
+    if (keyed !== null && view.hasFocus() && !sameCell(cellAt(view.state.selection.$from), keyed)) keyed = null;
+    const cell = open !== null ? shown : (hovered ?? keyed ?? caret);
     const node = cell === null ? null : view.state.doc.nodeAt(cell.table);
     if (cell === null || node === null || node.type.name !== "table" || cell.row >= node.childCount) {
       shown = null;
@@ -195,6 +206,8 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
       const cell = shown;
       const table = cell === null ? null : view.nodeDOM(cell.table);
       if (event.button !== 0 || cell === null || !(table instanceof HTMLElement) || !view.editable) return;
+      // The open menu sits inside the handle: a press on one of its items is that item's, never a drag.
+      if ((event.target as Element).closest("[role='menu']") !== null) return;
       const from = which === "row" ? cell.row : cell.column;
       if (which === "row" && from === 0) return;
       let to = from;
@@ -205,11 +218,15 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
         to = landing(table, which, next.clientX, next.clientY);
         drawLine(table, which, from, to, options.dropLine);
       };
-      const up = () => {
+      const stop = () => {
         handle.removeEventListener("pointermove", move);
         handle.removeEventListener("pointerup", up);
-        handle.removeEventListener("pointercancel", up);
+        handle.removeEventListener("pointercancel", stop);
         options.dropLine.dataset.show = "false";
+      };
+      // A drag the browser cancels (a touch it takes for scrolling) moves nothing.
+      const up = () => {
+        stop();
         if (!moving) return;
         dragged = true;
         // The click that follows this pointerup comes first; one that never comes (the pointer left the button) must
@@ -220,7 +237,7 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
       (event.target as Element).setPointerCapture?.(event.pointerId);
       handle.addEventListener("pointermove", move);
       handle.addEventListener("pointerup", up);
-      handle.addEventListener("pointercancel", up);
+      handle.addEventListener("pointercancel", stop);
     };
     handle.addEventListener("pointerdown", down);
     return () => handle.removeEventListener("pointerdown", down);
@@ -244,6 +261,33 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
       () =>
         new Plugin({
           key: new PluginKey("UNSET_TABLE_TOOLS"),
+          // The cells the tools hold follow the words before them; a table the change removed holds none.
+          state: {
+            init: () => null,
+            apply: (tr) => {
+              if (tr.docChanged) {
+                hovered = mapCell(hovered, tr.mapping);
+                shown = mapCell(shown, tr.mapping);
+                keyed = mapCell(keyed, tr.mapping);
+              }
+              return null;
+            },
+          },
+          // Alt+F10 in a cell shows its handles and puts the focus on the column's, so a keyboard reaches the menus a
+          // pointer opens; Tab there goes on to the row's (Alt+F10 reaches an editor's toolbar, as in CKEditor 5:
+          // https://ckeditor.com/docs/ckeditor5/latest/features/accessibility.html).
+          props: {
+            handleKeyDown: (view, event) => {
+              if (event.key !== "F10" || !event.altKey) return false;
+              const cell = cellAt(view.state.selection.$from);
+              if (cell === null) return false;
+              keyed = cell;
+              hovered = null;
+              update(view);
+              options.columnHandle.querySelector("button")?.focus();
+              return true;
+            },
+          },
           view: (view) => {
             const moved = (event: PointerEvent) => {
               if (!view.dom.contains(event.target as Node)) return;
@@ -254,6 +298,7 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
             };
             const left = () => {
               hovered = null;
+              keyed = null;
               open = null;
               update(view);
             };

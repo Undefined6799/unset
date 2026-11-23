@@ -83,6 +83,7 @@ const itemClass =
     type="button"
     class="{control} h-4 w-7"
     aria-label={TEXT_MENUS.table.column}
+    aria-keyshortcuts="Alt+F10"
     aria-haspopup="menu"
     aria-expanded={shown?.open === "column"}
     onclick={() => ontoggle("column")}><Icon name="grip" size={16} class="rotate-90" /></button
