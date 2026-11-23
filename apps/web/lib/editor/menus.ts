@@ -711,9 +711,26 @@ function handleView(ctx: Ctx, options: MenusOptions, { openAt, openChange }: Ope
     if (event.clientX >= card.left || event.clientX < card.left - reach) return;
     ctx.get(blockServiceInstance.key).mousemoveCallback(view, event);
   };
+  // Pressed, the dots stay with their block until let go. plugin-block 7.23.0 moves the handle to the block under any
+  // pointer move (lib/index.js, mousemoveCallback), pressed or not, and Chromium begins a drag on the first move after
+  // the press, from what is under the press then: a pointer moved straight from the dots onto other words took the
+  // handle away first and nothing was dragged (CI on #1999 at c2bd3bb). Its own pointermove and `side` both call this.
+  const service = ctx.get(blockServiceInstance.key);
+  const follow = service.mousemoveCallback;
+  let pressed = false;
+  service.mousemoveCallback = (view, event) => (pressed ? false : follow(view, event));
+  const press = () => {
+    pressed = true;
+  };
+  const release = () => {
+    pressed = false;
+  };
   options.add.addEventListener("pointerdown", hold);
   options.add.addEventListener("pointerup", add);
   options.grip.addEventListener("click", change);
+  options.grip.addEventListener("pointerdown", press);
+  // A drag that starts cancels the pointer (pointercancel) and ends in dragend; a press that does not ends in pointerup.
+  for (const type of ["pointerup", "pointercancel", "dragend"]) window.addEventListener(type, release);
   window.addEventListener("pointermove", side, { passive: true });
   provider.update();
   return {
@@ -722,7 +739,10 @@ function handleView(ctx: Ctx, options: MenusOptions, { openAt, openChange }: Ope
       options.add.removeEventListener("pointerdown", hold);
       options.add.removeEventListener("pointerup", add);
       options.grip.removeEventListener("click", change);
+      options.grip.removeEventListener("pointerdown", press);
+      for (const type of ["pointerup", "pointercancel", "dragend"]) window.removeEventListener(type, release);
       window.removeEventListener("pointermove", side);
+      service.mousemoveCallback = follow;
       provider.destroy();
     },
   };

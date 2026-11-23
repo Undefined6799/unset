@@ -1,8 +1,8 @@
 // The README card's text (ADR 0051): a small CommonMark subset (https://spec.commonmark.org/0.31.2/) parsed into
 // blocks that a renderer writes as escaped elements (readme.svelte), so member text is always escaped and raw HTML
-// is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced
-// code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH. Inline:
-// code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. From GitHub
+// is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced and
+// indented code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH.
+// Inline: code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. From GitHub
 // Flavored Markdown 0.29 (https://github.github.com/gfm/, read as cmark-gfm test/spec.txt), as ADR 0086 lets readers
 // extend CommonMark: strikethrough, task list items and tables. Images are
 // not shown (there is no media proxy), so `![alt](url)` is a link to the image with its alt text. A link is kept
@@ -88,6 +88,8 @@ const ORDERED = /^\s{0,3}\d{1,9}[.)]\s+(.*)$/;
 /** Any list item line at any indent: its indent, its marker, the spaces after it and its text. */
 const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
+// Four columns of indent: four spaces, or up to three and a tab, which reaches the next tab stop.
+const INDENTED = /^(?: {4}| {0,3}\t)/;
 
 /** Removes C0 controls except tab and line feed, and DEL; CRLF and CR become LF. */
 function clean(src: string): string {
@@ -387,6 +389,21 @@ function takeFence(lines: readonly string[], i: number, fence: string): { block:
 }
 
 /**
+ * An indented code block (CommonMark 0.31.2, "Indented code blocks"): indented lines and the blank lines between
+ * them, each without its first four columns; blank lines after the last indented line are not part of it.
+ */
+function takeIndented(lines: readonly string[], i: number): { block: Block; next: number } {
+  let last = i;
+  for (let at = i; at < lines.length; at += 1) {
+    const line = lines[at] ?? "";
+    if (INDENTED.test(line)) last = at;
+    else if (line.trim() !== "") break;
+  }
+  const text = lines.slice(i, last + 1).map((line) => (INDENTED.test(line) ? line.replace(INDENTED, "") : ""));
+  return { block: { kind: "code", text: text.join("\n") }, next: last + 1 };
+}
+
+/**
  * A heading's text without its optional closing hashes, which count only after a space or tab (CommonMark 0.31.2,
  * "ATX headings"): "## C#" keeps its hash. One pass from the end, so linear in the line.
  */
@@ -548,6 +565,7 @@ type Budget = { cells: number };
 function takeBlock(lines: readonly string[], i: number, budget: Budget): { block: Block | null; next: number } {
   const line = lines[i] ?? "";
   if (line.trim() === "") return { block: null, next: i + 1 };
+  if (INDENTED.test(line)) return takeIndented(lines, i);
   const fence = FENCE.exec(line)?.[1];
   if (fence !== undefined) return takeFence(lines, i, fence);
   const heading = HEADING_START.exec(line);

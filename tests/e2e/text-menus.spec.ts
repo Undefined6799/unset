@@ -331,6 +331,48 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// CI on #1999 at c2bd3bb: a drag from the dots moved nothing. plugin-block 7.23.0 shows the handle at the block under
+// the pointer on its first move past a 200 ms throttle (lib/index.js, mousemoveCallback), pressed or not, so a pointer
+// held on the dots and then moved straight onto other words took the handle to them before Chromium began the drag,
+// which then had nothing under the press to drag (no dragstart fired; seen with the CPU slowed 6x). Pressed, the dots
+// stay with their block until they are let go.
+test("the_dots_stay_with_their_block_while_pressed_so_a_quick_drag_lands", async ({ page }) => {
+  const watched = watch(page);
+  const word = `held${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
+  const lines = editor.locator("p");
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const last = await lines.last().boundingBox();
+  const first = await lines.first().boundingBox();
+  if (last === null || first === null) throw new Error("no lines");
+  const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+  const handleMiddle = async () => {
+    const at = await handle.boundingBox();
+    return at === null ? Number.POSITIVE_INFINITY : middle(at);
+  };
+  await lines.last().hover();
+  await expect.poll(async () => Math.abs((await handleMiddle()) - middle(last))).toBeLessThan(8);
+  const start = await grip.boundingBox();
+  if (start === null) throw new Error("no grip");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  // Held longer than plugin-block's throttle, then moved in one step onto the first line's words.
+  await page.waitForTimeout(250);
+  await page.mouse.move(first.x + 4, first.y + 2);
+  // Two frames, for the handle to be placed wherever plugin-block would show it (floating-ui places it on a promise).
+  await page.evaluate(() => {
+    const frame = (globalThis as unknown as { requestAnimationFrame: (run: () => void) => number })
+      .requestAnimationFrame;
+    return new Promise((done) => frame(() => frame(() => done(null))));
+  });
+  expect(Math.abs((await handleMiddle()) - middle(last))).toBeLessThan(8);
+  await page.mouse.up();
+  await expect(lines).toHaveText(["third line", `${word} one`, "second line"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 // Codex on #1965: the dots of a quote or a list change the whole block, its container too. Text takes a quote's
 // paragraphs out of it, and a list turned into a quote is a quote of its items' words.
 test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
@@ -400,10 +442,11 @@ test("the_dots_turn_a_heading_or_code_block_into_a_quote_or_list", async ({ page
   await menu.getByRole("option", { name: "Quote" }).click();
   await expect(editor.locator("h3")).toHaveCount(0);
   await expect(editor.locator("blockquote p")).toHaveText(["a title"]);
-  await editor.locator("pre").hover();
+  // A code block is drawn by CodeMirror (code-block.ts), in an element of its own.
+  await editor.locator(".code-block").hover();
   await grip.click();
   await menu.getByRole("option", { name: "Bullet list" }).click();
-  await expect(editor.locator("pre")).toHaveCount(0);
+  await expect(editor.locator(".code-block")).toHaveCount(0);
   await expect(editor.locator("ul li")).toHaveText(["some code"]);
   await discardAndRemove(page, word);
 });
@@ -576,14 +619,15 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await page.keyboard.type("y = 2");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
-  await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
+  // CodeMirror draws each line of a code block as an element of its own (code-block.ts).
+  await expect(editor.locator(".cm-line")).toHaveText(["x = 1", "y = 2"]);
   await expect(blocks.last()).toHaveText("after");
   // Shift+Enter after three backticks too.
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("```");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("z");
-  await expect(editor.locator("pre")).toHaveText(["x = 1\ny = 2", "z"]);
+  await expect(editor.locator(".code-block .cm-content")).toHaveText(["x = 1y = 2", "z"]);
   await page.keyboard.press("Shift+Enter");
   // In the middle of a point, Shift+Enter makes the words after the caret a block of their own between the two
   // halves of the list.
@@ -664,6 +708,31 @@ test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ pag
   // At the top there is nowhere to go, and nothing changes.
   await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
   await expect(editor.locator("li")).toHaveText(["second item", "first item"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Codex on #2003 at fcac4c8: the keys move a code block too with the caret in its code, which CodeMirror now holds,
+// and the caret stays there.
+test("the_move_keys_move_a_code_block_with_the_caret_in_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `codemoves${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} above\n\n\`\`\`\nx = 1\n\`\`\``);
+  const blocks = () =>
+    editor.evaluate((root) => {
+      // The spec's types have no DOM, so the browser's own nodes are named by their shape.
+      type Child = { classList: { contains: (name: string) => boolean }; textContent: string | null };
+      const children = (root as unknown as { children: Iterable<Child> }).children;
+      return Array.from(children, (child) => (child.classList.contains("code-block") ? "code" : child.textContent));
+    });
+  await editor.locator(".cm-content").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect.poll(blocks).toEqual(["code", `${word} above`]);
+  await page.keyboard.type("y");
+  await expect(editor.locator(".cm-content")).toHaveText("x = 1y");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+  await expect.poll(blocks).toEqual([`${word} above`, "code"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
@@ -765,7 +834,7 @@ test("the_bar_skips_a_space_the_menu_marks_its_row_no_ring_and_an_arrow_leaves_a
   await page.keyboard.press("ArrowDown");
   await page.keyboard.type("after");
   await expect(editor.locator(":scope > *").last()).toHaveText("after");
-  await expect(editor.locator("pre")).toHaveText("x = 1");
+  await expect(editor.locator(".cm-line")).toHaveText(["x = 1"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });

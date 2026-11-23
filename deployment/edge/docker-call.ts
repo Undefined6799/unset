@@ -51,7 +51,10 @@ export function subcommand(args: readonly string[]): string {
   return GROUPS.has(first) && second !== undefined && WORD.test(second) ? `${first} ${second}` : first;
 }
 
-/** Runs `file args` to completion or to `timeoutMs`; a kill throws `<file> <subcommand> killed after <ms> ms`. */
+/**
+ * Runs `file args` to completion or to `timeoutMs`; a kill throws `<file> <subcommand> killed after <ms> ms`, then the
+ * call's last stderr lines when it printed any.
+ */
 export function runOrKill(spawn: Spawn, file: string, args: readonly string[], timeoutMs: number): Ran {
   // spawnSync reads a zero timeout as none at all, so only a positive one keeps the kill.
   if (!(timeoutMs > 0)) throw new RangeError(`timeoutMs must be positive, got ${timeoutMs}`);
@@ -62,11 +65,22 @@ export function runOrKill(spawn: Spawn, file: string, args: readonly string[], t
     killSignal: "SIGKILL",
   });
   if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
-    throw new Error(
-      `${[file.slice(file.lastIndexOf("/") + 1), subcommand(args)].filter(Boolean).join(" ")} killed after ${timeoutMs} ms`,
-    );
+    const killed = `${[file.slice(file.lastIndexOf("/") + 1), subcommand(args)].filter(Boolean).join(" ")} killed after ${timeoutMs} ms`;
+    throw new Error(killed + lastOutput(result.stderr ?? ""));
   }
   return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
+}
+
+const LAST_OUTPUT = 2_000;
+
+/**
+ * What a killed call printed last, so a kill says where it hung: spawnSync keeps the stderr read before the kill (Node
+ * 26 child_process docs, "Synchronous process creation": `stderr`), and BuildKit's plain progress prints each
+ * step there as it starts. A hung build named only itself before (#1992's image-tests, job 137719574414).
+ */
+function lastOutput(stderr: string): string {
+  const tail = stderr.trimEnd().slice(-LAST_OUTPUT);
+  return tail === "" ? "" : `; its last output:\n${tail}`;
 }
 
 // The budgets (P1.27h, N1). A test that builds the edge image gets one build slot of 300 s, whose call is killed at
