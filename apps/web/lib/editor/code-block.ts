@@ -121,7 +121,8 @@ class CodeBlockView implements NodeView {
 
   private setLanguage(language: string) {
     const pos = this.getPos();
-    if (pos === undefined) return;
+    // Enter sets it, then the field's change on blur would set it again.
+    if (pos === undefined || String(this.node.attrs.language ?? "") === language) return;
     this.view.dispatch(this.view.state.tr.setNodeAttribute(pos, "language", language));
   }
 
@@ -144,10 +145,11 @@ class CodeBlockView implements NodeView {
     if (this.updating || !this.cm.hasFocus || pos === undefined) return;
     let offset = pos + 1;
     const { main } = update.state.selection;
-    const selFrom = offset + main.from;
-    const selTo = offset + main.to;
+    // Anchor and head, not from and to, so a selection made backwards stays backwards (Codex on #2003).
+    const selFrom = offset + main.anchor;
+    const selTo = offset + main.head;
     const pmSel = this.view.state.selection;
-    if (!update.docChanged && pmSel.from === selFrom && pmSel.to === selTo) return;
+    if (!update.docChanged && pmSel.anchor === selFrom && pmSel.head === selTo) return;
     const tr = this.view.state.tr;
     update.changes.iterChanges((fromA, toA, fromB, toB, text) => {
       if (text.length > 0) tr.replaceWith(offset + fromA, offset + toA, this.view.state.schema.text(text.toString()));
@@ -210,12 +212,27 @@ class CodeBlockView implements NodeView {
     return pos + this.node.nodeSize === this.view.state.doc.content.size;
   }
 
+  /**
+   * Whether an arrow up or down still has a row of code to go to: on a wrapped line the next row is the same line, so
+   * the visual rows are compared (Codex on #2003). CodeMirror's moveVertically goes to the code's start or end from
+   * its top or bottom row, which stays on that row.
+   */
+  private canMoveVertically(dir: -1 | 1): boolean {
+    const { main } = this.cm.state.selection;
+    const moved = this.cm.moveVertically(main, dir > 0);
+    if (moved.head === main.head) return false;
+    const at = this.cm.coordsAtPos(main.head);
+    const to = this.cm.coordsAtPos(moved.head);
+    return at === null || to === null || at.top !== to.top;
+  }
+
   private maybeEscape(unit: "line" | "char", dir: -1 | 1): boolean {
     const { state } = this.cm;
     const main = state.selection.main;
     if (!main.empty) return false;
-    const range = unit === "line" ? state.doc.lineAt(main.head) : main;
-    if (dir < 0 ? range.from > 0 : range.to < state.doc.length) return false;
+    if (unit === "char" ? (dir < 0 ? main.from > 0 : main.to < state.doc.length) : this.canMoveVertically(dir)) {
+      return false;
+    }
     const pos = this.getPos();
     if (pos === undefined) return false;
     const target = pos + (dir < 0 ? 0 : this.node.nodeSize);
