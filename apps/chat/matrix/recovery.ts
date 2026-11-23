@@ -10,6 +10,7 @@ import {
   type CryptoCallbacks,
   decodeRecoveryKey,
   type GeneratedSecretStorageKey,
+  type StartDehydrationOpts,
 } from "matrix-js-sdk/lib/crypto-api/index.js";
 import { type MatrixClient, MatrixError, Method } from "matrix-js-sdk/lib/matrix.js";
 import type { SecretStorageKeyDescriptionAesV1 } from "matrix-js-sdk/lib/secret-storage.js";
@@ -152,15 +153,37 @@ export async function makeKey({ crypto }: Keys, hasIdentity: boolean): Promise<G
   return key;
 }
 
-/** Setup, once the person has saved the key: a new vault under it and a new backup; true when both are confirmed. */
+/**
+ * Element's offline device (MSC3814; ADR 0113), as Element's initialiseDehydrationIfEnabled starts it (element-web
+ * v1.12.35 apps/web/src/utils/device/dehydration.ts): only where the server has it (CryptoApi.isDehydrationSupported,
+ * src/rust-crypto/DehydratedDeviceManager.ts:94-119), then startDehydration (src/crypto-api/index.ts:695-715), which
+ * picks up the offline device's messages first unless told not to, keeps its key in the vault and makes a new one. It
+ * needs the vault open, so it runs inside `holder.during`. False when it did not start; chat works without it, as in
+ * Element, which logs the failure and goes on (MatrixClientPeg.ts:333-345), and the next unlock or load tries again.
+ */
+export async function dehydrate(crypto: CryptoApi, opts: StartDehydrationOpts = {}): Promise<boolean> {
+  try {
+    if (!(await crypto.isDehydrationSupported())) return false;
+    await crypto.startDehydration(opts);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Setup, once the person has saved the key: a new vault under it, a new backup and the offline device with a new key
+ * (CreateSecretStorageDialog.tsx:241); true when the vault and the backup are confirmed.
+ */
 export async function storeKey({ crypto, holder }: Keys, key: GeneratedSecretStorageKey): Promise<boolean> {
-  await holder.during(null, key.privateKey, () =>
-    crypto.bootstrapSecretStorage({
+  await holder.during(null, key.privateKey, async () => {
+    await crypto.bootstrapSecretStorage({
       createSecretStorageKey: async () => key,
       setupNewSecretStorage: true,
       setupNewKeyBackup: true,
-    }),
-  );
+    });
+    await dehydrate(crypto, { createNewKey: true });
+  });
   return (await crypto.isSecretStorageReady()) && (await crypto.getActiveSessionBackupVersion()) !== null;
 }
 
@@ -168,7 +191,8 @@ export async function storeKey({ crypto, holder }: Keys, key: GeneratedSecretSto
  * A new browser with the saved key (ADR 0095 decision 3). The key is checked against the vault's default key first
  * (secretStorage.checkKey, as Element's AccessSecretStorageDialog.tsx:85-124 does), so a wrong one writes nothing. Then
  * a /keys/query for ourselves, which the 2026-11-20 spike needed, the signing keys from the vault (bootstrapCrossSigning
- * imports them and signs this device, CrossSigningIdentity.ts:88-118), the backup key, and the backup turned on here.
+ * imports them and signs this device, CrossSigningIdentity.ts:88-118), the backup key, the backup turned on here, and
+ * the offline device (dehydrate).
  */
 export async function unlock(keys: Keys, userId: string, typed: string): Promise<UnlockOutcome> {
   const { client, crypto, holder } = keys;
@@ -197,6 +221,9 @@ export async function unlock(keys: Keys, userId: string, typed: string): Promise
       await crypto.bootstrapCrossSigning({});
       await crypto.loadSessionBackupPrivateKeyFromSecretStorage();
       await crypto.checkKeyBackupAndEnable();
+      // The offline device's messages, sent while the account had no browser open, and a new one (Element's
+      // SetupEncryptionStore.ts:141, after the unlock).
+      await dehydrate(crypto);
     });
   } catch {
     return "failed";

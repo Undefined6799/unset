@@ -26,6 +26,7 @@ import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
   createKeyHolder,
+  dehydrate,
   type Keys,
   makeKey,
   phaseOf,
@@ -211,6 +212,15 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     })();
     return pusher;
   };
+  // A browser already set up keeps the offline device fresh from its cached key, picking up nothing: its own device
+  // got those messages (Element's MatrixClientPeg.ts:333-345, onlyIfKeyCached and no rehydrate). Not awaited, as
+  // Element does not wait for it either; a setup or an unlock started it already with the vault open.
+  let dehydrating = false;
+  const dehydrateOnce = () => {
+    if (dehydrating) return;
+    dehydrating = true;
+    void dehydrate(crypto, { onlyIfKeyCached: true, rehydrate: false });
+  };
   const report = serialReports(
     () => busy,
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
@@ -220,7 +230,10 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
       const phase = phaseOf(facts);
       // setUp holds the page (busy) before its first await, so no other report gets past `current` after this one.
       if (phase === "setup") return setUp(facts.hasIdentity);
-      if (phase === "ready") await registerOnce();
+      if (phase === "ready") {
+        await registerOnce();
+        dehydrateOnce();
+      }
       if (!current()) return;
       tell(
         phase === "ready"

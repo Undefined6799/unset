@@ -118,6 +118,13 @@ matrix_authentication_service:
   endpoint: http://mas:8080/
   secret_path: /run/secrets/synapse_mas_secret
 
+# Element's offline device (MSC3814; ADR 0113): each member's browsers keep one device on the server that receives
+# room keys while no browser of theirs is open, its keys encrypted under a key kept in their vault, which their recovery
+# key opens; the server cannot read them. Synapse 1.165.0 config/experimental.py:77; with MAS, Synapse leaves it out of
+# the device sync (rest/synapse/mas/devices.py:199-207). No other experiment.
+experimental_features:
+  msc3814_enabled: true
+
 # The server rule (P6.10a; ADR 0097): every room is encrypted, the default, or plain under the 30-day retention, fixed
 # at creation, and only that kind's events are accepted. Its package is infrastructure/matrix/synapse-module/, which
 # our Synapse image carries (deployment/images/synapse.Dockerfile); it takes no config (:103).

@@ -322,6 +322,46 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   for (const p of [a, b, a2]) expect(p.problems).toEqual([]);
 });
 
+test("chat_e2e.first_message_no_browser: a request sent while the other has no browser open is read once they do", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  // Staging, 2026-11-23: the first messages went with the request while the other member had no browser signed in to
+  // chat, so no device of theirs got the keys and their new browser could not read them. Element's offline device
+  // (MSC3814; ADR 0113) holds them: the new browser picks it up when it unlocks with the recovery key.
+  const alice = await stack.member(`alice${Date.now()}.unset.name`);
+  const bob = await stack.member(`bob${Date.now()}.unset.name`);
+  const b1 = await browserFor(browser, bob.handle);
+  await b1.page.goto("https://unset.cc/");
+  const bobKey = await saveKey(b1.page);
+  // Bob leaves unset.sh, which ends that browser's device: he now has no browser in chat at all.
+  const out = await b1.context.newPage();
+  await out.goto("https://unset.sh/logout");
+  await out.waitForURL("https://unset.sh/signed-out", { timeout: 90_000 });
+  const a = await browserFor(browser, alice.handle);
+  await a.page.goto(`https://unset.cc/?with=${encodeURIComponent(bob.userId)}`);
+  await saveKey(a.page);
+  await expect(a.page.locator("[data-screen=new-conversation]")).toBeVisible({ timeout: 60_000 });
+  await a.page.locator("#message").fill("sent while you were away");
+  await a.page.getByRole("button", { name: "Send" }).click();
+  await expect(conversation(a.page)).toHaveAttribute("data-composer", "pending", { timeout: 60_000 });
+  await send(a.page, "and a second one");
+  // A fresh browser of Bob's unlocks, accepts and reads both.
+  const b2 = await browserFor(browser, bob.handle);
+  await b2.page.goto("https://unset.cc/");
+  await expect.poll(() => state(b2.page), { timeout: 60_000 }).toBe("locked");
+  await b2.page.locator("#unlock-key").fill(bobKey);
+  await b2.page.getByRole("button", { name: "Unlock" }).click();
+  await expect.poll(() => state(b2.page), { timeout: 60_000 }).toBe("ready");
+  const request = b2.page.locator(`[data-request="${alice.userId}"]`);
+  await request.getByRole("button", { name: "Accept" }).click({ timeout: 60_000 });
+  await b2.page.locator(`[data-conversation="${alice.userId}"]`).click();
+  await expect(messages(b2.page)).toContainText("sent while you were away", { timeout: 90_000 });
+  await expect(messages(b2.page)).toContainText("and a second one", { timeout: 90_000 });
+  await expect(messages(b2.page).locator("[data-unreadable]")).toHaveCount(0);
+  for (const p of [a, b2]) expect(p.problems).toEqual([]);
+});
+
 test("chat_e2e.signup_step: from signup a new member saves the key, has a pusher at Synapse, and goes back", async ({
   browser,
 }) => {

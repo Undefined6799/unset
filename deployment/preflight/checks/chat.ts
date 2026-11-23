@@ -123,6 +123,8 @@ function synapseSettings(serverName: string): Settings {
         endpoint: "http://mas:8080/",
         secret_path: "/run/secrets/synapse_mas_secret",
       },
+      // Element's offline device, whose keys only the member's vault opens, and no other experiment (ADR 0113).
+      experimental_features: { msc3814_enabled: true },
       // The server rule and nothing else (P6.10a; ADR 0097), the only guarantee that rooms are encrypted: it refuses
       // any config, so none is given.
       modules: [{ module: "unset_chat_policy.RoomPolicy", config: {} }],

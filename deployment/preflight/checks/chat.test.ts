@@ -70,6 +70,10 @@ describe("C36 the chat servers' settings", () => {
       // No uploads: the media repository is off (config_documentation.md `enable_media_repo` at v1.165.0).
       ["enable_media_repo", true],
       ["enable_media_repo", undefined],
+      // Element's offline device (MSC3814; ADR 0113) and no other experiment.
+      ["experimental_features", undefined],
+      ["experimental_features.msc3814_enabled", false],
+      ["experimental_features", { msc3814_enabled: true, msc4108_enabled: true }],
     ];
     for (const [path, value] of cases) {
       const top = path.split(".")[0];
