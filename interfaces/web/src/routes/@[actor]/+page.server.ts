@@ -13,7 +13,6 @@
 // or AI search, whatever the Search and AI choices say. The session is read when a cookie is sent (policy.ts), and a
 // page rendered for a member is private and never stored (hooks.server.ts), so a visitor's copy is never theirs.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
-import { parseReadme } from "@unset/apps-web/lib/profile/parse.ts";
 import { cardViews, contactAction, shownCards, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { canonicalActorPath, type Did, parseActor, parseDid, parseHandle } from "@unset/domains-identity";
 import {
@@ -27,7 +26,9 @@ import {
   type Viewer,
 } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
+import { TEXT_READ_LIMITS } from "../../lib/server/limits.ts";
 import { config } from "../../lib/server/runtime.ts";
+import { pageTextReader } from "../../lib/server/text-reader.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
 
 /** A visitor's copy may be kept a minute (book P3.12 "Caching"), so a hidden account leaves caches within it. */
@@ -82,7 +83,12 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
   const cards =
     owner === null
       ? []
-      : shownCards(cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX), parseReadme));
+      : shownCards(
+          cardViews(
+            pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX),
+            pageTextReader(TEXT_READ_LIMITS, locals.deadlineAt),
+          ),
+        );
   return {
     shell: listed ? LISTED_SHELL : SHELL,
     // What search results and link previews show: only what the page itself shows, or the member's own overrides. A

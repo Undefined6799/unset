@@ -5,7 +5,6 @@
 // the PDS. A write that succeeds sends the browser back to the page (303); a refusal shows the page again with its
 // code and status.
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
-import { parseReadme } from "@unset/apps-web/lib/profile/parse.ts";
 import type { CardPanelRequest, CardView } from "@unset/apps-web/lib/profile/types.ts";
 import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -35,7 +34,9 @@ import {
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
+import { TEXT_READ_LIMITS } from "../../lib/server/limits.ts";
 import { ALLOW_PATH } from "../../lib/server/pds-failure.ts";
+import { pageTextReader } from "../../lib/server/text-reader.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
@@ -117,7 +118,8 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? cardViews(own.cards, parseReadme, own.versions) : [];
+  const readText = pageTextReader(TEXT_READ_LIMITS, locals.deadlineAt);
+  const cards = own.kind === "ok" ? cardViews(own.cards, readText, own.versions) : [];
   return {
     shell,
     account,

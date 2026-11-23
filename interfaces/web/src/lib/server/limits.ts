@@ -2,6 +2,7 @@
 // (P1.06p; plan section 5.2; ADR 0042). Each entry is a token bucket: `capacity` at once, refilled at `refillPerSec`.
 // A page names one of these in its policy.ts; a page that needs a new policy adds it here.
 import { definePolicies, type PolicyTable } from "@unset/shared-http";
+import type { TextReadLimits } from "./text-reader.ts";
 
 /**
  * The site-wide page ceiling (ADR 0042; sized for thousands of members by P1.21j, Proposed ADR 0071, from 3000 at once
@@ -81,3 +82,11 @@ export const IMAGE_UPLOADS_IN_FLIGHT = 4;
  * tests/integration/web/review-lanes.test.ts holds the two numbers together.
  */
 export const REVIEW_LANES = 2;
+
+/**
+ * Reading a member's Markdown on the server, inside the page load (P1.21k; text-reader.ts has the measurements): at
+ * most 150 ms for one card's text and 300 ms for all of a page's, past which a card is shown as plain text. A full
+ * card of 20,000 characters reads in about 15 ms as prose and 35 to 60 ms as a dense list or table, so a normal page
+ * reaches neither; text written to stall the parser costs the process no more than the page limit for each page load.
+ */
+export const TEXT_READ_LIMITS: TextReadLimits = { textMs: 150, pageMs: 300 };
