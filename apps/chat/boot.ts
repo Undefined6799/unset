@@ -11,7 +11,7 @@
 // browser out of chat (core/sign-out.ts signOutHere) and goes back to unset.sh.
 import type { ChatSession, ChatState } from "./core/chat.ts";
 import { dmTarget, startPathFor } from "./core/contact.ts";
-import { boxVisibility, DOCK, dockMessage, stateCookie, unreadChats } from "./core/dock.ts";
+import { boxVisibility, DOCK, type DockMode, dockMessage, stateCookie, unreadChats } from "./core/dock.ts";
 import { publicNames } from "./core/public-name.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
@@ -172,6 +172,8 @@ async function signOut(ticket: string | null, onState: (state: ChatState) => voi
 
 /** The chat box's Close: asks the shell to hide the box (it stays signed in, hidden, until the page goes). */
 export let closeDock: () => void = () => undefined;
+/** The chat box tells the shell what it shows, so the shell sizes and places the frame (core/dock.ts DockMode). */
+export let dockLayout: (mode: DockMode) => void = () => undefined;
 
 /** How long the chat box waits for unset.sh's hello and for its ticket. */
 const DOCK_WAIT_MS = 15_000;
@@ -184,7 +186,11 @@ const DOCK_PATH = "/?dock";
  * link's conversation when the shell asks (`onOpen` remounts the list on the start route). Renewal starts the box
  * again at its root, which signs in again on the same device.
  */
-export async function bootDock(onState: (state: ChatState) => void, onOpen: () => void): Promise<void> {
+export async function bootDock(
+  onState: (state: ChatState) => void,
+  onOpen: () => void,
+  onList: (kind: "list" | "back") => void,
+): Promise<void> {
   const parent = window.parent;
   let origin: string | null = null;
   let session: ChatSession | null = null;
@@ -211,14 +217,22 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
     if (message === null) return;
     if (message.kind === "hello") {
       origin ??= message.origin;
+      tell({ type: `${DOCK}layout`, mode });
       return hello();
     }
     if (message.kind === "shown") return seen.setShown(message.shown);
     if (message.kind === "log_out") return void logOut();
+    if (message.kind === "list" || message.kind === "back") return onList(message.kind);
     void openWith(message.did);
   });
   const tell = (data: Record<string, unknown>) => origin !== null && parent.postMessage(data, origin);
   closeDock = () => tell({ type: `${DOCK}close` });
+  // The last one is said again at each hello, as the shell loses it when the box's page loads again.
+  let mode: DockMode = "list";
+  dockLayout = (next) => {
+    mode = next;
+    tell({ type: `${DOCK}layout`, mode });
+  };
   // unset.sh's Log out (chat box review D3): the tab's own Log out happens on unset.cc's top level, which cannot reach
   // this partition, so the box runs it here, as the tab's /sign-out/return does: the backup catches up, the door ends
   // the device, the stores go. The queued end web makes at /logout stays the fallback.

@@ -258,6 +258,7 @@ addEventListener("message", (event) => {
   if (event.source !== frame.contentWindow || event.origin !== "https://unset.cc") return;
   const m = event.data;
   if (m?.type === "unset.dock.count") document.body.dataset.unread = String(m.unread);
+  if (m?.type === "unset.dock.layout" && ["list", "conversation", "bubble"].includes(m.mode)) frame.dataset.mode = m.mode;
   if (m?.type === "unset.dock.sign_in") frame.src = "/chat/sign-in?" + new URLSearchParams({ state: m.state, dock: "" });
 });
 </script>`;

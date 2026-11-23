@@ -7,6 +7,9 @@
   otherwise a composer for a new one that makes nothing: no room and no request until the member's first Send (Alex,
   2026-11-21), so following a link from any site tells nobody anything. A conversation that is not one-to-one and
   private (core/conversations.ts availableOf) is listed as unavailable, with no name, no Accept and nothing to open.
+  In the chat box on unset.sh (ADR 0115; Alex 2026-11-23, after the dock mock-up chat-mockup/dock-v1.html) `dock`
+  says what shows: the list (under unset.sh's chat icon), one conversation (at the bottom corner, its own bar with
+  the box's controls), or that conversation minimised to its avatar, with its count of new messages.
   Names are the other person's own text:
   Svelte escapes it, and nothing here renders markup.
 -->
@@ -21,17 +24,29 @@ import {
   type Conversation as Item,
   startTarget,
 } from "./core/conversations.ts";
+import type { DockMode } from "./core/dock.ts";
+import DockControls from "./DockControls.svelte";
 import { Icon } from "./lib/components/icon/index.js";
 import * as Alert from "./lib/components/ui/alert/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
+import PersonAvatar from "./PersonAvatar.svelte";
 import PersonName from "./PersonName.svelte";
+
+/** The chat box's part: what shows, and the box's ways to change it. */
+export type Dock = { readonly mode: DockMode; readonly show: (mode: DockMode) => void; readonly close: () => void };
 
 let {
   conversations,
   names,
   me,
-}: { conversations: Conversations; names: (chatId: string) => Promise<string | null>; me: string } = $props();
+  dock,
+}: {
+  conversations: Conversations;
+  names: (chatId: string) => Promise<string | null>;
+  me: string;
+  dock?: Dock;
+} = $props();
 
 let list: readonly Item[] = $state([]);
 let open: ConversationId | null = $state(null);
@@ -63,7 +78,14 @@ onMount(async () => {
   }
   open = await conversations.find(target);
   if (open === null) draft = target;
+  dock?.show("conversation");
 });
+
+function openTalk(id: ConversationId) {
+  open = id;
+  dock?.show("conversation");
+}
+const openItem = $derived(list.find((c) => c.id === open));
 
 async function startDraft(event: SubmitEvent) {
   event.preventDefault();
@@ -91,21 +113,37 @@ function leaveDraft() {
 }
 </script>
 
-{#if open !== null}
+{#if dock?.mode === "bubble" && open !== null}
+  <button
+    class="bg-primary text-primary-foreground relative flex size-full items-center justify-center rounded-full"
+    onclick={() => dock?.show("conversation")}
+    data-dock-bubble
+  >
+    <PersonAvatar handle={openItem?.with.name ?? ""} class="size-full text-xl" />
+    <span class="sr-only">Open the chat with {openItem?.with.name ?? "them"}</span>
+    {#if (openItem?.unread ?? 0) > 0}
+      <span class="bg-background text-foreground absolute bottom-1 rounded-full px-1.5 text-xs" data-unread={openItem?.unread}>
+        {openItem?.unread}<span class="sr-only"> new</span>
+      </span>
+    {/if}
+  </button>
+{:else if open !== null && dock?.mode !== "list"}
   <Conversation
     {conversations}
     {names}
     id={open}
     typed={carried?.text ?? ""}
     unsent={carried?.failed === true}
-    onBack={() => ((open = null), (carried = null))}
+    onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
+    controls={dock === undefined ? undefined : conversationControls}
   />
-{:else if draft !== null}
+{:else if draft !== null && dock?.mode !== "list"}
   <section class="flex flex-col gap-4" data-screen="new-conversation">
     <div class="flex items-center gap-2">
       <Button variant="ghost" size="icon" onclick={leaveDraft}><Icon name="back" label="Back to conversations" /></Button>
       <h2 class="min-w-0 flex-1 truncate font-medium">New conversation</h2>
       <span class="flex items-center gap-1 text-xs" data-mark="encrypted"><Icon name="private" size={16} />Encrypted</span>
+      {#if dock !== undefined}<DockControls onClose={dock.close} />{/if}
     </div>
     {#if problem !== null}
       <Alert.Root>
@@ -122,7 +160,7 @@ function leaveDraft() {
     </p>
   </section>
 {:else}
-  <div class="flex flex-col gap-4" data-screen="conversations">
+  <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto" data-screen="conversations">
     {#if problem !== null}
       <Alert.Root>
         <Alert.Description>{problem}</Alert.Description>
@@ -135,10 +173,16 @@ function leaveDraft() {
           {#each requests as request (request.id)}
             <li class="flex items-center justify-between gap-2" data-request={request.with.id}>
               <span class="flex min-w-0 items-center gap-2">
+                <PersonAvatar handle={request.with.name} />
                 {@render mark(request)}
                 <span class="truncate">{request.with.name} wants to talk</span>
               </span>
-              <Button size="sm" onclick={() => accept(request.id)}>Accept</Button>
+              {#if dock === undefined}
+                <Button size="sm" onclick={() => accept(request.id)}>Accept</Button>
+              {:else}
+                <!-- The box opens it, with Accept in the conversation, as the mock-up's menu does. -->
+                <Button size="sm" onclick={() => openTalk(request.id)}>Open</Button>
+              {/if}
             </li>
           {/each}
         </ul>
@@ -154,9 +198,10 @@ function leaveDraft() {
               variant="ghost"
               class="h-auto w-full justify-between py-2"
               data-conversation={talk.with.id}
-              onclick={() => (open = talk.id)}
+              onclick={() => openTalk(talk.id)}
             >
               <span class="flex min-w-0 items-center gap-2">
+                <PersonAvatar handle={talk.with.name} />
                 {@render mark(talk)}
                 <PersonName chatId={talk.with.id} handle={talk.with.name} {names} />
               </span>
@@ -181,6 +226,12 @@ function leaveDraft() {
     {/if}
   </div>
 {/if}
+
+{#snippet conversationControls()}
+  {#if dock !== undefined}
+    <DockControls onMinimise={() => dock.show("bubble")} onClose={dock.close} />
+  {/if}
+{/snippet}
 
 {#snippet mark(item: Item)}
   {#if item.kind === "encrypted"}

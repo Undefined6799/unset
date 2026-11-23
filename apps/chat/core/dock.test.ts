@@ -2,7 +2,7 @@
 // value's cookie. The box trusts a message only from its own parent window, whose origin the page's frame-ancestors
 // pins to unset.sh, and only in the shapes below.
 import { describe, expect, test } from "vitest";
-import { boxVisibility, dockMessage, isDock, stateCookie, unreadChats } from "./dock.ts";
+import { boxVisibility, dockMessage, initialOf, isDock, stateCookie, unreadChats } from "./dock.ts";
 
 const parent = {} as MessageEventSource;
 const other = {} as MessageEventSource;
@@ -41,6 +41,8 @@ describe("dockMessage", () => {
     expect(known({ type: "unset.dock.shown", shown: false })).toEqual({ kind: "shown", shown: false });
     expect(known({ type: "unset.dock.shown", shown: "yes" })).toBeNull();
     expect(known({ type: "unset.dock.log_out" })).toEqual({ kind: "log_out" });
+    expect(known({ type: "unset.dock.list" })).toEqual({ kind: "list" });
+    expect(known({ type: "unset.dock.back" })).toEqual({ kind: "back" });
     expect(known("unset.dock.hello")).toBeNull();
     expect(known(null)).toBeNull();
     expect(known({ type: "something.else" })).toBeNull();
@@ -94,6 +96,12 @@ describe("the box", () => {
 
   test("chat.dock_state_cookie: the door's hop-state name, partitioned to the box, ten minutes", () => {
     expect(stateCookie("abc")).toBe("__Host-chat-state=abc; Path=/; Max-Age=600; Secure; SameSite=None; Partitioned");
+  });
+
+  test("chat.dock_initial: an avatar's letter is the handle's first, upper-cased; nothing usable gives a dot", () => {
+    expect(initialOf("maya.unset.sh")).toBe("M");
+    expect(initialOf("@élise.unset.sh")).toBe("É");
+    expect(initialOf("")).toBe("·");
   });
 
   test("chat.dock_unread: the icon counts chats with new messages and requests waiting", () => {

@@ -247,6 +247,14 @@ const chatOrigin = $derived(chat === undefined ? "" : new URL(chat.href).origin)
 let dockMade = $state(false);
 let dockShown = $state(false);
 let dockFrame: HTMLIFrameElement | undefined = $state();
+/** What the box shows (apps/chat core/dock.ts DockMode): the list under the icon, a chat or its avatar at the corner. */
+type DockMode = "list" | "conversation" | "bubble";
+let dockMode: DockMode = $state("list");
+const DOCK_PLACE: Record<DockMode, string> = {
+  list: "top-20 h-[min(32rem,calc(100dvh-6rem))] w-96 rounded-lg border",
+  conversation: "bottom-4 h-[min(36rem,calc(100dvh-6rem))] w-96 rounded-lg border",
+  bubble: "bottom-4 size-14 rounded-full",
+};
 let liveUnread: number | undefined = $state();
 const unread = $derived(liveUnread ?? chat?.unread ?? 0);
 /** A Message link's DID, sent with the hello when the box's page loads. */
@@ -268,12 +276,20 @@ function openDock(did?: string): boolean {
   return true;
 }
 
+/**
+ * The chat icon (the mock-up's "Later: the menu and chat box"): it shows the list under it; pressed again it goes back
+ * to the chat (or its avatar) the list covered, or closes. The box decides which, as it knows what it covered.
+ */
 function chatClick(event: MouseEvent) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  if (dockShown && dockMade) {
-    dockShown = false;
+  if (!dockMade || !dockShown) {
+    if (!openDock()) return;
     event.preventDefault();
-  } else if (openDock()) event.preventDefault();
+    toDock({ type: `${DOCK}list` });
+    return;
+  }
+  event.preventDefault();
+  toDock({ type: dockMode === "list" ? `${DOCK}back` : `${DOCK}list` });
 }
 
 /** A click on a profile's Message link (`<door>/dm/<did>`, apps/web profile-header.svelte) opens it in the box. */
@@ -323,7 +339,7 @@ $effect(() => {
 function dockMessage(event: MessageEvent) {
   if (dockFrame?.contentWindow == null || event.source !== dockFrame.contentWindow || event.origin !== chatOrigin)
     return;
-  const message = event.data as { type?: unknown; state?: unknown; unread?: unknown } | null;
+  const message = event.data as { type?: unknown; state?: unknown; unread?: unknown; mode?: unknown } | null;
   if (typeof message !== "object" || message === null) return;
   if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
     // web checks the value's form; the frame comes back on the box's page, which says hello again.
@@ -336,6 +352,8 @@ function dockMessage(event: MessageEvent) {
     liveUnread = Math.max(0, message.unread);
   } else if (message.type === `${DOCK}close`) {
     dockShown = false;
+  } else if (message.type === `${DOCK}layout` && typeof message.mode === "string" && message.mode in DOCK_PLACE) {
+    dockMode = message.mode as DockMode;
   } else if (message.type === `${DOCK}logged_out`) {
     loggingOut?.();
   }
@@ -770,13 +788,14 @@ const row =
   {#if dockMade && chat !== undefined}
     <!-- The chat box (ADR 0115): sandboxed, so it can never navigate this page; it may open the full chat in a new tab. -->
     <div
-      class="fixed right-4 bottom-4 z-50 h-[min(36rem,calc(100dvh-6rem))] w-96 overflow-hidden rounded-lg border bg-background shadow-lg"
+      class="fixed right-4 z-50 overflow-hidden bg-background shadow-lg {DOCK_PLACE[dockMode]}"
       hidden={!dockShown}
       data-dock
     >
       <iframe
         bind:this={dockFrame}
         onload={dockLoaded}
+        data-mode={dockMode}
         src="{chatOrigin}/?dock"
         title={T.chat(0)}
         class="size-full"

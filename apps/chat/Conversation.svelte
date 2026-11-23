@@ -16,6 +16,7 @@
   Message text is the sender's own: Svelte escapes it, and nothing here renders markup.
 -->
 <script lang="ts">
+import { type Snippet, tick } from "svelte";
 import ConversationMessage from "./ConversationMessage.svelte";
 import {
   actionsOf,
@@ -34,6 +35,7 @@ import { Button } from "./lib/components/ui/button/index.js";
 import { Checkbox } from "./lib/components/ui/checkbox/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
 import { Label } from "./lib/components/ui/label/index.js";
+import PersonAvatar from "./PersonAvatar.svelte";
 import PersonName from "./PersonName.svelte";
 
 let {
@@ -43,13 +45,17 @@ let {
   names,
   typed = "",
   unsent = false,
+  controls,
 }: {
   conversations: Conversations;
   id: ConversationId;
-  onBack: () => void;
+  /** Back to the list; the chat box has none, its list is under unset.sh's chat icon. */
+  onBack?: () => void;
   names: (chatId: string) => Promise<string | null>;
   typed?: string;
   unsent?: boolean;
+  /** The chat box's own controls at the end of the top bar (DockControls.svelte). */
+  controls?: Snippet;
 } = $props();
 
 let view = $state<ConversationView | null>(null);
@@ -61,6 +67,19 @@ let sending = $state(false);
 // svelte-ignore state_referenced_locally
 let failed = $state(unsent);
 const sends = $derived(view !== null && canSend(view.composer));
+
+// Only the messages scroll; the bar above and the composer below stay put (Alex 2026-11-23). The newest stays in view
+// while the member is at the bottom, as a chat does; scrolled up to read, they are left where they are.
+let scroller: HTMLElement | undefined = $state();
+let atBottom = true;
+function scrolled() {
+  if (scroller !== undefined) atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+}
+$effect(() => {
+  void view?.messages.length;
+  if (scroller === undefined || !atBottom) return;
+  void tick().then(() => scroller?.scrollTo({ top: scroller.scrollHeight }));
+});
 
 $effect(() =>
   conversations.watch(id, (next) => {
@@ -141,10 +160,15 @@ async function accept() {
 }
 </script>
 
-<section class="flex flex-col gap-4" data-screen="conversation" data-composer={view?.composer}>
-  <div class="flex items-center gap-2">
-    <Button variant="ghost" size="icon" onclick={onBack}><Icon name="back" label="Back to conversations" /></Button>
-    {#if view !== null}
+<section class="flex min-h-0 flex-1 flex-col gap-4" data-screen="conversation" data-composer={view?.composer}>
+  <div class="flex shrink-0 items-center gap-2">
+    {#if onBack !== undefined}
+      <Button variant="ghost" size="icon" onclick={onBack}><Icon name="back" label="Back to conversations" /></Button>
+    {/if}
+    {#if view === null}
+      <span class="flex-1"></span>
+    {:else}
+      <PersonAvatar handle={view.conversation.with.name} />
       <h2 class="min-w-0 flex-1 font-medium">
         <PersonName chatId={view.conversation.with.id} handle={view.conversation.with.name} {names} />
       </h2>
@@ -156,10 +180,12 @@ async function accept() {
         </span>
       {/if}
     {/if}
+    {@render controls?.()}
   </div>
   {#if view === null}
     <p class="text-muted-foreground text-sm">{loaded ? "This conversation is not available." : "One moment."}</p>
   {:else}
+    <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto" bind:this={scroller} onscroll={scrolled}>
     {#if view.hasOlder}
       <Button variant="outline" size="sm" onclick={() => conversations.older(id)}>Show older messages</Button>
     {/if}
@@ -180,6 +206,8 @@ async function accept() {
         />
       {/each}
     </ol>
+    </div>
+    <div class="flex shrink-0 flex-col gap-2">
     {#if view.composer === "request"}
       <Button onclick={accept}>Accept</Button>
     {/if}
@@ -253,5 +281,6 @@ async function accept() {
     {#if view.composer !== "on"}
       <p id="composer-off" class="text-muted-foreground text-sm">{WAITING[view.composer](view.conversation.with.name)}</p>
     {/if}
+    </div>
   {/if}
 </section>

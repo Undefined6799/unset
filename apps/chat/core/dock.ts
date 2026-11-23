@@ -14,6 +14,12 @@
 //   box -> shell   unset.dock.close                 the box's Close
 //   shell -> box   unset.dock.open { did }          a profile's Message link
 //   shell -> box   unset.dock.shown { shown }       with the hello and at each change: whether the box is open
+//   shell -> box   unset.dock.list                  the chat icon: show the list of conversations
+//   shell -> box   unset.dock.back                  the chat icon again, the list showing: back to the conversation
+//                                                   (or its avatar) the list covered, or close
+//   box -> shell   unset.dock.layout { mode }       what the box shows, so the shell sizes and places the frame:
+//                                                   "list" under the icon, "conversation" at the bottom corner,
+//                                                   "bubble" (a minimised conversation's avatar) at the bottom corner
 //   shell -> box   unset.dock.log_out               unset.sh's Log out, before it posts /logout: the box logs out
 //                                                   in its own partition (backup wait, device ended, stores cleared)
 //   box -> shell   unset.dock.logged_out            done, whatever the outcome; the shell then posts /logout
@@ -32,7 +38,12 @@ export type DockMessage =
   | { readonly kind: "hello"; readonly origin: string }
   | { readonly kind: "open"; readonly did: string }
   | { readonly kind: "shown"; readonly shown: boolean }
-  | { readonly kind: "log_out" };
+  | { readonly kind: "log_out" }
+  | { readonly kind: "list" }
+  | { readonly kind: "back" };
+
+/** What the box shows (Alex 2026-11-23 and the dock mock-up, chat-mockup/dock-v1.html). */
+export type DockMode = "list" | "conversation" | "bubble";
 
 /** The box: the page's root with `?dock`, in a frame. */
 export const isDock = (location: { pathname: string; search: string }, framed: boolean): boolean =>
@@ -58,6 +69,8 @@ export function dockMessage(
   }
   if (data.type === `${DOCK}shown` && typeof data.shown === "boolean") return { kind: "shown", shown: data.shown };
   if (data.type === `${DOCK}log_out`) return { kind: "log_out" };
+  if (data.type === `${DOCK}list`) return { kind: "list" };
+  if (data.type === `${DOCK}back`) return { kind: "back" };
   return null;
 }
 
@@ -100,4 +113,10 @@ export function boxVisibility(page: Visibility): Visibility & { setShown: (shown
       changed();
     },
   };
+}
+
+/** The letter on a chat partner's avatar: the first of their handle, upper-cased; a dot when there is none. */
+export function initialOf(handle: string): string {
+  const first = [...handle.replace(/^@/, "")][0];
+  return first === undefined ? "·" : first.toLocaleUpperCase();
 }

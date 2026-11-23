@@ -45,7 +45,14 @@ staging the box would meet Pangolin's login page.
    first press of the chat icon or of a profile's Message link. A phone keeps the plain link. The door serves that
    one answer with `frame-ancestors <WEB_ORIGIN>` and no `X-Frame-Options`; every other path stays unframable. The
    shell's CSP gains `frame-src <CHAT_DOOR_ORIGIN> <WEB_ORIGIN>/chat/sign-in` alone. The frame is sandboxed without
-   top navigation.
+   top navigation. What it shows follows the mock-up's "Later: the menu and chat box" section with Alex's changes of
+   2026-11-23: the chat icon shows the list right under it (each person's avatar and count of new messages, requests
+   first); a chat opens at the bottom corner with a fixed bar (avatar, name, the lock, a three-dot menu with "Open
+   full chat", Minimise, Close) and a fixed composer, and only the messages scroll; Minimise leaves the person's
+   avatar at the corner. The box tells the shell which of the three it shows (`unset.dock.layout`), and the shell
+   sizes and places the one frame. One frame shows one at a time, so the list covers an open chat until the icon is
+   pressed again; the mock-up shows both at once, which would need the list drawn by unset.sh's own script from the
+   box's names and counts.
 2. **Sign-in is the hop, started by the shell's navigation of the frame.** The box makes a one-time value and sets it
    in the door's hop-state cookie, partitioned to the box. It posts the value to the shell, and the shell sets the
    frame's `src` to `GET /chat/sign-in?state=<value>&dock`. web answers as for the hop, with `<door>/?dock#ticket=…`

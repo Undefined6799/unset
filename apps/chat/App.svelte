@@ -19,12 +19,13 @@
 -->
 <script lang="ts">
 import { onMount } from "svelte";
-import { boot, bootDock, closeDock } from "./boot.ts";
-import Conversations from "./Conversations.svelte";
+import { boot, bootDock, closeDock, dockLayout } from "./boot.ts";
+import Conversations, { type Dock } from "./Conversations.svelte";
 import type { ChatState, UnlockOutcome } from "./core/chat.ts";
-import { isDock } from "./core/dock.ts";
+import { type DockMode, isDock } from "./core/dock.ts";
 import { CHECK_LENGTH, KEY_FILE_NAME, keyFileText, matchesEnd } from "./core/recovery-key.ts";
 import { hopPath } from "./core/sign-in.ts";
+import DockControls from "./DockControls.svelte";
 import * as Alert from "./lib/components/ui/alert/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
 import * as Card from "./lib/components/ui/card/index.js";
@@ -133,26 +134,74 @@ async function tryKey(event: SubmitEvent) {
   if (outcome === "unlocked") typedKey = "";
 }
 
-/** The chat box framed on unset.sh (ADR 0115): a compact page with a way to the full one and a Close. */
+/**
+ * The chat box framed on unset.sh (ADR 0115), built to the mock-up's "Later: the menu and chat box"
+ * (chat-mockup/index.html) with Alex's points of 2026-11-23: the chat icon shows the list under it; a chat opens at
+ * the bottom corner, its bar (avatar, name, lock, the three-dot menu, Minimise, Close) and its composer fixed and only
+ * the messages scrolling; Minimise leaves the person's avatar there. One frame shows one of these at a time, so the
+ * list covers an open chat until the icon is pressed again.
+ */
 const dock = isDock(window.location, window.parent !== window);
 /** Bumped when unset.sh asks the box to open a Message link's conversation: the list mounts again on the start route. */
 let opened = $state(0);
+let dockMode: DockMode = $state("list");
+/** What the list covers, to go back to when the icon is pressed again. */
+let covered: DockMode | null = null;
+function show(mode: DockMode) {
+  if (mode !== "list") covered = null;
+  dockMode = mode;
+  dockLayout(mode);
+}
+function closeBox() {
+  covered = null;
+  show("list");
+  closeDock();
+}
+function fromIcon(kind: "list" | "back") {
+  if (kind === "back") return covered === null ? closeBox() : show(covered);
+  if (dockMode !== "list") covered = dockMode;
+  dockMode = "list";
+  dockLayout("list");
+}
+const dockParts: Dock = {
+  get mode() {
+    return dockMode;
+  },
+  show,
+  close: closeBox,
+};
 
 onMount(() => {
   if (dock)
     void bootDock(
       (next) => (view = next),
-      () => (opened += 1),
+      () => {
+        opened += 1;
+        show("conversation");
+      },
+      fromIcon,
     );
   else void boot((next) => (view = next));
 });
 </script>
 
+{#if dock && view.kind === "ready" && !welcoming}
+  <main class="flex h-dvh flex-col gap-2 {dockMode === 'bubble' ? '' : 'p-3'}" data-state={view.kind} data-dock={dockMode}>
+    {#if dockMode === "list"}
+      <header class="flex shrink-0 items-center gap-2">
+        <h1 class="flex-1 font-medium">Messages</h1>
+        <DockControls onClose={closeBox} />
+      </header>
+    {/if}
+    {#key opened}
+      <Conversations conversations={view.conversations} names={view.names} me={view.me} dock={dockParts} />
+    {/key}
+  </main>
+{:else}
 {#if dock}
   <header class="flex items-center gap-2 border-b px-3 py-2" data-dock>
     <h1 class="flex-1 font-medium">Messages</h1>
-    <Button variant="ghost" size="sm" href="/" target="_blank" rel="noopener">Open full chat</Button>
-    <Button variant="ghost" size="sm" onclick={() => closeDock()}>Close</Button>
+    <DockControls onClose={closeBox} />
   </header>
 {/if}
 <main
@@ -261,3 +310,4 @@ onMount(() => {
     {/if}
   </Card.Root>
 </main>
+{/if}
