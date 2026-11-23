@@ -220,7 +220,7 @@ export const TEXT_IN_PLACE = {
 /** The in-place editor's side handle, block menu and floating bar (P1.21v slice 3), named as Crepe 7.23.0 names them. */
 export const TEXT_MENUS = {
   add: "Add a block below",
-  drag: "Drag to move this block",
+  drag: "Drag to move, or press to change this block",
   blocks: "Blocks",
   /** The tabs above the block menu, one for each group. */
   tabs: "Block groups",
