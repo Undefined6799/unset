@@ -153,21 +153,31 @@ export async function makeKey({ crypto }: Keys, hasIdentity: boolean): Promise<G
   return key;
 }
 
+/** Element's options at each place it starts the offline device (element-web v1.12.35). */
+/** Setup: a new key with the new vault (CreateSecretStorageDialog.tsx:241). */
+export const DEHYDRATE_AT_SETUP: StartDehydrationOpts = { createNewKey: true };
+/** Unlock: the defaults, so the offline device's messages are picked up before it is replaced (SetupEncryptionStore.ts:141). */
+export const DEHYDRATE_AT_UNLOCK: StartDehydrationOpts = {};
+/** A reload of a browser already set up: the cached key only, nothing picked up (MatrixClientPeg.ts:333-345). */
+export const DEHYDRATE_AT_LOAD: StartDehydrationOpts = { onlyIfKeyCached: true, rehydrate: false };
+
+/** How starting the offline device ended: started, the server has none, or a failure to try again later. */
+export type OfflineDevice = "started" | "unsupported" | "failed";
+
 /**
  * Element's offline device (MSC3814; ADR 0113), as Element's initialiseDehydrationIfEnabled starts it (element-web
  * v1.12.35 apps/web/src/utils/device/dehydration.ts): only where the server has it (CryptoApi.isDehydrationSupported,
- * src/rust-crypto/DehydratedDeviceManager.ts:94-119), then startDehydration (src/crypto-api/index.ts:695-715), which
- * picks up the offline device's messages first unless told not to, keeps its key in the vault and makes a new one. It
- * needs the vault open, so it runs inside `holder.during`. False when it did not start; chat works without it, as in
- * Element, which logs the failure and goes on (MatrixClientPeg.ts:333-345), and the next unlock or load tries again.
+ * src/rust-crypto/DehydratedDeviceManager.ts:94-119), then startDehydration (src/crypto-api/index.ts:695-715). It
+ * needs the vault open, so setup and unlock run it inside `holder.during`. A failure never stops them: chat works
+ * without it, as in Element, which logs it and goes on (MatrixClientPeg.ts:333-345); the caller decides what to do.
  */
-export async function dehydrate(crypto: CryptoApi, opts: StartDehydrationOpts = {}): Promise<boolean> {
+export async function dehydrate(crypto: CryptoApi, opts: StartDehydrationOpts): Promise<OfflineDevice> {
   try {
-    if (!(await crypto.isDehydrationSupported())) return false;
+    if (!(await crypto.isDehydrationSupported())) return "unsupported";
     await crypto.startDehydration(opts);
-    return true;
+    return "started";
   } catch {
-    return false;
+    return "failed";
   }
 }
 
@@ -182,7 +192,7 @@ export async function storeKey({ crypto, holder }: Keys, key: GeneratedSecretSto
       setupNewSecretStorage: true,
       setupNewKeyBackup: true,
     });
-    await dehydrate(crypto, { createNewKey: true });
+    await dehydrate(crypto, DEHYDRATE_AT_SETUP);
   });
   return (await crypto.isSecretStorageReady()) && (await crypto.getActiveSessionBackupVersion()) !== null;
 }
@@ -223,7 +233,7 @@ export async function unlock(keys: Keys, userId: string, typed: string): Promise
       await crypto.checkKeyBackupAndEnable();
       // The offline device's messages, sent while the account had no browser open, and a new one (Element's
       // SetupEncryptionStore.ts:141, after the unlock).
-      await dehydrate(crypto);
+      await dehydrate(crypto, DEHYDRATE_AT_UNLOCK);
     });
   } catch {
     return "failed";

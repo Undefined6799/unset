@@ -130,3 +130,12 @@ local-only.ts `CHAT_SERVICES`). Before the first start:
       edge ask a public CA.
    4. After the deploy, run that runbook's after-deploy check; it now checks the chat site's routes at the edge.
 
+
+## Before upgrading Synapse or matrix-js-sdk
+
+The offline device (ADR 0113) uses MSC3814 by its unstable name on both sides: Synapse's
+`experimental_features.msc3814_enabled` and its `/unstable/org.matrix.msc3814.v1/dehydrated_device` routes, and the
+SDK's `UnstablePrefix` calls. If an upgrade renames either one, the page finds no offline device and quietly goes on
+without it. Preflight C36 still passes, because Synapse ignores experimental keys it does not know. Before such an
+upgrade, read both release notes for MSC3814, and check that `chat_e2e.first_message_no_browser` in
+`tests/e2e/chat-two-browsers.chromium.spec.ts` passed on the upgrade's CI run.

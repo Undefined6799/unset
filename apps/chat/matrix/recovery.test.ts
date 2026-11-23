@@ -7,7 +7,16 @@
 import { createClient } from "matrix-js-sdk/lib/matrix.js";
 import { calculateKeyCheck, type SecretStorageKeyDescriptionAesV1 } from "matrix-js-sdk/lib/secret-storage.js";
 import { describe, expect, test } from "vitest";
-import { createKeyHolder, type KeyFacts, phaseOf, unlock } from "./recovery.ts";
+import {
+  createKeyHolder,
+  DEHYDRATE_AT_LOAD,
+  DEHYDRATE_AT_SETUP,
+  DEHYDRATE_AT_UNLOCK,
+  dehydrate,
+  type KeyFacts,
+  phaseOf,
+  unlock,
+} from "./recovery.ts";
 
 const none: KeyFacts = {
   hasIdentity: false,
@@ -120,4 +129,52 @@ describe("unlock", () => {
     expect(await unlock({ client, crypto, holder }, ME, key.encodedPrivateKey ?? "")).toBe("failed");
     client.stopClient();
   }, 20_000);
+});
+
+describe("dehydrate", () => {
+  /** matrix-js-sdk 43.0.0's own client and crypto; the homeserver answers GET dehydrated_device with `answer`. */
+  async function cryptoAgainst(answer: () => Response) {
+    const seen: string[] = [];
+    const fetchFn = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      seen.push(`${init?.method ?? "GET"} ${path}`);
+      if (path.endsWith("/org.matrix.msc3814.v1/dehydrated_device")) return answer();
+      return new Response(JSON.stringify({ errcode: "M_NOT_FOUND", error: "none" }), { status: 404 });
+    };
+    const client = createClient({
+      baseUrl: "http://127.0.0.1:9",
+      userId: "@uaaaaaaaaaaaaaaaaaaaa:unset.cc",
+      deviceId: "DEVICEAAAA",
+      accessToken: "t",
+      fetchFn,
+    });
+    await client.initRustCrypto({ useIndexedDB: false });
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    return { client, crypto, seen };
+  }
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  test("chat.offline_device_unsupported: a server without it answers unsupported and nothing is uploaded", async () => {
+    const { client, crypto, seen } = await cryptoAgainst(() => json(400, { errcode: "M_UNRECOGNIZED", error: "no" }));
+    expect(await dehydrate(crypto, DEHYDRATE_AT_UNLOCK)).toBe("unsupported");
+    expect(seen.filter((r) => r.startsWith("PUT"))).toEqual([]);
+    client.stopClient();
+  }, 20_000);
+
+  test("chat.offline_device_failed: a server fault is a typed failure, never a throw that stops setup or unlock", async () => {
+    const { client, crypto } = await cryptoAgainst(() => json(500, { errcode: "M_UNKNOWN", error: "busy" }));
+    expect(await dehydrate(crypto, DEHYDRATE_AT_SETUP)).toBe("failed");
+    client.stopClient();
+  }, 20_000);
+
+  test("chat.offline_device_options: Element's options at each place (element-web v1.12.35)", () => {
+    // CreateSecretStorageDialog.tsx:241, a new key with the new vault.
+    expect(DEHYDRATE_AT_SETUP).toEqual({ createNewKey: true });
+    // SetupEncryptionStore.ts:141, the defaults: pick up the offline device's messages before replacing it.
+    expect(DEHYDRATE_AT_UNLOCK).toEqual({});
+    // MatrixClientPeg.ts:339, a reload: the cached key only, and nothing picked up.
+    expect(DEHYDRATE_AT_LOAD).toEqual({ onlyIfKeyCached: true, rehydrate: false });
+  });
 });

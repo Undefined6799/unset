@@ -338,6 +338,11 @@ test("chat_e2e.first_message_no_browser: a request sent while the other has no b
   const out = await b1.context.newPage();
   await out.goto("https://unset.sh/logout");
   await out.waitForURL("https://unset.sh/signed-out", { timeout: 90_000 });
+  // So the only device Bob has is the offline one: only it can be given the keys of what Alice sends now. Synapse's
+  // admin list shows it like any device (it is registered as one, synapse/handlers/device.py:480-484).
+  const bobDevices = async () =>
+    ((await admin(`/_synapse/admin/v2/users/${encodeURIComponent(bob.userId)}/devices`)).devices as unknown[]).length;
+  await expect.poll(bobDevices, { timeout: 60_000 }).toBe(1);
   const a = await browserFor(browser, alice.handle);
   await a.page.goto(`https://unset.cc/?with=${encodeURIComponent(bob.userId)}`);
   await saveKey(a.page);
@@ -430,6 +435,7 @@ test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversatio
   const joined = (await admin(`/_synapse/admin/v1/users/${encodeURIComponent(alice.userId)}/joined_rooms`))
     .joined_rooms as string[];
   expect(joined).toEqual([]);
+  // None left, the offline device included (ADR 0113; first_message_no_browser shows the admin list holds it).
   const devices = (await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}/devices`)).devices as [];
   expect(devices).toEqual([]);
 });

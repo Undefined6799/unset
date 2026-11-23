@@ -26,6 +26,7 @@ import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
   createKeyHolder,
+  DEHYDRATE_AT_LOAD,
   dehydrate,
   type Keys,
   makeKey,
@@ -213,13 +214,14 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     return pusher;
   };
   // A browser already set up keeps the offline device fresh from its cached key, picking up nothing: its own device
-  // got those messages (Element's MatrixClientPeg.ts:333-345, onlyIfKeyCached and no rehydrate). Not awaited, as
-  // Element does not wait for it either; a setup or an unlock started it already with the vault open.
+  // got those messages (Element's MatrixClientPeg.ts:333-345, DEHYDRATE_AT_LOAD). Not awaited, as Element does not
+  // wait for it either. Once per page, and not after a setup or an unlock here, which started it with the vault open:
+  // each new offline device is a device-list change for everyone this member talks with.
   let dehydrating = false;
   const dehydrateOnce = () => {
     if (dehydrating) return;
     dehydrating = true;
-    void dehydrate(crypto, { onlyIfKeyCached: true, rehydrate: false });
+    void dehydrate(crypto, DEHYDRATE_AT_LOAD);
   };
   const report = serialReports(
     () => busy,
@@ -246,6 +248,8 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     busy = true;
     const outcome = await unlock(keys, session.userId, typed).finally(() => (busy = false));
     if (outcome !== "unlocked") return outcome;
+    dehydrating = true; // the unlock started it
+
     // Keys the account's other browsers had not uploaded yet are read once more, when they have (RESTORE_AGAIN_MS).
     restoreAgain = setTimeout(() => void restoreBackup(crypto), RESTORE_AGAIN_MS);
     await report();
@@ -267,6 +271,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     const claimed = await options.setup.claim();
     if (claimed !== "claimed") return claimed === "elsewhere" ? tell({ kind: "setup_elsewhere" }) : fail(UNAVAILABLE);
     if (!(await storeKey(keys, key).catch(() => false))) return fail(SETUP_FAILED);
+    dehydrating = true; // the setup started it
     await options.setup.release();
     busy = false;
     await report();
