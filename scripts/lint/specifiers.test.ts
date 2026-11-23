@@ -165,7 +165,10 @@ test("cruise_specifiers_reach_the_check", async () => {
   expect(await cruiseSpecs(from, () => ["node:fs", "node:test", "../preflight/compose-parse.ts"])).toEqual([]);
 });
 
-test("real_tree_uses_only_allowed_specifiers", async () => {
+// Cruising the whole tree took 2.8 s to 4.9 s on CI's runners (ci code job, 2026-11-23) and grows with the tree, so
+// Vitest's 5 s default failed it on a slow runner (#1999 at 06d16ea, job 137748060547). It gets the budget the
+// other whole-tree cruise has (image-rules.test.ts, image_builds_only_in_image_tests).
+test("real_tree_uses_only_allowed_specifiers", { timeout: 30_000 }, async () => {
   const list = (dir: string) =>
     readdirSync(join(ROOT, dir), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())

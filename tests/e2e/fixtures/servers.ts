@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import { type Did, PRIVACY_VERSION, parseDid, TERMS_VERSION } from "@unset/domains-identity";
-import { toCardRecord } from "@unset/domains-profile";
+import { type CardContent, toCardRecord } from "@unset/domains-profile";
 import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
 import type { SavedSession } from "@unset/infrastructure-pds";
 import {
@@ -37,11 +37,13 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { buildOnce, PDS_HOST, type Postgres, type RunningWeb, startWeb } from "../../integration/web/built-server.ts";
 import { readyMember } from "../../integration/web/members.ts";
+import { removeOrphans } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 import {
   ACCOUNT,
   BELL_SIZE,
   HOST,
+  HOSTILE,
   INBOX_SIZE,
   INDEXED,
   INNER,
@@ -76,6 +78,10 @@ function scratch(): string {
 /** Postgres with the migrations applied, then `seed` run as the superuser, connected to as `web` for this run. */
 async function database(seed = ""): Promise<Postgres> {
   process.on("exit", () => stopAllPostgres());
+  // A run killed before its exit listener ran (SIGKILL, a lost machine) left its container; an integration run
+  // removes those too (setup/pg.setup.ts), but a run of only e2e specs would never reach that.
+  const orphans = removeOrphans(60_000);
+  if (orphans.length > 0) process.stderr.write(`Removed test containers an ended run left: ${orphans.join(", ")}\n`);
   const migratorPassword = randomPassword();
   const postgres = await startPostgres({
     initDir: join(ROOT, "deployment/postgres/init"),
@@ -217,42 +223,87 @@ function connectProxy(): Promise<void> {
   return new Promise((done) => proxy.listen(Number(new URL(PROXY).port), "127.0.0.1", () => done()));
 }
 
+const INDEXED_AT = "2026-11-19T00:00:00.000Z";
+/** Record keys for a seeded member's cards, in page order. */
+const CARD_KEYS = ["3jzfcijpj2z2a", "3jzfcijpj2z2b", "3jzfcijpj2z2c", "3jzfcijpj2z2d"] as const;
+
+/** A value as a dollar-quoted SQL string, so no quote in a member's text ends it; the tag itself must not occur. */
+function quoted(text: string): string {
+  if (text.includes("$j$")) throw new Error("e2e seed: the text holds the quote tag");
+  return `$j$${text}$j$`;
+}
+
 /**
- * INDEXED as the indexer leaves a member with a profile, a main page and one card (P3.12s), so the public profile page at /@did
- * is a page under test. Constants only; the records are dollar-quoted JSON.
+ * A member as the indexer leaves one with a profile, a main page and its cards (P3.12s), so the public profile page at
+ * /@did is a page under test. Constants only; names and records are dollar-quoted.
  */
-function indexedMember(): string {
-  const at = "2026-11-19T00:00:00.000Z";
-  const card = toCardRecord({ kind: "readme", text: "A card on a public page." }, "full", null, at);
-  if (!card.ok) throw new Error(`e2e card did not build: ${card.code}`);
-  const profile = {
-    $type: "sh.unset.profile",
-    displayName: "Public Member",
-    headline: "On the open web",
-    createdAt: at,
-  };
-  // The main page lists the card, so it shows (ADR 0086 point 3, ADR 0091).
-  const page = {
-    $type: "sh.unset.page",
-    cards: [{ uri: `at://${INDEXED.did}/sh.unset.card/3jzfcijpj2z2a` }],
-    createdAt: at,
-  };
-  const did = INDEXED.did;
+function indexedMember(did: string, name: string, headline: string, contents: readonly CardContent[]): string {
+  const profile = { $type: "sh.unset.profile", displayName: name, headline, createdAt: INDEXED_AT };
+  const uris = contents.map((_, at) => `at://${did}/sh.unset.card/${CARD_KEYS[at]}`);
+  // The main page lists each card, so it shows (ADR 0086 point 3, ADR 0091).
+  const page = { $type: "sh.unset.page", cards: uris.map((uri) => ({ uri })), createdAt: INDEXED_AT };
+  const sections = contents.map((content, at) => {
+    const card = toCardRecord(content, "full", null, INDEXED_AT);
+    if (!card.ok || CARD_KEYS[at] === undefined) throw new Error("e2e card did not build");
+    return `
+    INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+      VALUES ('${uris[at]}', '${did}', '${CARD_KEYS[at]}', 'cid-s', '3l',
+        ${quoted(JSON.stringify(card.record))}, ${at}, now());`;
+  });
   return `
     INSERT INTO idx.account (did, handle_status, pds_active, track_requested_at, updated_at)
       VALUES ('${did}', 'unresolved', true, now(), now());
     INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
-      VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', $j$${JSON.stringify(profile)}$j$,
-        'Public Member', false, now());
+      VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', ${quoted(JSON.stringify(profile))},
+        ${quoted(name)}, false, now());
     INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
-      VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', $j$${JSON.stringify(page)}$j$, now());
-    INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-      VALUES ('at://${did}/sh.unset.card/3jzfcijpj2z2a', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l',
-        $j$${JSON.stringify(card.record)}$j$, 0, now());`;
+      VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', ${quoted(JSON.stringify(page))}, now());${sections.join("")}`;
+}
+
+/**
+ * The hostile member's cards (pages.ts HOSTILE): one of each kind, every text field hostile, and a script address
+ * beside a real one, as a PDS would store whatever its member wrote.
+ */
+const HOSTILE_CARDS: readonly CardContent[] = [
+  { kind: "readme", text: `${HOSTILE.close} [link](${HOSTILE.address}) ${HOSTILE.handler}` },
+  {
+    kind: "links",
+    title: HOSTILE.close,
+    layout: "list",
+    items: [
+      { uri: "https://hostile.example/one", label: HOSTILE.handler, description: HOSTILE.address },
+      { uri: HOSTILE.address, label: "Script address", description: "" },
+    ],
+  },
+  {
+    kind: "collection",
+    title: HOSTILE.handler,
+    layout: "grid",
+    items: [{ title: HOSTILE.close, tag: "", description: HOSTILE.handler, uri: "https://hostile.example/piece" }],
+  },
+  {
+    kind: "buttons",
+    heading: HOSTILE.close,
+    text: HOSTILE.handler,
+    buttons: [
+      { kind: "link", preset: "custom", uri: "https://hostile.example/call", label: HOSTILE.handler },
+      { kind: "link", preset: "custom", uri: HOSTILE.address, label: "Script button" },
+    ],
+  },
+];
+
+/** The production server's two indexed members: INDEXED, a plain page under test, and HOSTILE. */
+function indexedMembers(): string {
+  return [
+    indexedMember(INDEXED.did, "Public Member", "On the open web", [
+      { kind: "readme", text: "A card on a public page." },
+    ]),
+    indexedMember(HOSTILE.did, HOSTILE.close, HOSTILE.handler, HOSTILE_CARDS),
+  ].join("\n");
 }
 
 async function serveProd(): Promise<void> {
-  const pg = await database(indexedMember());
+  const pg = await database(indexedMembers());
   const dir = scratch();
   const web = await startWeb(pg, { UNSET_ENV: "dev", TEST_ROUTES: "false", ...frontedEnv("prod") });
   await tlsFront(dir, LISTEN.prod, INNER.prod);

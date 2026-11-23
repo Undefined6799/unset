@@ -1,7 +1,9 @@
 // Outer card surfaces persist through the real form actions and keep controls in every theme and width.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, deleteCard, OWN_PAGE } from "./cards.ts";
+import { addCard, deleteCard, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage } from "./observe.ts";
+
+paceWrites(test);
 
 // The Text card cycles through every surface in the editor; each other kind is added with one surface and checked
 // once, so the test spends 11 of the member's profile writes (4 adds, 3 saves, 4 deletes).

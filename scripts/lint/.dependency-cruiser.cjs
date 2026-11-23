@@ -33,6 +33,9 @@ const SDK_ADAPTERS = [
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
   { sdk: "@milkdown/[^/]*", adapter: "apps/web/lib/editor/" },
   { sdk: "prosemirror-[^/]*", adapter: "apps/web/lib/editor/" },
+  // The Text editor's code block (P1.21v, code-block.ts): CodeMirror and its parsers' highlighting tags.
+  { sdk: "@codemirror/[^/]*", adapter: "apps/web/lib/editor/" },
+  { sdk: "@lezer/[^/]*", adapter: "apps/web/lib/editor/" },
   // ADR 0070 point 2.2: pictures are decoded only in infrastructure/image's sandboxed children, never in web.
   { sdk: "sharp", adapter: "infrastructure/image/" },
   { sdk: "@img/[^/]+", adapter: "infrastructure/image/" },

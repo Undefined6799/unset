@@ -10,7 +10,7 @@ importance: normal
 related: ["[[identity]]", "[[lexicons]]", "[[http]]", "[[pds]]"]
 replaced_by: null
 tags: [area, profile]
-checked: 2026-11-21
+checked: 2026-11-23
 ---
 # profile
 
@@ -24,8 +24,9 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
   `sh.unset.page/self` and its `cards` list (`withList`, `withCardListed`, `withCardUnlisted`, `withCardOrder`). `APP_LIMITS` sit
   under the lexicon's limits, which are permanent once published (ADR 0051 point 5).
 - One page layout (ADR 0077, superseding 0072's choice): apps/web draws `profile-header.svelte` above the cards, the
-  avatar opening a native popover About panel (handle, details) with no hover, so it works the same on the
-  script-free public page. A stored `layout` field from before is an undefined field the merge keeps.
+  avatar opening a native popover About panel (handle, details) with no hover, so it works the same with script
+  off. The public page runs the client since P1.22e (ADR 0114); a member's text there is text nodes only. A stored
+  `layout` field from before is an undefined field the merge keeps.
 - `cards.ts`: reading profile cards, one `sh.unset.section` record each (ADR 0051). Lenient: a card that does not
   validate or whose kind is unknown is hidden, and an address that is not plain http(s) is dropped.
   Optional `surface` (ADR 0068) reads as filled when absent or unknown; the editor offers filled, outlined and plain.

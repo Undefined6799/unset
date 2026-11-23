@@ -12,7 +12,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { CARD_TEXT } from "../../profile/messages.ts";
-import type { CardLayout, CardSurface, CardView } from "../../profile/types.ts";
+import type { CardLayout, CardSurface, ShownCard } from "../../profile/types.ts";
 import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
@@ -25,7 +25,7 @@ let {
   add,
   text,
 }: {
-  cards: readonly CardView[];
+  cards: readonly ShownCard[];
   controls?: Snippet<[number]>;
   add?: Snippet;
   text?: Snippet<[number]>;
@@ -87,7 +87,7 @@ const CONTACT_FILLED =
 const PLAIN_FOCUS =
   "outline-offset-2 has-focus-visible:outline has-focus-visible:outline-1 has-focus-visible:outline-ring";
 /** The outer card's surface classes; Contact's Filled keeps its own tint and edge. */
-function outer(shown: CardView): string {
+function outer(shown: ShownCard): string {
   const surface =
     shown.surface === "filled" && shown.shown.kind === "buttons" ? CONTACT_FILLED : SURFACE[shown.surface];
   return shown.surface === "plain" && controls !== undefined ? `${surface} ${PLAIN_FOCUS}` : surface;
@@ -99,6 +99,13 @@ const head = "flex items-start justify-between gap-3";
  */
 const TEXT_INSET: Record<CardSurface, string> = { filled: "p-5 md:p-7", outlined: "p-5 md:p-7", plain: "p-0" };
 const count = "font-mono text-xs text-muted-foreground";
+/**
+ * On the owner's page with a mouse, room left of every card for a Text card's + and six dots, which sit outside the
+ * card (Alex 2026-11-22 00:12Z, the target look's decision 1): between the two columns, and before the first where the
+ * page's own margin is narrower than them (the handle is two 1.75rem buttons 0.5rem off the card, menus.ts). Touch
+ * screens never show them (text-menus.svelte), so a phone keeps the whole width.
+ */
+const HANDLE_ROOM = "pointer-fine:md:gap-x-20 pointer-fine:max-[75rem]:ps-20";
 </script>
 
 {#snippet listHead(title: string, counted: string, scrolls: boolean, index: number, sideways = -1)}
@@ -125,7 +132,7 @@ const count = "font-mono text-xs text-muted-foreground";
 {/snippet}
 
 {#if cards.length > 0 || add !== undefined}
-  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 {controls === undefined ? '' : HANDLE_ROOM}">
     {#each cards as shown, index (shown.key)}
       {@const span = shown.width === "half" ? "" : "md:col-span-2"}
       {#if shown.shown.kind === "readme"}

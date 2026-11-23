@@ -3,13 +3,15 @@
 // when the page opens, never merged on their own; Discard throws them away. All under the app's real CSP. The card
 // added is deleted again.
 import { expect, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites, spendsWrites } from "./cards.ts";
 import { addPageCookies, openPage, pageNoise, watch } from "./observe.ts";
+
+paceWrites(test);
 
 /** The in-place editor of the Text card that holds `word`, once the page has loaded it. */
 async function editorHolding(page: Page, word: string) {
   const card = page.locator('[data-slot="card"]', { hasText: word });
-  const editor = card.locator("[data-text-in-place] [contenteditable]");
+  const editor = card.locator("[data-text-in-place] .ProseMirror");
   await expect(editor).toHaveAttribute("contenteditable", "true");
   return { card, editor };
 }
@@ -350,6 +352,36 @@ async function warm(page: Page) {
 }
 
 /**
+ * Waits until the page is drawn as a person sees it: its stylesheets applied and no font still on its way. A test that
+ * measures where words are and then clicks there must measure that drawing: Playwright reads boxes from whatever has
+ * loaded, so a stylesheet or font that arrives between the two moves the words, and the click lands on others or on
+ * none (CI, #1968 at 64e0b31: WebKit never took the caret; here a stylesheet held until after the measure fails every
+ * such test in Chromium). document.fonts.ready is no use: it also waits for the document to finish loading, which a
+ * page with its scripts held never does.
+ */
+async function untilStyled(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const { document } = globalThis as unknown as {
+          document: {
+            querySelectorAll(selector: string): Iterable<{ sheet: unknown }>;
+            body: { offsetHeight: number };
+            fonts: Iterable<{ status: string }>;
+          };
+        };
+        if (Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some((link) => link.sheet === null)) {
+          return false;
+        }
+        // Laid out with the styles, so every font the words use has been asked for.
+        void document.body.offsetHeight;
+        return !Array.from(document.fonts).some((face) => face.status === "loading");
+      }),
+    )
+    .toBe(true);
+}
+
+/**
  * A page in a browser context of its own. WebKit gives a page a script it already holds in its memory cache without
  * asking page.route (in Playwright 1.64.1's WebKit no route call came for the editor's chunk once a page had loaded
  * it), so a hold or a failure set on a page that had drawn an editor did nothing, at random under load. A new context
@@ -358,7 +390,9 @@ async function warm(page: Page) {
 async function freshPage(page: Page): Promise<Page> {
   const browser = page.context().browser();
   if (browser === null) throw new Error("no browser");
-  return (await browser.newContext()).newPage();
+  const context = await browser.newContext();
+  spendsWrites(context);
+  return context.newPage();
 }
 
 /**
@@ -392,7 +426,7 @@ test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }
   expect((await openPage(held, OWN_PAGE))?.status()).toBe(200);
   // A press before the page's own script runs is the browser's alone; from the moment it runs, the card listens.
   await expect(held.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
-  await expect(held.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  await expect(held.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
   const card = held.locator('[data-slot="card"]', { hasText: word });
   await card.getByText(`${word} start`).click();
   await held.keyboard.type("Q");
@@ -431,6 +465,7 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   const line = card.getByText(`${word} start`);
   await expect(line).toBeVisible();
   await expect(cold.locator("[data-text-in-place][data-listening]")).toHaveCount(0);
+  await untilStyled(cold);
   const box = await line.boundingBox();
   if (box === null) throw new Error("no line");
   // At the end of the line, as the tester clicked at the end of a sentence.
@@ -451,13 +486,208 @@ test("a_click_before_the_page_script_runs_puts_the_caret_there_once_the_editor_o
   await closeHeld(cold);
 });
 
-/**
- * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
- * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
- * after this one (text-markdown.spec.ts) is not refused.
- */
-async function giveBackWrites(page: Page, used: number) {
-  await page.waitForTimeout(used * 2_000 + 1_000);
+// Staging, 2026-11-21 23:52Z (tester, main 10f85af): a click at the end of "A weekly slow-radio show" before the
+// editor opened put the caret on the line above, mid-word in Chromium. The page and the editor draw some blocks at
+// different sizes (here a code block: 13 px on the page), so the click's point is other words once the editor shows.
+// The click is carried as a place in the words, not a point on the screen.
+test("a_click_before_the_editor_opens_lands_in_the_same_words_where_the_editor_draws_them_elsewhere", async ({
+  page,
+}) => {
+  const word = `place${Date.now()}`;
+  await openOwnPage(page);
+  const code = "```\none\ntwo\nthree\nfour\n```";
+  // The emoji is one character on the page and two UTF-16 units in the editor: the count must agree.
+  const last = "A weekly 🎧 slow-radio show";
+  const text = `${word} start\n\n${code}\n\nSound design for short films\n\n${last}`;
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
+  const cold = await freshPage(page);
+  await addPageCookies(cold.context(), OWN_PAGE);
+  const clicked = Promise.withResolvers<void>();
+  const typed = Promise.withResolvers<void>();
+  // Every script held until the click, as a cold load; then the editor's own held until the letters are typed.
+  await cold.route("**/_app/immutable/**/*.js", async (route) => {
+    await clicked.promise;
+    const answer = await route.fetch();
+    const body = await answer.text();
+    if (body.includes("ProseMirror-")) await typed.promise;
+    return route.fulfill({ response: answer, body });
+  });
+  await cold.goto(page.url(), { waitUntil: "commit" });
+  const card = cold.locator('[data-slot="card"]', { hasText: word });
+  const line = card.getByText(last);
+  await expect(line).toBeVisible();
+  await untilStyled(cold);
+  const box = await line.boundingBox();
+  if (box === null) throw new Error("no line");
+  await cold.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  clicked.resolve();
+  await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+  await expect(cold.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
+  await cold.keyboard.type("EARLY");
+  typed.resolve();
+  const { editor } = await editorHolding(cold, word);
+  await expect(editor).toBeFocused();
+  await cold.keyboard.type("!");
+  await expect(editor.locator(":scope > p").last()).toHaveText(`${last}EARLY!`);
+  await expect(editor.locator(":scope > p").nth(1)).toHaveText("Sound design for short films");
+  await bar(cold).getByRole("button", { name: "Discard" }).click();
+  await removeCard(cold, word);
+  await closeHeld(cold);
+});
+
+// Review of #1968 (Codex, 2026-11-22 00:17Z): a click just after a space landed before it, and a click at the start
+// of a list's second item landed at the end of the first (the page draws <li>one</li><li>two</li>, nothing between).
+// Codex on 921401f (00:53Z): a click at the start of the line after a hard line break landed at the end of the line
+// before it, and a click inside a code block's indentation landed before the indentation (white space was one space).
+for (const { name, within, has, piece, at, up, expected, text: words } of [
+  { name: "just_after_a_space", within: "p", has: "hello", piece: 0, at: 6, expected: "hello EARLYworld" },
+  { name: "at_the_start_of_a_later_list_item", within: "li", has: "two", piece: 0, at: 0, expected: "EARLYtwo" },
+  {
+    name: "at_the_start_of_the_line_after_a_line_break",
+    within: "p",
+    has: "right",
+    piece: 1,
+    at: 0,
+    expected: "left\nEARLYright",
+  },
+  { name: "inside_a_code_block_s_indentation", within: "pre", has: "foo", piece: 0, at: 4, expected: "    EARLYfoo" },
+  // Codex on 2dd6f8a: the page draws items with a blank line between them as lists of their own, the editor as one
+  // (CommonMark 0.31.2 §5.3), so the block a place names is another one in the editor, with as many characters. Four
+  // of them: the editor draws them closer together than the page, so by the fourth the click's point on the screen is
+  // other words (with two, it happened to be the same words).
+  {
+    name: "before_an_item_the_page_draws_as_a_list_of_its_own",
+    within: "li",
+    has: "four",
+    piece: 0,
+    at: 0,
+    expected: "EARLYfour",
+    text: (word: string) => `${word} start\n\n- one\n\n- two\n\n- three\n\n- four\n\nend`,
+  },
+  // Codex on 7aa34b8: a click on the empty line between two hard line breaks landed at the start of the line after
+  // them, as both line starts were counted the same. `up` clicks that many lines above the character.
+  {
+    name: "on_an_empty_line_between_two_line_breaks",
+    within: "p",
+    has: "right",
+    piece: 1,
+    at: 0,
+    up: 1,
+    expected: "left\nEARLY\nright",
+    text: (word: string) => `${word} start\n\nleft\\\n\\\nright`,
+  },
+  // Codex on b497e1a: the same before the card's first words, where neither break counted, so the empty line was the
+  // same place as the start of the words after it.
+  {
+    name: "on_an_empty_line_before_the_first_words",
+    within: "p",
+    has: "right",
+    piece: 0,
+    at: 0,
+    up: 1,
+    expected: "\nEARLY\nright",
+    text: (word: string) => `\\\n\\\nright\n\n${word}`,
+  },
+  // Codex on c127b78: the white space a code block ends with was dropped from the count at the next line's start, so a
+  // click two characters into the paragraph after the block was the same place as one after the block's spaces.
+  {
+    name: "in_the_words_after_a_code_block_ending_in_spaces",
+    within: "p",
+    // "ar" and not "bar": the typed word splits "bar", and the editor is read with the same locator.
+    has: "ar",
+    piece: 0,
+    at: 1,
+    expected: "bEARLYar",
+    text: (word: string) => `\`\`\`\nfoo  \n\`\`\`\n\nbar\n\n${word}`,
+  },
+  // Codex on 8911813: a click inside that empty code block was carried to before the words after it, the same place.
+  {
+    name: "inside_an_empty_block_before_the_first_words",
+    within: "pre",
+    has: "",
+    piece: 0,
+    at: 0,
+    expected: "EARLY",
+    text: (word: string) => `\`\`\`\n\`\`\`\n\nhello\n\n${word}`,
+  },
+  // Codex on cef4242: a place before the words' first character is the start of the first block with words, not of
+  // the first block, which here is an empty code block.
+  {
+    name: "before_the_first_words_after_an_empty_block",
+    within: "p",
+    has: "hello",
+    piece: 0,
+    at: 0,
+    expected: "EARLYhello",
+    text: (word: string) => `\`\`\`\n\`\`\`\n\nhello\n\n${word}`,
+  },
+]) {
+  test(`a_click_before_the_editor_opens_${name}_lands_on_the_same_side`, async ({ page }) => {
+    const word = `side${Date.now()}`;
+    await openOwnPage(page);
+    const text =
+      words?.(word) ?? `${word} start\n\nhello world\n\n- one\n- two\n\nleft  \nright\n\n\`\`\`\n    foo\n\`\`\``;
+    await addCard(page, { kind: "readme", width: "full", surface: "filled", text });
+    const cold = await freshPage(page);
+    await addPageCookies(cold.context(), OWN_PAGE);
+    const clicked = Promise.withResolvers<void>();
+    const typed = Promise.withResolvers<void>();
+    await cold.route("**/_app/immutable/**/*.js", async (route) => {
+      await clicked.promise;
+      const answer = await route.fetch();
+      const body = await answer.text();
+      if (body.includes("ProseMirror-")) await typed.promise;
+      return route.fulfill({ response: answer, body });
+    });
+    await cold.goto(page.url(), { waitUntil: "commit" });
+    const card = cold.locator('[data-slot="card"]', { hasText: word });
+    const target = card.locator(within, { hasText: has });
+    await expect(target).toBeVisible();
+    await untilStyled(cold);
+    // The left edge of the character at `at`, a pixel in: the browser puts the caret just before it.
+    const point = await target.evaluate(
+      (element, { index, skip, lines }) => {
+        const page = element.ownerDocument;
+        // NodeFilter.SHOW_TEXT (the e2e project has no DOM types).
+        const walker = page.createTreeWalker(element, 4);
+        let words = walker.nextNode();
+        for (let left = skip; words !== null; words = walker.nextNode()) {
+          if ((words.textContent ?? "").trim() === "") continue;
+          if (left === 0) break;
+          left -= 1;
+        }
+        if (words === null) {
+          // An element with no words (an empty code block): its middle.
+          const box = element.getBoundingClientRect();
+          return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        }
+        const range = page.createRange();
+        range.setStart(words, index);
+        range.setEnd(words, index + 1);
+        const box = range.getBoundingClientRect();
+        return { x: box.left + 1, y: box.top + box.height / 2 - lines * box.height };
+      },
+      { index: at, skip: piece, lines: up ?? 0 },
+    );
+    await cold.mouse.click(point.x, point.y);
+    clicked.resolve();
+    await expect(cold.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+    await expect(cold.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
+    await cold.keyboard.type("EARLY");
+    typed.resolve();
+    const { editor } = await editorHolding(cold, word);
+    // The caret is in the editor: in its own text, or in a code block's CodeMirror, which takes the focus inside it.
+    await expect
+      .poll(() => editor.evaluate((element) => element.contains(element.ownerDocument.activeElement)))
+      .toBe(true);
+    // As drawn, so the side of a line break shows (innerText writes it as a new line). The editor draws a code block's
+    // text in CodeMirror (code-block.ts), the page in a pre.
+    const drawn = editor.locator(within === "pre" ? ".cm-content" : within, { hasText: has });
+    await expect.poll(() => drawn.evaluate((element) => (element as { innerText: string }).innerText)).toBe(expected);
+    await bar(cold).getByRole("button", { name: "Discard" }).click();
+    await removeCard(cold, word);
+    await closeHeld(cold);
+  });
 }
 
 /** The own page opened while the editor's script is held, with every Text card listening and none drawn yet. */
@@ -466,7 +696,7 @@ async function openHeld(page: Page): Promise<Page> {
   // Not openOwnPage: its wait for a quiet network would wait out the held script.
   expect((await openPage(held, OWN_PAGE))?.status()).toBe(200);
   await expect(held.locator("[data-text-in-place]:not([data-listening])")).toHaveCount(0);
-  await expect(held.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  await expect(held.locator("[data-text-in-place] .ProseMirror")).toHaveCount(0);
   return held;
 }
 
@@ -499,7 +729,6 @@ test("keys_typed_before_the_editor_opens_go_only_to_the_card_pressed_last", asyn
   await closeHeld(again);
   await removeCard(page, first);
   await removeCard(page, second);
-  await giveBackWrites(page, 4);
 });
 
 // Codex on 46550e5: a key the card cannot replay (Backspace, Enter, an arrow) ends the keys it keeps, so the words
@@ -519,7 +748,6 @@ test("a_key_typed_before_the_editor_opens_that_cannot_be_replayed_ends_the_kept_
   await bar(held).getByRole("button", { name: "Discard" }).click();
   await closeHeld(held);
   await removeCard(page, word);
-  await giveBackWrites(page, 2);
 });
 
 test("a_click_on_the_card_around_the_words_puts_the_caret_in_them", async ({ page }) => {
@@ -659,9 +887,13 @@ test("enter_or_space_pressed_again_after_a_keyboard_save_answered_leaves_the_wor
     await editor.press("End");
     await page.keyboard.type(typed);
     const saved = page.waitForResponse(/\?\/saveAll$/);
+    // The bar says Saved. only once the page has read the cards back (refreshAll after the Save's answer), so the
+    // test waits for that read too and names its status should it fail (CI run 45111322551: no Saved. within 5 s).
+    const reread = page.waitForResponse((answer) => answer.url().includes("/__data.json"));
     await bar(page).getByRole("button", { name: "Save" }).focus();
     await page.keyboard.press(key);
     await saved;
+    expect((await reread).status()).toBe(200);
     await expect(bar(page).getByRole("status")).toHaveText("Saved.");
     await expect(editor).not.toBeFocused();
     await page.keyboard.press(key);
@@ -707,7 +939,6 @@ test("after_a_save_from_the_markdown_field_typing_goes_on_there", async ({ page 
   await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
   await page.keyboard.press("Escape");
   await removeCard(page, word);
-  await giveBackWrites(page, 3);
 });
 
 test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) => {

@@ -4,8 +4,10 @@
 // "+" adds a line with the block menu open and whose grip drags the block. All under the app's real CSP. Each card
 // added is deleted again, and nothing is saved.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
+
+paceWrites(test);
 
 // A large screen, tall enough that a card's blocks and its handle are all in view while one is dragged.
 test.use({ viewport: { width: 1280, height: 1400 } });
@@ -90,7 +92,16 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
   await expect(menu).toBeVisible();
   await page.keyboard.type("head");
-  await expect(menu.getByRole("option")).toHaveText(["Heading 1", "Heading 2", "Heading 3"]);
+  // Six levels, each with its numbered icon, as the playground's menu has them (Crepe 7.23.0 block-edit menu).
+  await expect(menu.getByRole("option")).toHaveText([
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+  ]);
+  await expect(menu.getByRole("option").locator("svg")).toHaveCount(6);
   await expect(menu.getByRole("option", { name: "Heading 1" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowDown");
   const second = menu.getByRole("option", { name: "Heading 2" });
@@ -127,8 +138,86 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   await bold.click();
   await expect(editor.locator("strong")).toHaveText(`${word} start`);
   await expect(bold).toHaveAttribute("aria-pressed", "true");
+  // The playground's bar, in its order: Strikethrough after Italic (Crepe 7.23.0 toolbar).
+  const names = await floating.getByRole("button").evaluateAll((all) => all.map((b) => b.getAttribute("aria-label")));
+  expect(names).toEqual(["Bold", "Italic", "Strikethrough", "Inline code", "Link"]);
+  const strike = floating.getByRole("button", { name: "Strikethrough" });
+  await strike.click();
+  await expect(editor.locator("strong del, del strong")).toHaveText(`${word} start`);
+  await expect(strike).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("ArrowRight");
   await expect(floating).toBeHidden();
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+test("the_block_menu_has_the_playgrounds_tabs_and_makes_task_lists_and_tables", async ({ page }) => {
+  const watched = watch(page);
+  const word = `tabs${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} start`);
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("/");
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await expect(menu).toBeVisible();
+  // Crepe 7.23.0's items in its order, less Image and Math (block-edit/menu/config.ts), each with its icon.
+  await expect(menu.getByRole("option")).toHaveText([
+    "Text",
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+    "Quote",
+    "Divider",
+    "Bullet list",
+    "Ordered list",
+    "Task list",
+    "Code",
+    "Table",
+  ]);
+  await expect(menu.getByRole("option").locator("svg")).toHaveCount(14);
+  // The tabs above it name the groups; the one holding the active item is current (Crepe's tab-group).
+  const tabs = page.getByRole("group", { name: "Block groups" }).filter({ visible: true });
+  await expect(tabs.getByRole("button")).toHaveText(["Text", "List", "Advanced"]);
+  const current = () => tabs.locator("[aria-current=true]");
+  await expect(current()).toHaveText("Text");
+  const active = () => menu.getByRole("option", { selected: true });
+  // Right and left jump between groups: right to the next group's first item, left to the previous one's last.
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Bullet list");
+  await expect(current()).toHaveText("List");
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Code");
+  await expect(current()).toHaveText("Advanced");
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Code");
+  await page.keyboard.press("ArrowLeft");
+  await expect(active()).toHaveText("Task list");
+  // A press on a tab moves to its first item and keeps the menu open and the editor focused.
+  await tabs.getByRole("button", { name: "Text" }).click();
+  await expect(active()).toHaveText("Text");
+  await expect(current()).toHaveText("Text");
+  await expect(editor).toBeFocused();
+  await tabs.getByRole("button", { name: "List" }).click();
+  await expect(active()).toHaveText("Bullet list");
+  // Task list makes an unticked task (preset-gfm's task list item).
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  await page.keyboard.type("todo");
+  await expect(editor.locator('li[data-item-type="task"][data-checked="false"]')).toHaveText("todo");
+  // Table makes three rows of three cells, the caret in the first (preset-gfm insertTableCommand).
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("/table");
+  await expect(menu.getByRole("option")).toHaveText(["Table"]);
+  await page.keyboard.press("Enter");
+  await expect(editor.locator("table tr")).toHaveCount(3);
+  await expect(editor.locator("table tr").first().locator("th, td")).toHaveCount(3);
+  await page.keyboard.type("cell");
+  await expect(editor.locator("table th, table td").first()).toHaveText("cell");
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
@@ -139,8 +228,89 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
   const handle = card.locator("[data-block-handle]");
   await expect(handle).toBeHidden();
+
+  // Alex 2026-11-21 18:48Z: the dots "fully in the margin ... on the side", and a pointer along the card's side shows
+  // the handle of the block level with it, though the pointer never enters the card.
+  const box = await card.boundingBox();
+  const lines = await editor.locator("p").evaluateAll((all) =>
+    all.map((p) => {
+      const r = p.getBoundingClientRect();
+      return r.top + r.height / 2;
+    }),
+  );
+  if (box === null || lines.length !== 3) throw new Error("no card");
+  const handleMiddle = async () => {
+    const at = await handle.boundingBox();
+    return at === null ? Number.POSITIVE_INFINITY : at.y + at.height / 2;
+  };
+  await page.mouse.move(box.x - 20, lines[2] as number);
+  await expect(handle).toBeVisible();
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[2] as number))).toBeLessThan(8);
+  const placed = await handle.boundingBox();
+  expect((placed?.x ?? 0) + (placed?.width ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(box.x);
+  await page.mouse.move(box.x - 20, lines[0] as number, { steps: 4 });
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[0] as number))).toBeLessThan(8);
+
+  // Pressed, not dragged, the dots open the block menu to change their block, keeping its words.
+  // The handle follows the pointer on its next frame; a press or drag before it is level with the block works the
+  // dots of the block it left (WebKit, CI 857ee3c; Chromium, CI 2918521).
+  const hoverBlock = async (block: Locator) => {
+    await block.hover();
+    await expect
+      .poll(async () => {
+        const at = await block.boundingBox();
+        return at === null ? Number.POSITIVE_INFINITY : Math.abs((await handleMiddle()) - (at.y + at.height / 2));
+      })
+      .toBeLessThan(8);
+  };
+  await hoverBlock(editor.locator("p").nth(1));
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  await grip.click();
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await expect(menu).toBeVisible();
+  // What a block can become; a divider or a table is added, never turned into, so they are not offered here.
+  await expect(menu.getByRole("option")).toHaveText([
+    "Text",
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+    "Quote",
+    "Bullet list",
+    "Ordered list",
+    "Task list",
+    "Code",
+  ]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  // Only that block changed (a level 2 heading is an h3 under the card's h2).
+  await expect(editor.locator("h3")).toHaveText("second line");
+  await expect(editor.locator("p")).toHaveText([`${word} one`, "third line"]);
+  await hoverBlock(editor.locator("h3"));
+  await grip.click();
+  await expect(menu).toBeVisible();
+  // The change menu takes the block menu's keys: right and left jump between groups, Escape closes it, changing nothing.
+  const active = () => menu.getByRole("option", { selected: true });
+  await page.keyboard.press("ArrowRight");
+  await expect(active()).toHaveText("Bullet list");
+  await page.keyboard.press("ArrowLeft");
+  await expect(active()).toHaveText("Quote");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(editor.locator("h3")).toHaveText("second line");
+  await hoverBlock(editor.locator("h3"));
+  await grip.click();
+  await expect(menu).toBeVisible();
+  await menu.getByRole("option", { name: "Text" }).click();
+  await expect(editor.locator("p")).toHaveText([`${word} one`, "second line", "third line"]);
+  await expect(editor).toBeFocused();
+
   const first = editor.locator("p").first();
-  await first.hover();
+  await hoverBlock(first);
   await expect(handle).toBeVisible();
   await expect(handle.getByRole("button", { name: "Add a block below" })).toBeVisible();
   await handle.getByRole("button", { name: "Add a block below" }).click();
@@ -151,8 +321,7 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await expect(editor.locator("p").nth(1)).toHaveText("new line");
 
   // The grip drags its block: the third line goes above the first.
-  await editor.locator("p").nth(3).hover();
-  const grip = handle.getByRole("img", { name: "Drag to move this block" });
+  await hoverBlock(editor.locator("p").nth(3));
   await expect(grip).toBeVisible();
   // Crepe's handle is six dots; ours draws Lucide's grip-vertical (ADR 0087), one path per dot.
   await expect(grip.locator("svg path")).toHaveCount(6);
@@ -160,6 +329,166 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   await expect(editor.locator("p")).toHaveText(["third line", `${word} one`, "new line", "second line"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// CI on #1999 at c2bd3bb: a drag from the dots moved nothing. plugin-block 7.23.0 shows the handle at the block under
+// the pointer on its first move past a 200 ms throttle (lib/index.js, mousemoveCallback), pressed or not, so a pointer
+// held on the dots and then moved straight onto other words took the handle to them before Chromium began the drag,
+// which then had nothing under the press to drag (no dragstart fired; seen with the CPU slowed 6x). Pressed, the dots
+// stay with their block until they are let go.
+test("the_dots_stay_with_their_block_while_pressed_so_a_quick_drag_lands", async ({ page }) => {
+  const watched = watch(page);
+  const word = `held${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
+  const lines = editor.locator("p");
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const last = await lines.last().boundingBox();
+  const first = await lines.first().boundingBox();
+  if (last === null || first === null) throw new Error("no lines");
+  const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+  const handleMiddle = async () => {
+    const at = await handle.boundingBox();
+    return at === null ? Number.POSITIVE_INFINITY : middle(at);
+  };
+  await lines.last().hover();
+  await expect.poll(async () => Math.abs((await handleMiddle()) - middle(last))).toBeLessThan(8);
+  const start = await grip.boundingBox();
+  if (start === null) throw new Error("no grip");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  // Held longer than plugin-block's throttle, then moved in one step onto the first line's words.
+  await page.waitForTimeout(250);
+  await page.mouse.move(first.x + 4, first.y + 2);
+  // Two frames, for the handle to be placed wherever plugin-block would show it (floating-ui places it on a promise).
+  await page.evaluate(() => {
+    const frame = (globalThis as unknown as { requestAnimationFrame: (run: () => void) => number })
+      .requestAnimationFrame;
+    return new Promise((done) => frame(() => frame(() => done(null))));
+  });
+  expect(Math.abs((await handleMiddle()) - middle(last))).toBeLessThan(8);
+  await page.mouse.up();
+  await expect(lines).toHaveText(["third line", `${word} one`, "second line"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Codex on #1965: the dots of a quote or a list change the whole block, its container too. Text takes a quote's
+// paragraphs out of it, and a list turned into a quote is a quote of its items' words.
+test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
+  const word = `whole${Date.now()}`;
+  const { card, editor } = await cardWithCaret(
+    page,
+    word,
+    `${word} one\n\n> a quote\n>\n> said twice\n\n- an item\n- another`,
+  );
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator("blockquote").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Text" }).click();
+  await expect(editor.locator("blockquote")).toHaveCount(0);
+  await expect(editor.locator(":scope > p")).toHaveText([`${word} one`, "a quote", "said twice"]);
+  await editor.locator("ul").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Quote" }).click();
+  await expect(editor.locator("ul, li")).toHaveCount(0);
+  await expect(editor.locator("blockquote p")).toHaveText(["an item", "another"]);
+  await expect(editor).toBeFocused();
+  await discardAndRemove(page, word);
+});
+
+// Codex on #1965 at 8acb2f1: Enter breaks a line inside its block, and the page shows no break inside a list item
+// (milkdown.ts pageShapes), so a block with broken lines turned into a list becomes one item a line; before, the list
+// was refused and a quote lost its formatting on the way.
+test("the_dots_turn_broken_lines_into_one_list_item_each", async ({ page }) => {
+  const word = `broken${Date.now()}`;
+  const { card, editor } = await cardWithCaret(
+    page,
+    word,
+    `${word} one\\\nline two\n\n> quoted\\\n> again\n\nto do\\\nto do too`,
+  );
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator(":scope > p").first().hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Bullet list" }).click();
+  await expect(editor.locator("ul li")).toHaveText([`${word} one`, "line two"]);
+  await editor.locator("blockquote").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Ordered list" }).click();
+  await expect(editor.locator("blockquote")).toHaveCount(0);
+  await expect(editor.locator("ol li")).toHaveText(["quoted", "again"]);
+  await editor.locator(":scope > p").last().hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Task list" }).click();
+  await expect(editor.locator('li[data-item-type="task"][data-checked="false"]')).toHaveText(["to do", "to do too"]);
+  await expect(editor.locator("[data-type='hardbreak'], br")).toHaveCount(0);
+  await discardAndRemove(page, word);
+});
+
+// A heading or a code block the dots turn into a quote or a list becomes its words first: a quote holds only
+// paragraphs on the page (milkdown.ts pageShapes), so wrapping the block as it is would be refused (Codex on #1965).
+test("the_dots_turn_a_heading_or_code_block_into_a_quote_or_list", async ({ page }) => {
+  const word = `wrapped${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\n## a title\n\n\`\`\`\nsome code\n\`\`\``);
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await editor.locator("h3").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Quote" }).click();
+  await expect(editor.locator("h3")).toHaveCount(0);
+  await expect(editor.locator("blockquote p")).toHaveText(["a title"]);
+  // A code block is drawn by CodeMirror (code-block.ts), in an element of its own.
+  await editor.locator(".code-block").hover();
+  await grip.click();
+  await menu.getByRole("option", { name: "Bullet list" }).click();
+  await expect(editor.locator(".code-block")).toHaveCount(0);
+  await expect(editor.locator("ul li")).toHaveText(["some code"]);
+  await discardAndRemove(page, word);
+});
+
+test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_width", async ({ page }) => {
+  // Alex 2026-11-22 00:12Z: the six dots and the + "outside of the card ... on the margin of the card instead of
+  // inside", for a card on the right of a row too; with a mouse the owner's page keeps room for them.
+  const stamp = Date.now();
+  const words = [`lefthalf${stamp}`, `righthalf${stamp}`];
+  await openOwnPage(page);
+  for (const word of words)
+    await addCard(page, { kind: "readme", width: "half", surface: "filled", text: `${word} one` });
+  for (const width of [1280, 1024, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openOwnPage(page);
+    const cards = words.map((word) => page.locator('[data-slot="card"]', { hasText: word }));
+    for (const card of cards) {
+      const editor = card.locator("[data-text-in-place] .ProseMirror");
+      await editor.locator("p").first().hover();
+      const handle = card.locator("[data-block-handle]");
+      await expect(handle).toBeVisible();
+      await expect(handle.getByRole("button", { name: "Add a block below" })).toBeVisible();
+      const at = await handle.boundingBox();
+      const own = await card.boundingBox();
+      if (at === null || own === null) throw new Error(`no handle at ${width}`);
+      expect(at.x, `on the page at ${width}`).toBeGreaterThanOrEqual(0);
+      expect(at.x + at.width, `outside the card at ${width}`).toBeLessThanOrEqual(own.x);
+      for (const other of await page.locator('[data-slot="card"]').all()) {
+        const box = await other.boundingBox();
+        if (box === null) continue;
+        const apart =
+          at.x + at.width <= box.x ||
+          box.x + box.width <= at.x ||
+          at.y + at.height <= box.y ||
+          box.y + box.height <= at.y;
+        expect(apart, `over another card at ${width}`).toBe(true);
+      }
+      await page.mouse.move(0, 0);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  for (const word of words) await discardAndRemove(page, word, { changed: false });
 });
 
 test("selected_words_become_a_link_from_the_floating_bar_which_shows_edits_and_removes_it", async ({ page }) => {
@@ -290,14 +619,15 @@ test("enter_breaks_the_line_and_shift_enter_starts_a_new_block", async ({ page }
   await page.keyboard.type("y = 2");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("after");
-  await expect(editor.locator("pre")).toHaveText("x = 1\ny = 2");
+  // CodeMirror draws each line of a code block as an element of its own (code-block.ts).
+  await expect(editor.locator(".cm-line")).toHaveText(["x = 1", "y = 2"]);
   await expect(blocks.last()).toHaveText("after");
   // Shift+Enter after three backticks too.
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("```");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("z");
-  await expect(editor.locator("pre")).toHaveText(["x = 1\ny = 2", "z"]);
+  await expect(editor.locator(".code-block .cm-content")).toHaveText(["x = 1y = 2", "z"]);
   await page.keyboard.press("Shift+Enter");
   // In the middle of a point, Shift+Enter makes the words after the caret a block of their own between the two
   // halves of the list.
@@ -382,6 +712,31 @@ test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ pag
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #2003 at fcac4c8: the keys move a code block too with the caret in its code, which CodeMirror now holds,
+// and the caret stays there.
+test("the_move_keys_move_a_code_block_with_the_caret_in_it", async ({ page }) => {
+  const watched = watch(page);
+  const word = `codemoves${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} above\n\n\`\`\`\nx = 1\n\`\`\``);
+  const blocks = () =>
+    editor.evaluate((root) => {
+      // The spec's types have no DOM, so the browser's own nodes are named by their shape.
+      type Child = { classList: { contains: (name: string) => boolean }; textContent: string | null };
+      const children = (root as unknown as { children: Iterable<Child> }).children;
+      return Array.from(children, (child) => (child.classList.contains("code-block") ? "code" : child.textContent));
+    });
+  await editor.locator(".cm-content").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowUp");
+  await expect.poll(blocks).toEqual(["code", `${word} above`]);
+  await page.keyboard.type("y");
+  await expect(editor.locator(".cm-content")).toHaveText("x = 1y");
+  await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+  await expect.poll(blocks).toEqual([`${word} above`, "code"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 // Staging, 2026-11-21: pressing the grip gave its paragraph a class, so the page's margin for a bare paragraph (main
 // :where(p):not([class])) went and the words jumped up 24 px under the pointer; dropped on the lower half of the last
 // block, the pointer was then below the editor and nothing moved. The tester's gesture: the first block, pressed and
@@ -392,7 +747,9 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
   const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
   const lines = editor.locator("p");
   await lines.first().hover();
-  const grip = card.locator("[data-block-handle]").getByRole("img", { name: "Drag to move this block" });
+  const grip = card
+    .locator("[data-block-handle]")
+    .getByRole("button", { name: "Drag to move, or press to change this block" });
   await expect(grip).toBeVisible();
   const before = await lines.first().boundingBox();
   const start = await grip.boundingBox();
@@ -477,7 +834,7 @@ test("the_bar_skips_a_space_the_menu_marks_its_row_no_ring_and_an_arrow_leaves_a
   await page.keyboard.press("ArrowDown");
   await page.keyboard.type("after");
   await expect(editor.locator(":scope > *").last()).toHaveText("after");
-  await expect(editor.locator("pre")).toHaveText("x = 1");
+  await expect(editor.locator(".cm-line")).toHaveText(["x = 1"]);
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });

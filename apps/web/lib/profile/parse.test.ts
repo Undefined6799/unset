@@ -159,14 +159,46 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
-  test("a heading deeper than three reads as level three", () => {
-    expect(parseReadme("##### Deep")).toEqual([
-      { kind: "heading", level: 3, children: [{ kind: "text", text: "Deep" }] },
+  test("a heading keeps any of the six levels, and seven marks are a paragraph", () => {
+    expect(parseReadme("##### Deep\n\n###### Six\n\n####### Seven")).toEqual([
+      { kind: "heading", level: 5, children: [{ kind: "text", text: "Deep" }] },
+      { kind: "heading", level: 6, children: [{ kind: "text", text: "Six" }] },
+      { kind: "paragraph", children: [{ kind: "text", text: "####### Seven" }] },
     ]);
   });
 
   test("an unclosed code fence runs to the end", () => {
     expect(parseReadme("```js\nlet a\n\nlet b")).toEqual([{ kind: "code", text: "let a\n\nlet b" }]);
+  });
+
+  // The editor reads four spaces of indent as code (CommonMark 0.31.2 "Indented code blocks"), so the page does too:
+  // it showed such lines as a paragraph and lost their spaces.
+  test("lines indented four spaces or a tab are code, keeping the indent past four", () => {
+    expect(parseReadme("    let a\n      nested\n\tlet b")).toEqual([{ kind: "code", text: "let a\n  nested\nlet b" }]);
+  });
+
+  test("a blank line inside indented code is kept, and blank lines after it are not", () => {
+    expect(parseReadme("    one\n\n    two\n\n\nafter")).toEqual([
+      { kind: "code", text: "one\n\ntwo" },
+      { kind: "paragraph", children: [text("after")] },
+    ]);
+  });
+
+  test("an indented line cannot break into a paragraph: it continues it", () => {
+    expect(parseReadme("words\n    more")).toEqual([{ kind: "paragraph", children: [text("words more")] }]);
+  });
+
+  test("markup in indented code is text", () => {
+    expect(parseReadme('    <script>alert(1)</script>\n    <a href="javascript:x">y</a>')).toEqual([
+      { kind: "code", text: '<script>alert(1)</script>\n<a href="javascript:x">y</a>' },
+    ]);
+  });
+
+  test("a shorter fence does not close a longer one, and a fence's language is never shown", () => {
+    expect(parseReadme('````"><img src=x onerror=alert(1)>\n```\nstill code\n````\nafter')).toEqual([
+      { kind: "code", text: "```\nstill code" },
+      { kind: "paragraph", children: [text("after")] },
+    ]);
   });
 
   test("NUL and other controls are removed before parsing", () => {
@@ -266,5 +298,169 @@ describe("what the in-place editor writes (P1.21s)", () => {
       { kind: "paragraph", children: [text("one")] },
       { kind: "paragraph", children: [text("two")] },
     ]);
+  });
+
+  // GitHub Flavored Markdown 0.29 (cmark-gfm test/spec.txt), "Strikethrough (extension)" and "Task list items
+  // (extension)": Alex, 2026-11-21, "every single thing that you can do in markdown".
+  test("words between two tildes each side are struck through, and a single tilde is text", () => {
+    expect(parseInline("~~Hi~~ Hello, **~~world~~**")).toEqual([
+      { kind: "del", children: [text("Hi")] },
+      text(" Hello, "),
+      { kind: "strong", children: [{ kind: "del", children: [text("world")] }] },
+    ]);
+    expect(parseInline("~one~ and ~~ two")).toEqual([text("~one~ and ~~ two")]);
+  });
+
+  // GFM 0.29 example 493: a run of three or more tildes neither opens nor closes strikethrough.
+  test("a run of three or more tildes is text, not strikethrough", () => {
+    expect(parseInline("This will ~~~not~~~ strike.")).toEqual([text("This will ~~~not~~~ strike.")]);
+    expect(parseInline("~~a~~~ and ~~~b~~")).toEqual([{ kind: "del", children: [text("a~~~ and ~~~b")] }]);
+  });
+
+  test("a struck run does not reach past the paragraph it opens in", () => {
+    expect(parseReadme("This ~~has a\n\nnew paragraph~~.")).toEqual([
+      { kind: "paragraph", children: [text("This ~~has a")] },
+      { kind: "paragraph", children: [text("new paragraph~~.")] },
+    ]);
+  });
+
+  test("a list item opening with a task marker is a task, ticked by an x of either case", () => {
+    const src = ["- [ ] foo", "- [x] bar", "  - [X] baz", "- [y] not a task", "- [ ]", "1. [ ] numbered"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "list",
+        ordered: false,
+        items: [
+          { text: [text("foo")], lists: [], task: "open" },
+          {
+            text: [text("bar")],
+            lists: [{ kind: "list", ordered: false, items: [{ text: [text("baz")], lists: [], task: "done" }] }],
+            task: "done",
+          },
+          item("[y] not a task"),
+          item("[ ]"),
+        ],
+      },
+      { kind: "list", ordered: true, items: [{ text: [text("numbered")], lists: [], task: "open" }] },
+    ]);
+  });
+
+  // GFM 0.29, "Tables (extension)".
+  test("a header row, a delimiter row and data rows are a table, aligned by the delimiter's colons", () => {
+    const src = ["| abc | defghi |", ":-: | -----------:", "bar | baz", "| f\\|oo | `a\\|b` |", "", "after"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "table",
+        align: ["center", "right"],
+        head: [[text("abc")], [text("defghi")]],
+        rows: [
+          [[text("bar")], [text("baz")]],
+          [[text("f|oo")], [{ kind: "code", text: "a|b" }]],
+        ],
+      },
+      { kind: "paragraph", children: [text("after")] },
+    ]);
+  });
+
+  // Codex on 08db77c: an escaped backslash does not escape the pipe after it, so that pipe still splits the row, and
+  // a row ending in one still drops its closing pipe (micromark-extension-gfm-table 2.1.1, syntax.js).
+  test("a pipe after an escaped backslash splits the row, and a backslash escapes only the character after it", () => {
+    const src = ["| a | b |", "| --- | --- |", "|x\\\\|y\\\\|", "|p\\\\\\|q|r|"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "table",
+        align: [null, null],
+        head: [[text("a")], [text("b")]],
+        rows: [
+          [[text("x\\")], [text("y\\")]],
+          [[text("p\\|q")], [text("r")]],
+        ],
+      },
+    ]);
+  });
+
+  test("a row with fewer cells is filled, one with more is cut, and a line that starts a block ends the table", () => {
+    const src = ["| a | b |", "| --- | --- |", "| one |", "| x | y | z |", "> quoted"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "table",
+        align: [null, null],
+        head: [[text("a")], [text("b")]],
+        rows: [
+          [[text("one")], []],
+          [[text("x")], [text("y")]],
+        ],
+      },
+      { kind: "quote", paragraphs: [[text("quoted")]] },
+    ]);
+  });
+
+  test("a header whose cells do not match the delimiter row is no table", () => {
+    expect(parseReadme("| abc | def |\n| --- |\n| bar |")).toEqual([
+      { kind: "paragraph", children: [text("| abc | def | | --- | | bar |")] },
+    ]);
+  });
+});
+
+// Alex 2026-11-21: "bare addresses become https". GFM 0.29 "Autolinks (extension)", as micromark-extension-gfm-autolink-
+// literal 2.1.0 reads it (dev/lib/syntax.js), which is what the editor reads: the page links the same words.
+describe("bare addresses", () => {
+  const link = (href: string, words: string) => ({ kind: "link", href, children: [text(words)] });
+
+  test("an address and a www name are links, and www opens over https", () => {
+    expect(parseInline("see https://example.com/a and www.example.org.")).toEqual([
+      text("see "),
+      link("https://example.com/a", "https://example.com/a"),
+      text(" and "),
+      link("https://www.example.org/", "www.example.org"),
+      text("."),
+    ]);
+  });
+
+  test("closing punctuation after an address is not part of it", () => {
+    expect(parseInline("(see https://example.com/a_(b)), then http://x.example/?q=1!")).toEqual([
+      text("(see "),
+      link("https://example.com/a_(b)", "https://example.com/a_(b)"),
+      text("), then "),
+      link("http://x.example/?q=1", "http://x.example/?q=1"),
+      text("!"),
+    ]);
+  });
+
+  test("an address ends at a space or a <, and a trailing &name; is not part of it", () => {
+    expect(parseInline("www.a.example/x&amp; and https://b.example<c")).toEqual([
+      link("https://www.a.example/x", "www.a.example/x"),
+      text("&amp; and "),
+      link("https://b.example/", "https://b.example"),
+      text("<c"),
+    ]);
+  });
+
+  test("an address inside emphasis is a link inside it", () => {
+    expect(parseInline("*www.example.org*")).toEqual([
+      { kind: "em", children: [link("https://www.example.org/", "www.example.org")] },
+    ]);
+  });
+
+  test("what is not an address stays text", () => {
+    for (const words of [
+      "awww.example.org",
+      "xhttps://example.org",
+      "www.",
+      "https://",
+      "www.a_b.example_c",
+      "https://exa_mple.com",
+      "ftp://example.org",
+      "`https://example.org`",
+    ]) {
+      expect(
+        parseInline(words).some((node) => node.kind === "link"),
+        words,
+      ).toBe(false);
+    }
+  });
+
+  test("an address inside a link's words is not a second link", () => {
+    expect(parseInline("[www.a.example](https://b.example/)")).toEqual([link("https://b.example/", "www.a.example")]);
   });
 });

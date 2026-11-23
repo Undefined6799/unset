@@ -3,7 +3,7 @@
 // adds its own file beside this one. Postgres as `web` (TE-2); nothing is stood in. The routes under /test-routes/
 // exist for this file and are served only when TEST_ROUTES is on (interfaces/web/src/routes/test-routes/README.md).
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { connect, createServer, type Socket } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test server only
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -533,6 +533,37 @@ describe("policies and logs", () => {
   test("every_route_has_a_policy", () => {
     const missing = routeFolders().filter((dir) => !readdirSync(dir).includes("policy.ts"));
     expect(missing.map((dir) => relative(ROUTES, dir))).toEqual([]);
+  });
+
+  // ADR 0114 point 3 (book P1.22e): a public page runs SvelteKit's client only in the step that switches it on. The
+  // route's policy.ts says so (`client`), which is what the hook reads to send the script policy, and its +page.ts
+  // says `csr = true`; the two must agree, and the pages switched on are named here. A public page that sets `csr`
+  // without the policy, a policy that claims it for a page that does not, or a layout that turns the client on for
+  // every page under it, fails.
+  test("only_the_named_public_pages_run_the_client", async () => {
+    const setsCsr = (file: string): boolean | undefined => {
+      const said = /^export const csr = (true|false);$/m.exec(existsSync(file) ? readFileSync(file, "utf8") : "")?.[1];
+      return said === undefined ? undefined : said === "true";
+    };
+    const switchedOn: string[] = [];
+    const disagree: string[] = [];
+    for (const dir of routeFolders()) {
+      const name = relative(ROUTES, dir);
+      const { policy } = (await import(join(dir, "policy.ts"))) as { policy: { group: string; client?: true } };
+      const csr = setsCsr(join(dir, "+page.ts")) === true;
+      if (policy.client === true) switchedOn.push(name);
+      if (policy.client === true && policy.group !== "public")
+        disagree.push(`${name}: client on a ${policy.group} route`);
+      if (policy.group !== "app" && csr !== (policy.client === true)) disagree.push(`${name}: csr ${csr}`);
+    }
+    expect(disagree).toEqual([]);
+    expect(switchedOn).toEqual(["@[actor]"]);
+    // The root layout turns the client off for every page that does not ask, and no other layout says anything.
+    const layouts = readdirSync(ROUTES, { recursive: true, encoding: "utf8" }).filter((file) =>
+      /(^|\/)\+layout\.(ts|js)$/.test(file),
+    );
+    expect(layouts).toEqual(["+layout.ts"]);
+    expect(setsCsr(join(ROUTES, "+layout.ts"))).toBe(false);
   });
 
   test("only_health_skips_the_rate_limit", async () => {

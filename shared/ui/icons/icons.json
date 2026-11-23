@@ -60,7 +60,14 @@
     "inline-code": "code",
     "code-block": "code-brackets",
     "undo": "undo",
-    "redo": "redo"
+    "redo": "redo",
+    "strikethrough": "strikethrough",
+    "text": "text",
+    "task-list": "task-list",
+    "table": "table",
+    "align-left": "align-left",
+    "align-center": "align-center",
+    "align-right": "align-right"
   },
   "icons": {
     "next": "cf13159505df944c66c9d36838508dcd58106fe0d776702aeaf08dd91553eb3f",
@@ -121,7 +128,14 @@
     "inline-code": "dfdd2ec8355b62482c7f220c914c93bc610ee235afc61f9a1d02c8b20fe685fa",
     "code-block": "8885bba2e2c636f17dc9483e6c6e00edd8f1fa8c688abfd31e6cb876a8dcc212",
     "undo": "b460b2f7faea4185b1e3f7497d5d71b992e276655a4a2076302c107067674f02",
-    "redo": "f8519fef188a8e5cbb0a62b8d992b55266673f824b952a732a5caee04daa4ea9"
+    "redo": "f8519fef188a8e5cbb0a62b8d992b55266673f824b952a732a5caee04daa4ea9",
+    "strikethrough": "21614ebf0359ad62c70d80e9c7f9782113292e5dc08a302dbdeb8bcf0296414b",
+    "text": "e334a56aefdd7379a6f4ea07e9e48f2efdbd69e57bcc4cd19211b8e585b4c0d3",
+    "task-list": "5700f48d763355bf15c7258e05a0daaa9de4308505fb2f967811288ac8234cc6",
+    "table": "860f4208f8d9e0bb68d20eb1cff84abdf3cc171df8b38d2be1e61447785afb41",
+    "align-left": "fb5d4bfc94ee5a0428439014401e2d94c800f00109bf1382bc91209caccc2c41",
+    "align-center": "01023a0bebd3d03d27a53636bb2556d0d62ae79c6831052043c5744425c7e2c4",
+    "align-right": "672d1c8e3adf6b1e288f2b282f8aed1a4009346906133113046a1ca00f9dc8d4"
   },
   "drawings": {
     "next": [
@@ -1019,6 +1033,194 @@
         "strokeLinejoin": "round"
       }
     ],
+    "strikethrough": [
+      {
+        "d": "M3 12L21 12",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M16.2857 3L10.068 3C7.82129 3 6 4.82129 6 7.06797C6 8.81895 7.12044 10.3735 8.78157 10.9272L12 12M6 21H13.932C16.1787 21 18 19.1787 18 16.932C18 16.2409 17.8255 15.5804 17.512 15",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "text": [
+      {
+        "d": "M19 7V5L5 5V7",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 5L12 19M12 19H10M12 19H14",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "task-list": [
+      {
+        "d": "M9 6L20 6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3.80002 5.79999L4.60002 6.59998L6.60001 4.59999",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3.80002 11.8L4.60002 12.6L6.60001 10.6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3.80002 17.8L4.60002 18.6L6.60001 16.6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M9 12L20 12",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M9 18L20 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "table": [
+      {
+        "d": "M21 3V21H3V3H21Z",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 16.5H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 12H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 7.5H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M16.5 3V21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 3V21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M7.5 3V21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "align-left": [
+      {
+        "d": "M3 10L17 10",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 6H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 18L17 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 14H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "align-center": [
+      {
+        "d": "M3 6H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 14H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M6 10L18 10",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M6 18L18 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "align-right": [
+      {
+        "d": "M7 10L21 10",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 6H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M7 18L21 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M3 14H21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
     "grip": [
       {
         "d": "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
@@ -1056,11 +1258,191 @@
         "strokeLinecap": "round",
         "strokeLinejoin": "round"
       }
+    ],
+    "h1": [
+      {
+        "d": "M4 12h8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "m17 12 3-2v8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "h2": [
+      {
+        "d": "M4 12h8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "h3": [
+      {
+        "d": "M4 12h8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M17.5 10.5c1.7-1 3.5 0 3.5 1.5a2 2 0 0 1-2 2",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M17 17.5c2 1.5 4 .3 4-1.5a2 2 0 0 0-2-2",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "h4": [
+      {
+        "d": "M12 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M17 10v3a1 1 0 0 0 1 1h3",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M21 10v8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 12h8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "h5": [
+      {
+        "d": "M4 12h8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M17 13v-3h4",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M17 17.7c.4.2.8.3 1.3.3 1.5 0 2.7-1.1 2.7-2.5S19.8 13 18.3 13H17",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "h6": [
+      {
+        "d": "M4 12h8",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M12 18V6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M17 16a2 2 0 1 0 4 0a2 2 0 1 0 -4 0",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M20 10c-2 2-3 3.5-3 6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
     ]
   },
   "extensionProvenance": {
     "path": "approved-extensions.json",
-    "sha256": "1550bc39c49e9e5d66bbaea0474c3409e1944783acb4481b13f9a8d587c4593f",
+    "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f",
     "designApproval": {
       "by": "Alex",
       "date": "2026-10-18",
@@ -1076,6 +1458,30 @@
       "grip": {
         "lucideName": "grip-vertical",
         "sha256": "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5"
+      },
+      "h1": {
+        "lucideName": "heading-1",
+        "sha256": "d5920a0a7182751a071374f9c4dad0519afe4ca509da1e893cb09deba52d5c8f"
+      },
+      "h2": {
+        "lucideName": "heading-2",
+        "sha256": "a1fc4240bad7d883433927faca643b346e148ef721a571f95043be085555ae05"
+      },
+      "h3": {
+        "lucideName": "heading-3",
+        "sha256": "32d24e7734fc9bdba2c64f42c34761781249599364417c14b5cd06fa19c87551"
+      },
+      "h4": {
+        "lucideName": "heading-4",
+        "sha256": "33141a2aa843631f9a850cf867aa44c94e6289ba7438870bd661e60aebe03d79"
+      },
+      "h5": {
+        "lucideName": "heading-5",
+        "sha256": "f2e3885ab0c15dd3f037c047fa8b7229d316b920849cd77e275b96702c0cd994"
+      },
+      "h6": {
+        "lucideName": "heading-6",
+        "sha256": "cbad3fe7096b0431777ae07ff87fd61ac952aaa53f3ce626c6d46dcfc70f757e"
       }
     }
   }

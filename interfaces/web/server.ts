@@ -108,7 +108,17 @@ const methodField = (method = ""): Pick<LogFields, "method"> => {
   return known === undefined ? {} : { method: known };
 };
 
-const isProbe = (req: IncomingMessage) => (req.url ?? "").split("?")[0] === "/health";
+const pathOf = (req: IncomingMessage): string => (req.url ?? "").split("?")[0] ?? "";
+const isProbe = (req: IncomingMessage) => pathOf(req) === "/health";
+
+/**
+ * A page's data address: SvelteKit answers `<page>/__data.json` for every page route with the result of its server
+ * loads, whatever `csr` says (kit 3.2.0 src/pathname.js `has_data_suffix`, these two suffixes; book P1.22h). It is
+ * never a search result, so every answer there says noindex whatever its page says: the page's own X-Robots-Tag is
+ * set by the page's load, which does not run when the client asks for the layout alone or when the gate redirects.
+ */
+const DATA_SUFFIXES = ["/__data.json", ".html__data.json"];
+const isDataAddress = (req: IncomingMessage) => DATA_SUFFIXES.some((suffix) => pathOf(req).endsWith(suffix));
 
 /** The request's host, lowercase and without its port; undefined when absent or malformed. */
 function hostOf(req: IncomingMessage): string | undefined {
@@ -156,6 +166,7 @@ function serve(req: IncomingMessage, res: ServerResponse): void {
     });
   });
   for (const [name, value] of Object.entries(BASE_HEADERS)) res.setHeader(name, value);
+  if (isDataAddress(req)) res.setHeader("x-robots-tag", "noindex");
   hideFramework(res);
   keepStoredCsp(res);
   if (!isProbe(req)) {
