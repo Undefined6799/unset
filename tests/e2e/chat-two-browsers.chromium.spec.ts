@@ -373,6 +373,45 @@ test("chat_e2e.first_message_no_browser: a request sent while the other has no b
   for (const p of [a, b2]) expect(p.problems).toEqual([]);
 });
 
+test("chat_e2e.dock: the chat box framed on unset.sh sets up, accepts, reads and sends", async ({ browser }) => {
+  test.setTimeout(240_000);
+  // ADR 0115: the box signs in through unset.sh's shell (POST /chat/dock), its cookies partitioned to the box.
+  const alice = await stack.member(`alice${Date.now()}.unset.name`);
+  const bob = await stack.member(`bob${Date.now()}.unset.name`);
+  const a = await browserFor(browser, alice.handle);
+  await a.page.goto("https://unset.sh/dock-host");
+  const box = a.page.frameLocator("iframe[data-dock]");
+  const boxState = () => box.locator("main").getAttribute("data-state");
+  await expect.poll(boxState, { timeout: 60_000 }).toBe("save_key");
+  const key = await box.locator("#recovery-key").inputValue();
+  await box.getByRole("button", { name: "I have saved my key" }).click();
+  await box.locator("#key-end").fill(key.replaceAll(" ", "").slice(-4));
+  await box.getByRole("button", { name: "Continue" }).click();
+  await expect.poll(boxState, { timeout: 60_000 }).toBe("ready");
+  // The box's cookies are its own: partitioned, never a unset.cc tab's Strict one.
+  const cookies = await a.context.cookies("https://unset.cc/");
+  expect(cookies.find((c) => c.name === "__Host-chat-browser")?.sameSite).toBe("None");
+  // Bob asks from his own tab; the box takes the request, reads it and answers.
+  const b = await browserFor(browser, bob.handle);
+  await b.page.goto(`https://unset.cc/?with=${encodeURIComponent(alice.userId)}`);
+  await saveKey(b.page);
+  await b.page.locator("#message").fill("hello box");
+  await b.page.getByRole("button", { name: "Send" }).click();
+  await expect(conversation(b.page)).toHaveAttribute("data-composer", "pending", { timeout: 60_000 });
+  await box
+    .locator(`[data-request="${bob.userId}"]`)
+    .getByRole("button", { name: "Accept" })
+    .click({ timeout: 60_000 });
+  await expect(a.page.locator("body")).toHaveAttribute("data-unread", /^[0-9]+$/, { timeout: 60_000 });
+  await box.locator(`[data-conversation="${bob.userId}"]`).click();
+  await expect(box.locator("[data-screen=conversation] ol")).toContainText("hello box", { timeout: 90_000 });
+  await expect(box.locator("[data-screen=conversation]")).toHaveAttribute("data-composer", "on", { timeout: 60_000 });
+  await box.locator("#message").fill("hello from the box");
+  await box.getByRole("button", { name: "Send" }).click();
+  await expect(messages(b.page)).toContainText("hello from the box", { timeout: 90_000 });
+  for (const p of [a, b]) expect(p.problems).toEqual([]);
+});
+
 test("chat_e2e.signup_step: from signup a new member saves the key, has a pusher at Synapse, and goes back", async ({
   browser,
 }) => {

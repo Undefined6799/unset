@@ -69,9 +69,17 @@ export async function postTicket(
   return typeof code === "string" && CODE.test(code) ? { kind: "refused", code } : UNAVAILABLE;
 }
 
+/** The chat box's redeem (ADR 0115): the same, with its cookies partitioned to the box. */
+export const DOCK_REDEEM_PATH = `${REDEEM_PATH}?dock`;
+
 /** POST the ticket to the door; its answer as our session, or a fixed refusal code. */
-export async function redeem(fetchFn: Fetch, ticket: string, deadline: AbortSignal): Promise<Redeemed> {
-  const answer = await postTicket(fetchFn, REDEEM_PATH, ticket, deadline);
+export async function redeem(
+  fetchFn: Fetch,
+  ticket: string,
+  deadline: AbortSignal,
+  path = REDEEM_PATH,
+): Promise<Redeemed> {
+  const answer = await postTicket(fetchFn, path, ticket, deadline);
   return answer.kind === "ok" ? (signedIn(answer.body) ?? UNAVAILABLE) : answer;
 }
 

@@ -158,8 +158,27 @@ export async function startRealStack(
     const ticket = await chatAdmin.signTicket({ user: who.user, did: who.did, sid, state });
     res.writeHead(303, { location: `https://unset.cc/sign-out/return#${new URLSearchParams({ ticket })}` }).end();
   };
+  // web's POST /chat/dock (interfaces/web chat-dock.ts): the chat box's one-time value, from a form body, to a ticket.
+  const dockTicket = async (req: IncomingMessage, res: ServerResponse) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const state = parseDoorState(new URLSearchParams(body).get("state"));
+    const named = /(?:^|;\s*)member=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
+    const who = named === undefined ? undefined : members.get(decodeURIComponent(named));
+    if (state === null || who === undefined || req.headers.origin !== "https://unset.sh")
+      return res.writeHead(400).end();
+    const ticket = await chatAdmin.signTicket({
+      user: who.user,
+      did: who.did,
+      sid: sessionRef(Buffer.alloc(32, 1)),
+      state,
+    });
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ticket }));
+  };
   const unsetSh = (req: IncomingMessage, res: ServerResponse) => {
     const path = new URL(req.url ?? "/", "https://unset.sh").pathname;
+    if (path === "/chat/dock" && req.method === "POST") return void dockTicket(req, res);
+    if (path === "/dock-host") return void res.writeHead(200, { "content-type": "text/html" }).end(DOCK_HOST);
     if (path === "/logout") return void logOut(req, res);
     if (path === "/logout/done")
       return void res
@@ -235,3 +254,25 @@ async function masAdminToken(servers: RealServers): Promise<string> {
   });
   return ((await answer.json()) as { access_token: string }).access_token;
 }
+
+/**
+ * unset.sh's shell around the chat box (interfaces/web routes/+layout.svelte), cut to the relay: the frame, the
+ * hello, and the box's one-time value to POST /chat/dock and back, each message checked for the frame's own window and
+ * origin as the shell does.
+ */
+const DOCK_HOST = `<!doctype html><title>unset.sh</title>
+<iframe data-dock src="https://unset.cc/?dock" style="width:384px;height:576px"></iframe>
+<script>
+const frame = document.querySelector("iframe");
+const to = (data) => frame.contentWindow.postMessage(data, "https://unset.cc");
+addEventListener("message", async (event) => {
+  if (event.source !== frame.contentWindow || event.origin !== "https://unset.cc") return;
+  const m = event.data;
+  if (m?.type === "unset.dock.ready") to({ type: "unset.dock.hello" });
+  if (m?.type === "unset.dock.count") document.body.dataset.unread = String(m.unread);
+  if (m?.type === "unset.dock.sign_in") {
+    const r = await fetch("/chat/dock", { method: "POST", body: new URLSearchParams({ state: m.state }) });
+    to({ type: "unset.dock.ticket", ticket: r.ok ? (await r.json()).ticket : null });
+  }
+});
+</script>`;

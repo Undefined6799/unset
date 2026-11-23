@@ -19,9 +19,10 @@
 -->
 <script lang="ts">
 import { onMount } from "svelte";
-import { boot } from "./boot.ts";
+import { boot, bootDock, closeDock } from "./boot.ts";
 import Conversations from "./Conversations.svelte";
 import type { ChatState, UnlockOutcome } from "./core/chat.ts";
+import { isDock } from "./core/dock.ts";
 import { CHECK_LENGTH, KEY_FILE_NAME, keyFileText, matchesEnd } from "./core/recovery-key.ts";
 import { hopPath } from "./core/sign-in.ts";
 import * as Alert from "./lib/components/ui/alert/index.js";
@@ -132,15 +133,36 @@ async function tryKey(event: SubmitEvent) {
   if (outcome === "unlocked") typedKey = "";
 }
 
+/** The chat box framed on unset.sh (ADR 0115): a compact page with a way to the full one and a Close. */
+const dock = isDock(window.location, window.parent !== window);
+/** Bumped when unset.sh asks the box to open a Message link's conversation: the list mounts again on the start route. */
+let opened = $state(0);
+
 onMount(() => {
-  void boot((next) => (view = next));
+  if (dock)
+    void bootDock(
+      (next) => (view = next),
+      () => (opened += 1),
+    );
+  else void boot((next) => (view = next));
 });
 </script>
 
-<main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center p-4" aria-live="polite" data-state={view.kind}>
-  <Card.Root>
+{#if dock}
+  <header class="flex items-center gap-2 border-b px-3 py-2" data-dock>
+    <h1 class="flex-1 font-medium">Messages</h1>
+    <Button variant="ghost" size="sm" href="/" target="_blank" rel="noopener">Open full chat</Button>
+    <Button variant="ghost" size="sm" onclick={() => closeDock()}>Close</Button>
+  </header>
+{/if}
+<main
+  class={dock ? "flex flex-col p-2" : "mx-auto flex min-h-dvh max-w-md flex-col justify-center p-4"}
+  aria-live="polite"
+  data-state={view.kind}
+>
+  <Card.Root class={dock ? "border-0 shadow-none" : undefined}>
     <Card.Header>
-      <Card.Title><h1>{words.title}</h1></Card.Title>
+      {#if dock}<Card.Title><h2>{words.title}</h2></Card.Title>{:else}<Card.Title><h1>{words.title}</h1></Card.Title>{/if}
       {#if view.kind !== "ready" || welcoming}<Card.Description>{words.text}</Card.Description>{/if}
     </Card.Header>
     {#if view.kind === "save_key" && !checking}
@@ -221,7 +243,9 @@ onMount(() => {
       </Card.Content>
     {:else if view.kind === "ready"}
       <Card.Content>
-        <Conversations conversations={view.conversations} names={view.names} me={view.me} />
+        {#key opened}
+          <Conversations conversations={view.conversations} names={view.names} me={view.me} />
+        {/key}
       </Card.Content>
     {:else if view.kind === "open_elsewhere"}
       <Card.Content>
@@ -232,7 +256,7 @@ onMount(() => {
         {#if view.kind === "error"}
           <p class="text-muted-foreground font-mono text-sm">{view.code}</p>
         {/if}
-        <Button href={hopPath("/")}>Try again</Button>
+        <Button href={dock ? "/?dock" : hopPath("/")}>Try again</Button>
       </Card.Content>
     {/if}
   </Card.Root>

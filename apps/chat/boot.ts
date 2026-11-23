@@ -9,12 +9,13 @@
 // and starts a fresh hop; the tab that lost it stops its client at once.
 // The page has no Log out (Alex 2026-11-21): unset.sh's Log out sends the tab to /sign-out/return, which logs this
 // browser out of chat (core/sign-out.ts signOutHere) and goes back to unset.sh.
-import type { ChatState } from "./core/chat.ts";
+import type { ChatSession, ChatState } from "./core/chat.ts";
 import { dmTarget, startPathFor } from "./core/contact.ts";
+import { DOCK, dockMessage, stateCookie, unreadChats } from "./core/dock.ts";
 import { publicNames } from "./core/public-name.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
-import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
+import { DOCK_REDEEM_PATH, hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
 import {
   redeemForSignOut,
   SIGN_OUT_RETURN_PATH,
@@ -69,14 +70,34 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
   await signIn(ticket, elsewhere.signal, (state) => elsewhere.signal.aborted || onState(state));
 }
 
+/** How a signed-in page gets its next session: the hop for a tab; for the chat box, the box's own sign-in again. */
+type Renewal = {
+  readonly redeemPath?: string;
+  readonly renew: () => void;
+  /** The session, once redeemed: the chat box opens a Message link's conversation with it. */
+  readonly onSession?: (session: ChatSession) => void;
+};
+const TAB: Renewal = { renew: () => hop() };
+
 /** The return page's work, in this tab only while it holds the lock: nothing reaches `onState` once `gone` is set. */
-async function signIn(ticket: string | null, gone: AbortSignal, onState: (state: ChatState) => void): Promise<void> {
+async function signIn(
+  ticket: string | null,
+  gone: AbortSignal,
+  onState: (state: ChatState) => void,
+  renewal: Renewal = TAB,
+): Promise<void> {
   if (ticket === null) return onState({ kind: "error", code: "chat.no_ticket" });
-  const outcome = await redeem(window.fetch.bind(window), ticket, AbortSignal.timeout(DOOR_DEADLINE_MS));
+  const outcome = await redeem(
+    window.fetch.bind(window),
+    ticket,
+    AbortSignal.timeout(DOOR_DEADLINE_MS),
+    renewal.redeemPath,
+  );
   if (outcome.kind === "refused") return onState({ kind: "error", code: outcome.code });
-  window.history.replaceState(null, "", outcome.returnTo);
+  if (renewal === TAB) window.history.replaceState(null, "", outcome.returnTo);
   const signedInAt = Date.now();
   const { session } = outcome;
+  renewal.onSession?.(session);
   // A profile's Message link (ADR 0101 decision 3): its member's chat ID, then the start route, before the list mounts.
   const member = dmTarget(outcome.returnTo);
   if (member !== null) {
@@ -89,7 +110,7 @@ async function signIn(ticket: string | null, gone: AbortSignal, onState: (state:
     window.history.replaceState(null, "", next);
   }
   // Renewal, unless chat has moved to another tab by then.
-  const renew = () => gone.aborted || hop();
+  const renew = () => gone.aborted || renewal.renew();
   window.setTimeout(renew, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
   const door = window.fetch.bind(window);
   const deadline = () => AbortSignal.timeout(DOOR_DEADLINE_MS);
@@ -108,7 +129,7 @@ async function signIn(ticket: string | null, gone: AbortSignal, onState: (state:
       if (gone.aborted) return;
       if (Date.now() - signedInAt < TOO_SOON_MS) return onState({ kind: "error", code: "chat.session_refused" });
       onState({ kind: "signed_out" });
-      hop();
+      renewal.renew();
     },
   });
 }
@@ -141,4 +162,103 @@ async function signOut(ticket: string | null, onState: (state: ChatState) => voi
     },
     ticket,
   );
+}
+
+/** The chat box's Close: asks the shell to hide the box (it stays signed in, hidden, until the page goes). */
+export let closeDock: () => void = () => undefined;
+
+/** How long the chat box waits for unset.sh's hello and for its ticket. */
+const DOCK_WAIT_MS = 15_000;
+/** Where the chat box starts again: its own root, so it stays the box (core/dock.ts isDock). */
+const DOCK_PATH = "/?dock";
+
+/**
+ * The chat box framed on unset.sh (ADR 0115; core/dock.ts says the messages). It takes the one-tab lock as a tab does,
+ * among the boxes of every unset.sh tab, signs in through the shell, tells the shell its count, and opens a Message
+ * link's conversation when the shell asks (`onOpen` remounts the list on the start route). Renewal starts the box
+ * again at its root, which signs in again on the same device.
+ */
+export async function bootDock(onState: (state: ChatState) => void, onOpen: () => void): Promise<void> {
+  const parent = window.parent;
+  let origin: string | null = null;
+  let session: ChatSession | null = null;
+  let asked: string | null = null;
+  let hello: () => void = () => undefined;
+  const helloed = new Promise<void>((resolve) => (hello = resolve));
+  const tickets: ((ticket: string | null) => void)[] = [];
+  const door = window.fetch.bind(window);
+  const openWith = async (did: string) => {
+    if (session === null) {
+      asked = did;
+      return;
+    }
+    const next = await startPathFor(door, session.deviceId, did, AbortSignal.timeout(DOOR_DEADLINE_MS));
+    window.history.replaceState(null, "", next);
+    onOpen();
+  };
+  window.addEventListener("message", (event) => {
+    const message = dockMessage(event, parent, origin);
+    if (message === null) return;
+    if (message.kind === "hello") {
+      origin ??= message.origin;
+      return hello();
+    }
+    if (message.kind === "ticket") return tickets.shift()?.(message.ticket);
+    void openWith(message.did);
+  });
+  const tell = (data: Record<string, unknown>) => origin !== null && parent.postMessage(data, origin);
+  closeDock = () => tell({ type: `${DOCK}close` });
+  parent.postMessage({ type: `${DOCK}ready` }, "*");
+  const timeout = new Promise<"late">((resolve) => window.setTimeout(() => resolve("late"), DOCK_WAIT_MS));
+  if ((await Promise.race([helloed, timeout])) === "late")
+    return onState({ kind: "error", code: "chat.dock_no_shell" });
+
+  let stopCount: (() => void) | null = null;
+  const report = (state: ChatState) => {
+    if (state.kind === "ready") {
+      stopCount?.();
+      stopCount = state.conversations.watchList((list) => tell({ type: `${DOCK}count`, unread: unreadChats(list) }));
+    }
+    onState(state);
+  };
+  const elsewhere = new AbortController();
+  const start = async () => {
+    const state = randomState();
+    document.cookie = stateCookie(state);
+    const ticket = new Promise<string | null>((resolve) => tickets.push(resolve));
+    tell({ type: `${DOCK}sign_in`, state });
+    const late = new Promise<null>((resolve) => window.setTimeout(() => resolve(null), DOCK_WAIT_MS));
+    const got = await Promise.race([ticket, late]);
+    if (got === null) return onState({ kind: "error", code: "chat.dock_refused" });
+    await signIn(got, elsewhere.signal, (s) => elsewhere.signal.aborted || report(s), {
+      redeemPath: DOCK_REDEEM_PATH,
+      renew: () => window.location.replace(DOCK_PATH),
+      onSession: (s) => {
+        session = s;
+        if (asked !== null) void openWith(asked);
+      },
+    });
+  };
+  const lost = () => {
+    elsewhere.abort();
+    onState({ kind: "open_elsewhere", useHere: () => void useHere() });
+  };
+  const useHere = async () => {
+    const outcome = await holdTabLock(navigator.locks, "take_over", lost);
+    if (outcome !== "held") return onState({ kind: "error", code: "chat.tab_lock_unavailable" });
+    window.location.replace(DOCK_PATH);
+  };
+  const outcome = await holdTabLock(navigator.locks, "if_free", lost, { hops });
+  if (outcome === "unavailable") return onState({ kind: "error", code: "chat.tab_lock_unavailable" });
+  if (outcome === "elsewhere") return onState({ kind: "open_elsewhere", useHere: () => void useHere() });
+  await start();
+}
+
+/** 32 random bytes as base64url, the door's one-time value (domains/messaging parseDoorState). */
+function randomState(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 }
