@@ -192,21 +192,35 @@ test("markup_coloured_as_html_on_the_page_stays_text", async ({ browser, page })
   await deleteNewest(page);
 });
 
+/**
+ * A new card's key, so the test can remove the card it added: a TID (atproto.com/specs/tid), the microseconds since
+ * 1970 and a random clock id in base32-sortable, as domains/profile parseNewCardKey accepts.
+ */
+function newCardKey(): string {
+  let value = (BigInt(Date.now()) * 1000n) << 10n;
+  value |= BigInt(Math.floor(Math.random() * 1024));
+  let key = "";
+  for (let i = 0; i < 13; i += 1) {
+    key = "234567abcdefghijklmnopqrstuvwxyz"[Number(value & 31n)] + key;
+    value >>= 5n;
+  }
+  return key;
+}
+
 // Review of #2004 at e36de8a: the server colours a member's code inside the page load, and one Textile line of "<a "
 // took minutes there, stalling the web process for every visitor. Within the colouring limits
 // (interfaces/web limits.ts CODE_COLOUR_LIMITS) the page answers at once and shows the code as plain text. The card is
 // added and removed by the form actions alone: the owner's page with script would draw it in the editor.
 test("hostile_code_on_the_page_is_plain_and_the_page_answers_quickly", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
-  const key = /name="newKey" value="([^"]+)"/.exec(await (await page.request.get(page.url())).text())?.[1];
-  expect(key).toBeDefined();
+  const key = newCardKey();
   const line = "<a ".repeat(3_000);
   await addCard(page, {
     kind: "readme",
     width: "full",
     surface: "filled",
     text: `\`\`\`textile\n${line}\n\`\`\``,
-    newKey: key ?? "",
+    newKey: key,
   });
   const started = Date.now();
   const answer = await page.request.get(page.url());
@@ -218,7 +232,7 @@ test("hostile_code_on_the_page_is_plain_and_the_page_answers_quickly", async ({ 
     const body = new URLSearchParams({ key: card });
     const init = { method: "POST", body, headers: { accept: "text/html" }, redirect: "manual" } as const;
     return (await fetch("?/remove", init)).type;
-  }, key ?? "");
+  }, key);
   expect(removed).toBe("opaqueredirect");
 });
 
