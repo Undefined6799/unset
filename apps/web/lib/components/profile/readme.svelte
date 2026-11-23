@@ -5,9 +5,21 @@
   no title of its own (P1.21p), so its headings sit beside the other cards' titles: # is an h2, under the page's h1.
 -->
 <script lang="ts">
+import { onMount } from "svelte";
+import { CARD_TEXT } from "../../profile/messages.ts";
 import type { Block, Inline, ListBlock } from "../../profile/types.ts";
+import { Button } from "../ui/button/index.ts";
 
 let { blocks }: { blocks: readonly Block[] } = $props();
+// Copy needs script (Alex 2026-11-23, "script adds Copy"): the server draws no button that could do nothing.
+let scripted = $state(false);
+onMount(() => {
+  scripted = true;
+});
+const copy = (text: string) => void navigator.clipboard?.writeText(text);
+/** The block's code as stored: a coloured block carries only its runs, which join back to it (code-colours.ts). */
+const codeText = (block: { readonly text: string } | { readonly runs: readonly { readonly text: string }[] }) =>
+  "runs" in block ? block.runs.map((run) => run.text).join("") : block.text;
 // Six levels under the page's h1: # is an h2, and HTML stops at h6, so ##### and ###### share it.
 const HEADINGS = ["h2", "h3", "h4", "h5", "h6", "h6"] as const;
 // The playground's six steps (Crepe 7.23.0 theme/common/reset.css: 2.625em down to 1.125em), on the theme's type
@@ -77,7 +89,16 @@ const HEADING_LOOK = [
     {:else if block.kind === "list"}
       {@render list(block)}
     {:else if block.kind === "code"}
-      <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5"><code>{#if "runs" in block}{#each block.runs as run, r (r)}{#if run.colour}<span class={run.colour}>{run.text}</span>{:else}{run.text}{/if}{/each}{:else}{block.text}{/if}</code></pre>
+      <div class="relative">
+        <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5" class:pe-20={scripted}><code>{#if "runs" in block}{#each block.runs as run, r (r)}{#if run.colour}<span class={run.colour}>{run.text}</span>{:else}{run.text}{/if}{/each}{:else}{block.text}{/if}</code></pre>
+        {#if scripted}<Button
+            variant="outline"
+            size="sm"
+            class="absolute top-2 right-2 h-7 px-2.5 text-xs"
+            aria-label={CARD_TEXT.copyCode}
+            onclick={() => copy(codeText(block))}>{CARD_TEXT.copy}</Button
+          >{/if}
+      </div>
     {:else if block.kind === "table"}
       <!-- A wide table scrolls inside the card rather than widening it. -->
       <div class="overflow-x-auto">
