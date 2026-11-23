@@ -241,6 +241,13 @@ afterNavigate(() => {
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
 });
+// A client navigation keeps the document too, and with it the theme the server drew the first page with. The server
+// draws a page every visitor shares in the system's theme and a page with the theme form in the choice
+// (hooks.server.ts readsTheme, +layout.server.ts prefs), so the page now shown gets the one a full load of it would
+// have. It matters since the public profile runs the client (P1.22e): its Sign in link is followed in place.
+afterNavigate(({ type }) => {
+  if (type !== "enter") applyTheme(prefs === undefined ? "system" : current);
+});
 // A tab that has seen a newer build (SvelteKit checks version.json when the tab is shown or focused, and reads the
 // version on every data response) loads the next page in full, as kit 3.2.0 documents for version.name
 // (src/exports/vite/public.d.ts, "version"): the old tab's pieces may be gone after a deploy (P1.21g, ADR 0069), or

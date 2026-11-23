@@ -56,7 +56,8 @@ describe("lhci_no_public_upload", () => {
     expect(config.ci.collect.settings).not.toHaveProperty("chromeIgnoreDefaultFlags");
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
-    // expectJs false (public pages) stays at 0 scripts, an error. An app page runs SvelteKit's client (ADR 0054): the
+    // expectJs false stays at 0 scripts, an error. A page that runs SvelteKit's client (an app page, ADR 0054, and
+    // since book P1.22e the public profile, ADR 0114) has the app pages' line: the
     // one bundle of output.bundleStrategy "single" was 99214 bytes as served (brotli) at P1.20k. Its 120 KiB is a
     // warning, never a failure (Alex, 2026-11-18T04:18:09Z; scripts/budgets/app-js.ts measures it in gzip).
     const matrix = config.ci.assert.assertMatrix;
