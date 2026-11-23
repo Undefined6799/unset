@@ -381,7 +381,9 @@ const scriptPolicy = (startUpHash: string): string =>
   "style-src https://unset.test/_app/; style-src-attr 'unsafe-hashes' " +
   "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +
   "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; " +
-  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard";
+  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard; " +
+  // The chat box (ADR 0115) goes with every page that runs the client: the door's origin and web's chat sign-in.
+  "frame-src https://staging.unset.cc https://unset.test/chat/sign-in";
 /** The public group's fixed policy (csp.test.ts zero_script_groups_pinned): no script can run under it. */
 const FIXED_POLICY =
   "default-src 'none'; img-src https://unset.test/_app/; style-src https://unset.test/_app/; " +
