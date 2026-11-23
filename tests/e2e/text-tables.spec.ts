@@ -246,3 +246,23 @@ test("the_handles_follow_edits_before_the_table_and_alt_f10_reaches_them", async
   await expect(editor.locator("tr").first()).toHaveText("ab");
   await discardAndRemove(page, word);
 });
+
+// Codex on #1992: a press back in the words, with a table menu open, closes the menu and leaves the caret there, so the
+// next keys type into the cell; the menu takes the focus only as it opens.
+test("a_press_in_the_words_closes_a_table_menu_and_keeps_the_caret", async ({ page }) => {
+  const word = `backtowords${Date.now()}`;
+  const { card, editor } = await tableCard(page, word);
+  const column = card.getByRole("button", { name: "Column options" });
+  const menu = page.getByRole("menu", { name: "Column options" });
+  const cell = editor.getByRole("cell", { name: "2", exact: true });
+  await cell.hover();
+  await column.click();
+  await expect(menu).toBeVisible();
+  // The first column's last cell, clear of the second column's menu.
+  await editor.getByRole("cell", { name: "3", exact: true }).click();
+  await expect(menu).toBeHidden();
+  await page.keyboard.press("End");
+  await page.keyboard.type("x");
+  await expect(editor.getByRole("cell", { name: "3x", exact: true })).toBeVisible();
+  await discardAndRemove(page, word);
+});
