@@ -6,11 +6,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import fc from "fast-check";
+import { parseFragment } from "parse5";
 import type { Component } from "svelte";
 import { compile } from "svelte/compiler";
 import { render } from "svelte/server";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { parseReadme } from "./parse.ts";
+import { parseReadme, plainText } from "./parse.ts";
 import type { Block } from "./types.ts";
 
 type Readme = Component<{ blocks: readonly Block[] }>;
@@ -88,6 +89,81 @@ describe("Readme", () => {
     );
   });
 
+  // Code is shown as text and never run or fetched (Alex 2026-11-23; lexicon sh.unset.block.text): whatever the code
+  // holds, and however its block is opened or closed, the card's markup has no element of the member's making.
+  const HOSTILE = [
+    "<script>alert(1)</script>",
+    '<img src="https://evil.example/x.png" onerror="alert(1)">',
+    '<a href="javascript:alert(1)">x</a>',
+    "[x](javascript:alert(1))",
+    "</code></pre><script>alert(1)</script>",
+  ];
+  const CARD_ELEMENTS = new Set(["pre", "code", "p", "br", "blockquote", "ul", "li"]);
+  type Node = { nodeName: string; value?: string; attrs?: unknown[]; childNodes?: Node[] };
+  /** The markup's elements and its text, as an HTML parser reads it (parse5, the WHATWG algorithm). */
+  function read(markup: string): { elements: { name: string; attributes: number }[]; text: string } {
+    const elements: { name: string; attributes: number }[] = [];
+    let text = "";
+    const walk = (node: Node) => {
+      if (node.nodeName === "#text") text += node.value ?? "";
+      else if (!node.nodeName.startsWith("#"))
+        elements.push({ name: node.nodeName, attributes: node.attrs?.length ?? 0 });
+      node.childNodes?.forEach(walk);
+    };
+    walk(parseFragment(markup) as Node);
+    return { elements, text };
+  }
+  const fenced = (code: string) => `\`\`\`\n${code}\n\`\`\``;
+  test.each([
+    ["a fenced block", fenced],
+    ["an indented block", (code: string) => `    ${code}`],
+    ["a code span", (code: string) => `\`\`${code}\`\``],
+    ["a fenced block left open", (code: string) => `\`\`\`\n${code}`],
+    ["a fenced block closed early", (code: string) => `\`\`\`\`\n${code}\n\`\`\`\n${code}\n\`\`\`\``],
+    [
+      "a fenced block with a hostile language name",
+      (code: string) => `\`\`\`${code.replaceAll("`", "")}\n${code}\n\`\`\``,
+    ],
+    ["a fenced block in a quote", (code: string) => `> \`\`\`\n> ${code}\n> \`\`\``],
+    ["a fenced block in a list item", (code: string) => `- \`\`\`\n  ${code}\n  \`\`\``],
+  ])("markup inside %s is text", (_name, wrap) => {
+    for (const code of HOSTILE) {
+      // Read back as a browser reads it: only the card's own elements, none with an attribute, and the code as text.
+      const { elements, text } = read(html(wrap(code)));
+      expect(
+        elements.filter(({ name }) => !CARD_ELEMENTS.has(name)),
+        code,
+      ).toEqual([]);
+      expect(
+        elements.filter(({ attributes }) => attributes > 0),
+        code,
+      ).toEqual([]);
+      expect(text, code).toContain(code);
+    }
+  });
+
+  test("a fence's language is never drawn, whatever it holds", () => {
+    expect(html('```"><script>alert(1)</script>\nx\n```')).toBe("<pre><code>x</code></pre>");
+    expect(html("~~~ <img src=x onerror=alert(1)>\nx\n~~~")).toBe("<pre><code>x</code></pre>");
+  });
+
+  // Raw HTML outside code is text too, as a block and inside a line (CommonMark's HTML blocks and inline HTML).
+  test("an HTML block and inline HTML are shown as text", () => {
+    expect(html('<div onclick="alert(1)">\n<script>alert(1)</script>\n</div>')).toBe(
+      '<p>&lt;div onclick="alert(1)">\n&lt;script>alert(1)&lt;/script>\n&lt;/div></p>',
+    );
+    expect(html('a <img src=x onerror="alert(1)"> b')).toBe('<p>a &lt;img src=x onerror="alert(1)"> b</p>');
+    expect(html("<!-- c --><?php x ?><![CDATA[y]]>")).not.toMatch(/<(?!\/?p>)/);
+  });
+
+  test("a card shown as plain text is escaped the same way", () => {
+    const { body } = render(Readme, {
+      props: { blocks: plainText("<script>alert(1)</script>\n[x](javascript:alert(1))") },
+    });
+    expect(body).not.toMatch(/<script|<a\b/i);
+    expect(body).toContain("&lt;script>alert(1)&lt;/script>");
+  });
+
   test("links open as user content", () => {
     expect(html("[a](https://a.example)")).toBe(
       '<p><a href="https://a.example/" rel="nofollow ugc noopener noreferrer">a</a></p>',
@@ -112,6 +188,14 @@ describe("Readme", () => {
       "`",
       "```\n",
       "\n",
+      "    ",
+      "<!--",
+      "<div>",
+      "| a |\n| - |\n",
+      "[a]: javascript:x\n",
+      "[a]",
+      "![",
+      "www.a.example",
       "# ",
       "> ",
       "- ",
