@@ -332,6 +332,23 @@ describe("what the in-place editor writes (P1.21s)", () => {
     ]);
   });
 
+  // Codex on 08db77c: an escaped backslash does not escape the pipe after it, so that pipe still splits the row, and
+  // a row ending in one still drops its closing pipe (micromark-extension-gfm-table 2.1.1, syntax.js).
+  test("a pipe after an escaped backslash splits the row, and a backslash escapes only the character after it", () => {
+    const src = ["| a | b |", "| --- | --- |", "|x\\\\|y\\\\|", "|p\\\\\\|q|r|"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "table",
+        align: [null, null],
+        head: [[text("a")], [text("b")]],
+        rows: [
+          [[text("x\\")], [text("y\\")]],
+          [[text("p\\|q")], [text("r")]],
+        ],
+      },
+    ]);
+  });
+
   test("a row with fewer cells is filled, one with more is cut, and a line that starts a block ends the table", () => {
     const src = ["| a | b |", "| --- | --- |", "| one |", "| x | y | z |", "> quoted"].join("\n");
     expect(parseReadme(src)).toEqual([
