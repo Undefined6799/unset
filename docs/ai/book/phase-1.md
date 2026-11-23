@@ -5503,8 +5503,10 @@ script, and replaces the fail-closed default with a test over every answer. No c
 The record loosens a security default, so its PR merges on Alex's typed line. P1.22j may be built before that line
 (it changes no behaviour); P1.22k and the steps after it wait for it. That line is also his line for P1.22k, P1.22g
 and P1.22l (Alex, 21:23Z: "One line for all"; ADR 0116 point 10): each merges on the reviewer's SAFE at its exact
-head with the checks green, as long as it does only what the record says. Anything past it (a directive, a limit, a
-cookie rule, an answer the record keeps without script) needs its own line.
+head with the checks green. The line covers only the loosenings point 10 lists, (a) to (e). Anything else that
+loosens a security control, or could (another load result, a new value read from the request, a directive, a limit,
+a cookie rule, a refusal page, a dependency), goes to its own pull request or waits for its own line; in doubt it is
+outside. P1.22j, P1.22f and P1.22m are not covered.
 
 ### P1.22j — Name every page's script setting and pin every answer's header (added step, 2026-11-23)
 

@@ -120,12 +120,25 @@ last-resort `error.html` is sent when the error page itself fails. Neither shows
     for all: "One line for all". So his line accepting this record is also his line (ADR 0059 decision 1) for the
     three steps that carry it out: P1.22k (the default turned round, the error page), P1.22g (home, the legal pages
     and `/request-invite`) and P1.22l (the sign-in, join and welcome pages). Each still merges only as every other
-    pull request does: the reviewer's SAFE on the exact head, the required checks green, the verifier's merge. The
-    line covers a step only while it does what this record says. A change to any directive of the policy, a limit,
-    a cookie rule, a page or answer this record keeps without script, or any other security control is outside it
-    and needs its own line; the reviewer and the verifier decide which case a pull request is, and when in doubt it
-    is outside (ADR 0059 decision 2). Nothing from those steps reaches staging before P1.22f has measured the
-    edge's file allowance.
+    pull request does: the reviewer's SAFE on the exact head, the required checks green, the verifier's merge.
+
+    The line covers these loosenings in a pull request for one of those three steps, and no other:
+    - (a) the root layout set to `csr = true`, and a `csr = false` line removed from a page this record names;
+    - (b) the hook choosing the header as point 3 says, with the route policy's `client` field turned round;
+    - (c) the two path-derived values moved out of the root layout's server load (point 6);
+    - (d) the bell opening its panel where the client runs (point 8);
+    - (e) the header tests, no-script tests and budget lines of the pages switched on, moved as the step book says,
+      and the docs.
+
+    Anything else in such a pull request that loosens a security control, or could, is outside the line: another
+    value a load returns, a new value read from the request, a directive of the policy, a limit, a cookie rule, a
+    refusal page, a dependency, a test or guard weakened beyond (e). It goes to its own pull request or waits for
+    its own line. A change that loosens nothing is reviewed as in any pull request. The reviewer and the verifier
+    decide which case it is, never the author, and when in doubt it is outside (ADR 0059 decision 2). P1.22j,
+    P1.22f and P1.22m are not covered: they are booked as loosening nothing, and one that turns out to needs its
+    own line.
+
+    Nothing from these steps reaches staging before P1.22f has measured the edge's file allowance.
 
 ## Alternatives
 
@@ -161,7 +174,7 @@ last-resort `error.html` is sent when the error page itself fails. Neither shows
   staging; changing a limit is its own decision (ADR 0059).
 - **Three security changes merge without a line of their own.** P1.22k, P1.22g and P1.22l loosen what a page may
   run, and Alex will not type the head of each. What he gives up is his own look at each exact head; what stays is
-  the reviewer's adversarial review of it, the every-answer test, and the limit in point 10 on what the line covers.
+  the reviewer's adversarial review of it, the every-answer test, and the list in point 10 of what the line covers.
 - **Budgets.** Home and the legal pages leave "script size 0" for the app pages' 120 KiB warning line.
 - **`csr = false` stops meaning safety.** Where it remains it means "nobody reads this route". The docs that
   describe the default (`features/core-shell.md`, the `area/web` note, the `CLAUDE.md` line) change in the step
