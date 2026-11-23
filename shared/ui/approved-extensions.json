@@ -886,6 +886,139 @@
           }
         ]
       ]
+    },
+    "task-list": {
+      "iconoirName": "task-list",
+      "approval": "Alex 2026-11-21 18:52:12Z (\"match everything that they have\", the block menu's Task list item, which the playground draws with one; Iconoir icons only, decision 33)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/task-list.svg",
+      "sourceSha256": "5700f48d763355bf15c7258e05a0daaa9de4308505fb2f967811288ac8234cc6",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M9 6L20 6",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3.80002 5.79999L4.60002 6.59998L6.60001 4.59999",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3.80002 11.8L4.60002 12.6L6.60001 10.6",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3.80002 17.8L4.60002 18.6L6.60001 16.6",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M9 12L20 12",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M9 18L20 18",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "table": {
+      "iconoirName": "table",
+      "approval": "Alex 2026-11-21 18:52:12Z (\"match everything that they have\", the block menu's Table item, which the playground draws with one; Iconoir icons only, decision 33)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/table.svg",
+      "sourceSha256": "860f4208f8d9e0bb68d20eb1cff84abdf3cc171df8b38d2be1e61447785afb41",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M21 3V21H3V3H21Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 16.5H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 12H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 7.5H21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M16.5 3V21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M12 3V21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M7.5 3V21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
     }
   }
 }
