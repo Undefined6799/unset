@@ -19,6 +19,7 @@ export const load: Load = ({ url, data }) => {
     prefs?: ShellData["prefs"];
     privacyNotice?: string | null;
     notifications?: NotificationsView;
+    bellOpens?: boolean;
     signInHref?: string;
     siteNoindex?: boolean;
   } | null;
@@ -31,6 +32,8 @@ export const load: Load = ({ url, data }) => {
     privacyNotice: typeof server?.privacyNotice === "string" ? server.privacyNotice : null,
     // The bell's list and count (P2.27); undefined for a visitor.
     notifications: server?.notifications,
+    // Whether the bell opens its panel (a page with script) or is a link to /notifications (ADR 0108 point 3).
+    bellOpens: server?.bellOpens === true,
     signInHref: server?.signInHref ?? "/login",
     // Search and AI listing off on the whole site (P1.21b); without the server's word, noindex.
     siteNoindex: server?.siteNoindex !== false,
