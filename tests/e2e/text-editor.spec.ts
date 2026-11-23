@@ -39,7 +39,10 @@ test("the_toolbar_and_shortcuts_write_markdown_into_the_posted_field", async ({ 
   await editor.getByText("Title", { exact: true }).click();
   await chooseStyle(page, dialog, "Heading 2");
   await expect(postedText(dialog)).toHaveValue("## Title\n\n**a word**");
-  await writeText(editor, ["- one", "two"]);
+  // In a list Enter makes the next point; Shift+Enter would leave the list (Alex 2026-11-22 00:02Z).
+  await writeText(editor, ["- one"]);
+  await editor.press("Enter");
+  await editor.pressSequentially("two");
   await expect(postedText(dialog)).toHaveValue("- one\n- two");
   await page.keyboard.press("Escape");
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
@@ -240,7 +243,10 @@ test("a_save_sent_in_the_same_moment_as_an_edit_posts_it", async ({ page }) => {
 test("quote_wraps_paragraphs_and_leaves_headings_and_lists_alone", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
   const quote = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Quote" });
-  await writeText(editor, ["- one", "two"]);
+  // In a list Enter makes the next point; Shift+Enter would leave the list (Alex 2026-11-22 00:02Z).
+  await writeText(editor, ["- one"]);
+  await editor.press("Enter");
+  await editor.pressSequentially("two");
   await editor.press("ControlOrMeta+a");
   await expect(quote).toBeDisabled();
   await expect(postedText(dialog)).toHaveValue("- one\n- two");

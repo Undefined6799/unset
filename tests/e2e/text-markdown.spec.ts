@@ -145,10 +145,12 @@ test("typed_markdown_is_stored_as_written_and_the_page_shows_it", async ({ page 
   await page.keyboard.press("Enter");
   await page.keyboard.type("next line");
   await expect(editor.locator("[data-type='hardbreak']")).toHaveCount(1);
-  // Shift+Enter in a quote starts the quote's next paragraph.
+  // Enter twice at a line's end in a quote starts the quote's next paragraph; Shift+Enter would leave the quote
+  // (Alex 2026-11-22 00:02Z, for lists; quotes the same).
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("> first");
-  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
   await page.keyboard.type("second");
   await expect(editor.locator("blockquote p")).toHaveCount(2);
   const { card, editor: reopened } = await saveAndReopen(page, word);
