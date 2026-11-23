@@ -10,6 +10,8 @@ import {
   addRowAfterCommand,
   addRowBeforeCommand,
   deleteSelectedCellsCommand,
+  moveColCommand,
+  moveRowCommand,
   selectColCommand,
   selectRowCommand,
   setAlignCommand,
@@ -38,6 +40,8 @@ export type TableOptions = {
   /** The handles, placed inside the element that holds them and the editor (their offset parent). */
   readonly columnHandle: HTMLElement;
   readonly rowHandle: HTMLElement;
+  /** The line drawn where a dragged column or row would land. */
+  readonly dropLine: HTMLElement;
   readonly onTable: (state: TableState) => void;
 };
 
@@ -100,6 +104,53 @@ function place(view: EditorView, cell: Cell, options: TableOptions) {
   rowHandle.style.top = `${line.top - origin.top + (line.height - rowHandle.offsetHeight) / 2}px`;
 }
 
+/** Pixels a press moves before it is a drag rather than a press (a press opens the handle's menu). */
+const DRAG_START = 4;
+
+/**
+ * Where a dragged column or row lands with the pointer at (x, y): the one under it, clamped to the
+ * table. A row never lands on the header row (GFM's table starts with exactly one header row), and the header row is
+ * never dragged.
+ */
+function landing(table: HTMLElement, which: "column" | "row", x: number, y: number): number {
+  const rows = [...table.querySelectorAll("tr")];
+  const spans =
+    which === "row"
+      ? rows.map((row) => row.getBoundingClientRect()).map((box) => [box.top, box.bottom] as const)
+      : [...(rows[0]?.children ?? [])]
+          .map((cell) => cell.getBoundingClientRect())
+          .map((box) => [box.left, box.right] as const);
+  const at = which === "row" ? y : x;
+  const first = which === "row" ? 1 : 0;
+  let to = spans.findIndex(([start, end]) => at >= start && at < end);
+  if (to === -1) to = at < (spans[0]?.[0] ?? 0) ? first : spans.length - 1;
+  return Math.max(to, first);
+}
+
+/** Draws the drop line on the edge of `to` that the dragged column or row would take: its top or left when it moves up. */
+function drawLine(table: HTMLElement, which: "column" | "row", from: number, to: number, line: HTMLElement) {
+  const rows = table.querySelectorAll("tr");
+  const target = which === "row" ? rows[to] : rows[0]?.children[to];
+  const parent = line.offsetParent;
+  if (target === undefined || parent === null) return;
+  const origin = parent.getBoundingClientRect();
+  const box = table.getBoundingClientRect();
+  const edge = target.getBoundingClientRect();
+  const before = to < from;
+  if (which === "row") {
+    line.style.left = `${box.left - origin.left}px`;
+    line.style.top = `${(before ? edge.top : edge.bottom) - origin.top - 1}px`;
+    line.style.width = `${box.width}px`;
+    line.style.height = "2px";
+  } else {
+    line.style.left = `${(before ? edge.left : edge.right) - origin.left - 1}px`;
+    line.style.top = `${box.top - origin.top}px`;
+    line.style.width = "2px";
+    line.style.height = `${box.height}px`;
+  }
+  line.dataset.show = "true";
+}
+
 function alignOf(table: ProseNode, column: number): Alignment | null {
   const value = table.firstChild?.maybeChild(column)?.attrs.alignment;
   return value === "left" || value === "center" || value === "right" ? value : null;
@@ -110,6 +161,8 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
   let hovered: Cell | null = null;
   let open: "column" | "row" | null = null;
   let shown: Cell | null = null;
+  /** A press on a handle that moved far enough to be a drag; its click then opens no menu. */
+  let dragged = false;
 
   const update = (view: EditorView) => {
     // On a screen with no pointer that hovers, the caret's cell: a touch puts the caret there.
@@ -132,6 +185,59 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
     place(view, cell, options);
   };
 
+  /**
+   * Dragging a handle moves its column or row (decision 7) by preset-gfm 7.23.0's moveColCommand / moveRowCommand
+   * (prosemirror-tables 1.8.5 moveTableColumn / moveTableRow: `to` is the index it ends at), with a line where it
+   * lands. The pointer is captured, so the hover under it does not move the handles meanwhile.
+   */
+  const dragFrom = (view: EditorView, which: "column" | "row", handle: HTMLElement) => {
+    const down = (event: PointerEvent) => {
+      const cell = shown;
+      const table = cell === null ? null : view.nodeDOM(cell.table);
+      if (event.button !== 0 || cell === null || !(table instanceof HTMLElement) || !view.editable) return;
+      const from = which === "row" ? cell.row : cell.column;
+      if (which === "row" && from === 0) return;
+      let to = from;
+      let moving = false;
+      const move = (next: PointerEvent) => {
+        if (!moving && Math.hypot(next.clientX - event.clientX, next.clientY - event.clientY) < DRAG_START) return;
+        moving = true;
+        to = landing(table, which, next.clientX, next.clientY);
+        drawLine(table, which, from, to, options.dropLine);
+      };
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+        options.dropLine.dataset.show = "false";
+        if (!moving) return;
+        dragged = true;
+        // The click that follows this pointerup comes first; one that never comes (the pointer left the button) must
+        // not swallow the next press.
+        setTimeout(() => (dragged = false));
+        if (to !== from) moveTo(view, which, cell, from, to);
+      };
+      (event.target as Element).setPointerCapture?.(event.pointerId);
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    };
+    handle.addEventListener("pointerdown", down);
+    return () => handle.removeEventListener("pointerdown", down);
+  };
+  const moveTo = (view: EditorView, which: "column" | "row", cell: Cell, from: number, to: number) =>
+    editor.action((ctx) => {
+      // The move finds its row or column through the selection (prosemirror-tables 1.8.5 getSelectionRangeInRow),
+      // so it is selected first, as a press on the handle does.
+      select(ctx, which, cell);
+      const command = which === "row" ? moveRowCommand : moveColCommand;
+      ctx.get(commandsCtx).call(command.key, { from, to, pos: cell.table + 1 });
+      shown = which === "row" ? { ...cell, row: to } : { ...cell, column: to };
+      hovered = shown;
+      update(view);
+      view.focus();
+    });
+
   const area = options.columnHandle.parentElement;
   editor.use(
     $prose(
@@ -153,11 +259,15 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
             };
             area?.addEventListener("pointermove", moved);
             area?.addEventListener("pointerleave", left);
+            const stopRow = dragFrom(view, "row", options.rowHandle);
+            const stopColumn = dragFrom(view, "column", options.columnHandle);
             return {
               update: () => update(view),
               destroy: () => {
                 area?.removeEventListener("pointermove", moved);
                 area?.removeEventListener("pointerleave", left);
+                stopRow();
+                stopColumn();
               },
             };
           },
@@ -186,7 +296,7 @@ export function withTables(editor: Editor, options: TableOptions): TableTools {
     toggle: (which) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
-        if (shown === null) return;
+        if (shown === null || dragged) return;
         open = open === which ? null : which;
         if (open !== null) select(ctx, which, shown);
         update(view);

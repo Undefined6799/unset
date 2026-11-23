@@ -15,6 +15,7 @@ let {
   state: shown,
   columnHandle = $bindable(),
   rowHandle = $bindable(),
+  dropLine = $bindable(),
   ontoggle,
   onclose,
   oncolumn,
@@ -23,6 +24,7 @@ let {
   state: TableState;
   columnHandle?: HTMLElement;
   rowHandle?: HTMLElement;
+  dropLine?: HTMLElement;
   ontoggle: (which: "column" | "row") => void;
   onclose: () => void;
   oncolumn: (action: ColumnAction) => void;
@@ -120,3 +122,5 @@ const itemClass =
     </div>
   {/if}
 </div>
+
+<div bind:this={dropLine} data-table-drop data-show="false" aria-hidden="true" class="pointer-events-none invisible absolute z-20 rounded-full bg-primary data-[show=true]:visible"></div>
