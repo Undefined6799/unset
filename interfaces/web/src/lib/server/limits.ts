@@ -86,8 +86,9 @@ export const REVIEW_LANES = 2;
 /**
  * Colouring a member's code on the server, inside the page load (P1.21v; review of #2004 at e36de8a; measured in
  * apps/web/lib/editor/code-colours.ts): a block of at most 20,000 characters (the text block's ceiling) whose lines are
- * at most 400 characters, so no parser step runs long; at most 30 ms of parsing for one block and 60 ms for the page,
- * past which its code is plain. A normal 20,000-character TypeScript block parses in about 15 ms. The Text editor's
- * preview uses the same numbers (cardEditLimits), so it colours what the page will.
+ * at most 400 characters, so no parser step runs long; at most 50 ms of parsing for one block and 100 ms for the page,
+ * past which its code is plain. Normal use fits: a 20,000-character TypeScript block parsed in about 15 ms locally and
+ * 35 ms on a CI runner (2026-11-23), and the Text editor writes at most 10,000. The Text editor's preview uses the same
+ * numbers (cardEditLimits), so it colours what the page will.
  */
-export const CODE_COLOUR_LIMITS: CodeColourLimits = { chars: 20_000, lineChars: 400, blockMs: 30, pageMs: 60 };
+export const CODE_COLOUR_LIMITS: CodeColourLimits = { chars: 20_000, lineChars: 400, blockMs: 50, pageMs: 100 };

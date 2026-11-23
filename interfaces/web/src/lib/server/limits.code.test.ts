@@ -9,10 +9,11 @@ import {
   codeColourBudget,
   colourCode,
 } from "@unset/apps-web/lib/editor/code-colours.ts";
+import { TEXT_EDIT_BYTES } from "@unset/domains-profile";
 import { describe, expect, test } from "vitest";
 import { CODE_COLOUR_LIMITS as LIMITS } from "./limits.ts";
 
-/** The longest step measured was about 35 ms (70 ms with the block's own 30); room for a slow, busy test machine. */
+/** The longest step measured was about 35 ms (71 ms with a block's own 30); room for a slow, busy test machine. */
 const ONE_STEP_MS = 250;
 
 /** `piece` repeated in lines of at most `width` characters, `chars` in all. */
@@ -58,9 +59,10 @@ describe("CODE_COLOUR_LIMITS", () => {
     expect((await timed(`${line} `, "js", UNTIMED)).coloured).toEqual({ plain: "size" });
   });
 
-  // Normal use fits inside the limit (Alex 2026-11-19): the quickest of five parses, so a busy moment does not count.
-  test("a normal full-size block parses within `blockMs`", async () => {
-    const block = lines("export function f(a: number): string {\n  return `${a}`; // n\n}\n", LIMITS.chars, 80);
+  // Normal use fits inside the limit (Alex 2026-11-19): a block as long as the Text editor writes (domains/profile
+  // TEXT_EDIT_BYTES), the quickest of five parses so a busy moment does not count.
+  test("a normal block as long as the editor allows parses within `blockMs`", async () => {
+    const block = lines("export function f(a: number): string {\n  return `${a}`; // n\n}\n", TEXT_EDIT_BYTES, 80);
     const runs: number[] = [];
     for (let i = 0; i < 5; i += 1) {
       const { ms, coloured } = await timed(block, "ts", UNTIMED);

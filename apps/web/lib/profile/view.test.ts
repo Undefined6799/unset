@@ -5,7 +5,7 @@ import type { CodeColourLimits } from "../editor/code-colours.ts";
 import { contactAction, shownCards, cardViews as viewsWithin } from "./view.ts";
 
 // The numbers interfaces/web limits.ts CODE_COLOUR_LIMITS has today; limits.code.test.ts tests those themselves.
-const CODE_COLOURS: CodeColourLimits = { chars: 20_000, lineChars: 400, blockMs: 30, pageMs: 60 };
+const CODE_COLOURS: CodeColourLimits = { chars: 20_000, lineChars: 400, blockMs: 50, pageMs: 100 };
 const cardViews = (cards: Parameters<typeof viewsWithin>[0], versions?: ReadonlyMap<string, string>) =>
   viewsWithin(cards, CODE_COLOURS, versions);
 
@@ -152,7 +152,7 @@ describe("a page of hostile code", () => {
   test("answers within the page's budget and shows every block as its text", async () => {
     const started = performance.now();
     const views = await viewsWithin([...hostile, ...hostile.map((c) => ({ ...c, key: `${c.key}2` }))], CODE_COLOURS);
-    // The page's 60 ms, one more parser step (at most about 35 ms measured) and the Markdown parse; far under a second.
+    // The page's 100 ms, one more parser step (at most about 35 ms measured) and the Markdown parse; far under a second.
     expect(performance.now() - started).toBeLessThan(1_000);
     for (const [i, view] of views.entries()) {
       const block = view.shown.kind === "readme" ? view.shown.blocks[0] : undefined;
