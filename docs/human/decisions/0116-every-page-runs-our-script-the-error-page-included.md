@@ -10,6 +10,8 @@ amends:
     part: "point 6, last sentence: the native controls we already have stay until a step has a reason to change them"
   - adr: "0114"
     part: "Compliance: P1.22f and P1.22g as booked there"
+  - adr: "0059"
+    part: "decision 1, first bullet: a typed line for each loosening, for the three steps point 10 names and no other"
 ---
 # 0116 — Every page runs our script, the error page included; a page without it is named
 
@@ -113,9 +115,17 @@ last-resort `error.html` is sent when the error page itself fails. Neither shows
    link or a native control that does the job with a full page. Once the client is ready it takes over, and the
    link's own behaviour no longer applies. Until the client is ready, a press does the plain thing; it is never
    lost. Everything else in ADR 0114 stands: its points 1, 2, 4, 5 and 7, and the rest of point 6.
-10. **Order.** This record changes no code. The steps are in the step book (Compliance). Each step that changes a
-    page's header or turns the client on is a security change and merges on Alex's typed line (ADR 0059), as P1.22e
-    did. Nothing from those steps reaches staging before P1.22f has measured the edge's file allowance.
+10. **Order, and one line for the steps.** This record changes no code. The steps are in the step book
+    (Compliance). Alex, 2026-11-23 21:23Z, asked whether he types a line for each step that turns script on or one
+    for all: "One line for all". So his line accepting this record is also his line (ADR 0059 decision 1) for the
+    three steps that carry it out: P1.22k (the default turned round, the error page), P1.22g (home, the legal pages
+    and `/request-invite`) and P1.22l (the sign-in, join and welcome pages). Each still merges only as every other
+    pull request does: the reviewer's SAFE on the exact head, the required checks green, the verifier's merge. The
+    line covers a step only while it does what this record says. A change to any directive of the policy, a limit,
+    a cookie rule, a page or answer this record keeps without script, or any other security control is outside it
+    and needs its own line; the reviewer and the verifier decide which case a pull request is, and when in doubt it
+    is outside (ADR 0059 decision 2). Nothing from those steps reaches staging before P1.22f has measured the
+    edge's file allowance.
 
 ## Alternatives
 
@@ -149,6 +159,9 @@ last-resort `error.html` is sent when the error page itself fails. Neither shows
 - **Every first visit asks for build files**, an unmatched address included: about 30 for a cold page, against 120
   per 10 seconds per address at the edge (ADR 0069). A refusal page asks for none. P1.22f measures it before
   staging; changing a limit is its own decision (ADR 0059).
+- **Three security changes merge without a line of their own.** P1.22k, P1.22g and P1.22l loosen what a page may
+  run, and Alex will not type the head of each. What he gives up is his own look at each exact head; what stays is
+  the reviewer's adversarial review of it, the every-answer test, and the limit in point 10 on what the line covers.
 - **Budgets.** Home and the legal pages leave "script size 0" for the app pages' 120 KiB warning line.
 - **`csr = false` stops meaning safety.** Where it remains it means "nobody reads this route". The docs that
   describe the default (`features/core-shell.md`, the `area/web` note, the `CLAUDE.md` line) change in the step

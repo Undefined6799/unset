@@ -5501,7 +5501,10 @@ script policy unchanged, names what stays without script (the gate's refusal pag
 and three routes nobody reads), keeps the one 404 (rule SE-2), keeps request text out of the error page's start-up
 script, and replaces the fail-closed default with a test over every answer. No code, header or test changes here.
 The record loosens a security default, so its PR merges on Alex's typed line. P1.22j may be built before that line
-(it changes no behaviour); P1.22k and the steps after it wait for it.
+(it changes no behaviour); P1.22k and the steps after it wait for it. That line is also his line for P1.22k, P1.22g
+and P1.22l (Alex, 21:23Z: "One line for all"; ADR 0116 point 10): each merges on the reviewer's SAFE at its exact
+head with the checks green, as long as it does only what the record says. Anything past it (a directive, a limit, a
+cookie rule, an answer the record keeps without script) needs its own line.
 
 ### P1.22j — Name every page's script setting and pin every answer's header (added step, 2026-11-23)
 
@@ -5539,12 +5542,12 @@ layout says `csr = true`. Because P1.22j made every other page say false itself,
 are error pages: an address no route matches, and a failed load on any route.
 
 The hook follows ADR 0116 point 3: SvelteKit's own header, narrowed, goes out on an HTML document SvelteKit drew
-with its client, and the fixed one on everything else. How the hook knows is this step's design, within two
-rules: it reads only what the server itself did (the route's policy for a page; for an error page, that SvelteKit
-drew one), never the request; and the every-answer test holds header and document to each other in both
-directions. That SvelteKit sent a header cannot be the signal: it sends its own on every page it draws, whatever
-`csr` says (kit 3.2.0 `page/render.js:577-579`). The `client` field of `policy.ts` and `only_the_named_public_pages_run_the_client` turn round with the
-default: the test now names the pages that do not run the client, each with its reason, and
+with its client, and the fixed one on everything else. How the hook knows is this step's design, within two rules:
+it reads only what the server itself did (the route's policy for a page; for an error page, that SvelteKit drew
+one), never the request; and the every-answer test holds header and document to each other in both directions. That
+SvelteKit sent a header cannot be the signal: it sends its own on every page it draws, whatever `csr` says (kit
+3.2.0 `page/render.js:577-579`). The `client` field of `policy.ts` and `only_the_named_public_pages_run_the_client`
+turn round with the default: the test now names the pages that do not run the client, each with its reason, and
 `scripts/docs/endpoints.ts` follows the field.
 
 The error page's data (ADR 0116 point 6). The Sign in link's return path and the theme form's return path leave
