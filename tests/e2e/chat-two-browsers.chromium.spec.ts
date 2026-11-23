@@ -409,6 +409,14 @@ test("chat_e2e.dock: the chat box framed on unset.sh sets up, accepts, reads and
   await box.locator("#message").fill("hello from the box");
   await box.getByRole("button", { name: "Send" }).click();
   await expect(messages(b.page)).toContainText("hello from the box", { timeout: 90_000 });
+  // The key is asked once (Alex 2026-11-23): a reload, and a new tab once this one is gone, open the same device ready.
+  await a.page.reload();
+  await expect.poll(boxState, { timeout: 60_000 }).toBe("ready");
+  await a.page.close();
+  const tab = await a.context.newPage();
+  await tab.goto("https://unset.sh/dock-host");
+  const again = tab.frameLocator("iframe[data-dock]");
+  await expect.poll(() => again.locator("main").getAttribute("data-state"), { timeout: 60_000 }).toBe("ready");
   for (const p of [a, b]) expect(p.problems).toEqual([]);
 });
 
