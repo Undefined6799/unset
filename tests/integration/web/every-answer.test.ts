@@ -5,8 +5,8 @@
 // route the build has and ROUTES does not name fails, and so does a row with no route: a page nobody named cannot
 // merge. Every answer, whatever the tables say of it, is also held to the rules in `held` below.
 // The app policy is pinned in gate.test.ts too (ADR 0054); here it is one of the values an answer may carry.
-// Asked with GET, and POST for the forms; a HEAD is its GET without the body. Not asked, because the build cannot be
-// made to give them: the gate's refusal of a route with no policy.ts (gate.test.ts every_route_has_a_policy keeps
+// Asked with GET, and POST for the forms; one of each kind again with HEAD, held to its GET. Not asked, because the
+// build cannot be made to give them: the gate's refusal of a route with no policy.ts (gate.test.ts every_route_has_a_policy keeps
 // one from existing) and of an error the gate itself catches (gate.test.ts a_session_store_outage_is_its_503). Both
 // leave the gate by the same `plain` refusal as the ones asked here (interfaces/web/src/hooks.server.ts).
 // Postgres as `web` and, for the one indexed profile, as `indexer` (TE-2); the PDS is stood in (TE-1).
@@ -120,6 +120,7 @@ type State = "mid sign-in" | "at age" | "at terms" | "at chat";
 
 const OWNER = parseDid(`did:plc:${"a".repeat(24)}`) as Did;
 const SHOWN = `did:plc:${"p".repeat(24)}`;
+const NOBODY = `did:plc:${"n".repeat(24)}`;
 
 const TO_SIGN_IN = "303 redirect: static";
 const SENT_ON = "303 redirect: static";
@@ -604,11 +605,6 @@ const OTHERS: Readonly<Record<string, { readonly seen: Cell; readonly ask: Ask }
   "429 on an app route, no document": { seen: "429 text/plain: static", ask: overTheLimit(APP_ROUTE, NO_DOCUMENT) },
   "429 on a public route": { seen: "429 refusal page: plain", ask: overTheLimit(PUBLIC_ROUTE) },
   "429 on a public route, no document": { seen: "429 text/plain: plain", ask: overTheLimit(PUBLIC_ROUTE, NO_DOCUMENT) },
-  // The member's own bucket, whatever their address (limits.ts `profile`: thirty writes); a visitor's post is sent on.
-  "429 for a member over their own limit": {
-    seen: { visitor: TO_SIGN_IN, member: "429 refusal page: plain" },
-    ask: (send) => firstRefusal(() => send("/test-routes/members", form("x=1"))),
-  },
   "503 past the deadline, no document": {
     seen: "503 text/plain: static",
     ask: (send) => send("/test-routes/waits", { headers: NO_DOCUMENT }),
@@ -635,6 +631,13 @@ const OTHERS: Readonly<Record<string, { readonly seen: Cell; readonly ask: Ask }
     seen: { visitor: TO_SIGN_IN, member: "400 page: script" },
     ask: (send) => send(`/${OWNER}?/create`, form("x=1")),
   },
+  // The error page under an app route with a parameter. No GET there fails today (a GET of another account's page is
+  // sent on to its public one), so it is a member's write to a page that is not their own.
+  "a form post to another account's page": {
+    seen: { visitor: TO_SIGN_IN, member: "404 error page: app, no hash" },
+    ask: (send) => send(`/${NOBODY}?/create`, form("x=1")),
+  },
+  "another account's page": { seen: SENT_ON, ask: (send) => send(`/${NOBODY}`) },
   "a form post refused with the error page": {
     seen: "400 error page: app, no hash",
     ask: (send) => send("/prefs/theme", form("theme=mauve")),
@@ -650,6 +653,13 @@ const OTHERS: Readonly<Record<string, { readonly seen: Cell; readonly ask: Ask }
   "a public page, unchanged": { seen: "304 not modified: none", ask: unchanged(() => "/") },
   "an app page, unchanged": { seen: "304 not modified: none", ask: unchanged(() => APP_ROUTE) },
   "a build file, unchanged": { seen: "304 not modified: none", ask: unchanged(() => buildFile("chunks", ".js")) },
+
+  // The member's own bucket, whatever their address (limits.ts `profile`: thirty writes a minute); a visitor's post is
+  // sent on. Last, because it spends what every member's write above counts against.
+  "429 for a member over their own limit": {
+    seen: { visitor: TO_SIGN_IN, member: "429 refusal page: plain" },
+    ask: (send) => firstRefusal(() => send("/test-routes/members", form("x=1"))),
+  },
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -675,6 +685,19 @@ function saysOfCsr(file: string): boolean | "nothing" | "unclear" {
   if (any.length === 0) return "nothing";
   return plain.length === 1 && any.length === 1 ? plain[0]?.[1] === "true" : "unclear";
 }
+
+/** One of each kind of answer, asked again with HEAD. */
+const HEADS: Readonly<Record<string, () => string>> = {
+  "a public page": () => "/",
+  "a page that runs the client": () => APP_ROUTE,
+  "a member's page": () => `/${OWNER}`,
+  "a path no route matches": () => "/no/such/page",
+  "a failed load": () => "/@nobody.example.com",
+  "a redirect": () => "/settings",
+  "an endpoint": () => "/health",
+  "a build file": () => buildFile("chunks", ".js"),
+  "the last-resort page": () => "/test-routes/fails",
+};
 
 // A walk asks a few hundred times in a row; beside the other files on a busy runner that passes Vitest's five seconds.
 const WALK = 60_000;
@@ -719,6 +742,28 @@ describe("every answer", () => {
       expect(page).toBe("404 refusal page: plain");
     } finally {
       await off.stop();
+    }
+  });
+
+  // HTTP asks for a HEAD's header fields to be its GET's, with no content (RFC 9110 section 9.3.2). The tables ask
+  // with GET, so this holds one of each kind to it: the same status, nothing to run, and the same pinned policy.
+  test("a_head_answers_as_its_get_with_no_body", async () => {
+    for (const [name, path] of Object.entries(HEADS)) {
+      for (const viewer of ["visitor", "member"] as const) {
+        const send = sendAs(viewer, undefined, web);
+        const got = await send(path());
+        held(`${name}, a ${viewer}: GET`, got);
+        const head = await send(path(), { method: "HEAD" });
+        const label = `${name}, a ${viewer}: HEAD`;
+        expect(head.body, label).toBe("");
+        expect(head.status, label).toBe(got.status);
+        // The policy by its pinned name: a member's start-up script, and so its hash, differs from one answer to the next.
+        const policy = policyOf(head.headers.get("content-security-policy"));
+        expect(policy, label).toBe(policyOf(got.headers.get("content-security-policy")));
+        expect(policy, label).toBeDefined();
+        expect(head.headers.get("content-security-policy-report-only"), label).toBeNull();
+        expect(head.headers.get("link"), label).toBeNull();
+      }
     }
   });
 
