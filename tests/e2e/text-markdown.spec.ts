@@ -3,7 +3,7 @@
 // CommonMark allows and the page shows them, and pasted HTML loads nothing from elsewhere.
 // All under the app's real CSP. Each card added is deleted again.
 import { expect, type Page, test } from "@playwright/test";
-import { addCard, OWN_PAGE, paceWrites } from "./cards.ts";
+import { addCard, OWN_PAGE, paceWrites, spendsWrites } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 
 paceWrites(test);
@@ -337,4 +337,29 @@ test("a_pasted_table_is_a_table_and_what_the_page_cannot_show_is_refused", async
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
   await giveBackWrites(page, 2);
+});
+
+// Review of #1958: a task's checkbox on the page had no accessible name, so a screen reader announced "checkbox,
+// checked" with nothing to say which task (WCAG 2.2 SC 4.1.2). It is named by the task's own words. The page is read
+// with script off, where the server draws the card rather than the editor; that context counts against the write
+// budget (cards.ts spendsWrites).
+test("a_task_checkbox_on_the_page_is_named_by_its_words", async ({ browser, page }) => {
+  const word = `task${Date.now()}`;
+  await openOwnPage(page);
+  const tasks = "- [x] Ship **it**\n- [ ] Write [the docs](https://x.example/d)\n  - [ ] Nested one";
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start\n\n${tasks}` });
+  const context = await browser.newContext({
+    storageState: await page.context().storageState(),
+    javaScriptEnabled: false,
+  });
+  spendsWrites(context);
+  const quiet = await context.newPage();
+  expect((await quiet.goto(page.url()))?.status()).toBe(200);
+  await expect(quiet.getByRole("checkbox", { name: "Ship it", exact: true })).toBeChecked();
+  // The words of its own line only, not of the list nested under it.
+  await expect(quiet.getByRole("checkbox", { name: "Write the docs", exact: true })).not.toBeChecked();
+  await expect(quiet.getByRole("checkbox", { name: "Nested one", exact: true })).not.toBeChecked();
+  await context.close();
+  await openOwnPage(page);
+  await removeCard(page, word);
 });
