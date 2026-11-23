@@ -216,6 +216,17 @@ describe("GET /chat/sign-in", () => {
     expect(logged).not.toContain(envelope.sig);
   });
 
+  test("chat.sign_in_dock: the chat box's hop goes back to the box, the ticket only in the fragment", async () => {
+    // ADR 0115: unset.sh's shell points the box's frame here; the ticket reaches the box on unset.cc by the redirect,
+    // never unset.sh's script (chat box review D1).
+    const { cookie } = await signedIn();
+    const response = await get(`${signInPath()}&dock`, cookie);
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(`${location.origin}${location.pathname}${location.search}`).toBe(`${DOOR}/?dock`);
+    expect([...new URLSearchParams(location.hash.slice(1)).keys()]).toEqual(["ticket"]);
+  });
+
   test("chat.sign_in_fresh_each_time: two hops get two tickets", async () => {
     const { cookie } = await signedIn();
     const jti = async () => {

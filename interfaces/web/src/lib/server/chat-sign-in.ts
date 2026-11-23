@@ -27,6 +27,12 @@ import { stepOf } from "./welcome.ts";
 
 /** The door's path that takes the ticket (the door step builds to it). */
 export const DOOR_RETURN_PATH = "/sign-in/return";
+/**
+ * The chat box's (ADR 0115): unset.sh's shell points the box's frame at this route with `&dock`, and the ticket goes
+ * back to the box's own page, the one door page unset.sh may frame (interfaces/chat-auth door.ts rootDocument). The
+ * navigation is the frame's, so unset.sh's script never holds the ticket (chat box review D1).
+ */
+export const DOOR_DOCK_PATH = "/?dock";
 const PRIVATE = { "cache-control": "private, no-store", vary: "Cookie", "referrer-policy": "no-referrer" };
 
 const plain = (status: number, code: string) =>
@@ -59,12 +65,13 @@ export async function chatSignIn(event: RequestEvent): Promise<Response> {
   const { deadline } = event.locals;
   await admit(event, session);
   const state = stateOf(event.url.searchParams);
-  if (state === null) return redirectTo(`${config.CHAT_DOOR_ORIGIN}/`);
+  const dock = event.url.searchParams.has("dock");
+  if (state === null) return redirectTo(`${config.CHAT_DOOR_ORIGIN}${dock ? DOOR_DOCK_PATH : "/"}`);
   if (state === "bad") return plain(400, "chat.bad_state");
   const { chat } = services();
   const ports = { readyUser: (did: Did) => chat.readyUser(did, deadline), sign: chat.signTicket };
   const outcome = await signIn(ports, { did: session.did, idHash: session.idHash, state });
   if (outcome.kind === "not_ready") return plain(503, "chat.not_ready");
   const fragment = new URLSearchParams({ ticket: outcome.ticket });
-  return redirectTo(`${config.CHAT_DOOR_ORIGIN}${DOOR_RETURN_PATH}#${fragment}`);
+  return redirectTo(`${config.CHAT_DOOR_ORIGIN}${dock ? DOOR_DOCK_PATH : DOOR_RETURN_PATH}#${fragment}`);
 }

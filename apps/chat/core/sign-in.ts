@@ -24,9 +24,9 @@ type Tab = {
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
 /** The ticket in the fragment, or null; the fragment is gone from the address bar and history either way. */
-export function takeTicket(tab: Tab): string | null {
+export function takeTicket(tab: Tab, keep: string = tab.location.pathname): string | null {
   const tickets = new URLSearchParams(tab.location.hash.slice(1)).getAll("ticket");
-  tab.history.replaceState(null, "", tab.location.pathname);
+  tab.history.replaceState(null, "", keep);
   return tickets.length === 1 && tickets[0] !== "" ? (tickets[0] ?? null) : null;
 }
 

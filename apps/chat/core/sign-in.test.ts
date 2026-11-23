@@ -45,6 +45,12 @@ describe("takeTicket", () => {
     expect(tab.location.hash).toBe("");
   });
 
+  test("chat.ticket_dock_keeps_box: the chat box keeps its own address, /?dock, without the fragment", () => {
+    const tab = page("#ticket=abc");
+    expect(takeTicket(tab, "/?dock")).toBe("abc");
+    expect(tab.calls).toEqual(["/?dock"]);
+  });
+
   test.each([[""], ["#"], ["#ticket="], ["#other=1"], ["#ticket=a&ticket=b"]])(
     "chat.ticket_missing: %s gives no ticket, and the fragment still goes",
     (hash) => {

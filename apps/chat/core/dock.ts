@@ -1,12 +1,14 @@
 // The chat box's side of its talk with unset.sh (ADR 0115). unset.sh's shell frames this page at /?dock, on this
 // origin, so the browser keeps the box's storage and cookies apart from a unset.cc tab and the box is a browser of its
-// own to chat. A frame's navigation to unset.sh carries no unset.sh session (tested, Chromium 157, 2026-11-23), so the
-// box cannot take the sign-in hop; the shell does its middle step:
+// own to chat. A navigation the frame starts to unset.sh carries no unset.sh session (tested, Chromium 157,
+// 2026-11-23), but one the shell starts, by setting the frame's src, is same-origin and carries it (chat box review D1,
+// run in Chromium 157). So the shell sends the frame on the hop and the ticket comes back to the box by the redirect,
+// never through unset.sh's script:
 //
 //   shell -> box   unset.dock.hello                 at the frame's load event, to unset.cc's origin; the box keeps
 //                                                   the sender's origin from here on, so it never posts to "*"
-//   box -> shell   unset.dock.sign_in { state }     the one-time value, also in the box's own cookie
-//   shell -> box   unset.dock.ticket { ticket }     web's ticket for that value (POST /chat/dock), or null
+//   box -> shell   unset.dock.sign_in { state }     the box has set its one-time value in its own cookie
+//   shell          frame.src = /chat/sign-in?state=…&dock   web's hop; 303 to <door>/?dock#ticket=…
 //   box -> door    POST /sign-in/redeem?dock        as the hop's redeem; the door matches the value in the cookie
 //   box -> shell   unset.dock.count { unread }      for the chat icon
 //   box -> shell   unset.dock.close                 the box's Close
@@ -16,17 +18,15 @@
 // The box takes a message only from its parent window (MessageEvent.source), whose origin the page's frame-ancestors
 // pins to unset.sh (interfaces/chat-auth door.ts rootDocument), and after the hello only from that origin
 // (HTML "Cross-document messaging", https://html.spec.whatwg.org/multipage/web-messaging.html, read 2026-11-23: check
-// origin and source). A script on unset.sh that reads the ticket gains nothing: the door redeems it only with the
-// value in this box's own cookie (security pass finding 8). Nothing secret is ever posted to the shell.
+// origin and source). The shell cannot read the frame's address (cross-origin), and a script that fetches the hop
+// itself gets an opaque redirect. Nothing secret is ever posted to the shell.
 import type { Conversation } from "./conversations.ts";
 
 export const DOCK = "unset.dock.";
-const MAX_TICKET = 3000;
 const DID = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2048}$/;
 
 export type DockMessage =
   | { readonly kind: "hello"; readonly origin: string }
-  | { readonly kind: "ticket"; readonly ticket: string | null }
   | { readonly kind: "open"; readonly did: string }
   | { readonly kind: "shown"; readonly shown: boolean };
 
@@ -45,16 +45,10 @@ export function dockMessage(
 ): DockMessage | null {
   if (event.source === null || event.source !== parent) return null;
   if (origin !== null && event.origin !== origin) return null;
-  const data = event.data as { type?: unknown; ticket?: unknown; did?: unknown; shown?: unknown } | null;
+  const data = event.data as { type?: unknown; did?: unknown; shown?: unknown } | null;
   if (typeof data !== "object" || data === null) return null;
   if (data.type === `${DOCK}hello`) return { kind: "hello", origin: event.origin };
   if (origin === null) return null;
-  if (data.type === `${DOCK}ticket`) {
-    if (data.ticket === null) return { kind: "ticket", ticket: null };
-    return typeof data.ticket === "string" && data.ticket.length <= MAX_TICKET
-      ? { kind: "ticket", ticket: data.ticket }
-      : null;
-  }
   if (data.type === `${DOCK}open` && typeof data.did === "string" && DID.test(data.did)) {
     return { kind: "open", did: data.did };
   }

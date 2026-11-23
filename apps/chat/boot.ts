@@ -188,7 +188,9 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
   let asked: string | null = null;
   let hello: () => void = () => undefined;
   const helloed = new Promise<void>((resolve) => (hello = resolve));
-  const tickets: ((ticket: string | null) => void)[] = [];
+  // Back from the hop the shell sent the frame on (web's GET /chat/sign-in?dock), the ticket is in the fragment; it
+  // leaves the address first, whatever comes next (core/sign-in.ts takeTicket).
+  const ticket = takeTicket(window, DOCK_PATH);
   const door = window.fetch.bind(window);
   const seen = boxVisibility(document);
   const openWith = async (did: string) => {
@@ -207,7 +209,6 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
       origin ??= message.origin;
       return hello();
     }
-    if (message.kind === "ticket") return tickets.shift()?.(message.ticket);
     if (message.kind === "shown") return seen.setShown(message.shown);
     void openWith(message.did);
   });
@@ -229,14 +230,17 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
   };
   const elsewhere = new AbortController();
   const start = async () => {
-    const state = randomState();
-    document.cookie = stateCookie(state);
-    const ticket = new Promise<string | null>((resolve) => tickets.push(resolve));
-    tell({ type: `${DOCK}sign_in`, state });
-    const late = new Promise<null>((resolve) => window.setTimeout(() => resolve(null), DOCK_WAIT_MS));
-    const got = await Promise.race([ticket, late]);
-    if (got === null) return onState({ kind: "error", code: "chat.dock_refused" });
-    await signIn(got, elsewhere.signal, (s) => elsewhere.signal.aborted || report(s), {
+    if (ticket === null) {
+      // The hop: the box keeps its one-time value in its own cookie and asks the shell to send the frame to web's
+      // sign-in, which comes back here with the ticket (core/dock.ts). The page normally leaves before the wait ends.
+      const state = randomState();
+      document.cookie = stateCookie(state);
+      announceHop(hops);
+      tell({ type: `${DOCK}sign_in`, state });
+      window.setTimeout(() => onState({ kind: "error", code: "chat.dock_refused" }), DOCK_WAIT_MS);
+      return;
+    }
+    await signIn(ticket, elsewhere.signal, (s) => elsewhere.signal.aborted || report(s), {
       redeemPath: DOCK_REDEEM_PATH,
       renew: () => window.location.replace(DOCK_PATH),
       page: seen,

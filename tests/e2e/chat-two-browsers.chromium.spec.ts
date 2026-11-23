@@ -375,7 +375,7 @@ test("chat_e2e.first_message_no_browser: a request sent while the other has no b
 
 test("chat_e2e.dock: the chat box framed on unset.sh sets up, accepts, reads and sends", async ({ browser }) => {
   test.setTimeout(240_000);
-  // ADR 0115: the box signs in through unset.sh's shell (POST /chat/dock), its cookies partitioned to the box.
+  // ADR 0115: the shell sends the box on the sign-in hop (GET /chat/sign-in?dock), its cookies partitioned to the box.
   const alice = await stack.member(`alice${Date.now()}.unset.name`);
   const bob = await stack.member(`bob${Date.now()}.unset.name`);
   const a = await browserFor(browser, alice.handle);

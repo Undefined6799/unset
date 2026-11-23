@@ -28,6 +28,10 @@ const FORM_TYPES = new Set(["application/x-www-form-urlencoded", "multipart/form
 const UNTRUSTED_PEER_LOG_MS = 60_000;
 
 const ZERO_SCRIPT = zeroScriptCsp(config.PUBLIC_ORIGIN);
+// What an app page may frame (ADR 0115): the chat box on the door's origin, and this origin's chat sign-in, which the
+// shell points the box's frame at so the ticket goes to the box by the redirect (chat-sign-in.ts DOOR_DOCK_PATH). A
+// redirect's target is checked against frame-src without its path (CSP3 "paths and redirects").
+const chatFrames = `${config.CHAT_DOOR_ORIGIN} ${config.PUBLIC_ORIGIN}/chat/sign-in`;
 
 let untrustedLoggedAt = Number.NEGATIVE_INFINITY;
 const clientIpOf = createClientIpResolver(config, () => {
@@ -275,7 +279,7 @@ function withGroupHeaders(
   const kit = out.headers.get("content-security-policy");
   if (group === "app" && kit !== null) {
     // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).
-    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN, config.CHAT_DOOR_ORIGIN));
+    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN, chatFrames));
   } else {
     out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
   }

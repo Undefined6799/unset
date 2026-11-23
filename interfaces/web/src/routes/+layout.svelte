@@ -234,9 +234,10 @@ const chat = $derived(data.chat);
 // The chat box (ADR 0115; Alex 2026-11-23, "what I want to see is chat inside unset.sh"): on a wider screen the icon
 // and a profile's Message link open the chat page in a frame on unset.cc's origin, here in the corner, instead of
 // leaving; a phone keeps the plain link (Alex: no dock on a phone). The frame is made at the first open, so a page
-// that never opens it runs no chat; it stays, hidden, while the member moves between pages. The shell only relays:
-// it posts the box's one-time value to POST /chat/dock and hands back web's ticket, which redeems only with that
-// value in the box's own cookie on unset.cc (apps/chat core/dock.ts has the whole exchange). Each message is taken
+// that never opens it runs no chat; it stays, hidden, while the member moves between pages. To sign in, the shell
+// only points the frame at web's GET /chat/sign-in with the box's one-time value: the request is this origin's, so the
+// session goes with it, and the ticket reaches the box by the redirect, never this script (chat box review D1; apps/chat
+// core/dock.ts has the whole exchange). Each message is taken
 // only from the frame's own window and origin (HTML web messaging: check source and origin). The icon's number is
 // read again every half minute while the box is not open (GET /chat/count), and from the box once it runs.
 const DOCK = "unset.dock.";
@@ -299,13 +300,14 @@ $effect(() => {
   toDock({ type: `${DOCK}shown`, shown: dockShown });
 });
 
-async function dockMessage(event: MessageEvent) {
+function dockMessage(event: MessageEvent) {
   if (dockFrame?.contentWindow == null || event.source !== dockFrame.contentWindow || event.origin !== chatOrigin)
     return;
   const message = event.data as { type?: unknown; state?: unknown; unread?: unknown } | null;
   if (typeof message !== "object" || message === null) return;
   if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
-    toDock({ type: `${DOCK}ticket`, ticket: await dockTicket(message.state) });
+    // web checks the value's form; the frame comes back on the box's page, which says hello again.
+    dockFrame.src = `/chat/sign-in?${new URLSearchParams({ state: message.state, dock: "" })}`;
   } else if (
     message.type === `${DOCK}count` &&
     typeof message.unread === "number" &&
@@ -314,23 +316,6 @@ async function dockMessage(event: MessageEvent) {
     liveUnread = Math.max(0, message.unread);
   } else if (message.type === `${DOCK}close`) {
     dockShown = false;
-  }
-}
-
-/** web's ticket for the box's one-time value, or null when web refuses it or cannot be reached. */
-async function dockTicket(state: string): Promise<string | null> {
-  try {
-    const response = await fetch("/chat/dock", {
-      method: "POST",
-      body: new URLSearchParams({ state }),
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-    });
-    const body = (await response.json()) as { ticket?: unknown };
-    return response.ok && typeof body.ticket === "string" ? body.ticket : null;
-  } catch {
-    return null;
   }
 }
 

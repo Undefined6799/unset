@@ -29,8 +29,8 @@ const FILE_DIRECTIVES: Readonly<Record<string, string>> = {
 
 /**
  * SvelteKit's header with 'self' in the file directives replaced by `${origin}<path>`; every other source kept. With
- * `frames`, the chat door's origin, a `frame-src` of that origin alone is added for the chat box (ADR 0115); kit's
- * `default-src 'none'` frames nothing else.
+ * `frames`, the sources the chat box needs (ADR 0115: the chat door's origin and web's own chat sign-in), a `frame-src`
+ * of those alone is added; kit's `default-src 'none'` frames nothing else.
  */
 export function narrowed(header: string, origin: string, frames?: string): string {
   const policy = header

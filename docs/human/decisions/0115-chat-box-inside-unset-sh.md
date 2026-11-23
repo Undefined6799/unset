@@ -10,7 +10,7 @@ amends:
   - adr: "0105"
     part: "decision 5, the Pangolin login on staging.unset.cc"
 ---
-# 0115 — Chat opens in a box inside unset.sh, signed in through the shell
+# 0115 — Chat opens in a box inside unset.sh, signed in by the shell's navigation
 
 Proposed 2026-11-23 for P6.02. Alex asked for it on 2026-11-23 at 04:06Z: "I want to be able to message directly with
 an unset.sh ... what I want to see is chat inside unset.sh", and reworking the unset.cc page can wait. He also
@@ -25,10 +25,16 @@ contract joins the two, and there is no dock on a phone. ADR 0093 left the dock 
 
 A spike on 2026-11-23 (Chromium 157, Playwright, two local sites) found three things:
 - A navigation that a frame of unset.cc makes to unset.sh carries no unset.sh session cookie, Lax or Strict. So the
-  box cannot use the sign-in hop.
+  box cannot start the sign-in hop itself.
 - A cookie with `SameSite=None; Partitioned` (CHIPS) set by the frame, from the server or from its own script, is
   kept and sent back on the frame's fetches and after a reload.
 - A redirect that answers with `frame-ancestors 'none'` does not stop the frame's navigation.
+
+The chat box review on 2026-11-23 (finding D1) ran a fourth case in Chromium 157.0.8103.78: when **the shell sets the
+frame's `src`** to unset.sh's `GET /chat/sign-in`, the request is same-origin, the Lax and Strict cookies arrive, and
+web's 303 carries the ticket to the box's page on unset.cc. The shell cannot read the frame's address
+(`SecurityError`), and a script that fetches the hop with `redirect: "manual"` sees an opaque redirect. This holds
+with third-party cookies blocked and with the shell's sandbox value.
 
 Pangolin's login cookie is `SameSite=Lax` (fosrl/pangolin main `server/auth/sessions/resource.ts`
 `serializeResourceSessionCookie`, read 2026-11-23). So the browser never sends it to a frame on another site, and on
@@ -38,15 +44,18 @@ staging the box would meet Pangolin's login page.
 1. **The box is the chat page at `https://<chat>/?dock`, framed by the unset.sh shell** on a wider screen, at the
    first press of the chat icon or of a profile's Message link. A phone keeps the plain link. The door serves that
    one answer with `frame-ancestors <WEB_ORIGIN>` and no `X-Frame-Options`; every other path stays unframable. The
-   shell's CSP gains `frame-src <CHAT_DOOR_ORIGIN>` alone. The frame is sandboxed without top navigation.
-2. **Sign-in goes through the shell, bound to the box's own cookie.** The box makes a one-time value and sets it in
-   the door's hop-state cookie, partitioned to the box. It posts the value to the shell. The shell posts it to
-   `POST /chat/dock` (a form post, under the Origin check, signed-in members past the app gate). web signs the same
-   ticket as `GET /chat/sign-in` and answers it as JSON, and the shell hands the ticket back. The box redeems it at
+   shell's CSP gains `frame-src <CHAT_DOOR_ORIGIN> <WEB_ORIGIN>/chat/sign-in` alone. The frame is sandboxed without
+   top navigation.
+2. **Sign-in is the hop, started by the shell's navigation of the frame.** The box makes a one-time value and sets it
+   in the door's hop-state cookie, partitioned to the box. It posts the value to the shell, and the shell sets the
+   frame's `src` to `GET /chat/sign-in?state=<value>&dock`. web answers as for the hop, with `<door>/?dock#ticket=…`
+   in place of the return path. The box takes the ticket from the fragment and redeems it at
    `POST /sign-in/redeem?dock`, which reads the value from that cookie and sets the browser cookie
-   `SameSite=None; Partitioned`. A script on unset.sh that reads the ticket cannot redeem it anywhere else, so security
-   pass finding 8 still holds. Messages are taken only from the other window and its origin. The full exchange is in
-   `apps/chat/core/dock.ts`.
+   `SameSite=None; Partitioned`. No ticket ever reaches unset.sh's script, so ADR 0093's line that no sign-in ticket
+   sits on an unset.sh page still holds. (A first version had the shell fetch the ticket from a `POST /chat/dock` and
+   pass it on. The review's finding D1 showed that a script on unset.sh could then ask for a ticket bound to a value
+   of its own and redeem it elsewhere. That route is gone.) Messages are taken only from the other window and its
+   origin. The full exchange is in `apps/chat/core/dock.ts`.
 3. **The box is its own chat browser.** It needs the recovery key once, typed in the box, or it sets chat up there
    for an account with no key yet. Renewal starts the box again on the same device. unset.sh's Log out ends its device
    through the queued end that web already makes for every device the session signed in (ADR 0095 decision 5).
@@ -70,11 +79,14 @@ staging the box would meet Pangolin's login page.
   out, until the browser clears the partition. Only the server side ends.
 - **Safari and Firefox are untested.** Their support for partitioned cookies in a cross-site frame is unverified.
 - `CHAT_DOOR_ORIGIN` now also drives the shell's `frame-src`.
+- If web cannot give a ticket (the session ended, or the app gate sends the member elsewhere), the frame shows web's
+  answer, which refuses to be framed, so the box is blank until the page is reloaded.
 
 ## Compliance
 - `interfaces/chat-auth/door.test.ts` covers `door.dock_page` and `door.dock_only_root`.
 - `tests/integration/chat-auth/door.test.ts` covers `door.redeem_dock`.
 - `interfaces/web/src/lib/server/csp.test.ts` covers `narrowed_frames_only_the_chat_door`.
+- `tests/integration/web/app/chat-sign-in.test.ts` covers `chat.sign_in_dock`.
 - `apps/chat/core/dock.test.ts` covers the box's messages, its state cookie and its count.
 - `tests/e2e/chat-two-browsers.chromium.spec.ts` covers `chat_e2e.dock`: the box on unset.sh sets up, accepts,
   reads and sends against real Synapse and MAS.

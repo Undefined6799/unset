@@ -145,7 +145,9 @@ export async function startRealStack(
       sid: sessionRef(Buffer.alloc(32, 1)),
       state,
     });
-    res.writeHead(303, { location: `https://unset.cc/sign-in/return#${new URLSearchParams({ ticket })}` }).end();
+    // The chat box's hop comes back to the box (interfaces/web chat-sign-in.ts DOOR_DOCK_PATH).
+    const back = new URL(req.url ?? "/", "https://unset.sh").searchParams.has("dock") ? "/?dock" : "/sign-in/return";
+    res.writeHead(303, { location: `https://unset.cc${back}#${new URLSearchParams({ ticket })}` }).end();
   };
   // web's POST /logout for that session, through GET /logout/chat (interfaces/web chat-sign-out.ts): a ticket for the
   // ended session with a random one-time value, then the door's sign-out page. One GET stands for both.
@@ -158,26 +160,8 @@ export async function startRealStack(
     const ticket = await chatAdmin.signTicket({ user: who.user, did: who.did, sid, state });
     res.writeHead(303, { location: `https://unset.cc/sign-out/return#${new URLSearchParams({ ticket })}` }).end();
   };
-  // web's POST /chat/dock (interfaces/web chat-dock.ts): the chat box's one-time value, from a form body, to a ticket.
-  const dockTicket = async (req: IncomingMessage, res: ServerResponse) => {
-    let body = "";
-    for await (const chunk of req) body += chunk;
-    const state = parseDoorState(new URLSearchParams(body).get("state"));
-    const named = /(?:^|;\s*)member=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
-    const who = named === undefined ? undefined : members.get(decodeURIComponent(named));
-    if (state === null || who === undefined || req.headers.origin !== "https://unset.sh")
-      return res.writeHead(400).end();
-    const ticket = await chatAdmin.signTicket({
-      user: who.user,
-      did: who.did,
-      sid: sessionRef(Buffer.alloc(32, 1)),
-      state,
-    });
-    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ticket }));
-  };
   const unsetSh = (req: IncomingMessage, res: ServerResponse) => {
     const path = new URL(req.url ?? "/", "https://unset.sh").pathname;
-    if (path === "/chat/dock" && req.method === "POST") return void dockTicket(req, res);
     if (path === "/dock-host") return void res.writeHead(200, { "content-type": "text/html" }).end(DOCK_HOST);
     if (path === "/logout") return void logOut(req, res);
     if (path === "/logout/done")
@@ -256,12 +240,13 @@ async function masAdminToken(servers: RealServers): Promise<string> {
 }
 
 /**
- * unset.sh's shell around the chat box (interfaces/web routes/+layout.svelte), cut to the relay: the frame, the
- * hello, and the box's one-time value to POST /chat/dock and back, each message checked for the frame's own window and
- * origin as the shell does.
+ * unset.sh's shell around the chat box (interfaces/web routes/+layout.svelte), cut to the relay: the frame with the
+ * shell's sandbox, the hello, and the frame sent on web's sign-in hop with the box's one-time value, each message
+ * checked for the frame's own window and origin as the shell does.
  */
 const DOCK_HOST = `<!doctype html><title>unset.sh</title>
-<iframe data-dock src="https://unset.cc/?dock" style="width:384px;height:576px"></iframe>
+<iframe data-dock src="https://unset.cc/?dock" style="width:384px;height:576px" referrerpolicy="no-referrer"
+  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"></iframe>
 <script>
 const frame = document.querySelector("iframe");
 const to = (data) => frame.contentWindow.postMessage(data, "https://unset.cc");
@@ -269,13 +254,10 @@ frame.addEventListener("load", () => {
   to({ type: "unset.dock.hello" });
   to({ type: "unset.dock.shown", shown: true });
 });
-addEventListener("message", async (event) => {
+addEventListener("message", (event) => {
   if (event.source !== frame.contentWindow || event.origin !== "https://unset.cc") return;
   const m = event.data;
   if (m?.type === "unset.dock.count") document.body.dataset.unread = String(m.unread);
-  if (m?.type === "unset.dock.sign_in") {
-    const r = await fetch("/chat/dock", { method: "POST", body: new URLSearchParams({ state: m.state }) });
-    to({ type: "unset.dock.ticket", ticket: r.ok ? (await r.json()).ticket : null });
-  }
+  if (m?.type === "unset.dock.sign_in") frame.src = "/chat/sign-in?" + new URLSearchParams({ state: m.state, dock: "" });
 });
 </script>`;

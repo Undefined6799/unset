@@ -24,23 +24,22 @@ describe("dockMessage", () => {
 
   test("chat.dock_only_its_origin: once known, a message from another origin is nothing", () => {
     const from = (o: string) =>
-      dockMessage(event({ type: "unset.dock.ticket", ticket: "abc" }, parent, o), parent, "https://unset.sh");
-    expect(from("https://unset.sh")).toEqual({ kind: "ticket", ticket: "abc" });
+      dockMessage(event({ type: "unset.dock.open", did: "did:plc:abc" }, parent, o), parent, "https://unset.sh");
+    expect(from("https://unset.sh")).toEqual({ kind: "open", did: "did:plc:abc" });
     expect(from("https://evil.test")).toBeNull();
     // Before the hello nothing but the hello is taken.
-    expect(dockMessage(event({ type: "unset.dock.ticket", ticket: "abc" }), parent, null)).toBeNull();
+    expect(dockMessage(event({ type: "unset.dock.open", did: "did:plc:abc" }), parent, null)).toBeNull();
   });
 
-  test("chat.dock_shapes: a ticket, a refused ticket and a Message link's DID; anything else is nothing", () => {
+  test("chat.dock_shapes: a Message link's DID and whether the box is open; anything else, a ticket too, is nothing", () => {
     const known = (data: unknown) => dockMessage(event(data), parent, "https://unset.sh");
-    expect(known({ type: "unset.dock.ticket", ticket: null })).toEqual({ kind: "ticket", ticket: null });
+    // The ticket never passes through the shell (chat box review D1), so the box takes none from it.
+    expect(known({ type: "unset.dock.ticket", ticket: "abc" })).toBeNull();
     expect(known({ type: "unset.dock.open", did: "did:plc:abc" })).toEqual({ kind: "open", did: "did:plc:abc" });
     expect(known({ type: "unset.dock.open", did: "not a did" })).toBeNull();
     expect(known({ type: "unset.dock.shown", shown: true })).toEqual({ kind: "shown", shown: true });
     expect(known({ type: "unset.dock.shown", shown: false })).toEqual({ kind: "shown", shown: false });
     expect(known({ type: "unset.dock.shown", shown: "yes" })).toBeNull();
-    expect(known({ type: "unset.dock.ticket", ticket: 7 })).toBeNull();
-    expect(known({ type: "unset.dock.ticket", ticket: "x".repeat(5000) })).toBeNull();
     expect(known("unset.dock.hello")).toBeNull();
     expect(known(null)).toBeNull();
     expect(known({ type: "something.else" })).toBeNull();
