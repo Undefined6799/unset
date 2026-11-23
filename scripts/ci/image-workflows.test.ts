@@ -320,6 +320,7 @@ describe("image workflows", () => {
       "pds_admin_web_key",
       "pds_web_key",
       "objects_web",
+      "draft_url_keyring",
     ];
     for (const name of secrets) expect(health).toContain(`"$secrets/${name}"`);
     const files = [
@@ -329,12 +330,13 @@ describe("image workflows", () => {
       "PDS_ADMIN_WEB_KEY_FILE",
       "PDS_WEB_KEY_FILE",
       "OBJECT_STORE_SECRET_FILE",
+      "DRAFT_URL_KEYRING_FILE",
     ];
     for (const key of files) {
       expect(health).toMatch(new RegExp(`-e ${key}=/run/secrets/\\w+`));
     }
     expect(health).not.toMatch(
-      /-e (PG_PASSWORD|SEAL_KEYRING|OAUTH_CLIENT_KEYS|PDS_ADMIN_WEB_KEY|PDS_WEB_KEY|OBJECT_STORE_SECRET)=/,
+      /-e (PG_PASSWORD|SEAL_KEYRING|OAUTH_CLIENT_KEYS|PDS_ADMIN_WEB_KEY|PDS_WEB_KEY|OBJECT_STORE_SECRET|DRAFT_URL_KEYRING)=/,
     );
     // The rest of web's settings live in its test env file, which must name every one web requires.
     const testEnv = readFileSync(join(ROOT, "deployment", "images", "web.test.env"), "utf8");

@@ -294,6 +294,11 @@ async function startOn(
       OBJECT_STORE_BUCKET: "unset-private",
       OBJECT_STORE_ACCESS_ID: "unset-web",
       OBJECT_STORE_SECRET_FILE: secret("objects_web", randomBytes(32).toString("hex")),
+      // P2.19: the draft link keys, a keyring of their own.
+      DRAFT_URL_KEYRING_FILE: secret(
+        "draft_url_keyring",
+        JSON.stringify({ active: "d1", keys: { d1: randomBytes(32).toString("base64") } }),
+      ),
       TEST_ROUTES: "true",
       ...LEGAL_ENV,
       ...fixture,

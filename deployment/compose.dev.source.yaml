@@ -248,6 +248,8 @@ services:
       OBJECT_STORE_BUCKET: unset-private
       OBJECT_STORE_ACCESS_ID: unset-web
       OBJECT_STORE_SECRET_FILE: /run/secrets/objects_web
+      # The draft link keys (book P2.19): web signs the owner's preview links, media checks them; no seal key among them.
+      DRAFT_URL_KEYRING_FILE: /run/secrets/draft_url_keyring
       # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
       # page says noindex and robots.txt names no member. A literal, so turning it on is a reviewed change.
       SEARCH_LISTING: "off"
@@ -261,7 +263,7 @@ services:
       SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web, draft_url_keyring]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -530,6 +532,8 @@ secrets:
   # Web's secret key for its identity in objects_s3 (P2.21a): 64 hex characters; read by web (uid 65532) only.
   objects_web:
     file: ../../unset-dev-secrets/objects_web
+  draft_url_keyring:
+    file: ../../unset-dev-secrets/draft_url_keyring
   # pds-admin's files (P2.09e), read by 65532 only: the PDS admin password, web's public key, the request log's key.
   pds_admin_password:
     file: ../../unset-dev-secrets/pds_admin_password

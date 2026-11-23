@@ -158,6 +158,8 @@ jobs:
           openssl rand -hex 32 | tr -d '\n' > "$secrets/pds_web_key"
           # P2.21a: web's secret key for the draft image store, 64 hex characters; no store answers here.
           openssl rand -hex 32 | tr -d '\n' > "$secrets/objects_web"
+          # P2.19: the draft link keys, a keyring of its own beside seal_keyring (web refuses a shared key).
+          printf '{"active":"d1","keys":{"d1":"%s"}}' "$(openssl rand -base64 32)" > "$secrets/draft_url_keyring"
           # Readable by the containers' own users (postgres, 65532); the runner is thrown away after the job.
           chmod 644 "$secrets"/*
           docker network create health > /dev/null
@@ -175,7 +177,8 @@ jobs:
             -e PG_PASSWORD_FILE=/run/secrets/pg_password -e SEAL_KEYRING_FILE=/run/secrets/seal_keyring
             -e OAUTH_CLIENT_KEYS_FILE=/run/secrets/oauth_client_keys -e OAUTH_ACTIVE_KID=ci
             -e PDS_ADMIN_WEB_KEY_FILE=/run/secrets/pds_admin_web_key -e PDS_WEB_KEY_FILE=/run/secrets/pds_web_key
-            -e OBJECT_STORE_SECRET_FILE=/run/secrets/objects_web)
+            -e OBJECT_STORE_SECRET_FILE=/run/secrets/objects_web
+            -e DRAFT_URL_KEYRING_FILE=/run/secrets/draft_url_keyring)
           id="$(docker run -d "${app[@]}" "$APP_IMAGE")"
           for _ in $(seq 20); do
             status="$(docker inspect --format '{{.State.Health.Status}}' "$id")"
