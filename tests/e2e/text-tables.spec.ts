@@ -182,9 +182,11 @@ test("a_cancelled_drag_or_a_press_in_the_menu_moves_nothing", async ({ page }) =
   if (first === null || handle === null) throw new Error("no box");
   await drag(page, handle, first.x + 4, first.y + 2);
   await expect(line).toBeVisible();
-  await row.evaluate((button) =>
-    button.parentElement?.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1 })),
-  );
+  await row.evaluate((button) => {
+    // The spec's types have no DOM, so the browser's PointerEvent is named by its shape.
+    const g = globalThis as unknown as { PointerEvent: new (type: string, init: Record<string, unknown>) => Event };
+    button.parentElement?.dispatchEvent(new g.PointerEvent("pointercancel", { bubbles: true, pointerId: 1 }));
+  });
   await page.mouse.up();
   await expect(line).toBeHidden();
   await expect(editor.locator("tr").nth(1)).toHaveText("12");
