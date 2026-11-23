@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Did } from "@unset/domains-identity";
+import { toCardRecord } from "@unset/domains-profile";
 import type { SavedSession } from "@unset/infrastructure-pds";
 import { createOAuthSessionStore, createPool, migrate, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
@@ -15,7 +16,7 @@ import { createLogger } from "@unset/shared-log";
 import { PDS_HOST, type Postgres, startWeb } from "../../integration/web/built-server.ts";
 import { readyMember } from "../../integration/web/members.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
-import { ACCOUNT, HOST } from "../pages.ts";
+import { ACCOUNT, HOST, INDEXED } from "../pages.ts";
 
 const INNER_PORT = 8091;
 const EDGE_PORT = 9444;
@@ -49,7 +50,37 @@ async function database(): Promise<Postgres> {
   if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
   const password = randomPassword();
   postgres.sql("unset", `ALTER ROLE web PASSWORD '${password}'`);
+  postgres.sql("unset", indexedMember());
   return { host: "127.0.0.1", port: postgres.port, database: "unset", user: "web", password };
+}
+
+/**
+ * A public member as the indexer leaves one (P1.22f, visitors.ts): a profile, a main page and one text card, so
+ * /@INDEXED.did is the public profile a visitor opens, as tests/e2e/fixtures/servers.ts seeds it. Constants only.
+ */
+function indexedMember(): string {
+  const did = INDEXED.did;
+  const at = "2026-11-19T00:00:00.000Z";
+  const uri = `at://${did}/sh.unset.card/3jzfcijpj2z2a`;
+  const card = toCardRecord({ kind: "readme", text: "Hello from the open web." }, "full", null, at);
+  if (!card.ok) throw new Error("the seed card did not build");
+  const profile = {
+    $type: "sh.unset.profile",
+    displayName: "Public Member",
+    headline: "On the open web",
+    createdAt: at,
+  };
+  const page = { $type: "sh.unset.page", cards: [{ uri }], createdAt: at };
+  return `
+    INSERT INTO idx.account (did, handle_status, pds_active, track_requested_at, updated_at)
+      VALUES ('${did}', 'unresolved', true, now(), now());
+    INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
+      VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', '${JSON.stringify(profile)}',
+        'Public Member', false, now());
+    INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+      VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', '${JSON.stringify(page)}', now());
+    INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+      VALUES ('${uri}', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l', '${JSON.stringify(card.record)}', 0, now());`;
 }
 
 /** The finished member's grant and session, as tests/e2e/fixtures/servers.ts seeds its `account` member. */
