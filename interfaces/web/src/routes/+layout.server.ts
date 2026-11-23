@@ -62,6 +62,10 @@ export const load: ServerLoad = async (event) => {
   // The bell (P2.27): the newest few and their count, brought by the session read on every page a member opens,
   // so it is current with no script, no polling and no statement of its own. Undefined for a visitor.
   const notifications = locals.did === undefined ? undefined : await bellView(event);
+  // Whether the bell opens its panel: only a page that runs script can mark what the panel showed (ADR 0085). Every
+  // other page (home, a profile, the legal pages, an error page) draws the bell as a link to /notifications, whose
+  // visit marks it (ADR 0108 point 3).
+  const bellOpens = route.id !== null && policyOf(route.id)?.group === "app";
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
   const siteNoindex = config.SEARCH_LISTING !== "on";
   return {
@@ -71,6 +75,7 @@ export const load: ServerLoad = async (event) => {
     prefs,
     privacyNotice,
     notifications,
+    bellOpens,
     signInHref: signInHref(url.pathname),
     siteNoindex,
   };
