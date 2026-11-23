@@ -29,7 +29,7 @@
     "assert": {
       "assertMatrix": [
         {
-          "matchingUrlPattern": "^https://unset\\.test:8443/(legal/[a-z]+|login|welcome/blocked|join\\?invite=[A-Za-z0-9-]+|request-invite|@did:plc:[a-z2-7]{24})?$",
+          "matchingUrlPattern": "^https://unset\\.test:8443/(legal/[a-z]+|login|welcome/blocked|join\\?invite=[A-Za-z0-9-]+|request-invite)?$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],
@@ -40,7 +40,7 @@
           }
         },
         {
-          "matchingUrlPattern": "^https://unset\\.test:8443/signed-out$",
+          "matchingUrlPattern": "^https://unset\\.test:8443/(signed-out|@did:plc:[a-z2-7]{24})$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],

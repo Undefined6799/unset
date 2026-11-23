@@ -5,7 +5,10 @@
 // members only, or only to its member, gives anyone it leaves out the limited page, never the 404, and is never offered
 // to search engines; the session is read when a cookie is sent. Book P1.22h: SvelteKit also answers each page at
 // `<page>/__data.json` (../data-address.ts), and that address gives every viewer the page's own answers and no more.
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+// Book P1.22e (ADR 0114): the page runs SvelteKit's client under the app group's script policy, pinned here by value;
+// its 404, its refusals and its data address keep the public group's fixed policy; and what the start-up script
+// hands the browser is what the data address answers, held to what each viewer's page shows (rule SE-3).
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -24,7 +27,21 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
-import { DATA, dataAnswer, fieldsOf, LAYOUT_ONLY, nodeData, undrawn } from "../data-address.ts";
+import {
+  DATA,
+  dataAnswer,
+  elementsOf,
+  fieldsOf,
+  inlineScripts,
+  LAYOUT_ONLY,
+  leaves,
+  nodeData,
+  pageText,
+  scriptCount,
+  startup,
+  startupData,
+  undrawn,
+} from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -94,6 +111,15 @@ const ONLY_ME = `did:plc:${"w".repeat(24)}`;
 const FUTURE = `did:plc:${"x".repeat(24)}`;
 const OTHER = `did:plc:${"y".repeat(24)}`;
 const WHOLE = `did:plc:${"d".repeat(24)}`;
+const HOSTILE = `did:plc:${"h".repeat(24)}`;
+
+/** Text that would be markup, a handler or a script address if anything read it as one. */
+const HOSTILE_TEXT = {
+  close: "</script><script>globalThis.ran = 1</script>",
+  handler: '<img src=x onerror="globalThis.ran = 1">',
+  address: "javascript:globalThis.ran=1",
+  comment: "<!-- <script> -->",
+} as const;
 
 /** An account as the indexer leaves it once our PDS confirmed it, with a profile and one README card unless told. */
 async function indexed(
@@ -209,6 +235,77 @@ const EVERY_KIND: readonly CardContent[] = [
   },
 ];
 
+/**
+ * Two cards of `did` that its page must not show: one the main page does not list (in the repo, off the page), and one
+ * it lists whose kind this version does not read. Each holds words of its own.
+ */
+async function hiddenCards(did: string) {
+  const unlisted = toCardRecord({ kind: "readme", text: "Unlisted words" }, "full", null, NOW);
+  if (!unlisted.ok) throw new Error(`seed card did not build: ${unlisted.code}`);
+  const unread = {
+    $type: "sh.unset.card",
+    content: { $type: "sh.unset.block.later", text: "Unread words" },
+    createdAt: NOW,
+  };
+  await withClient(indexer, null, async (c) => {
+    const rows: [rkey: string, record: unknown, position: number | null][] = [
+      ["unlisted000", unlisted.record, null],
+      ["unread00000", unread, 90],
+    ];
+    for (const [rkey, record, position] of rows) {
+      await c.query(
+        `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+         VALUES ($1, $2, $3, 'cid-s', '3l', $4, $5, now())`,
+        [`at://${did}/sh.unset.card/${rkey}`, did, rkey, record, position],
+      );
+    }
+    await c.query(
+      `UPDATE idx.page SET record = jsonb_set(record, '{cards}', (record -> 'cards') || $2::jsonb) WHERE did = $1`,
+      [did, JSON.stringify([{ uri: `at://${did}/sh.unset.card/unread00000` }])],
+    );
+  });
+}
+
+/**
+ * A card of each kind whose every text field is hostile text, and whose addresses include a script address beside a
+ * real one: a PDS stores what its member writes, so the page's own read is what keeps it out.
+ */
+const HOSTILE_CARDS: readonly CardContent[] = [
+  { kind: "readme", text: `${HOSTILE_TEXT.close} [link](${HOSTILE_TEXT.address}) ${HOSTILE_TEXT.handler}` },
+  {
+    kind: "links",
+    title: HOSTILE_TEXT.close,
+    layout: "list",
+    items: [
+      { uri: "https://eve.example/one", label: HOSTILE_TEXT.handler, description: HOSTILE_TEXT.address },
+      { uri: HOSTILE_TEXT.address, label: "Script address", description: HOSTILE_TEXT.comment },
+    ],
+  },
+  {
+    kind: "collection",
+    title: HOSTILE_TEXT.handler,
+    layout: "grid",
+    items: [
+      {
+        title: HOSTILE_TEXT.close,
+        tag: HOSTILE_TEXT.comment,
+        description: HOSTILE_TEXT.handler,
+        uri: "https://eve.example/piece",
+      },
+      { title: "Script piece", tag: "", description: "", uri: HOSTILE_TEXT.address },
+    ],
+  },
+  {
+    kind: "buttons",
+    heading: HOSTILE_TEXT.close,
+    text: HOSTILE_TEXT.handler,
+    buttons: [
+      { kind: "link", preset: "custom", uri: "https://eve.example/call", label: HOSTILE_TEXT.handler },
+      { kind: "link", preset: "custom", uri: HOSTILE_TEXT.address, label: "Script button" },
+    ],
+  },
+];
+
 let web: RunningWeb;
 /** A server with invite requests on (ADR 0080), so the limited card offers Sign up. It never sends a mail here. */
 let inviting: RunningWeb;
@@ -232,6 +329,14 @@ beforeAll(async () => {
     fields: { location: "Dana town", website: "https://dana.example/home" },
   });
   await moreCards(WHOLE, EVERY_KIND);
+  await hiddenCards(WHOLE);
+  await indexed(HOSTILE, {
+    handle: "eve.unset.org",
+    status: "verified",
+    name: HOSTILE_TEXT.close,
+    fields: { headline: HOSTILE_TEXT.handler, location: HOSTILE_TEXT.comment, website: HOSTILE_TEXT.address },
+  });
+  await moreCards(HOSTILE, HOSTILE_CARDS);
   secrets = mkdtempSync(join(tmpdir(), "public-profile-"));
   const file = (name: string, text: string): string => {
     const path = join(secrets, name);
@@ -265,24 +370,93 @@ const get = (path: string, init: { method?: string; cookie?: string } = {}) =>
 const kept = (response: Response) =>
   [...response.headers].filter(([name]) => !["content-length", "date", "x-request-id"].includes(name));
 
+/**
+ * The app group's policy, as gate.test.ts pins it for an app page (ADR 0054 decision 4, ADR 0073 decision 3): what a
+ * page that runs the client is sent, unchanged (ADR 0114 point 2). The one script hash is the page's own start-up
+ * script's, given here as base64 SHA-256.
+ */
+const scriptPolicy = (startUpHash: string): string =>
+  "default-src 'none'; connect-src 'self'; font-src https://unset.test/fonts/; img-src 'self'; " +
+  `manifest-src 'self'; object-src 'none'; script-src https://unset.test/_app/ 'sha256-${startUpHash}'; ` +
+  "style-src https://unset.test/_app/; style-src-attr 'unsafe-hashes' " +
+  "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +
+  "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; " +
+  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard";
+/** The public group's fixed policy (csp.test.ts zero_script_groups_pinned): no script can run under it. */
+const FIXED_POLICY =
+  "default-src 'none'; img-src https://unset.test/_app/; style-src https://unset.test/_app/; " +
+  "font-src https://unset.test/fonts/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; " +
+  "object-src 'none'; manifest-src 'self'";
+
+/**
+ * A page that runs the client: the app policy by value, whose one script hash is the hash of the one script the page
+ * carries, so no other inline script could run; no script element with an address; nothing fetched and inlined.
+ */
+function expectScriptPolicy(response: Response, html: string, who = "") {
+  const scripts = inlineScripts(html);
+  expect(scripts, who).toHaveLength(1);
+  expect(scriptCount(html), who).toBe(1);
+  const hash = createHash("sha256")
+    .update(scripts[0] ?? "")
+    .digest("base64");
+  const csp = response.headers.get("content-security-policy") ?? "";
+  expect(csp, who).toBe(scriptPolicy(hash));
+  expect(csp, who).not.toContain("unsafe-inline");
+  expect(csp, who).not.toContain("unsafe-eval");
+  expect(html, who).not.toContain("data-sveltekit-fetched");
+}
+
+/** An answer no script can run in: the public group's fixed policy, and no script element. */
+function expectNoScript(response: Response, html: string, who = "") {
+  expect(response.headers.get("content-security-policy"), who).toBe(FIXED_POLICY);
+  expect(html, who).not.toContain("<script");
+}
+
 describe("public profile", () => {
-  test("profile_renders_from_the_index_with_no_script", async () => {
+  test("profile_renders_from_the_index_under_the_app_script_policy", async () => {
     const response = await get(`/@${SHOWN}`);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("public, max-age=60");
     expect(response.headers.get("x-robots-tag")).toBe("noindex");
     expect(response.headers.get("vary")).toBe("Cookie"); // the session is read when sent (ADR 0078)
-    const csp = response.headers.get("content-security-policy") ?? "";
-    expect(csp).toContain("default-src 'none'");
-    expect(csp).not.toContain("script-src");
     const html = await response.text();
+    expectScriptPolicy(response, html);
     expect(html).toContain("<title>Shown Member</title>");
     expect(html).toContain("Card of Shown Member");
     expect(html).toContain("&lt;b>Head&lt;/b>");
     expect(html).not.toContain("<b>Head</b>");
-    expect(html).not.toContain("<script");
     expect(html).toContain('<meta name="robots" content="noindex"');
     expect(html).toContain('data-surface="filled"');
+  });
+
+  test("a_member_s_copy_and_the_owner_s_have_the_same_script_policy", async () => {
+    for (const viewer of [OTHER, SHOWN]) {
+      const response = await get(`/@${SHOWN}`, { cookie: await signedIn(viewer) });
+      expect(response.headers.get("cache-control"), viewer).toBe("private, no-store");
+      expectScriptPolicy(response, await response.text(), viewer);
+    }
+  });
+
+  // ADR 0114 point 3: only the page itself is switched on. A refusal at the gate is a page with no script under the
+  // fixed policy, and so is every answer that is not a 200 page.
+  test("a_refusal_on_the_route_keeps_the_fixed_policy_and_no_script", async () => {
+    const refused = await web.fetch(`/@${SHOWN}`, {
+      method: "POST",
+      headers: {
+        "x-forwarded-for": clientAddress(),
+        origin: ORIGIN,
+        accept: "text/html",
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": "1",
+      },
+      body: "a",
+    });
+    expect(refused.status).toBe(405);
+    expect(refused.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expectNoScript(refused, await refused.text());
+    const moved = await get(`/@${NAMED}`);
+    expect(moved.status).toBe(301);
+    expect(moved.headers.get("content-security-policy")).toBe(FIXED_POLICY);
   });
 
   test("a_stored_card_surface_reaches_the_page", async () => {
@@ -316,8 +490,13 @@ describe("public profile", () => {
     // actor, shown or not), and the ETag hashes the body; both are set aside.
     const unpathed = (html: string) => html.replace(/\/login\?next=[^"]*"/g, '/login?next="');
     const headers = (response: Response) => kept(response).filter(([name]) => name !== "etag");
-    const body = unpathed(await missing.text());
-    expect(body).not.toContain("<script");
+    const body = unpathed(await missing.clone().text());
+    // The 404 runs no script (SvelteKit takes `csr` for a failed load's error page from the layouts alone, kit 3.2.0
+    // src/runtime/server/page/index.js:276-291) and keeps the fixed policy, whoever asks.
+    expectNoScript(missing, await missing.text());
+    const asMember = await get(`/@${HIDDEN}`, { cookie: await signedIn(OTHER) });
+    expect(asMember.status).toBe(404);
+    expectNoScript(asMember, await asMember.text(), "member");
     for (const path of [
       `/@${HIDDEN}`,
       `/@${BARE}`,
@@ -344,8 +523,11 @@ describe("public profile", () => {
 
   test("never_more_cards_than_the_owner_page_reads", async () => {
     const html = await (await get(`/@${MANY}`)).text();
-    const shown = (html.match(/Card of Many/g) ?? []).length + (html.match(/Extra card/g) ?? []).length;
+    const text = pageText(html);
+    const shown = (text.match(/Card of Many/g) ?? []).length + (text.match(/Extra card/g) ?? []).length;
     expect(shown).toBe(CARDS_MAX);
+    // The browser is sent no more than the page draws: the start-up script holds the same cards and no others.
+    expect((startupData(html, 1) as { cards: unknown[] }).cards).toHaveLength(CARDS_MAX);
   });
 
   test("only_reads", async () => {
@@ -385,7 +567,7 @@ describe("page visibility (ADR 0078)", () => {
     expect(html).toContain('data-limited="signedIn"');
     expect(html).toContain("data-limited-sign-in");
     expect(html).toContain(`/login?next=${encodeURIComponent("/@bea.unset.org")}`);
-    expect(html).not.toContain("<script");
+    expectScriptPolicy(response, html); // the limited page is the same page, for a viewer the choice leaves out
     expect(html).not.toContain("data-limited-sign-up"); // invite requests are off on this server
   });
 
@@ -435,7 +617,7 @@ describe("page visibility (ADR 0078)", () => {
     const ownHtml = await own.text();
     expect(ownHtml).toContain(`href="/${NAMED}"`);
     expect(ownHtml).toContain("Edit your page");
-    expect(ownHtml).not.toContain("<script");
+    expectScriptPolicy(own, ownHtml); // "View as public" follows the page
     // Right after the owner's visit: a visitor's copy and another member's copy never carry the link.
     for (const cookie of [undefined, await signedIn(OTHER)]) {
       const html = await (await get("/@alice.unset.org", cookie === undefined ? {} : { cookie })).text();
@@ -452,17 +634,30 @@ describe("page visibility (ADR 0078)", () => {
   });
 });
 
-/** A page and its data address as one viewer gets them, the answer's two nodes read back. */
+/**
+ * A page and its data address as one viewer gets them, the answer's two nodes read back. The page runs the client
+ * (book P1.22e), so its start-up script hands the browser the same two results: they are read out of the HTML and held
+ * equal to the data address's, and every test below that holds the data to what the page shows holds both. The data
+ * address keeps the fixed policy; the page has the script policy.
+ */
 async function pageAndData(path: string, cookie?: string) {
   const init = cookie === undefined ? {} : { cookie };
   const page = await get(path, init);
   const data = await get(`${path}${DATA}`, init);
   const answer = await dataAnswer(data.clone());
-  return { page, data, html: await page.text(), layout: nodeData(answer, 0), leaf: nodeData(answer, 1) };
+  const html = await page.text();
+  const [layout, leaf] = [nodeData(answer, 0), nodeData(answer, 1)];
+  expect(data.headers.get("content-security-policy"), path).toBe(FIXED_POLICY);
+  expectScriptPolicy(page, html, path);
+  expect(startup(html), path).toMatchObject({ form: null, error: null });
+  expect(startup(html)?.data, path).toHaveLength(2);
+  expect(startupData(html, 0), path).toEqual(layout);
+  expect(startupData(html, 1), path).toEqual(leaf);
+  return { page, data, html, layout, leaf };
 }
 
-/** The headers a data address shares with its page: the cache rule, Vary, the robots word and the group's policy. */
-const SHARED_HEADERS = ["cache-control", "vary", "x-robots-tag", "content-security-policy"];
+/** The headers a data address shares with its page: the cache rule, Vary and the robots word. */
+const SHARED_HEADERS = ["cache-control", "vary", "x-robots-tag"];
 const shared = (response: Response) => SHARED_HEADERS.map((name) => [name, response.headers.get(name)]);
 
 /**
@@ -649,6 +844,7 @@ describe("the data address (book P1.22h)", () => {
     expect(missing.headers.get("cache-control")).toBe("no-cache");
     expect(missing.headers.get("x-robots-tag")).toBe("noindex");
     expect(shared(missing)).toEqual(shared(await get(path)));
+    expect(missing.headers.get("content-security-policy")).toBe(FIXED_POLICY);
     const body = unpathed(await missing.clone().text());
     expect((await dataAnswer(missing)).type === "data").toBe(true);
     for (const hidden of [
@@ -767,5 +963,95 @@ describe("the data address (book P1.22h)", () => {
     expect(head.status).toBe(200);
     expect(await head.text()).toBe("");
     expect(shared(head)).toEqual(shared(await get(`/@${SHOWN}${DATA}`)));
+  });
+});
+
+/** Words of the two cards Dana's page must not show (hiddenCards). */
+const HIDDEN_WORDS = ["Unlisted words", "Unread words", "unlisted000", "unread00000", "sh.unset.block.later"];
+
+describe("what the browser is sent (book P1.22e, rule SE-3)", () => {
+  // The start-up script and the data address hold the whole result of the page's load and the root layout's, drawn or
+  // not. pageAndData holds the two equal; here each viewer's copy is held to its fields by name and to what is drawn.
+  test("each_viewer_s_start_up_data_is_what_their_page_shows", async () => {
+    const member = await signedIn(OTHER);
+    const cases: [who: string, path: string, cookie: string | undefined, fields: readonly string[]][] = [
+      ["visitor", "/@dana.unset.org", undefined, WHOLE_PAGE_FIELDS],
+      ["member", "/@dana.unset.org", member, WHOLE_PAGE_FIELDS],
+      ["owner", "/@dana.unset.org", await signedIn(WHOLE), WHOLE_PAGE_FIELDS],
+      ["visitor at a members' page", "/@bea.unset.org", undefined, LIMITED_FIELDS],
+      ["member at an only-me page", "/@cy.unset.org", member, LIMITED_FIELDS],
+    ];
+    for (const [who, path, cookie, fields] of cases) {
+      const { html, data, layout } = await pageAndData(path, cookie);
+      const sent = startupData(html, 1);
+      expect(fieldsOf(sent), who).toEqual(fields);
+      expect(undrawn(sent, html, isSwitch), who).toEqual([]);
+      // The shell's part: a visitor's names no one; a member's is their own account, theme and bell (P1.22g ends the
+      // two values their page does not draw, pinned in the data address tests above).
+      if (cookie === undefined)
+        expect(startupData(html, 0), who).toEqual({
+          ...VISITOR_SHELL,
+          signInHref: (layout as { signInHref: string }).signInHref,
+        });
+      else expect(startupData(html, 0), who).toMatchObject({ signedIn: true, bellOpens: false });
+      for (const text of [html, await data.text()]) {
+        for (const word of HIDDEN_WORDS) expect(text, `${who}: ${word}`).not.toContain(word);
+      }
+    }
+  });
+
+  test("a_member_s_start_up_data_names_only_themselves", async () => {
+    const { html } = await pageAndData("/@dana.unset.org", await signedIn(OTHER));
+    const shell = startupData(html, 0);
+    expect(shell).toMatchObject({ account: { path: `/${OTHER}` } });
+    expect(JSON.stringify(shell)).not.toContain(WHOLE);
+    // Dana's page holds nothing of the viewer: their DID is in the shell's part alone.
+    expect(JSON.stringify(startupData(html, 1))).not.toContain(OTHER);
+  });
+
+  test("the_limited_page_s_start_up_data_holds_nothing_of_the_page", async () => {
+    for (const [path, cookie] of [
+      ["/@bea.unset.org", undefined],
+      ["/@cy.unset.org", await signedIn(OTHER)],
+      [`/@${FUTURE}`, undefined],
+    ] as const) {
+      const { html } = await pageAndData(path, cookie);
+      const [script] = inlineScripts(html);
+      expect(script, path).not.toContain("Card of");
+      expect(script, path).not.toContain("Head");
+      expect(script, path).not.toContain("cards");
+    }
+  });
+
+  // A member's text reaches the start-up script through devalue's uneval, which writes `<` as an escape (kit 3.2.0
+  // src/runtime/server/page/data_serializer.js:99, devalue 5.9.4 src/utils.js:5), and the page as text nodes. Nothing
+  // in either closes the script, opens an element or becomes an address.
+  test("hostile_text_stays_text_in_the_page_and_in_the_start_up_script", async () => {
+    const { html, leaf } = await pageAndData("/@eve.unset.org");
+    const [script = ""] = inlineScripts(html);
+    expect(scriptCount(html)).toBe(1);
+    expect(html.match(/<script/gi)).toHaveLength(1);
+    expect(html.match(/<\/script/gi)).toHaveLength(1);
+    expect(script).not.toContain("<");
+    // Read back, the text is what the member wrote, to the character.
+    expect(startupData(html, 1)).toMatchObject({ name: HOSTILE_TEXT.close, headline: HOSTILE_TEXT.handler });
+    expect(undrawn(leaf, html, isSwitch)).toEqual([]);
+    // No element, handler or script address came of it: read as a browser's parser reads the page, the only script
+    // is the start-up script, there is no img, no attribute is a handler, and no attribute's value is a script address.
+    const elements = elementsOf(html);
+    expect(elements.filter((element) => element.name === "script")).toHaveLength(1);
+    expect(elements.filter((element) => ["img", "iframe", "object", "embed", "base"].includes(element.name))).toEqual(
+      [],
+    );
+    const attributes = elements.flatMap((element) => Object.entries(element.attributes));
+    expect(attributes.filter(([name]) => /^on/i.test(name))).toEqual([]);
+    expect(attributes.filter(([, value]) => /^\s*(javascript|data|vbscript):/i.test(value))).toEqual([]);
+    // Every address the data holds is a real one or none: a script address is dropped where the record is read.
+    const addresses = leaves(leaf).filter(([path]) => /(href|url|address)$/i.test(path));
+    const real = addresses.filter(([, value]) => typeof value === "string");
+    expect(real.length).toBeGreaterThan(3);
+    for (const [path, value] of real) expect(value, path).toMatch(/^https:\/\/(eve\.example|unset\.test)\//);
+    expect(addresses.filter(([, value]) => typeof value !== "string" && value !== null)).toEqual([]);
+    expect(leaf).toMatchObject({ website: null });
   });
 });

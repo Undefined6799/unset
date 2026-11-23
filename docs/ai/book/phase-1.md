@@ -5379,6 +5379,15 @@ How the hook knows a page runs the client is this step's design: one fact per ro
 from the request. The page keeps its cache rules and varies on no preference cookie. No new control, no feature:
 with script the page looks as it does now. The owner's "View as public" copy follows the page.
 
+As built: the fact is `client: true` in the route's `policy.ts`, beside `csr = true` in its `+page.ts`;
+`gate.test.ts` `only_the_named_public_pages_run_the_client` names every route that has it and fails when the two
+disagree. The route stays in the `public` group, so its cache rules, the system theme and the bell as a link are
+untouched. The hook keeps SvelteKit's header only on that route's 200 page. Its 404 runs no script and keeps the
+fixed header: for a failed load kit takes `csr` from the layouts alone (kit 3.2.0
+`src/runtime/server/page/index.js:276-291`), so the one 404 stays identical whoever asks (rule SE-2). The route's
+refusals, its redirect and its data address keep the fixed header too. The browser tests are in
+`public-profile-script.spec.ts`; `csp.spec.ts` and `a11y.spec.ts` take the page from `pages.ts`.
+
 Tests, each changed for this page only and written first: `public-profile.test.ts` (the header is the app policy
 pinned by value, no `'unsafe-inline'`, no eval; a visitor's and a member's copy), `headers.spec.ts`, `pages.ts`
 (`expectJs`), `csp.spec.ts` (no violation with script on), `lighthouserc.json` (this address moves from script
