@@ -1,57 +1,46 @@
 # Docs site (docs.unset.sh)
 
-docs.unset.sh is GitHub Pages on the docs repository, [unset-sh/docs](https://github.com/unset-sh/docs), built by
-that repository's `site` workflow on every push (ADR 0111). The workflow and the site are written here
-(`deployment/docs-repo/site.yml`, `docs/site`) and copied there by `docs-mirror.yml`
-([docs-mirror-key.md](docs-mirror-key.md)), so a docs change merged to main is live a few minutes later with no step
-by hand.
+docs.unset.sh is owned by [unset-sh/docs](https://github.com/unset-sh/docs). Its root owns the Hugo framework,
+brand integration and Pages workflow. Organisation repositories own and export their own sections.
+[org-0002](https://github.com/unset-sh/agent-kit/blob/d3e3be6da8e693610d51f6bf743082033db4214d/skills/org-decisions/records/org-0002-docs-site-shows-only-organisation-docs.md) excludes this app repository until it moves into `unset-sh`; this repository's `docs/human`
+and `docs/site` remain here and continue to be checked in CI.
 
-Until the DNS record in "Once: GitHub Pages" below points at Pages, the staging edge still serves the site from a
-manual build (ADR 0075): the three sections after it describe that, and go when the edge's docs site does.
+[ADR 0112](../decisions/0112-app-docs-mirror-retires-at-the-organisation-cutover.md) records the app mirror's retirement. A docs change merged here no longer publishes
+to docs.unset.sh. The [retirement procedure](docs-mirror-key.md) must run only after the first real organisation
+export and replacement build are green. Preparing or merging this PR does not itself change Pages settings or DNS.
 
-**Who:** Alex.
+**Who:** Alex coordinates the cutover and owns keys, DNS and Pages settings.
 
-## Once: GitHub Pages
+## Publish and diagnose the organisation site
 
-Do these after the first copy has landed in unset-sh/docs, in this order. The custom domain is added before the DNS
-record so that nobody else can claim the name in between (github/docs,
-`content/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site.md`).
+Use the [docs repository's instructions](https://github.com/unset-sh/docs#readme) and its Actions runs. A source
+page changes in its owning organisation repository; the site framework changes in `unset-sh/docs`. Check the source
+export first, then the docs site's build and deploy. Do not rerun the retired app mirror to repair a failed publish:
+it could overwrite the new framework. A failed replacement build leaves the last successful Pages deployment up.
 
-1. **Source.** On unset-sh/docs: Settings, Pages, "Build and deployment", Source: **GitHub Actions**. Choose none of
-   the suggested workflows: ours is already there as `.github/workflows/site.yml`.
-2. **First publish.** Actions tab, `site`, re-run the latest run (or "Run workflow"). A run from before step 1 failed
-   in its deploy job without effect. When it is green the site is at `https://unset-sh.github.io/docs/`, without
-   styles, because every address in it is written for docs.unset.sh.
-3. **Verify the domain for the organisation.** Organisation unset-sh: Settings, Pages, "Add a domain", `unset.sh`. Add
-   the TXT record it shows (`_github-pages-challenge-unset-sh.unset.sh`) at the DNS host, then Verify. From then on
-   only the organisation's repositories can publish to `unset.sh` and its subdomains, which is what stops a takeover
-   if the Pages site is ever switched off while the DNS record stays.
-4. **Custom domain.** On unset-sh/docs: Settings, Pages, "Custom domain", `docs.unset.sh`, Save. With a workflow as
-   the source no `CNAME` file is needed.
-5. **DNS.** Replace the `docs.unset.sh` record that points at Pangolin with a `CNAME` to `unset-sh.github.io`.
-   GitHub then asks Let's Encrypt for the certificate; the CAA records already allow `letsencrypt.org`.
-6. **HTTPS.** When Settings, Pages shows the DNS check passed and the certificate issued, tick **Enforce HTTPS**.
-7. **Pangolin.** Remove the `docs.unset.sh` resource. The edge's docs site, its limit and its folder bind are removed
-   by the change that follows this one (ADR 0111 Decision 6).
+The app's `docs-site` CI job still builds `docs/site` and compares its generated ADR index. For a local build use
+[docs/site/README.md](../../site/README.md). This validates the app documentation; it does not publish it.
 
-The `github-pages` environment that GitHub creates deploys from the default branch only. Leave it so.
+## Check the cutover and HTTPS
 
-## Check (GitHub Pages)
+On `unset-sh/docs`, Settings → Pages must use GitHub Actions, the custom domain `docs.unset.sh`, and **Enforce
+HTTPS**. Keep the organisation's domain verification in place. Wait for the domain's certificate before enabling
+HTTPS enforcement; see [GitHub's HTTPS guide](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https)
+(read 2026-11-22). Domain, certificate and enforcement are live settings, not proved by a green Hugo build.
 
 ```sh
 dig +short docs.unset.sh CNAME
 curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://docs.unset.sh/
-curl -sS --max-time 10 https://docs.unset.sh/ | grep -o '<meta name=robots[^>]*>'
+curl -sSI --max-time 10 http://docs.unset.sh/
 ```
 
-The first prints `unset-sh.github.io.`, the second `200`, the third `<meta name=robots content="noindex, nofollow">`:
-the site stays out of search engines until Alex says otherwise.
+Expect `unset-sh.github.io.`, HTTPS `200` without bypassing certificate verification, and an HTTP redirect to
+`https://docs.unset.sh/`. Open the first real source section and the organisation map; verify that app pages under
+`/unset/` are absent. The site remains out of search engines until Alex says otherwise.
 
-## When the site did not update
-
-Look at the newest commit on unset-sh/docs. If it is not the copy of your change, the `docs-mirror` run here failed
-([docs-mirror-key.md](docs-mirror-key.md), "When a run fails"). If it is, open the `site` run there: a red build job
-names the page Hugo refused, and the last good site stays up until a fix is copied.
+The staging-edge removal is separate ([app PR #1985](https://github.com/Undefined6799/unset/pull/1985)). The legacy
+procedures below apply only while the old edge still serves the domain. Do not use them to republish the app after
+the organisation cutover or reverse its DNS change.
 
 ## The staging edge, until DNS moves
 
