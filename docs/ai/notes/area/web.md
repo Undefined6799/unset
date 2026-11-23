@@ -64,6 +64,12 @@ still carries their own bell entries and a Sign in address their page does not d
   (`scripts/budgets/app-js.ts`).
 - No inline script or style on any page beyond SvelteKit's hashed startup script and two hashed style attributes
   (`interfaces/web/vite.config.ts`).
+- Work on a member's input inside a page load is synchronous and blocks every request on the process, so it needs a
+  bound a timer can enforce between small steps. Code colouring (P1.21v, review of #2004): a CodeMirror parser is
+  driven by `startParse`/`advance()` to a deadline, but a stream parser's step is whole lines and Markdown's a whole
+  paragraph, and some legacy modes are worse than quadratic in a line, so size and line caps bound the step and the
+  deadline bounds the sum (`CODE_COLOUR_LIMITS` in `interfaces/web/src/lib/server/limits.ts`, measured in
+  `apps/web/lib/editor/code-colours.ts`). Some parsers also throw.
 
 The paragraph below describes the React shell; the Svelte shell's Sign in is a link to /login with `next` set to
 the page (`signInHref`, `routes/+layout.server.ts`).

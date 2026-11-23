@@ -80,6 +80,7 @@ const panelState = (stay: string): CardPanelState => ({
     submit={CARD_EDIT.save}
     max={maxRows(limits, card.content.kind)}
     textMax={limits.text}
+    codeColours={limits.codeColours}
     {enhance}
   />
 {:else if request.kind === "remove" && card !== undefined}
@@ -111,6 +112,7 @@ const panelState = (stay: string): CardPanelState => ({
     submit={CARD_EDIT.add}
     max={maxRows(limits, adding.kind)}
     textMax={limits.text}
+    codeColours={limits.codeColours}
     {newKey}
     {enhance}
   />

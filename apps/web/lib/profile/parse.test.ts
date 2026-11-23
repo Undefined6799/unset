@@ -104,7 +104,7 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
         ],
       },
       { kind: "quote", paragraphs: [[{ kind: "text", text: "quoted" }]] },
-      { kind: "code", text: "<b>raw</b>" },
+      { kind: "code", text: "<b>raw</b>", language: "" },
       { kind: "rule" },
     ]);
   });
@@ -167,19 +167,29 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
+  // The language picks the page's code colours (CommonMark 0.31.2 "Fenced code blocks": the info string's first word).
+  test("a fence keeps its info string's first word as the language", () => {
+    expect(parseReadme("~~~ Python extra words\nx\n~~~\n\n```\ny\n```")).toEqual([
+      { kind: "code", text: "x", language: "Python" },
+      { kind: "code", text: "y", language: "" },
+    ]);
+  });
+
   test("an unclosed code fence runs to the end", () => {
-    expect(parseReadme("```js\nlet a\n\nlet b")).toEqual([{ kind: "code", text: "let a\n\nlet b" }]);
+    expect(parseReadme("```js\nlet a\n\nlet b")).toEqual([{ kind: "code", text: "let a\n\nlet b", language: "js" }]);
   });
 
   // The editor reads four spaces of indent as code (CommonMark 0.31.2 "Indented code blocks"), so the page does too:
   // it showed such lines as a paragraph and lost their spaces.
   test("lines indented four spaces or a tab are code, keeping the indent past four", () => {
-    expect(parseReadme("    let a\n      nested\n\tlet b")).toEqual([{ kind: "code", text: "let a\n  nested\nlet b" }]);
+    expect(parseReadme("    let a\n      nested\n\tlet b")).toEqual([
+      { kind: "code", text: "let a\n  nested\nlet b", language: "" },
+    ]);
   });
 
   test("a blank line inside indented code is kept, and blank lines after it are not", () => {
     expect(parseReadme("    one\n\n    two\n\n\nafter")).toEqual([
-      { kind: "code", text: "one\n\ntwo" },
+      { kind: "code", text: "one\n\ntwo", language: "" },
       { kind: "paragraph", children: [text("after")] },
     ]);
   });
@@ -190,13 +200,13 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
 
   test("markup in indented code is text", () => {
     expect(parseReadme('    <script>alert(1)</script>\n    <a href="javascript:x">y</a>')).toEqual([
-      { kind: "code", text: '<script>alert(1)</script>\n<a href="javascript:x">y</a>' },
+      { kind: "code", text: '<script>alert(1)</script>\n<a href="javascript:x">y</a>', language: "" },
     ]);
   });
 
-  test("a shorter fence does not close a longer one, and a fence's language is never shown", () => {
+  test("a shorter fence does not close a longer one, and a fence's language is kept as data, never shown", () => {
     expect(parseReadme('````"><img src=x onerror=alert(1)>\n```\nstill code\n````\nafter')).toEqual([
-      { kind: "code", text: "```\nstill code" },
+      { kind: "code", text: "```\nstill code", language: '"><img' },
       { kind: "paragraph", children: [text("after")] },
     ]);
   });
