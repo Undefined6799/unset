@@ -23,9 +23,11 @@ import { flushSync, onDestroy, onMount, tick } from "svelte";
 import type { BlockItem, MenusState } from "../../editor/menus.ts";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
 import { type Place, placeIn } from "../../editor/place.ts";
+import type { TableState } from "../../editor/tables.ts";
 import { TEXT_IN_PLACE, TEXT_MENUS } from "../../profile/messages.ts";
 import type { Block } from "../../profile/types.ts";
 import Readme from "./readme.svelte";
+import TableHandles from "./table-tools.svelte";
 import TextMenus from "./text-menus.svelte";
 
 let {
@@ -52,10 +54,15 @@ let failed = $state(false);
 let menus: MenusState = $state({ items: [], index: 0, bar: false, on: new Set(), link: null });
 let handle: HTMLElement | undefined = $state();
 let add: HTMLElement | undefined = $state();
+let grip: HTMLElement | undefined = $state();
 let menu: HTMLElement | undefined = $state();
 let bar: HTMLElement | undefined = $state();
 let linkEdit: HTMLElement | undefined = $state();
 let linkPreview: HTMLElement | undefined = $state();
+let columnHandle: HTMLElement | undefined = $state();
+let rowHandle: HTMLElement | undefined = $state();
+let dropLine: HTMLElement | undefined = $state();
+let table: TableState = $state(null);
 const optionId = (item: BlockItem) => `${id}-block-${item}`;
 /** The page's script runs here: from now on a press on the card opens the editor (a press before that is the page's). */
 let listening = $state(false);
@@ -114,8 +121,10 @@ function whenIdle(run: () => void): () => void {
 async function mount() {
   try {
     const { mountMarkdownEditor } = await import("../../editor/milkdown.ts");
-    if (closed || host === undefined || handle === undefined || add === undefined || menu === undefined) return;
+    if (closed || host === undefined || handle === undefined || add === undefined || grip === undefined || menu === undefined)
+      return;
     if (bar === undefined || linkEdit === undefined || linkPreview === undefined) return;
+    if (columnHandle === undefined || rowHandle === undefined || dropLine === undefined) return;
     const mounted = await mountMarkdownEditor(host, {
       value,
       labelledBy: labelId,
@@ -123,9 +132,11 @@ async function mount() {
       onEdit: () => undefined,
       onChange: onedit,
       onToolbar: () => undefined,
+      tables: { columnHandle, rowHandle, dropLine, onTable: (state) => (table = state) },
       menus: {
         handle,
         add,
+        grip,
         menu,
         bar,
         linkEdit,
@@ -271,11 +282,13 @@ onDestroy(() => {
   {optionId}
   bind:handle
   bind:add
+  bind:grip
   bind:menu
   bind:bar
   bind:linkEdit
   bind:linkPreview
   onchoose={(item) => editor?.menus?.choose(item)}
+  onpoint={(item) => editor?.menus?.point(item)}
   onformat={(item) => editor?.menus?.format(item)}
   onlink={{
     confirm: (address) => editor?.menus?.confirmLink(address),
@@ -284,11 +297,21 @@ onDestroy(() => {
     remove: () => editor?.menus?.removeLink(),
   }}
 />
+<TableHandles
+  state={table}
+  bind:columnHandle
+  bind:rowHandle
+  bind:dropLine
+  ontoggle={(which) => editor?.tables?.toggle(which)}
+  onclose={() => editor?.tables?.close()}
+  oncolumn={(action) => editor?.tables?.column(action)}
+  onrow={(action) => editor?.tables?.row(action)}
+/>
 <div
   bind:this={host}
   data-text-in-place
   data-listening={listening ? "" : undefined}
   onfocusin={() => editor !== undefined && onfocus?.(editor.focus)}
-  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:outline-solid [&_.markdown-editor:focus-visible]:outline-2 [&_.markdown-editor:focus-visible]:outline-offset-8 [&_.markdown-editor:focus-visible]:outline-ring/40 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_.markdown-editor>p]:my-3 [&_.markdown-editor_:is(ul,ol,dl)]:my-0 [&_.markdown-editor>:first-child]:mt-0 [&_.markdown-editor>:last-child]:mb-0 [&_li>p]:my-0 [&_li+li]:mt-0.5 [&_blockquote]:flex [&_blockquote]:flex-col [&_blockquote]:gap-3 [&_blockquote>p]:my-0 [&_h2]:text-2xl [&_h2]:leading-8 [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-xl [&_h3]:font-semibold [&_h4]:mt-1 [&_h4]:font-semibold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
+  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:outline-solid [&_.markdown-editor:focus-visible]:outline-2 [&_.markdown-editor:focus-visible]:outline-offset-8 [&_.markdown-editor:focus-visible]:outline-ring/40 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_.markdown-editor>p]:my-3 [&_.markdown-editor_:is(ul,ol,dl)]:my-0 [&_.markdown-editor>:first-child]:mt-0 [&_.markdown-editor>:last-child]:mb-0 [&_li>p]:my-0 [&_li+li]:mt-0.5 [&_blockquote]:flex [&_blockquote]:flex-col [&_blockquote]:gap-3 [&_blockquote>p]:my-0 [&_h2]:mt-2 [&_h2]:text-4xl [&_h2]:leading-tight [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-3xl [&_h3]:leading-tight [&_h3]:font-bold [&_h3]:tracking-tight [&_h4]:mt-1 [&_h4]:text-2xl [&_h4]:leading-snug [&_h4]:font-semibold [&_h5]:mt-1 [&_h5]:text-xl [&_h5]:font-semibold [&_h6[data-level=5]]:text-lg [&_h6[data-level=5]]:font-semibold [&_h6[data-level=6]]:font-bold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_:is(th,td)]:border-b [&_:is(th,td)]:border-input [&_:is(th,td)]:px-3 [&_:is(th,td)]:py-1.5 [&_th]:font-semibold [&_:is(th,td)>p]:my-0 [&_li[data-item-type=task]]:-ms-5 [&_li[data-item-type=task]]:list-none [&_li[data-item-type=task]]:before:me-1.5 [&_li[data-item-type=task]]:before:inline-block [&_li[data-item-type=task]]:before:size-3.5 [&_li[data-item-type=task]]:before:cursor-pointer [&_li[data-item-type=task]]:before:rounded-sm [&_li[data-item-type=task]]:before:border [&_li[data-item-type=task]]:before:border-input [&_li[data-item-type=task]]:before:align-middle [&_li[data-item-type=task]]:before:content-[''] [&_li[data-item-type=task]>p:first-of-type]:inline [&_li[data-checked=true]]:before:border-primary [&_li[data-checked=true]]:before:bg-primary [&_del]:line-through [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
 ></div>
 </div>

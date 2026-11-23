@@ -6,9 +6,21 @@
 // The cards added are deleted again, so the member page is as the other specs expect it.
 import { expect, type Page, test } from "@playwright/test";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
-import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE, postedText, writeText } from "./cards.ts";
+import {
+  addCard,
+  chooseFromMenu,
+  deleteCard,
+  menuButton,
+  OWN_PAGE,
+  paceWrites,
+  postedText,
+  spendsWrites,
+  writeText,
+} from "./cards.ts";
 import { openPage } from "./observe.ts";
 import { phoneContext } from "./phone.ts";
+
+paceWrites(test);
 
 test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
@@ -538,6 +550,7 @@ test("a_card_is_dragged_into_place_on_a_large_screen", async ({ browser, browser
     await expect(titles).toHaveText(["Gamma", "Alpha", "Beta"]);
     // The same cards on a touch phone do not drag; their menu reorders them with a tap.
     const context = await browser.newContext(phoneContext(browserName, { width: 390, height: 900 }));
+    spendsWrites(context);
     try {
       const phonePage = await context.newPage();
       expect((await openPage(phonePage, OWN_PAGE))?.status()).toBe(200);

@@ -26,6 +26,7 @@
     "@milkdown/plugin-slash": "7.23.0",
     "@milkdown/plugin-tooltip": "7.23.0",
     "@milkdown/preset-commonmark": "7.23.0",
+    "@milkdown/preset-gfm": "7.23.0",
     "@milkdown/prose": "7.23.0",
     "@milkdown/utils": "7.23.0",
     "@unset/shared-safe-href": "*",

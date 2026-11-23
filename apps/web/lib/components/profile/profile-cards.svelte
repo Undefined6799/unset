@@ -99,6 +99,13 @@ const head = "flex items-start justify-between gap-3";
  */
 const TEXT_INSET: Record<CardSurface, string> = { filled: "p-5 md:p-7", outlined: "p-5 md:p-7", plain: "p-0" };
 const count = "font-mono text-xs text-muted-foreground";
+/**
+ * On the owner's page with a mouse, room left of every card for a Text card's + and six dots, which sit outside the
+ * card (Alex 2026-11-22 00:12Z, the target look's decision 1): between the two columns, and before the first where the
+ * page's own margin is narrower than them (the handle is two 1.75rem buttons 0.5rem off the card, menus.ts). Touch
+ * screens never show them (text-menus.svelte), so a phone keeps the whole width.
+ */
+const HANDLE_ROOM = "pointer-fine:md:gap-x-20 pointer-fine:max-[75rem]:ps-20";
 </script>
 
 {#snippet listHead(title: string, counted: string, scrolls: boolean, index: number, sideways = -1)}
@@ -125,7 +132,7 @@ const count = "font-mono text-xs text-muted-foreground";
 {/snippet}
 
 {#if cards.length > 0 || add !== undefined}
-  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 {controls === undefined ? '' : HANDLE_ROOM}">
     {#each cards as shown, index (shown.key)}
       {@const span = shown.width === "half" ? "" : "md:col-span-2"}
       {#if shown.shown.kind === "readme"}

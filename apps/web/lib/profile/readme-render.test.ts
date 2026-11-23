@@ -41,6 +41,12 @@ describe("Readme", () => {
     expect(html("# A\n\n## B\n\n### C")).toBe("<h2>A</h2><h3>B</h3><h4>C</h4>");
   });
 
+  // Six levels, as the playground's block menu offers (Alex 2026-11-21 18:52:12Z); HTML stops at h6, so the last two
+  // share it and keep their own sizes.
+  test("all six heading levels are shown, the fifth and sixth both as an h6", () => {
+    expect(html("#### D\n\n##### E\n\n###### F")).toBe("<h5>D</h5><h6>E</h6><h6>F</h6>");
+  });
+
   test("struck words are a del, and a task's box is shown ticked or not and cannot be changed", () => {
     expect(html("~~gone~~ kept")).toBe("<p><del>gone</del> kept</p>");
     expect(html("- [x] done\n- [ ] open\n- plain")).toBe(

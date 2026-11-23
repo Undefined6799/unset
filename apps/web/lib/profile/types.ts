@@ -51,7 +51,7 @@ export type Inline =
   | { readonly kind: "link"; readonly href: string; readonly children: readonly Inline[] };
 
 export type Block =
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
+  | { readonly kind: "heading"; readonly level: 1 | 2 | 3 | 4 | 5 | 6; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
