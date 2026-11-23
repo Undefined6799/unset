@@ -14,6 +14,7 @@ import {
   destinationFinder,
   emphasisCloser,
   isEscapable,
+  isEscaped,
   isWord,
   type Mark,
   nextUnescaped,
@@ -68,6 +69,12 @@ const MAX_BLOCKS = 2_000;
 const MAX_DEPTH = 3;
 /** A guard: a table wider than this is read as text. */
 const MAX_COLUMNS = 50;
+/**
+ * A guard: the cells of all of one card's tables, header cells and the empty cells a short row is filled with
+ * counted. A row of one character fills a whole row, so without it 20 kB of text could ask the server for half a
+ * million cells. Rows past it are read as the paragraph they would be without a table.
+ */
+const MAX_CELLS = 10_000;
 /** Lists nest this deep; an item indented further is a sibling of the deepest. */
 const MAX_LIST_DEPTH = 3;
 
@@ -244,9 +251,13 @@ function takeImage(text: string, i: number, depth: number, find: Finders): Taken
   return text[i] === "!" && text[i + 1] === "[" ? takeLink(text, i + 1, depth, find) : null;
 }
 
-/** Strikethrough, `~~words~~` (GFM 0.29, "Strikethrough (extension)"): paired as emphasis is; a single tilde is text. */
+/**
+ * Strikethrough, `~~words~~` (GFM 0.29, "Strikethrough (extension)"): paired as emphasis is; a single tilde is text,
+ * and so is a run of three or more (example 493), at any position inside it.
+ */
 function takeStrike(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
-  if (!text.startsWith("~~", i)) return null;
+  if (!text.startsWith("~~", i) || text[i + 2] === "~") return null;
+  if (text[i - 1] === "~" && !isEscaped(text, i - 1)) return null;
   const end = find.emphasisClose("~~", i + 2);
   if (end <= i + 2) return null;
   return { node: { kind: "del", children: parseInline(text.slice(i + 2, end), depth + 1, links) }, next: end + 2 };
@@ -511,22 +522,28 @@ function delimiterRow(line: string): TableBlock["align"] | null {
  * (not inside a paragraph), and its rows run to a blank line or the start of another block; each row is filled with
  * empty cells or cut to the header's width.
  */
-function takeTable(lines: readonly string[], i: number): { block: Block; next: number } | null {
+function takeTable(lines: readonly string[], i: number, budget: Budget): { block: Block; next: number } | null {
   const header = lines[i] ?? "";
   if (!header.includes("|")) return null;
   const align = delimiterRow(lines[i + 1] ?? "");
   const head = rowCells(header);
   if (align === null || align.length !== head.length || head.length > MAX_COLUMNS) return null;
+  if (budget.cells < head.length) return null;
+  budget.cells -= head.length;
   const rows: Inline[][][] = [];
   let next = i + 2;
-  for (; next < lines.length && !startsBlock(lines[next] ?? ""); next += 1) {
+  for (; next < lines.length && !startsBlock(lines[next] ?? "") && budget.cells >= head.length; next += 1) {
     const cells = rowCells(lines[next] ?? "");
     rows.push(head.map((_, c) => parseInline(cells[c] ?? "")));
+    budget.cells -= head.length;
   }
   return { block: { kind: "table", align, head: head.map((cell) => parseInline(cell)), rows }, next };
 }
 
-function takeBlock(lines: readonly string[], i: number): { block: Block | null; next: number } {
+/** What is left of a card's guards as its blocks are read. */
+type Budget = { cells: number };
+
+function takeBlock(lines: readonly string[], i: number, budget: Budget): { block: Block | null; next: number } {
   const line = lines[i] ?? "";
   if (line.trim() === "") return { block: null, next: i + 1 };
   const fence = FENCE.exec(line)?.[1];
@@ -540,7 +557,7 @@ function takeBlock(lines: readonly string[], i: number): { block: Block | null; 
   if (RULE.test(line)) return { block: { kind: "rule" }, next: i + 1 };
   if (BULLET.test(line) || ORDERED.test(line)) return takeList(lines, i);
   if (QUOTE.test(line)) return takeQuote(lines, i);
-  return takeTable(lines, i) ?? takeParagraph(lines, i);
+  return takeTable(lines, i, budget) ?? takeParagraph(lines, i);
 }
 
 function takeQuote(lines: readonly string[], i: number): { block: Block | null; next: number } {
@@ -603,8 +620,9 @@ function isEmptyLineMark(lines: readonly string[]): boolean {
 export function parseReadme(src: string): Block[] {
   const lines = clean(src).split("\n");
   const blocks: Block[] = [];
+  const budget: Budget = { cells: MAX_CELLS };
   for (let i = 0; i < lines.length && blocks.length < MAX_BLOCKS; ) {
-    const { block, next } = takeBlock(lines, i);
+    const { block, next } = takeBlock(lines, i, budget);
     if (block !== null) blocks.push(block);
     i = next;
   }
