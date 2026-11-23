@@ -133,6 +133,8 @@ export function closes(text: string, j: number, mark: Mark): boolean {
   // An escaped mark before it is text, not part of its run (CommonMark 0.31.2, "Backslash escapes").
   const runBefore = text[j - 1] === ch && !isEscaped(text, j - 1);
   if (mark.length === 1 && (text[j + 1] === ch || runBefore)) return false;
+  // Strikethrough closes only with a run of exactly two tildes (GFM 0.29, "Strikethrough (extension)", example 493).
+  if (mark === "~~" && (text[j + 2] === "~" || runBefore)) return false;
   return ch !== "_" || !isWord(text[j + mark.length]);
 }
 
