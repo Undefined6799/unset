@@ -68,7 +68,7 @@ Every change:
   from the design sheet (a reference). A stock one needs no approval; changing one or adding a non-shadcn one is called
   out in the PR; `inventory.json` lists all. Tailwind classes only there and in the shell, never in pages.
   `shared/ui` keeps only the theme, the sheet's tokens, fonts and icon data. The 0x40 "v2e" look is superseded.
-- **Script (ADR 0114):** our own script may run on any page. Without it a page still reads and saves by plain links and forms: the floor, never the ceiling.
+- **Script (ADR 0114, 0116):** our own script runs on every page, the error page included, unless its `+page.ts` says `csr = false`. Without it a page still reads and saves by plain links and forms: the floor, never the ceiling.
 - **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in
   `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm package
   (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG (exceptions: ADR 0087's Lucide `grip` and ADR 0109's `h1` to `h6`, pinned the same way).
