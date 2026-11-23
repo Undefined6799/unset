@@ -1,6 +1,11 @@
 ---
-status: Proposed
+status: Accepted
 date: "2026-11-23"
+accepted:
+  at: "2026-11-23T13:00:14Z"
+  head: 18d5a0a9bfdf76b82379fe161214b8e6ad716b74
+  line: "Merge 1962 at d7c6cd6 and 1994 at 18d5a0a"
+  merged: 810d3dbb5f3d23b522fa3b20a28daefab03ffc6f
 step: P1.22d
 supersedes:
   - adr: "0054"
