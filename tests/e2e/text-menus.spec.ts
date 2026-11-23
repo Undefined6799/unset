@@ -324,7 +324,8 @@ test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_widt
   const stamp = Date.now();
   const words = [`lefthalf${stamp}`, `righthalf${stamp}`];
   await openOwnPage(page);
-  for (const word of words) await addCard(page, { kind: "readme", width: "half", surface: "filled", text: `${word} one` });
+  for (const word of words)
+    await addCard(page, { kind: "readme", width: "half", surface: "filled", text: `${word} one` });
   for (const width of [1280, 1024, 900]) {
     await page.setViewportSize({ width, height: 900 });
     await openOwnPage(page);
@@ -344,7 +345,10 @@ test("the_dots_and_plus_sit_outside_the_card_and_cover_no_other_card_at_any_widt
         const box = await other.boundingBox();
         if (box === null) continue;
         const apart =
-          at.x + at.width <= box.x || box.x + box.width <= at.x || at.y + at.height <= box.y || box.y + box.height <= at.y;
+          at.x + at.width <= box.x ||
+          box.x + box.width <= at.x ||
+          at.y + at.height <= box.y ||
+          box.y + box.height <= at.y;
         expect(apart, `over another card at ${width}`).toBe(true);
       }
       await page.mouse.move(0, 0);

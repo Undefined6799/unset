@@ -40,6 +40,14 @@ const picture = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const images = (list: unknown[], extra: Record<string, unknown> = {}) => card("images", { images: list, ...extra });
+// One line's fingerprint (sh.unset.block.text#lineFingerprint): 8 characters.
+const FP = "567b4f30";
+// One table cell side (sh.unset.block.text#edge): the top of the first header cell.
+const edge = (extra: Record<string, unknown> = {}) => ({ direction: "horizontal", line: 0, cell: 0, ...extra });
+const oneTable = (extra: Record<string, unknown> = {}) => ({ lines: [FP], edges: [edge()], ...extra });
+const tableText = (tableStyle: Record<string, unknown>) => card("text", { text: "| a |\n| - |", tableStyle });
+const align = (extra: Record<string, unknown> = {}) => ({ lines: [FP], value: "center", ...extra });
+const alignedText = (textStyle: Record<string, unknown>) => card("text", { text: "# a", textStyle });
 const cardRef = { uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzfcijpj2z2a" };
 
 // One record per limit: the value exactly at the limit passes and one past it fails, which proves LIMITS equals the
@@ -70,6 +78,15 @@ const FIXTURES: Record<string, Build> = {
   "card.widthBytes": C((n) => ({ ...links([]), width: text(n) })),
   "card.surfaceBytes": C((n) => ({ ...links([]), surface: text(n) })),
   "card.textBytes": C((n) => card("text", { text: text(n) })),
+  "card.styledTablesMax": C((n) => tableText({ tables: many(n, oneTable()) })),
+  "card.tableEdgesMax": C((n) => tableText({ tables: [oneTable({ edges: many(n, edge()) })] })),
+  "card.edgeDirectionBytes": C((n) => tableText({ tables: [oneTable({ edges: [edge({ direction: text(n) })] })] })),
+  "card.edgeLineHighest": C((n) => tableText({ tables: [oneTable({ edges: [edge({ line: n })] })] })),
+  "card.edgeCellHighest": C((n) => tableText({ tables: [oneTable({ edges: [edge({ cell: n })] })] })),
+  "card.alignedBlocksMax": C((n) => alignedText({ align: many(n, align()) })),
+  "card.alignValueBytes": C((n) => alignedText({ align: [align({ value: text(n) })] })),
+  "card.lookLinesMax": C((n) => alignedText({ align: [align({ lines: many(n, FP) })] })),
+  "card.lineFingerprintBytes": C((n) => alignedText({ align: [align({ lines: [text(n)] })] })),
   "card.title": C((n) => links([], { title: text(n) })),
   "card.layoutBytes": C((n) => showcase([], { layout: text(n) })),
   "card.linksMax": C((n) => links(many(n, { uri: ORIGIN }))),
@@ -150,6 +167,52 @@ describe("LIMITS", () => {
   test("an_unknown_block_is_valid_since_the_union_is_open", () => {
     const value = { ...links([]), content: { $type: "com.example.video", id: "x" } };
     expect(validateRecord("sh.unset.card", value, "read").ok).toBe(true);
+  });
+
+  test("text_looks: optional, beside unchanged Markdown, each named by its block's line fingerprints", () => {
+    const write = (value: Record<string, unknown>) => validateRecord("sh.unset.card", value, "write").ok;
+    // ADR 0110: every part is optional, so a text card without them is unchanged.
+    expect(write(card("text", { text: "| a |\n| - |" }))).toBe(true);
+    expect(write(tableText({}))).toBe(true);
+    expect(write(alignedText({}))).toBe(true);
+    const switches = { hideHeaderLine: true, hideRowLines: false, showColumnLines: true, showOutline: true };
+    expect(write(tableText(switches))).toBe(true);
+    expect(
+      write(tableText({ tables: [oneTable({ edges: [edge(), edge({ direction: "vertical", hide: true })] })] })),
+    ).toBe(true);
+    expect(write(alignedText({ align: [align(), align({ value: "end", lines: [FP, FP, FP] })] }))).toBe(true);
+    // A look names its block: its line fingerprints are required, and so is what it sets.
+    for (const part of ["lines", "value"]) {
+      const partial: Record<string, unknown> = align();
+      delete partial[part];
+      expect(write(alignedText({ align: [partial] })), part).toBe(false);
+    }
+    for (const part of ["lines", "edges"]) {
+      const partial: Record<string, unknown> = oneTable();
+      delete partial[part];
+      expect(write(tableText({ tables: [partial] })), part).toBe(false);
+    }
+    for (const part of ["direction", "line", "cell"]) {
+      const partial: Record<string, unknown> = edge();
+      delete partial[part];
+      expect(write(tableText({ tables: [oneTable({ edges: [partial] })] })), part).toBe(false);
+    }
+    // A line's fingerprint is exactly 8 characters, and a block has at least one line.
+    expect(write(alignedText({ align: [align({ lines: [FP.slice(1)] })] }))).toBe(false);
+    expect(write(alignedText({ align: [align({ lines: [] })] }))).toBe(false);
+    expect(write(tableText({ tables: [oneTable({ edges: [edge({ line: -1 })] })] }))).toBe(false);
+    expect(write(tableText({ tables: [oneTable({ edges: [edge({ cell: 1.5 })] })] }))).toBe(false);
+    expect(write(tableText({ hideRowLines: "yes" }))).toBe(false);
+    // Writing refuses anything a look does not define, so no CSS, colour or link can ride along.
+    expect(write(alignedText({ align: [align({ colour: "red" })] }))).toBe(false);
+    expect(write(tableText({ css: "x" }))).toBe(false);
+    expect(write(tableText({ tables: [oneTable({ edges: [edge({ href: "https://example.com" })] })] }))).toBe(false);
+    // Later values are open (knownValues), so an older reader still accepts the record.
+    const later = tableText({ tables: [oneTable({ edges: [edge({ direction: "diagonal" })] })] });
+    expect(validateRecord("sh.unset.card", later, "read").ok).toBe(true);
+    expect(validateRecord("sh.unset.card", alignedText({ align: [align({ value: "justify" })] }), "read").ok).toBe(
+      true,
+    );
   });
 
   test("the_page_lists_cards_by_address", () => {
