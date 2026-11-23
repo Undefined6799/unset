@@ -30,12 +30,15 @@ screens, `render.tsx`, the island runtime and Hono are deleted; nothing in the r
   `policy.ts`. The shell is the root `+layout.svelte`, fed by a page's `shell` (`src/lib/shell.ts`).
 
 **How data flows.** Request → `server.ts` → `hooks.server.ts` gate → a `+page.server.ts` load or form action, which
-calls a domain (and infrastructure through `lib/server`) → a plain view object → the Svelte page. Pages that need
-script set `csr = true` in their `+page.ts`; the root layout sets `csr = false`, so a page ships no script unless it
-asks. A public page that asks also says `client: true` in its `policy.ts` (ADR 0114, P1.22e): the hook then keeps
+calls a domain (and infrastructure through `lib/server`) → a plain view object → the Svelte page. Every page
+says in its own `+page.ts` whether it runs SvelteKit's client, `csr = true` or `csr = false` (P1.22j); the root
+layout's `csr = false` decides the error page alone. A public page that says true also says `client: true` in its `policy.ts` (ADR 0114, P1.22e): the hook then keeps
 SvelteKit's own CSP, narrowed, on that page's 200 answer only. The public profile is the first; its 404 runs no
 script (for a failed load kit takes `csr` from the layouts alone, 3.2.0 `page/index.js:276`) and keeps the fixed
 policy, as do its refusals and its data address. `gate.test.ts` names the pages switched on.
+`every-answer.test.ts` (P1.22j) names every route of the built server and what its GET and data address answer for a
+visitor and a member, plus the answers no route gives (unmatched, refusals, redirects, build files, a 304), and pins
+each CSP header by value: a new route, or a page with no `csr` line, fails it until it has a row.
 A client navigation keeps the document, so the layout's `afterNavigate` applies the theme a full load of the new page
 would have (system where `prefs` is absent); without it a visitor's saved theme was lost from the profile to /login.
 
@@ -61,6 +64,12 @@ still carries their own bell entries and a Sign in address their page does not d
   (`scripts/budgets/app-js.ts`).
 - No inline script or style on any page beyond SvelteKit's hashed startup script and two hashed style attributes
   (`interfaces/web/vite.config.ts`).
+- Work on a member's input inside a page load is synchronous and blocks every request on the process, so it needs a
+  bound a timer can enforce between small steps. Code colouring (P1.21v, review of #2004): a CodeMirror parser is
+  driven by `startParse`/`advance()` to a deadline, but a stream parser's step is whole lines and Markdown's a whole
+  paragraph, and some legacy modes are worse than quadratic in a line, so size and line caps bound the step and the
+  deadline bounds the sum (`CODE_COLOUR_LIMITS` in `interfaces/web/src/lib/server/limits.ts`, measured in
+  `apps/web/lib/editor/code-colours.ts`). Some parsers also throw.
 
 The paragraph below describes the React shell; the Svelte shell's Sign in is a link to /login with `next` set to
 the page (`signInHref`, `routes/+layout.server.ts`).

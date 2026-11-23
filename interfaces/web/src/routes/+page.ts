@@ -7,6 +7,10 @@ import { PUBLIC_PAGE_CACHE, type ShellData } from "../lib/shell.ts";
 
 const SHELL: ShellData = { kind: "core", active: "home", hiddenHeading: "Home" };
 
+// A full load of this page ships no script. The page says so itself (book P1.22j), so its answer does not follow the
+// root layout's default; the step that switches it on removes the line.
+export const csr = false;
+
 export const load: Load = ({ setHeaders }) => {
   setHeaders({ "cache-control": PUBLIC_PAGE_CACHE });
   return { shell: SHELL };

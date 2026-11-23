@@ -127,6 +127,36 @@
   main :where(code:not([class])) {
     @apply font-mono;
   }
+  /* Code colours, drawn on the server as classes (apps/web/lib/editor/code-colours.ts); the editor uses the same
+   * variables, so the page and the editor show code alike. */
+  .code-keyword {
+    color: var(--code-keyword);
+  }
+  .code-string {
+    color: var(--code-string);
+  }
+  .code-number {
+    color: var(--code-number);
+  }
+  .code-comment {
+    color: var(--code-comment);
+    font-style: italic;
+  }
+  .code-type {
+    color: var(--code-type);
+  }
+  .code-function {
+    color: var(--code-function);
+  }
+  .code-tag {
+    color: var(--code-tag);
+  }
+  .code-attribute {
+    color: var(--code-attribute);
+  }
+  .code-invalid {
+    color: var(--code-invalid);
+  }
   /* A link in text is underlined, so it never relies on colour alone (WCAG 1.4.1; axe link-in-text-block). A link
    * drawn as a component (shadcn's Button with href sets data-slot) keeps that component's own colour and look. */
   a:not([data-slot]) {

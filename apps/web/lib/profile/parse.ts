@@ -34,9 +34,15 @@ export type Block =
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
-  | { readonly kind: "code"; readonly text: string }
+  | CodeBlock
   | { readonly kind: "rule" }
   | TableBlock;
+
+/**
+ * A code block's text and its language: a fence's info string's first word (CommonMark 0.31.2, "Fenced code blocks"),
+ * "" for none or an indented block. The language only picks the page's colours; it is never drawn.
+ */
+export type CodeBlock = { readonly kind: "code"; readonly text: string; readonly language: string };
 
 /** A table's column alignments, header cells and data rows, each row as wide as the header (GFM "Tables"). */
 export type TableBlock = {
@@ -385,7 +391,8 @@ function closesFence(line: string, fence: string): boolean {
 function takeFence(lines: readonly string[], i: number, fence: string): { block: Block; next: number } {
   let end = i + 1;
   while (end < lines.length && !closesFence(lines[end] ?? "", fence)) end += 1;
-  return { block: { kind: "code", text: lines.slice(i + 1, end).join("\n") }, next: end + 1 };
+  const language = (lines[i] ?? "").trim().slice(fence.length).trim().split(/\s/, 1)[0] ?? "";
+  return { block: { kind: "code", text: lines.slice(i + 1, end).join("\n"), language }, next: end + 1 };
 }
 
 /**
@@ -400,7 +407,7 @@ function takeIndented(lines: readonly string[], i: number): { block: Block; next
     else if (line.trim() !== "") break;
   }
   const text = lines.slice(i, last + 1).map((line) => (INDENTED.test(line) ? line.replace(INDENTED, "") : ""));
-  return { block: { kind: "code", text: text.join("\n") }, next: last + 1 };
+  return { block: { kind: "code", text: text.join("\n"), language: "" }, next: last + 1 };
 }
 
 /**
