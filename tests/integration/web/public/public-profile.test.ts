@@ -372,11 +372,12 @@ const kept = (response: Response) =>
 
 /**
  * The app group's policy, as gate.test.ts pins it for an app page (ADR 0054 decision 4, ADR 0073 decision 3): what a
- * page that runs the client is sent, unchanged (ADR 0114 point 2). The one hash is the page's own start-up script.
+ * page that runs the client is sent, unchanged (ADR 0114 point 2). The one script hash is the page's own start-up
+ * script's, given here as base64 SHA-256.
  */
-const SCRIPT_POLICY =
+const scriptPolicy = (startUpHash: string): string =>
   "default-src 'none'; connect-src 'self'; font-src https://unset.test/fonts/; img-src 'self'; " +
-  "manifest-src 'self'; object-src 'none'; script-src https://unset.test/_app/ 'sha256-<startup script>'; " +
+  `manifest-src 'self'; object-src 'none'; script-src https://unset.test/_app/ 'sha256-${startUpHash}'; ` +
   "style-src https://unset.test/_app/; style-src-attr 'unsafe-hashes' " +
   "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +
   "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; " +
@@ -392,20 +393,16 @@ const FIXED_POLICY =
  * carries, so no other inline script could run; no script element with an address; nothing fetched and inlined.
  */
 function expectScriptPolicy(response: Response, html: string, who = "") {
-  const csp = response.headers.get("content-security-policy") ?? "";
-  const hash = /'sha256-([A-Za-z0-9+/=]+)'/.exec(/script-src ([^;]*)/.exec(csp)?.[1] ?? "")?.[1] ?? "";
-  expect(csp.replace(`'sha256-${hash}'`, "'sha256-<startup script>'"), who).toBe(SCRIPT_POLICY);
-  expect(csp, who).not.toContain("unsafe-inline");
-  expect(csp, who).not.toContain("unsafe-eval");
   const scripts = inlineScripts(html);
   expect(scripts, who).toHaveLength(1);
   expect(scriptCount(html), who).toBe(1);
-  expect(
-    createHash("sha256")
-      .update(scripts[0] ?? "")
-      .digest("base64"),
-    who,
-  ).toBe(hash);
+  const hash = createHash("sha256")
+    .update(scripts[0] ?? "")
+    .digest("base64");
+  const csp = response.headers.get("content-security-policy") ?? "";
+  expect(csp, who).toBe(scriptPolicy(hash));
+  expect(csp, who).not.toContain("unsafe-inline");
+  expect(csp, who).not.toContain("unsafe-eval");
   expect(html, who).not.toContain("data-sveltekit-fetched");
 }
 
