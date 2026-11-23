@@ -68,15 +68,19 @@ last-resort `error.html` is sent when the error page itself fails. Neither shows
    no script from another host, from the media origin or from a member, and the session cookie stays `HttpOnly`.
 3. **The header follows the document.** The script policy goes out only on an HTML document that SvelteKit drew
    with its client. The hook decides that from what the server itself did (the route's own policy, and whether
-   SvelteKit drew a page or the error page), never from anything the request says. Every other answer keeps the
-   fixed header it has today: data addresses, redirects, refusals, endpoints, build files and fonts.
+   SvelteKit drew a page or the error page), never from anything the request says. That SvelteKit sent a header
+   is not the signal: it sends its own on every page it draws, whatever `csr` says (`page/render.js:577-579`).
+   Every other answer keeps the fixed header it has today: data addresses, redirects, refusals, endpoints, build
+   files and fonts.
 4. **What stays without script, by name.**
    - *The gate's refusal page.* It is sent when the server is refusing work. A page that then asks for about 30
      build files would spend the allowance that has just run out (the edge counts them, ADR 0069), and it must stay
      the cheapest answer we have. It shows no navbar, so Alex's rule does not reach it.
    - *SvelteKit's last-resort `error.html`.* It exists for the case where drawing a page failed.
    - *Three routes nobody reads:* `/login/continue`, `/prefs/theme` and `/privacy-notice/seen`. Each keeps
-     `csr = false` in its own `+page.ts`. The sign-in hop must not wait for, or depend on, a script file.
+     `csr = false` in its own `+page.ts`, so its own page stays plain. The sign-in hop must not wait for, or depend
+     on, a script file. A load that fails on one of them draws the shared error page, which takes `csr` from the
+     layouts and so runs the client like every other error page.
    No other page is left out, and none is left out for a security reason: the sign-in, join and welcome pages run
    the same client under the same policy. A page that later turns the client off says so in its own `+page.ts` and
    is added to the named list in the test of point 7 with its reason. That is a tightening and needs no line.
@@ -92,7 +96,10 @@ last-resort `error.html` is sent when the error page itself fails. Neither shows
    today (the Sign in link's return path and the theme form's) are worked out where they are drawn, from the page's
    own address. For a visitor, the start-up script is then the same bytes for
    every unmatched address of the same depth: SvelteKit writes its file paths relative to the address
-   (`page/render.js:120-126`), so the number of slashes shows and nothing else of it.
+   (`page/render.js:120-126`), so the number of slashes shows and nothing else of it. This rests on how we set
+   SvelteKit up: with `router.resolution` set to `server`, or an embedded build, it would also write the route's
+   parameters into that script (`page/render.js:476-486`). We use neither (the default is `client`,
+   `src/core/config/options.js:256`), and the test of this point fails if that changes.
 7. **The safety net is a test, not a default.** One test walks every answer the built server gives and pins its
    header by value (Compliance). A route it does not name fails it. It replaces "a forgotten page ships no script"
    with "a page nobody named cannot merge".
@@ -165,8 +172,9 @@ This record changes no code, header or test. The steps, in `docs/ai/book/phase-1
   rows of the table move to the app policy; point 5 as a test over a missing, a hidden, an erased and an
   unknown profile for a visitor and for a member, on the page, on the data address and by a click in a
   browser with script on; point 6 as a test that two different unmatched addresses of one depth give a visitor
-  the same start-up script, and a browser test with hostile addresses that runs nothing and reports no violation;
-  the error page read with script off, with its files refused and with the client failing at start.
+  the same start-up script, and so do a failed load on `/@` a hostile handle and on `/@` a missing one of the same
+  depth; a browser test with hostile addresses that runs nothing and reports no violation; the error page read
+  with script off, with its files refused and with the client failing at start.
 - **P1.22g** (changed): home, the legal pages and `/request-invite` drop their `csr = false`; the bell opens its
   panel wherever the client runs (point 8).
 - **P1.22l**: `/login`, `/join`, `/welcome` and `/welcome/blocked` drop theirs; the named list of point 4 is then

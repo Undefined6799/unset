@@ -5542,7 +5542,8 @@ The hook follows ADR 0116 point 3: SvelteKit's own header, narrowed, goes out on
 with its client, and the fixed one on everything else. How the hook knows is this step's design, within two
 rules: it reads only what the server itself did (the route's policy for a page; for an error page, that SvelteKit
 drew one), never the request; and the every-answer test holds header and document to each other in both
-directions. The `client` field of `policy.ts` and `only_the_named_public_pages_run_the_client` turn round with the
+directions. That SvelteKit sent a header cannot be the signal: it sends its own on every page it draws, whatever
+`csr` says (kit 3.2.0 `page/render.js:577-579`). The `client` field of `policy.ts` and `only_the_named_public_pages_run_the_client` turn round with the
 default: the test now names the pages that do not run the client, each with its reason, and
 `scripts/docs/endpoints.ts` follows the field.
 
@@ -5559,12 +5560,16 @@ Tests, written first and shown failing:
   address (P1.22h's tests, re-run); and in a browser with script on, a click from a page that runs the client to
   each of the four draws the same error page and makes the same requests;
 - request text (point 6): two different unmatched addresses of one depth give a visitor the same start-up script,
-  byte for byte; a member's differs from the visitor's only by their own shell data;
+  byte for byte, and so do a failed load on `/@` a hostile handle and on `/@` a missing one of the same depth (kit
+  writes the route's parameters into the script only with `router.resolution: "server"` or an embedded build,
+  `page/render.js:476-486`; we use neither, and this case fails if that changes); a member's differs from the
+  visitor's only by their own shell data;
 - hostile addresses, in a browser with script on: paths and queries holding `</script><script>`, `<!--`, a quote,
   U+2028 and a `javascript:` return path run nothing, report no violation and show the error page;
 - the fallback: the error page read with script off, with its script files refused, and with the client failing
   at start (`nojs.spec.ts` keeps it); an `internal.error` page still shows its request id;
-- the gate's refusal page, SvelteKit's `error.html` and the three routes nobody reads still carry no script.
+- the gate's refusal page and SvelteKit's `error.html` still carry no script, and neither do the own pages of the
+  three routes nobody reads; a load that fails on one of those three draws the shared error page, with script.
 
 Docs in the same PR: `features/core-shell.md` ("The three shells": the default), the `area/web` note, the ASVS
 V3.4.3 row, the plan's §5.4 words on the error page, and the Script line under UI in `CLAUDE.md` (it is at its 120
