@@ -176,7 +176,8 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
   expect(packages.testFile("shared/http/main.test.ts")).toBe(true);
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
-});
+  // A cruise of the whole tree: 3.5 s here, 5.4 s on a loaded CI runner (#1963 on 12c3e0bb), past vitest's 5 s default.
+}, 60_000);
 
 test("sveltekit_modules_only_in_the_web_process", () => {
   // ADR 0054: SvelteKit's $app modules are allowed in interfaces/web, by name, and nowhere else.
