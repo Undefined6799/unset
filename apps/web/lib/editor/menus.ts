@@ -34,7 +34,7 @@ import { createTable, toggleStrikethroughCommand } from "@milkdown/preset-gfm";
 import { findParent, posToDOMRect } from "@milkdown/prose";
 import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
-import type { NodeType } from "@milkdown/prose/model";
+import type { Node as ProseNode, NodeType } from "@milkdown/prose/model";
 import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection } from "@milkdown/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
@@ -107,6 +107,28 @@ const linkTips = tooltipFactory("UNSET_LINK");
 const WEB = ["http:", "https:"] as const;
 /** How long a pointer rests before the link preview follows it (Crepe's link-tooltip DELAY). */
 const HOVER_MS = 50;
+
+/**
+ * The dots change their whole block (Codex on #1965): a quote or a list is first taken apart into the lines it holds,
+ * left in place and selected, so Text leaves them plain and any other item turns or wraps them all, as the commands do
+ * over a selection of several lines. A block that is one line already is left as it is.
+ */
+function unwrapBlock(view: EditorView) {
+  const { $from } = view.state.selection;
+  if ($from.depth < 2) return;
+  const block = $from.node(1);
+  const start = $from.before(1);
+  const lines: ProseNode[] = [];
+  block.descendants((node) => {
+    if (!node.isTextblock) return true;
+    lines.push(node);
+    return false;
+  });
+  if (lines.length === 0) return;
+  const tr = view.state.tr.replaceWith(start, start + block.nodeSize, lines);
+  const end = start + lines.reduce((size, line) => size + line.nodeSize, 0);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, start + 1, end - 1)));
+}
 
 function blockCommand(ctx: Ctx, item: BlockItem): () => void {
   const commands = ctx.get(commandsCtx);
@@ -298,7 +320,10 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     const typed = changing === null;
     close();
     if (typed) ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+    else unwrapBlock(view);
     blockCommand(ctx, item)();
+    if (!typed)
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, view.state.selection.to)));
     view.focus();
   };
 
