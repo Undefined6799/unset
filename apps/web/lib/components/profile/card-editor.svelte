@@ -16,8 +16,8 @@
 import { tick } from "svelte";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
-import { parseReadme } from "../../profile/parse.ts";
 import type {
+  Block,
   CardContent,
   CardPanelState,
   CardSurface,
@@ -199,17 +199,27 @@ async function addRow() {
   const rows = document.getElementById(formId)?.querySelectorAll<HTMLElement>("[data-row]");
   rows?.[rows.length - 1]?.querySelector<HTMLElement>("input")?.focus();
 }
-/** The README editor's open tab, and the text its preview shows, read from the field when Preview opens. */
+/**
+ * The README editor's open tab, and what its preview shows: the field's text as the page will draw it, read when
+ * Preview opens. The reader arrives with the first Preview, as the editor's own file does with the dialog (ADR 0069
+ * split), so the page's first load carries no Markdown parser.
+ */
 let tab = $state("write");
-let previewText = $state("");
-function showTab(value: string) {
-  if (value === "preview") {
-    const field = document.getElementById(formId)?.querySelector<HTMLTextAreaElement>('textarea[name="text"]');
-    previewText = field?.value ?? "";
-  }
+let preview = $state.raw<{ readonly blocks: readonly Block[] } | "failed" | undefined>();
+async function showTab(value: string) {
   tab = value;
+  if (value !== "preview") return;
+  const field = document.getElementById(formId)?.querySelector<HTMLTextAreaElement>('textarea[name="text"]');
+  const text = field?.value ?? "";
+  preview = undefined;
+  try {
+    const { parseReadme } = await import("../../profile/parse.ts");
+    preview = { blocks: parseReadme(text) };
+  } catch {
+    // The reader's file did not arrive (a dropped connection): say so; the text is still on Write and still posts.
+    preview = "failed";
+  }
 }
-const previewBlocks = $derived(tab === "preview" ? parseReadme(previewText) : []);
 const formId = $props.id();
 /** The Text editor's dialog (P1.21u): wide on a desktop, the whole screen on a phone, by the stock Dialog's own classes. */
 const TEXT_DIALOG = "sm:max-w-3xl max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:rounded-none max-sm:border-0";
@@ -315,7 +325,9 @@ const buttonRows = $derived([
           <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
         </Tabs.Content>
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
-          {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={previewBlocks} />{/if}
+          {#if preview === "failed"}<p role="alert" class="text-muted-foreground">{CARD_EDIT.previewFailed}</p
+            >{:else if preview?.blocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p
+            >{:else if preview !== undefined}<Readme blocks={preview.blocks} />{/if}
         </Tabs.Content>
       </Tabs.Root>
     {:else if kind === "readme"}
