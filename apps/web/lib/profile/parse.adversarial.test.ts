@@ -70,6 +70,10 @@ describe("parseReadme, adversarial input", () => {
     "<http://a",
     "<https://a.example>",
     "https://a.example",
+    "www.",
+    "www.a",
+    "http://",
+    ").",
     "#",
     "## ",
     "> ",
@@ -114,6 +118,11 @@ describe("parseReadme, adversarial input", () => {
     // Review of #1827 at b449c4d: each opener looked for the next unescaped "](" past every escaped one.
     ["label openers before escaped label closers", `${"[".repeat(50_000)}${"\\](".repeat(16_000)}`],
     ["labels of escaped closers", "[\\](".repeat(25_000)],
+    // Bare addresses (GFM autolink literals): each start reads its address once, and a refused one is not reread.
+    ["bare names whose domains are refused", "www._".repeat(20_000)],
+    ["bare names inside one long address-like run", "(www.a_b.c_".repeat(9_000)],
+    ["an address before a run of closing marks", `https://a.example/${")".repeat(99_000)}`],
+    ["an address before a run of references", `https://a.example/${"&a;".repeat(33_000)}`],
   ])("%s read each destination once", (_name, src) => {
     const started = performance.now();
     parseReadme(src);
@@ -123,8 +132,19 @@ describe("parseReadme, adversarial input", () => {
   test("a destination past the address limit, or holding a bracket, stays text", () => {
     const long = `[a](https://a.example/${"x".repeat(2_000)})`;
     expect(parseReadme(long)).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: long }] }]);
+    // The label is not a link; the address in it is a bare one (GFM "Autolinks (extension)"), which ends before
+    // "])", as GFM's trailing punctuation does.
     const bracket = "[a](https://a.example/[x])";
-    expect(parseReadme(bracket)).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: bracket }] }]);
+    expect(parseReadme(bracket)).toEqual([
+      {
+        kind: "paragraph",
+        children: [
+          { kind: "text", text: "[a](" },
+          { kind: "link", href: "https://a.example/[x", children: [{ kind: "text", text: "https://a.example/[x" }] },
+          { kind: "text", text: "])" },
+        ],
+      },
+    ]);
   });
 
   test("a code span closes only on a run of the same length, so it can show backticks", () => {
@@ -218,6 +238,19 @@ describe("parseReadme, adversarial input", () => {
         { kind: "text", text: " after" },
       ],
     });
+  });
+
+  // Codex on #1958: a wide header with thousands of one-character rows is a few bytes per row but fifty cells each,
+  // and the server renders every cell for each visitor. The card's tables share one budget of cells.
+  test("the tables of one card hold at most 10,000 cells, however short their rows", () => {
+    const head = `|${"h|".repeat(50)}\n|${"-|".repeat(50)}\n`;
+    const cells = (blocks: ReturnType<typeof parseReadme>) =>
+      blocks.reduce((n, b) => (b.kind === "table" ? n + (b.rows.length + 1) * b.head.length : n), 0);
+    const one = parseReadme(`${head}${"x\n".repeat(9_700)}`);
+    expect(cells(one)).toBeLessThanOrEqual(10_000);
+    const many = parseReadme(`${head}${"x\n".repeat(100)}\n`.repeat(200));
+    expect(cells(many)).toBeLessThanOrEqual(10_000);
+    expect(many[0]).toMatchObject({ kind: "table" });
   });
 
   test("a longer fence holds a shorter one as code", () => {

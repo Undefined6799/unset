@@ -41,6 +41,20 @@ describe("Readme", () => {
     expect(html("# A\n\n## B\n\n### C")).toBe("<h2>A</h2><h3>B</h3><h4>C</h4>");
   });
 
+  test("struck words are a del, and a task's box is shown ticked or not and cannot be changed", () => {
+    expect(html("~~gone~~ kept")).toBe("<p><del>gone</del> kept</p>");
+    expect(html("- [x] done\n- [ ] open\n- plain")).toBe(
+      '<ul><li><input type="checkbox" checked="" disabled=""/>done</li><li><input type="checkbox" disabled=""/>open</li><li>plain</li></ul>',
+    );
+  });
+
+  test("a table has a header row and is aligned per column", () => {
+    expect(html("| a | b |\n| :-: | --: |\n| 1 | **2** |")).toBe(
+      "<div><table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td><strong>2</strong></td></tr></tbody></table></div>",
+    );
+    expect(html("| a |\n| --- |")).toBe("<div><table><thead><tr><th>a</th></tr></thead></table></div>");
+  });
+
   test("an ordered list keeps its first number", () => {
     expect(html("3. third\n4. fourth")).toContain('<ol start="3">');
   });
