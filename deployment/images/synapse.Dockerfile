@@ -45,7 +45,9 @@ COPY infrastructure/matrix/synapse-module/unset_chat_policy /opt/synapse/lib/pyt
 USER 991:991
 EXPOSE 8008
 # GET /health answers once Synapse serves: it "is by default active for all other resources", so the client listener
-# has it (docs/usage/configuration/config_documentation.md:522 at v1.165.0).
+# has it (docs/usage/configuration/config_documentation.md:522 at v1.165.0). Synapse binds only its fixed addresses,
+# never 127.0.0.1 (homeserver.yaml), so the check asks the first listener's first address, read from the config the
+# container runs, with the PyYAML Synapse itself loads it with.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD ["/opt/synapse/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/health', timeout=2)"]
+  CMD ["/opt/synapse/bin/python", "-c", "import urllib.request, yaml; l = yaml.safe_load(open('/config/homeserver.yaml'))['listeners'][0]; urllib.request.urlopen('http://%s:%d/health' % (l['bind_addresses'][0], l['port']), timeout=2)"]
 ENTRYPOINT ["/opt/synapse/bin/python", "-m", "synapse.app.homeserver", "-c", "/config/homeserver.yaml"]

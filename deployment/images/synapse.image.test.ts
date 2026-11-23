@@ -29,6 +29,16 @@ function run(args: readonly string[]): string {
   return ran.out.trim();
 }
 
+/** Docker's health verdict once it leaves `starting`, waiting at most the image's start period plus two checks. */
+function healthOf(container: string): string {
+  const until = Date.now() + 60_000;
+  for (;;) {
+    const status = run(["inspect", "--format", "{{.State.Health.Status}}", container]);
+    if (status !== "starting" || Date.now() > until) return status;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_000);
+  }
+}
+
 /** A folder Synapse's 991 can read, holding the stack's config files, `homeserver.yaml` possibly changed. */
 function configDir(homeserver: string): string {
   const dir = mkdtempSync(join(tmpdir(), "unset-synapse-config-"));
@@ -186,6 +196,9 @@ describe("synapse image", () => {
             { timeoutMs: CALL_MS },
           );
           expect(loopback.err).toContain("Connection refused");
+          // The image's own HEALTHCHECK reaches a listener Synapse binds, so Docker marks it healthy (staging marked it
+          // unhealthy while it served, when the check asked 127.0.0.1; Alex, 2026-11-23).
+          expect(healthOf(synapse)).toBe("healthy");
           // As 991, never root, and nothing it imports is the OIDC or JWT library. The distroless runtime ships no
           // `id` (ADR 0092: no shell or coreutils), so the venv's own Python reads the process's uid.
           expect(run(["exec", synapse, "/opt/synapse/bin/python", "-c", "import os; print(os.getuid())"])).toBe("991");
