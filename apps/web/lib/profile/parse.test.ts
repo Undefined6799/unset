@@ -171,6 +171,36 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     expect(parseReadme("```js\nlet a\n\nlet b")).toEqual([{ kind: "code", text: "let a\n\nlet b" }]);
   });
 
+  // The editor reads four spaces of indent as code (CommonMark 0.31.2 "Indented code blocks"), so the page does too:
+  // it showed such lines as a paragraph and lost their spaces.
+  test("lines indented four spaces or a tab are code, keeping the indent past four", () => {
+    expect(parseReadme("    let a\n      nested\n\tlet b")).toEqual([{ kind: "code", text: "let a\n  nested\nlet b" }]);
+  });
+
+  test("a blank line inside indented code is kept, and blank lines after it are not", () => {
+    expect(parseReadme("    one\n\n    two\n\n\nafter")).toEqual([
+      { kind: "code", text: "one\n\ntwo" },
+      { kind: "paragraph", children: [text("after")] },
+    ]);
+  });
+
+  test("an indented line cannot break into a paragraph: it continues it", () => {
+    expect(parseReadme("words\n    more")).toEqual([{ kind: "paragraph", children: [text("words more")] }]);
+  });
+
+  test("markup in indented code is text", () => {
+    expect(parseReadme('    <script>alert(1)</script>\n    <a href="javascript:x">y</a>')).toEqual([
+      { kind: "code", text: '<script>alert(1)</script>\n<a href="javascript:x">y</a>' },
+    ]);
+  });
+
+  test("a shorter fence does not close a longer one, and a fence's language is never shown", () => {
+    expect(parseReadme('````"><img src=x onerror=alert(1)>\n```\nstill code\n````\nafter')).toEqual([
+      { kind: "code", text: "```\nstill code" },
+      { kind: "paragraph", children: [text("after")] },
+    ]);
+  });
+
   test("NUL and other controls are removed before parsing", () => {
     expect(parseReadme("a\u0000b\u0007c")).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: "abc" }] }]);
   });
