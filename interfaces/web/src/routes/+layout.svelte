@@ -256,6 +256,11 @@ const DOCK_PLACE: Record<DockMode, string> = {
   bubble: "bottom-4 size-14 rounded-full",
 };
 let liveUnread: number | undefined = $state();
+/**
+ * Whether the box sends the count: from its first count on. A box that never gets that far (chat open in another tab,
+ * or a failed sign-in) leaves the poll running, so the icon's number stays current (Codex review on cdb237c1).
+ */
+let dockCounting = false;
 const unread = $derived(liveUnread ?? chat?.unread ?? 0);
 /** A Message link's DID, sent with the hello when the box's page loads. */
 let dockAsk: string | undefined;
@@ -370,6 +375,7 @@ function dockMessage(event: MessageEvent) {
     typeof message.unread === "number" &&
     Number.isSafeInteger(message.unread)
   ) {
+    dockCounting = true;
     liveUnread = Math.max(0, message.unread);
   } else if (message.type === `${DOCK}close`) {
     dockShown = false;
@@ -383,7 +389,7 @@ function dockMessage(event: MessageEvent) {
 $effect(() => {
   if (chat === undefined) return;
   const timer = window.setInterval(async () => {
-    if (document.visibilityState !== "visible" || dockMade) return;
+    if (document.visibilityState !== "visible" || dockCounting) return;
     try {
       const response = await fetch("/chat/count", { cache: "no-store", redirect: "error" });
       const body = (await response.json()) as { unread?: unknown };
@@ -404,7 +410,7 @@ const letter = $derived(account?.name === undefined ? undefined : accountLetter(
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
   // A page load read the icon's number afresh; the box, once running, keeps telling its own.
-  if (!dockMade) liveUnread = undefined;
+  if (!dockCounting) liveUnread = undefined;
   for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
