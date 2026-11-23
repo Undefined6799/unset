@@ -5,7 +5,7 @@ step: P1.21t
 supersedes:
   - adr: "0075"
 ---
-# 0092 — Human docs are gathered in one docs repository, and docs.unset.sh is GitHub Pages built from it
+# 0111 — Human docs are gathered in one docs repository, and docs.unset.sh is GitHub Pages built from it
 
 Alex asked on 2026-11-21 (20:25Z to 20:29Z) for one documentation pipeline across our repositories: each repository
 keeps its docs beside its code, and "whenever the documentation for human is updated", its own CI/CD "will send it to

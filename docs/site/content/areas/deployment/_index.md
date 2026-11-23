@@ -22,13 +22,12 @@ What puts the system on machines: Compose, the edge, images and the preflight. D
 | preflight | `deployment/preflight/` | [preflight](preflight/) |
 | env templates | `deployment/env/` | [compose](compose/) |
 | reserved labels | `deployment/reserved-labels.txt` | this page |
-| docs repository files | `deployment/docs-repo/` | this page |
 
 ## Owns
 
 The pieces in the table. `deployment/pds/` is the paired frontend recipe (`Dockerfile`, `source.lock.json`, `README.md`, `build.test.ts`, `ui/unset-theme.css`, `ui/theme.test.ts`); [images](images/) describes it. The `pds` service images are on [compose](compose/). The `/deployment/` supply-chain row below covers `deployment/pds/`. The tree also has the Sigstore root, the reserved-label list, `networks.dev.json` and `limits.dev.json`. `deployment/postgres/init-local/` is on the tree and is superseded; see [postgres init](postgres-init/).
 
-`deployment/docs-repo/` holds the docs repository's own files: its `README.md` and `site.yml`, the workflow that builds docs.unset.sh there and publishes it as GitHub Pages (`scripts/ci/docs-site.test.ts` holds its rules). `scripts/ci/docs-export.ts` adds it to the copy of `docs/human` and `docs/site` that `.github/workflows/docs-mirror.yml` pushes to `unset-sh/docs` ([ADR 0092](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0092-docs-gathered-in-one-repository-and-served-by-pages.md)). Nothing here runs on a machine of ours.
+The organisation's documentation site is owned by [unset-sh/docs](https://github.com/unset-sh/docs). This app no longer exports its docs or owns that site's workflow ([ADR 0112](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0112-app-docs-mirror-retires-at-the-organisation-cutover.md)). The app's local Hugo site and its CI checks remain here; [the cutover runbook](https://github.com/Undefined6799/unset/blob/main/docs/human/runbooks/docs-mirror-key.md) covers retiring the old writer and key.
 
 `.github/CODEOWNERS` (supply chain, then the trusted-base section):
 

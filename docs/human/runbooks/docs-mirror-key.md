@@ -1,62 +1,43 @@
-# The docs mirror and its deploy key
+# Retire the app's docs mirror and deploy key
 
-`.github/workflows/docs-mirror.yml` copies this repository's human docs (`docs/human` and `docs/site`) to the docs
-repository, [unset-sh/docs](https://github.com/unset-sh/docs), where every repository's docs are gathered and from
-which docs.unset.sh is built (ADR 0092). It pushes with a deploy key: an SSH key pair whose public half is on the docs
-repository and whose private half is the secret `DOCS_DEPLOY_KEY` of the `docs-mirror` environment here. Only Alex
-makes and places the key. Never paste the private half anywhere but the secret field, and never give it to an agent.
+The app publisher is retired by [ADR 0112](../decisions/0112-app-docs-mirror-retires-at-the-organisation-cutover.md), implementing the accepted
+[org-0002](https://github.com/unset-sh/agent-kit/blob/d3e3be6da8e693610d51f6bf743082033db4214d/skills/org-decisions/records/org-0002-docs-site-shows-only-organisation-docs.md). This is a cutover procedure, not instructions to set up a new app mirror.
 
-**Who:** Alex.
+**Who:** Alex. No private key needs to be read, copied or given to an agent.
 
-## Set up (once)
-1. Create `unset-sh/docs`: public, with "Add a README file" ticked, no licence, no `.gitignore`. The copy cannot read
-   a repository with no commit, and its first run replaces that README with ours.
-2. Allow deploy keys in the organisation, if the lexicons mirror has not already: profile picture, Organizations,
-   unset-sh, Settings, Member privileges, "Deploy keys", Enabled, Save.
-3. Add no branch protection or ruleset to `unset-sh/docs` that would refuse a deploy key's push to its default
-   branch: the copy pushes there directly, with no pull request.
-4. Make the pair on your own machine, without a passphrase (the workflow cannot type one):
-   `ssh-keygen -t ed25519 -N "" -C "unset docs mirror" -f ~/docsmirror`
-5. Public half (`~/docsmirror.pub`): on unset-sh/docs open Settings, Deploy keys, Add deploy key, title
-   `Undefined6799/unset docs-mirror`, paste it, tick "Allow write access", Add key.
-6. Private half (`~/docsmirror`): on Undefined6799/unset open Settings, Environments, New environment, name
-   `docs-mirror`, Configure environment. Under "Deployment branches and tags" choose "Selected branches and tags" and
-   add the branch `main`. Add no required reviewers. Under "Environment secrets" add `DOCS_DEPLOY_KEY` with the file's
-   whole content. It must be an environment secret: a repository secret can be read by a workflow on any branch.
-7. Delete both files and clear the clipboard: `rm ~/docsmirror ~/docsmirror.pub && pbcopy < /dev/null`.
+## Before merging the retirement
 
-Every push to main that changes `docs/human` or `docs/site` starts a copy, and so does the merge that adds the
-workflow. A run that failed for a missing key or repository changed nothing: once the steps above are done, re-run it
-from the Actions tab.
+1. Confirm at least one `unset-sh` repository has exported real pages to `unset-sh/docs`, and the replacement
+   framework builds those pages successfully. A fixture or local preview is not an export.
+2. Record the last successful Pages deployment and the reviewed framework commit. Keep the existing public site
+   serving until the replacement can publish.
+3. Merge the app retirement only as part of that coordinated cutover. The app's `docs/human` and `docs/site` stay in
+   this repository; app CI continues to validate them.
 
-## Check
-The Actions tab shows a green `docs-mirror` run whose summary says "Pushed". On unset-sh/docs the newest commit is
-"Copy the docs from Undefined6799/unset@…", it links the commit here, and `unset/site/hugo.yaml` exists.
+## Stop the old writer before publishing the replacement
 
-## Another repository joins
-Each source repository gets its own key pair, so one can be cut off without the others: repeat steps 4 to 7 with a
-new pair, the public half on unset-sh/docs under that repository's name, the private half in that repository's own
-`docs-mirror` environment. Its workflow replaces only the folder named after it.
+1. After the retirement merge, cancel any queued or running `docs-mirror` runs from older commits here. Verify none
+   remains active. Do not rerun an old mirror run.
+2. Remove this app's access to the write credential. In this app repository → Settings → Environments, delete the
+   retired `docs-mirror` environment, including its `DOCS_DEPLOY_KEY` secret. Do not display or export the value.
+3. In `unset-sh/docs` → Settings → Deploy keys, delete the key titled `Undefined6799/unset docs-mirror` if it belongs
+   only to this app. If Alex explicitly transferred that key to the first organisation source, preserve its
+   destination key and verify the app no longer has its secret. Do not delete another source's key.
+4. Publish the reviewed docs framework with the app's legacy `unset/` tree removed. Verify HTTPS and real source
+   pages using [docs-site.md](docs-site.md). Record the source export, retirement merge and successful deployment.
 
-Its folder becomes a section of docs.unset.sh under the folder's name (`deployment/docs-repo/site.yml`). The folder
-is Hugo content: an `_index.md` at its top whose front matter gives `title`, `type: docs` with `cascade: { type: docs }`,
-and, to appear in the top bar, a `menus: { main: { weight: N } }` entry; links between its pages are relative, so they
-also work on GitHub. A folder named like a section the site already has, or one holding a link, fails the site build.
-Add the folder to the table in `deployment/docs-repo/README.md`.
+A deletion on main does not revoke a credential. GitHub reruns use the original commit and ref; the old exporter
+owned `unset/`, the root `README.md` and `.github/`, so an old run could put the legacy framework back. GitHub's
+[rerun documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+and [deploy-key documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)
+were checked on 2026-11-22. A write deploy key authorises the repository, not a single source folder.
 
-## Rotate
-Repeat steps 4 to 7 with a new pair, replacing the secret's value, then delete the old deploy key on unset-sh/docs.
-Rotate when anyone who could read the private half should no longer, and after any doubt.
+## Recovery
 
-## Cut off (a leak, or anything odd in the docs repository)
-1. Delete the deploy key on unset-sh/docs (Settings, Deploy keys). It stops working at once.
-2. Compare `unset/`, `README.md` and `.github/` there with `node scripts/ci/docs-export.ts <new folder>` run on main
-   here, and look at the other folders' history: a deploy key can write any file of that repository. If the history
-   was rewritten, restore it by hand as an owner of the organisation.
-3. Set up a new key. The next copy puts this repository's files back.
+If the replacement build or deploy fails, diagnose it in `unset-sh/docs`; the last successful Pages deployment
+continues serving. Do not restore the app mirror or recreate its key to fix the organisation site. Reverting this
+code change alone does not restore a revoked key. Returning to the old publishing model needs a new owner decision
+and a coordinated rollback of the docs repository.
 
-## When a run fails
-- "refused the push three times": the docs repository did not accept the push. Check that the deploy key is there
-  with write access and that nothing restricts pushes to the default branch (step 3), then re-run.
-- A failed rebase ("could not apply"): someone changed `unset/`, `README.md` or `.github/` in the docs repository by
-  hand. Nothing was pushed. Revert that commit there, then re-run; the change belongs in this repository.
+If an old mirror already overwrote the framework, remove its credential access first, then restore the reviewed framework and
+source trees by a reviewed change in `unset-sh/docs`. Keep the app's documentation readable in this repository.
