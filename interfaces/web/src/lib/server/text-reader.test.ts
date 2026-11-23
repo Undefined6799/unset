@@ -1,10 +1,11 @@
 // The page's Markdown reader (book P1.21k): a parse that would hold the process is stopped at its limit and the card
-// is shown as plain text. The times asserted are loose on purpose: the unbounded parses take seconds, the limits are
-// tens of milliseconds, and each bar sits far from both, so a slow machine does not decide a test.
+// is shown as plain text, and what a read gave is remembered, so a text costs its time once and not on every page
+// load. The times asserted are loose on purpose: the unbounded parses take seconds, the limits are tens of
+// milliseconds, and each bar sits far from both, so a slow machine does not decide a test.
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
-import { pageTextReader, type TextReadLimits, within } from "./text-reader.ts";
+import { createTextReads, type TextReadLimits, within } from "./text-reader.ts";
 
 /** Far past any test's limit, so the request's own deadline decides nothing. */
 const LATER = Number.POSITIVE_INFINITY;
@@ -53,12 +54,14 @@ describe("within", () => {
   });
 });
 
-describe("pageTextReader", () => {
-  const GENEROUS: TextReadLimits = { textMs: 10_000, pageMs: 10_000 };
+/** Room to remember every text a test reads, for ten minutes. */
+const KEPT = { keptNodes: 100_000, keptForMs: 600_000 } as const;
+const GENEROUS: TextReadLimits = { textMs: 10_000, pageMs: 10_000, ...KEPT };
 
+describe("one page's reader", () => {
   test("a normal text is read as the parser reads it", () => {
     const text = "# Title\n\nSome **bold** words and a [link](https://a.example).\n\n- one\n- two";
-    expect(pageTextReader(GENEROUS, LATER)(text)).toEqual(parseReadme(text));
+    expect(createTextReads(GENEROUS).forPage(LATER)(text)).toEqual(parseReadme(text));
   });
 
   // What micromark 4.0.3 takes seconds over at the text block's 20,000 characters, or overflows its stack on
@@ -68,7 +71,7 @@ describe("pageTextReader", () => {
     "text written to stall the parser, %j repeated, is stopped and shown as plain text",
     (shape) => {
       const text = repeated(shape);
-      const { out, ms } = timed(() => pageTextReader(TEXT_READ_LIMITS, LATER)(text));
+      const { out, ms } = timed(() => createTextReads(TEXT_READ_LIMITS).forPage(LATER)(text));
       expect(out).toEqual(plainText(text));
       expect(ms).toBeLessThan(TEXT_READ_LIMITS.textMs + 1_000);
     },
@@ -76,10 +79,10 @@ describe("pageTextReader", () => {
 
   test("one text gets at most its own limit, and the page's cards share the page's", () => {
     let started = 0;
-    const read = pageTextReader({ textMs: 40, pageMs: 100 }, LATER, () => {
+    const read = createTextReads({ textMs: 40, pageMs: 100, ...KEPT }, () => {
       started += 1;
       return forever();
-    });
+    }).forPage(LATER);
     const one = timed(() => read("first"));
     expect(one.out).toEqual(plainText("first"));
     expect(one.ms).toBeLessThan(40 + 1_000);
@@ -100,28 +103,177 @@ describe("pageTextReader", () => {
       }
       return parseReadme(text);
     };
-    const read = pageTextReader({ textMs: 1_000, pageMs: 50 }, LATER, slow);
+    const read = createTextReads({ textMs: 1_000, pageMs: 50, ...KEPT }, slow).forPage(LATER);
     expect(read("**a**")).toEqual(parseReadme("**a**"));
-    for (let i = 0; i < 10; i += 1) read("**b**");
+    for (let i = 0; i < 10; i += 1) read(`**b${i}**`);
     expect(calls).toBeLessThanOrEqual(3);
     expect(read("**c**")).toEqual(plainText("**c**"));
   });
 
   test("no read starts once the request's deadline has passed", () => {
     let started = 0;
-    const read = pageTextReader(GENEROUS, performance.now() - 1, (text) => {
+    const read = createTextReads(GENEROUS, (text) => {
       started += 1;
       return parseReadme(text);
-    });
+    }).forPage(performance.now() - 1);
     expect(read("**late**")).toEqual(plainText("**late**"));
     expect(started).toBe(0);
   });
 
   test("a read is cut at the request's deadline when that comes before the limits", () => {
-    const read = pageTextReader(GENEROUS, performance.now() + 30, forever);
+    const read = createTextReads(GENEROUS, forever).forPage(performance.now() + 30);
     const { out, ms } = timed(() => read("text"));
     expect(out).toEqual(plainText("text"));
     expect(ms).toBeLessThan(30 + 1_000);
+  });
+});
+
+// Review of #2013: with nothing remembered, a page of two stalling cards cost its whole 300 ms on every load, and one
+// address may load a page five times a second. What a read gave is kept for the process, so the cost is paid once.
+describe("what is remembered between page loads", () => {
+  /** A parser that counts its calls and then does `then`. */
+  function counted(then: (text: string) => Block[]) {
+    const seen = { calls: 0 };
+    const read = (text: string): Block[] => {
+      seen.calls += 1;
+      return then(text);
+    };
+    return { seen, read };
+  }
+
+  test("a text read on one page load is not parsed again on the next", () => {
+    const { seen, read } = counted(parseReadme);
+    const reads = createTextReads(GENEROUS, read);
+    const first = reads.forPage(LATER)("# Once\n\nand *only* once");
+    const second = reads.forPage(LATER)("# Once\n\nand *only* once");
+    expect(second).toEqual(first);
+    expect(first).toEqual(parseReadme("# Once\n\nand *only* once"));
+    expect(seen.calls).toBe(1);
+  });
+
+  // Every page load that asks gets the one kept copy, so a page that changed it would change it for all.
+  test("what a read gave cannot be changed by the page that gets it", () => {
+    const reads = createTextReads(GENEROUS);
+    const text = "- a [link](https://a.example) in a *list*\n\n| a |\n| - |\n| 1 |";
+    const blocks = reads.forPage(LATER)(text);
+    const all = (value: unknown): object[] =>
+      typeof value !== "object" || value === null ? [] : [value, ...Object.values(value).flatMap(all)];
+    expect(all(blocks).length).toBeGreaterThan(10);
+    expect(all(blocks).filter((node) => !Object.isFrozen(node))).toEqual([]);
+    expect(() => (blocks as Block[]).push({ kind: "rule" })).toThrow(TypeError);
+    expect(reads.forPage(LATER)(text)).toEqual(parseReadme(text));
+  });
+
+  // SvelteKit writes a page's data with devalue, which writes a value it meets twice once and then refers to it
+  // (tests/integration/web/public never_more_cards_than_the_owner_page_reads went red on that). Two cards with the
+  // same words must not change the shape of the page's data, so each further use on one page is a copy.
+  test("one text twice on a page is parsed once and shares nothing between its two cards", () => {
+    const { seen, read } = counted(parseReadme);
+    const page = createTextReads(GENEROUS, read).forPage(LATER);
+    const text = "- the *same* [words](https://a.example)";
+    const [first, second, third] = [page(text), page(text), page(text)];
+    expect(seen.calls).toBe(1);
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+    const all = (value: unknown): object[] =>
+      typeof value !== "object" || value === null ? [] : [value, ...Object.values(value).flatMap(all)];
+    const met = new Set([...all(first), ...all(second), ...all(third)]);
+    expect(met.size).toBe(3 * all(first).length);
+  });
+
+  test("a text stopped at a card's limit is not parsed again on the next page load, and stays plain", () => {
+    const { seen, read } = counted(forever);
+    const reads = createTextReads({ textMs: 20, pageMs: 100, ...KEPT }, read);
+    expect(reads.forPage(LATER)("stalls")).toEqual(plainText("stalls"));
+    const again = timed(() => reads.forPage(LATER)("stalls"));
+    expect(again.out).toEqual(plainText("stalls"));
+    expect(seen.calls).toBe(1);
+    expect(again.ms).toBeLessThan(20);
+  });
+
+  // The page's real limits and the real parser: the second load of each stalling text runs no parse at all.
+  test.each(["_*", "+ ", "1. "])("the real parser stalls on %j repeated once for the process", (shape) => {
+    const text = repeated(shape);
+    const { seen, read } = counted(parseReadme);
+    const reads = createTextReads(TEXT_READ_LIMITS, read);
+    expect(reads.forPage(LATER)(text)).toEqual(plainText(text));
+    const again = timed(() => reads.forPage(LATER)(text));
+    expect(again.out).toEqual(plainText(text));
+    expect(seen.calls).toBe(1);
+    expect(again.ms).toBeLessThan(TEXT_READ_LIMITS.textMs / 2);
+  });
+
+  // A read cut short by what was left of the page's limit, or by the request's deadline, says nothing about the
+  // text: the next page load reads it, in full.
+  test("a text cut short by the page's limit or the request's deadline is read on the next load", () => {
+    const slow = (text: string): Block[] => {
+      const until = performance.now() + 30;
+      while (performance.now() < until) {
+        // Works for 30 ms, then ends.
+      }
+      return parseReadme(text);
+    };
+    const reads = createTextReads({ textMs: 1_000, pageMs: 45, ...KEPT }, slow);
+    const page = reads.forPage(LATER);
+    expect(page("**a**")).toEqual(parseReadme("**a**"));
+    expect(page("**b**")).toEqual(plainText("**b**"));
+    expect(reads.forPage(LATER)("**b**")).toEqual(parseReadme("**b**"));
+    expect(reads.forPage(performance.now() + 10)("**c**")).toEqual(plainText("**c**"));
+    expect(reads.forPage(LATER)("**c**")).toEqual(parseReadme("**c**"));
+  });
+
+  // Nothing is kept for ever: a busy moment can stop a text that is merely long, and a text a member deleted should
+  // leave the process's memory by itself.
+  test.each([
+    ["a stopped text", forever],
+    ["a read text", parseReadme],
+  ])("%s is read afresh once keptForMs has passed", (_name, parser) => {
+    let now = 1_000;
+    const { seen, read } = counted(parser);
+    const reads = createTextReads({ textMs: 20, pageMs: 100, keptNodes: 100_000, keptForMs: 500 }, read, () => now);
+    const first = reads.forPage(LATER)("some *text*");
+    now += 499;
+    expect(reads.forPage(LATER)("some *text*")).toEqual(first);
+    expect(seen.calls).toBe(1);
+    now += 1;
+    expect(reads.forPage(LATER)("some *text*")).toEqual(first);
+    expect(seen.calls).toBe(2);
+  });
+
+  // Each text below reads to 100 paragraphs of one run each, 200 nodes, so three fit in 800 and four do not.
+  test("at most keptNodes are kept, and the text read longest ago is dropped first", () => {
+    const { seen, read } = counted(parseReadme);
+    const reads = createTextReads({ ...GENEROUS, keptNodes: 800 }, read);
+    const page = reads.forPage(LATER);
+    const text = (name: string) => `${"word\n\n".repeat(99)}${name}`;
+    for (const name of ["one", "two", "three"]) page(text(name));
+    expect(seen.calls).toBe(3);
+    // "one" is read again, so "two" is now the oldest; a fourth text pushes "two" out and nothing else.
+    page(text("one"));
+    page(text("four"));
+    expect(seen.calls).toBe(4);
+    for (const name of ["one", "three", "four"]) page(text(name));
+    expect(seen.calls).toBe(4);
+    page(text("two"));
+    expect(seen.calls).toBe(5);
+  });
+
+  test("a result larger than keptNodes is given but not kept", () => {
+    const { seen, read } = counted(parseReadme);
+    const reads = createTextReads({ ...GENEROUS, keptNodes: 50 }, read);
+    const long = "word\n\n".repeat(60);
+    expect(reads.forPage(LATER)(long)).toEqual(parseReadme(long));
+    reads.forPage(LATER)(long);
+    expect(seen.calls).toBe(2);
+  });
+
+  test("texts that differ only past the reader's 20,000 characters are one text", () => {
+    const { seen, read } = counted(parseReadme);
+    const reads = createTextReads(GENEROUS, read);
+    const head = "a".repeat(20_000);
+    reads.forPage(LATER)(`${head}one`);
+    reads.forPage(LATER)(`${head}two`);
+    expect(seen.calls).toBe(1);
   });
 });
 
@@ -147,5 +299,16 @@ describe("the page's limits", () => {
   test("the page's limit holds two full reads, and no page load reads for more than 300 ms", () => {
     expect(TEXT_READ_LIMITS.pageMs).toBeGreaterThanOrEqual(2 * TEXT_READ_LIMITS.textMs);
     expect(TEXT_READ_LIMITS.pageMs).toBeLessThanOrEqual(300);
+  });
+
+  // The densest full card reads to about 15,000 nodes (20,000 characters of "*a* "), a dense list or table to about
+  // 3,300: the reader keeps a page of 50 dense full cards, and keeps a result between one minute and an hour.
+  test("what is kept holds a page of full cards, and is kept for minutes", () => {
+    const densest = parseReadme(repeated("*a* "));
+    expect(JSON.stringify(densest).split("{").length - 1).toBeLessThan(TEXT_READ_LIMITS.keptNodes / 10);
+    expect(TEXT_READ_LIMITS.keptNodes).toBeGreaterThanOrEqual(50 * 3_300);
+    expect(TEXT_READ_LIMITS.keptNodes).toBeLessThanOrEqual(400_000);
+    expect(TEXT_READ_LIMITS.keptForMs).toBeGreaterThanOrEqual(60_000);
+    expect(TEXT_READ_LIMITS.keptForMs).toBeLessThanOrEqual(3_600_000);
   });
 });
