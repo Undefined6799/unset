@@ -60,7 +60,8 @@
     "inline-code": "code",
     "code-block": "code-brackets",
     "undo": "undo",
-    "redo": "redo"
+    "redo": "redo",
+    "strikethrough": "strikethrough"
   },
   "icons": {
     "next": "cf13159505df944c66c9d36838508dcd58106fe0d776702aeaf08dd91553eb3f",
@@ -121,7 +122,8 @@
     "inline-code": "dfdd2ec8355b62482c7f220c914c93bc610ee235afc61f9a1d02c8b20fe685fa",
     "code-block": "8885bba2e2c636f17dc9483e6c6e00edd8f1fa8c688abfd31e6cb876a8dcc212",
     "undo": "b460b2f7faea4185b1e3f7497d5d71b992e276655a4a2076302c107067674f02",
-    "redo": "f8519fef188a8e5cbb0a62b8d992b55266673f824b952a732a5caee04daa4ea9"
+    "redo": "f8519fef188a8e5cbb0a62b8d992b55266673f824b952a732a5caee04daa4ea9",
+    "strikethrough": "21614ebf0359ad62c70d80e9c7f9782113292e5dc08a302dbdeb8bcf0296414b"
   },
   "drawings": {
     "next": [
@@ -1019,6 +1021,20 @@
         "strokeLinejoin": "round"
       }
     ],
+    "strikethrough": [
+      {
+        "d": "M3 12L21 12",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M16.2857 3L10.068 3C7.82129 3 6 4.82129 6 7.06797C6 8.81895 7.12044 10.3735 8.78157 10.9272L12 12M6 21H13.932C16.1787 21 18 19.1787 18 16.932C18 16.2409 17.8255 15.5804 17.512 15",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
     "grip": [
       {
         "d": "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
@@ -1060,7 +1076,7 @@
   },
   "extensionProvenance": {
     "path": "approved-extensions.json",
-    "sha256": "1550bc39c49e9e5d66bbaea0474c3409e1944783acb4481b13f9a8d587c4593f",
+    "sha256": "ecafac5055f9d073a2bf1daab0f3a74f268551c1a1eb3b930d468e9bbdadd6b2",
     "designApproval": {
       "by": "Alex",
       "date": "2026-10-18",
