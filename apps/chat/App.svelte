@@ -19,6 +19,7 @@
 -->
 <script lang="ts">
 import { onMount } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 import { boot, bootDock, closeDock, dockLayout } from "./boot.ts";
 import Conversations, { type Dock } from "./Conversations.svelte";
 import type { ChatState, UnlockOutcome } from "./core/chat.ts";
@@ -146,7 +147,7 @@ const dock = isDock(window.location, window.parent !== window);
 /** Bumped when unset.sh asks the box to open a Message link's conversation: the list mounts again on the start route. */
 let opened = $state(0);
 /** What was typed and not sent, by conversation, kept across the list's remount (Conversations.svelte `unsent`). */
-const unsent = new Map<ConversationId, string>();
+const unsent = new SvelteMap<ConversationId, string>();
 let dockMode: DockMode = $state("list");
 /** What the list covers, to go back to when the icon is pressed again. */
 let covered: DockMode | null = null;

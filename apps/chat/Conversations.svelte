@@ -15,6 +15,7 @@
 -->
 <script lang="ts">
 import { onMount } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 import Conversation from "./Conversation.svelte";
 import {
   type ChatId,
@@ -42,7 +43,7 @@ let {
   names,
   me,
   dock,
-  unsent = new Map(),
+  unsent = new SvelteMap(),
 }: {
   conversations: Conversations;
   names: (chatId: string) => Promise<string | null>;
@@ -51,9 +52,9 @@ let {
   /**
    * What was typed and not sent, by conversation, kept by the page above this list (App.svelte), which remounts the
    * list for a Message link; a conversation is unmounted when the box is minimised or the list covers it (Codex review
-   * on e4620a92 and dedb86d1). Only in this page's memory. Read when a conversation opens, so it needs no reactivity.
+   * on e4620a92 and dedb86d1). Only in this page's memory. Conversation.svelte keeps its own entry.
    */
-  unsent?: Map<ConversationId, string>;
+  unsent?: SvelteMap<ConversationId, string>;
 } = $props();
 
 let list: readonly Item[] = $state([]);
@@ -144,7 +145,7 @@ function leaveDraft() {
     unsent={composerOnOpen(open, unsent, carried).failed}
     onBack={dock === undefined ? () => ((open = null), (carried = null)) : undefined}
     controls={dock === undefined ? undefined : conversationControls}
-    onTyped={(id, text) => unsent.set(id, text)}
+    drafts={unsent}
   />
 {:else if draft !== null && dock?.mode !== "list"}
   <section class="flex flex-col gap-4" data-screen="new-conversation">

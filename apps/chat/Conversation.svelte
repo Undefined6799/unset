@@ -17,6 +17,7 @@
 -->
 <script lang="ts">
 import { type Snippet, tick } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 import ConversationMessage from "./ConversationMessage.svelte";
 import {
   actionsOf,
@@ -46,7 +47,7 @@ let {
   typed = "",
   unsent = false,
   controls,
-  onTyped,
+  drafts = new SvelteMap(),
 }: {
   conversations: Conversations;
   id: ConversationId;
@@ -57,21 +58,26 @@ let {
   unsent?: boolean;
   /** The chat box's own controls at the end of the top bar (DockControls.svelte). */
   controls?: Snippet;
-  /** Told what the field holds at each change, so a box that hides this conversation can open it with it again. */
-  onTyped?: (id: ConversationId, text: string) => void;
+  /**
+   * What is typed and not sent, by conversation, owned by the page (App.svelte), so it outlives this component: the
+   * chat box unmounts a conversation when it is minimised or its list covers it, and a send that finishes after that
+   * still clears what it sent (Codex review on e4620a92, dedb86d1, bbf29338). Only in this page's memory.
+   */
+  drafts?: SvelteMap<ConversationId, string>;
 } = $props();
 
 let view = $state<ConversationView | null>(null);
 let loaded = $state(false);
-// What the field opens with, once, when the conversation opens; the field is the member's from then on.
+// This conversation's own entry: `id` is fixed for the component's life (Conversations.svelte opens another by
+// remounting), so nothing typed here can land in another person's conversation. `typed` seeds it the first time.
 // svelte-ignore state_referenced_locally
-let text = $state(typed);
+const own = id;
+// svelte-ignore state_referenced_locally
+if (!drafts.has(own)) drafts.set(own, typed);
+const text = $derived(drafts.get(own) ?? "");
 let sending = $state(false);
 // svelte-ignore state_referenced_locally
 let failed = $state(unsent);
-// svelte-ignore state_referenced_locally
-const typedIn = id;
-$effect(() => onTyped?.(typedIn, text));
 const sends = $derived(view !== null && canSend(view.composer));
 
 // Only the messages scroll; the bar above and the composer below stay put (Alex 2026-11-23). The newest stays in view
@@ -121,7 +127,7 @@ async function send(event: SubmitEvent) {
   const sent = await conversations.send(id, draft, answering?.id);
   sending = false;
   failed = !sent;
-  text = draftAfterSend(draft, text, sent);
+  drafts.set(own, draftAfterSend(draft, drafts.get(own) ?? "", sent));
   if (sent && replyingTo === answering) replyingTo = null;
 }
 
@@ -280,7 +286,7 @@ async function accept() {
         autocomplete="off"
         disabled={!sends}
         aria-describedby={view.composer === "on" ? undefined : "composer-off"}
-        bind:value={text}
+        bind:value={() => text, (typedNow) => drafts.set(own, typedNow)}
       />
       <Button type="submit" disabled={!sends || sending}>Send</Button>
     </form>
