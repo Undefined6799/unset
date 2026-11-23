@@ -308,7 +308,8 @@ test("bare_addresses_are_links_and_a_www_name_opens_over_https", async ({ page }
 });
 
 // The page reads no footnotes and no line break inside a table cell (GFM cells hold one line), so the editor takes
-// neither: a pasted footnote is refused whole, and Shift+Enter in a cell does nothing. A pasted table is a table.
+// neither: a pasted footnote or a pasted table with a broken cell is refused whole, and Enter or Shift+Enter in a cell
+// adds no break. A pasted table is a table.
 test("a_pasted_table_is_a_table_and_what_the_page_cannot_show_is_refused", async ({ page }) => {
   const word = `nofoot${Date.now()}`;
   const { editor } = await cardWithCaret(page, word);
@@ -319,13 +320,18 @@ test("a_pasted_table_is_a_table_and_what_the_page_cannot_show_is_refused", async
   await page.keyboard.press("End");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("z");
-  await expect(editor.locator("table td").first()).toHaveText("1z");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("w");
+  await expect(editor.locator("table td").first()).toHaveText("1zw");
   await expect(editor.locator("table br")).toHaveCount(0);
   await editor.getByText(`${word} start`).click();
   await page.keyboard.press("End");
   await paste(page, { "text/plain": "a[^1]\n\n[^1]: note" });
   await expect(editor.locator("[data-type^='footnote']")).toHaveCount(0);
   await expect(editor).not.toContainText("note");
+  await paste(page, { "text/html": "<table><tr><th>p</th></tr><tr><td>q<br>r</td></tr></table>" });
+  await expect(editor.locator("table")).toHaveCount(1);
+  await expect(editor.locator("table br")).toHaveCount(0);
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
   await giveBackWrites(page, 2);
