@@ -217,6 +217,29 @@ describe("compose.dev.source.yaml against compose.dev.yaml (P1.37y)", () => {
     expect(unlocked).toEqual([]);
   });
 
+  test("chat_network_members_hold_fixed_addresses", () => {
+    // A listener binds a fixed address on each chat network, and Docker hands a member with no fixed address one from
+    // the same subnet, so on staging web took the door's .19 on chat_count by starting first (Alex, 2026-11-23). Every
+    // member of a chat network with a fixed subnet holds its own fixed address there, none of them the subnet's gateway (its first host).
+    const source = parse(SOURCE);
+    const ipv4 = (address: string) => address.split(".").reduce((n, part) => n * 256 + Number(part), 0);
+    const problems: string[] = [];
+    for (const network of source.networks.filter((n) => CHAT_NETWORKS.has(n.name) && n.subnet !== null)) {
+      const [base, bits] = (network.subnet ?? "0.0.0.0/32").split("/");
+      const first = ipv4(base ?? "") + 1;
+      const last = ipv4(base ?? "") + 2 ** (32 - Number(bits)) - 2;
+      const held = new Set<string>();
+      for (const service of source.services.filter((s) => s.networks.includes(network.name))) {
+        const address = service.addresses.find(([name]) => name === network.name)?.[1];
+        const n = address === undefined ? Number.NaN : ipv4(address);
+        if (address === undefined || held.has(address) || !(n > first && n <= last))
+          problems.push(`${service.name} on ${network.name}`);
+        if (address !== undefined) held.add(address);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   test("source_file_names_its_step_and_record", () => {
     const header = read(SOURCE).split("\n").slice(0, 5).join("\n");
     expect(header).toContain("P1.37y");

@@ -1060,10 +1060,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     // PDS is known by the base lock's image and the edge by its Dockerfile (P1.35o, architecture 03:05Z F3).
     expect(pdsNeighbours(devInputs())).toEqual([]);
     const webOnEdge = (text: string) =>
-      text.replace(
-        "    networks: [db, app, web_egress, objects_web]\n",
-        "    networks: [db, app, web_egress, objects_web, edge]\n",
-      );
+      text.replace("      objects_web:\n    mem_limit: 1g\n", "      objects_web:\n      edge:\n    mem_limit: 1g\n");
     expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
@@ -1078,10 +1075,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect(inputs.compose.services.find((s) => s.name === "pds")?.build).not.toBeNull();
     expect(pdsNeighbours(inputs)).toEqual([]);
     const webOnEdge = (text: string) =>
-      text.replace(
-        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, chat_count, chat_admin]\n",
-        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, chat_count, chat_admin, edge]\n",
-      );
+      text.replace("        ipv4_address: 10.250.38.28\n", "        ipv4_address: 10.250.38.28\n      edge:\n");
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
     expect(pdsNeighbours(sourceInputs((text) => webOnEdge(renamed(text))))).toEqual([

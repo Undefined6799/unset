@@ -197,7 +197,9 @@ services:
       newt_edge:
         ipv4_address: 10.250.37.3
       chat_edge:
+        ipv4_address: 10.250.38.42
       chat_edge_synapse:
+        ipv4_address: 10.250.38.50
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 128
@@ -286,7 +288,17 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db, app, web_egress, pds_admin, objects_web, review_web, chat_count, chat_admin]
+    networks:
+      db:
+      app:
+      web_egress:
+      pds_admin:
+      objects_web:
+      review_web:
+      chat_count:
+        ipv4_address: 10.250.38.20
+      chat_admin:
+        ipv4_address: 10.250.38.28
     mem_limit: 1g
     cpus: 1
     pids_limit: 128
@@ -489,6 +501,7 @@ services:
       chat_mas:
         ipv4_address: 10.250.38.2
       chat_count:
+        ipv4_address: 10.250.38.21
       chat_edge_synapse:
         ipv4_address: 10.250.38.51
       chat_admin_synapse:
@@ -562,7 +575,9 @@ services:
       chat_admin:
         ipv4_address: 10.250.38.27
       chat_admin_mas:
+        ipv4_address: 10.250.38.10
       chat_admin_synapse:
+        ipv4_address: 10.250.38.34
     mem_limit: 128m
     cpus: 0.25
     pids_limit: 32
@@ -618,6 +633,7 @@ services:
       chat_count:
         ipv4_address: 10.250.38.19
       chat_admin:
+        ipv4_address: 10.250.38.29
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 64
