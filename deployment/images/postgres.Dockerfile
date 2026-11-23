@@ -19,6 +19,12 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND PostgreSQL"
 # base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
 # no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.
 RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*
+# Temporary (Alex, 2026-11-23 02:10Z, "Upgrade the four packages"; KRB5_UPGRADE in images.test.ts, expires
+# 2026-12-07): the base ships krb5 1.21.3-5+deb13u1, whose client libraries carry 14 HIGH CVEs (CVE-2026-71199,
+# CVE-2026-71200 and others; Trivy 0.76.1 on 2026-11-23) that Debian fixed in 1.21.3-5+deb13u2. No upstream
+# postgres:18-trixie index ships it yet (the newest, pushed 2026-11-20, still has deb13u1). Upgrade exactly these
+# four packages to exactly that version while apt is still here; remove this once the locked base ships deb13u2.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade libkrb5-3=1.21.3-5+deb13u2 libgssapi-krb5-2=1.21.3-5+deb13u2 libk5crypto3=1.21.3-5+deb13u2 libkrb5support0=1.21.3-5+deb13u2 && rm -rf /var/lib/apt/lists/*
 RUN rm -rf /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     /etc/ssl/certs/ce275665.0 \
   && apt-get purge --allow-remove-essential -y apt \
