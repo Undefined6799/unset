@@ -8,6 +8,7 @@
 // dynamically). Changes are reported once per animation frame, not after @milkdown/plugin-listener's 200 ms
 // debounce, so a save pressed right after typing never posts stale text; the caller also reads `markdown()` as the
 // form is sent.
+
 import {
   defaultValueCtx,
   Editor,
@@ -30,6 +31,7 @@ import { liftListItem, wrapInList } from "@milkdown/prose/schema-list";
 import { type Command, type EditorState, Plugin, Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, $remark, getMarkdown } from "@milkdown/utils";
+import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
@@ -192,6 +194,8 @@ export type MarkdownEditor = {
    * card's padding, or below the last line), then focuses the editor.
    */
   readonly focusAt: (x: number, y: number) => void;
+  /** Puts the caret at `place` in the words and focuses the editor; false when the editor has no such block. */
+  readonly focusAtPlace: (place: Place) => boolean;
   /** Types `text` at the caret, as the member's own keys would. */
   readonly type: (text: string) => void;
   readonly destroy: () => Promise<void>;
@@ -396,6 +400,71 @@ function caretAt(view: EditorView, x: number, y: number): Selection {
   return y < box.top ? Selection.atStart(doc) : Selection.atEnd(doc);
 }
 
+/** Where `place` is in the editor's words (counted as place.ts counts the page's), or null when they differ. */
+function caretAtPlace(doc: ProseNode, place: Place): Selection | null {
+  if (countWords(doc).chars !== place.total) return null;
+  const count = emptyCount();
+  let found: number | null = null;
+  doc.descendants((child, pos, parent) => {
+    if (found !== null) return false;
+    // Each text block starts another line of the words, as the page counts its list items and its blocks (place.ts),
+    // and so does a hard line break, as the page counts its <br>. A place at the start of an empty line is just before
+    // the break that ends it.
+    if (isHardBreak(child)) {
+      if (count.line && place.space && placeOf(count).chars === place.chars) found = pos;
+      else breakLine(count);
+      return false;
+    }
+    if (child.isTextblock) startLine(count);
+    if (!child.isText) return true;
+    found = placeInText(child.text ?? "", pos, count, place, parent?.type.spec.code === true);
+    return false;
+  });
+  return found === null ? null : TextSelection.near(doc.resolve(found), place.space ? 1 : -1);
+}
+
+const isHardBreak = (node: ProseNode) => node.type.name === "hardbreak";
+
+/**
+ * Where `place` falls in one piece of a block's words starting at `pos`, or null when it is further on. By code point,
+ * as the page counts (place.ts): an emoji is one character but two positions. After a space or at a line's start the
+ * place is before the next character counted; otherwise it is after the last one, or before the first when there is
+ * none. In a code block (`literal`) each white space character counts.
+ */
+function placeInText(text: string, pos: number, count: Count, place: Place, literal: boolean): number | null {
+  let offset = 0;
+  for (const ch of text) {
+    const before = placeOf(count);
+    const pending = count.pending;
+    countChars(ch, count, literal);
+    const after = placeOf(count);
+    const moved = after.chars > before.chars;
+    // Before the words' first character (or a code block's first white space, which counts), in whichever block they
+    // start: not at the document's start, which can be an empty block before them.
+    if (place.chars === 0 && before.chars === 0 && pending === 0 && (moved || count.pending > 0)) return pos + offset;
+    if (place.space && moved && before.space && before.chars === place.chars) return pos + offset;
+    if (!place.space && moved && after.chars === place.chars) return pos + offset + ch.length;
+    offset += ch.length;
+  }
+  return null;
+}
+
+/** The characters of a node's words (the whole document's, for a place), counted as the page counts them (place.ts). */
+function countWords(node: ProseNode): Count {
+  const count = emptyCount();
+  const visit = (child: ProseNode, literal: boolean) => {
+    if (isHardBreak(child)) breakLine(count);
+    else if (child.isTextblock) startLine(count);
+    if (child.isText) countChars(child.text ?? "", count, literal);
+    else
+      child.forEach((inner) => {
+        visit(inner, child.type.spec.code === true);
+      });
+  };
+  visit(node, false);
+  return count;
+}
+
 export async function mountMarkdownEditor(root: HTMLElement, options: MountOptions): Promise<MarkdownEditor> {
   let frame = 0;
   let flush: () => void = () => undefined;
@@ -556,6 +625,15 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         const view = ctx.get(editorViewCtx);
         view.dispatch(view.state.tr.setSelection(caretAt(view, x, y)));
         view.focus();
+      }),
+    focusAtPlace: (place) =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const caret = caretAtPlace(view.state.doc, place);
+        if (caret === null) return false;
+        view.dispatch(view.state.tr.setSelection(caret));
+        view.focus();
+        return true;
       }),
     type: (text) =>
       editor.action((ctx) => {
