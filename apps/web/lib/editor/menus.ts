@@ -18,8 +18,10 @@ import {
   headingSchema,
   hrSchema,
   linkSchema,
+  listItemSchema,
   orderedListSchema,
   paragraphSchema,
+  selectTextNearPosCommand,
   setBlockTypeCommand,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
@@ -28,7 +30,7 @@ import {
   updateLinkCommand,
   wrapInBlockTypeCommand,
 } from "@milkdown/preset-commonmark";
-import { toggleStrikethroughCommand } from "@milkdown/preset-gfm";
+import { createTable, toggleStrikethroughCommand } from "@milkdown/preset-gfm";
 import { findParent, posToDOMRect } from "@milkdown/prose";
 import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
@@ -38,22 +40,9 @@ import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view
 import { $prose } from "@milkdown/utils";
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 
-/** The block menu's items, in Crepe's order, less what the page cannot show (tables, tasks, images, math). */
-export const BLOCK_ITEMS = [
-  "text",
-  "heading1",
-  "heading2",
-  "heading3",
-  "heading4",
-  "heading5",
-  "heading6",
-  "quote",
-  "divider",
-  "bullets",
-  "numbers",
-  "codeBlock",
-] as const;
-export type BlockItem = (typeof BLOCK_ITEMS)[number];
+import { acrossGroups, BLOCK_ITEMS, type BlockItem } from "./block-items.ts";
+
+export type { BlockItem };
 export const BAR_ITEMS = ["strong", "emphasis", "strike", "code", "link"] as const;
 export type BarItem = (typeof BAR_ITEMS)[number];
 
@@ -95,6 +84,8 @@ export type MenusOptions = {
 export type Menus = {
   /** Runs the block menu's item: the "/" and what follows it go, and the block becomes the item. */
   readonly choose: (item: BlockItem) => void;
+  /** Makes `item` the active one, as a press on its group's tab does; the menu stays open. */
+  readonly point: (item: BlockItem) => void;
   readonly format: (item: BarItem) => void;
   /** The link editor's address: set on the words when the page would show it as a link, else refused. */
   readonly confirmLink: (address: string) => void;
@@ -138,8 +129,18 @@ function blockCommand(ctx: Ctx, item: BlockItem): () => void {
       return wrap(bulletListSchema.type(ctx));
     case "numbers":
       return wrap(orderedListSchema.type(ctx));
+    case "tasks":
+      return () =>
+        commands.call(wrapInBlockTypeCommand.key, { nodeType: listItemSchema.type(ctx), attrs: { checked: false } });
     case "codeBlock":
       return set(codeBlockSchema.type(ctx));
+    case "table":
+      // Three rows of three, the caret put back in the first cell (Crepe's table item).
+      return () => {
+        const { from } = ctx.get(editorViewCtx).state.selection;
+        commands.call(addBlockTypeCommand.key, { nodeType: createTable(ctx, 3, 3) });
+        commands.call(selectTextNearPosCommand.key, { pos: from });
+      };
   }
 }
 
@@ -308,6 +309,8 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     if (event.key === "Escape") close();
     else if (event.key === "ArrowDown") index = Math.min(index + 1, items.length - 1);
     else if (event.key === "ArrowUp") index = Math.max(index - 1, 0);
+    else if (event.key === "ArrowRight") index = acrossGroups(items, index, 1);
+    else if (event.key === "ArrowLeft") index = acrossGroups(items, index, -1);
     else if (event.key === "Enter") choose(items[index] as BlockItem);
     else return false;
     report();
@@ -490,6 +493,13 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
 
   return {
     choose,
+    point: (item) => {
+      const at = items.indexOf(item);
+      if (ctx === undefined || at === -1) return;
+      index = at;
+      report();
+      refresh(ctx.get(editorViewCtx));
+    },
     format: (item) => {
       if (ctx === undefined) return;
       const view = ctx.get(editorViewCtx);
