@@ -30,7 +30,7 @@ export type Inline =
   | { readonly kind: "link"; readonly href: SafeHref; readonly children: readonly Inline[] };
 
 export type Block =
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
+  | { readonly kind: "heading"; readonly level: HeadingLevel; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
   | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
@@ -45,6 +45,9 @@ export type TableBlock = {
   readonly head: readonly (readonly Inline[])[];
   readonly rows: readonly (readonly (readonly Inline[])[])[];
 };
+
+/** CommonMark's six ATX heading levels, one per mark. */
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type ListBlock = {
   readonly kind: "list";
@@ -549,7 +552,7 @@ function takeBlock(lines: readonly string[], i: number, budget: Budget): { block
   if (fence !== undefined) return takeFence(lines, i, fence);
   const heading = HEADING_START.exec(line);
   if (heading !== null) {
-    const level = Math.min((heading[1] ?? "#").length, 3) as 1 | 2 | 3;
+    const level = (heading[1] ?? "#").length as HeadingLevel;
     const text = headingText(line.slice(heading[0].length));
     return { block: { kind: "heading", level, children: text === "" ? [] : parseInline(text) }, next: i + 1 };
   }

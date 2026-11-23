@@ -133,36 +133,53 @@ export function parseSvg(name: string, svg: string): IconElement[] {
 }
 
 /**
- * ADR 0087: the one icon from a second set. Lucide 1.72.0 (ISC, icons/LICENSE-lucide.txt) `icons/grip-vertical.svg`,
- * copied byte for byte from https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/grip-vertical.svg as
- * icons/lucide/grip.svg.txt: the six-dot drag handle Crepe 7.23.0 draws, which Iconoir 7.12.1 lacks. No other file
- * may sit in icons/lucide/ and no Lucide package is installed.
+ * The icons from a second set, Lucide 1.72.0 (ISC, icons/LICENSE-lucide.txt), each copied byte for byte from
+ * https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/<lucideName>.svg to icons/lucide/<name>.svg.txt.
+ * ADR 0087: `grip-vertical`, the six-dot drag handle Crepe 7.23.0 draws. ADR 0109: `heading-1` to `heading-6`, the
+ * block menu's numbered headings Crepe draws. Iconoir 7.12.1 has neither. No other file may sit in icons/lucide/ and
+ * no Lucide package is installed.
  */
 export const LUCIDE = {
   version: "1.72.0",
   icons: {
     grip: { lucideName: "grip-vertical", sha256: "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5" },
+    h1: { lucideName: "heading-1", sha256: "d5920a0a7182751a071374f9c4dad0519afe4ca509da1e893cb09deba52d5c8f" },
+    h2: { lucideName: "heading-2", sha256: "a1fc4240bad7d883433927faca643b346e148ef721a571f95043be085555ae05" },
+    h3: { lucideName: "heading-3", sha256: "32d24e7734fc9bdba2c64f42c34761781249599364417c14b5cd06fa19c87551" },
+    h4: { lucideName: "heading-4", sha256: "33141a2aa843631f9a850cf867aa44c94e6289ba7438870bd661e60aebe03d79" },
+    h5: { lucideName: "heading-5", sha256: "f2e3885ab0c15dd3f037c047fa8b7229d316b920849cd77e275b96702c0cd994" },
+    h6: { lucideName: "heading-6", sha256: "cbad3fe7096b0431777ae07ff87fd61ac952aaa53f3ce626c6d46dcfc70f757e" },
   },
 } as const;
 const LUCIDE_DIR = "icons/lucide";
 const LUCIDE_ROOT =
   '<svg\n  xmlns="http://www.w3.org/2000/svg"\n  width="24"\n  height="24"\n  viewBox="0 0 24 24"\n  fill="none"\n' +
   '  stroke="currentColor"\n  stroke-width="2"\n  stroke-linecap="round"\n  stroke-linejoin="round"\n>\n';
-const LUCIDE_DOT = /^ {2}<circle cx="(\d{1,2})" cy="(\d{1,2})" r="1" \/>$/;
+const LUCIDE_CIRCLE = /^ {2}<circle cx="(\d{1,2})" cy="(\d{1,2})" r="([12])" \/>$/;
+/** A path with path data only: commands, digits, signs, dots, commas and spaces; no other attribute. */
+const LUCIDE_PATH = /^ {2}<path d="([MmLlHhVvCcSsQqTtAaZz\d .,-]{1,512})" \/>$/;
+
+/** One Lucide line as an Iconoir-style path: a circle becomes the two arcs that draw it. */
+function lucideLine(line: string): string | null {
+  const path = LUCIDE_PATH.exec(line);
+  if (path !== null) return path[1] ?? null;
+  const circle = LUCIDE_CIRCLE.exec(line);
+  if (circle === null) return null;
+  const [cx, cy, r] = [Number(circle[1]), Number(circle[2]), Number(circle[3])];
+  return `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 -${2 * r} 0`;
+}
 
 /**
- * A Lucide file of radius-1 circles as Iconoir-style paths: each circle becomes the two arcs that draw it, with
- * Lucide's colour, caps and joins; its stroke width 2 is left out so the Icon's 1.5 applies. Anything else is refused.
+ * A Lucide file of paths and radius-1 or -2 circles as Iconoir-style paths, with Lucide's colour, caps and joins; its
+ * stroke width 2 is left out so the Icon's 1.5 applies. Anything else is refused.
  */
 export function parseLucide(name: string, svg: string): IconElement[] {
-  const refuse = () => new IconsError("icons.drawing_mismatch", `${name}.svg is not a plain Lucide circle file`);
+  const refuse = () => new IconsError("icons.drawing_mismatch", `${name}.svg is not a plain Lucide path file`);
   if (!svg.startsWith(LUCIDE_ROOT) || !svg.endsWith("\n</svg>\n")) throw refuse();
   const lines = svg.slice(LUCIDE_ROOT.length, -"\n</svg>\n".length).split("\n");
   return lines.map((line) => {
-    const m = LUCIDE_DOT.exec(line);
-    if (m === null) throw refuse();
-    const [cx, cy] = [Number(m[1]), Number(m[2])];
-    const d = `M${cx - 1} ${cy}a1 1 0 1 0 2 0a1 1 0 1 0 -2 0`;
+    const d = lucideLine(line);
+    if (d === null) throw refuse();
     return ["path", { d, stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }];
   });
 }
@@ -212,7 +229,7 @@ function checkSource(io: IconsIo): string {
 const EXTENSION = "approved-extensions.json";
 // P2.24f: sha256 of the exact bytes of shared/ui/approved-extensions.json that Alex approved (ADR 0027 / Task 3). Any
 // byte change to that file, prose and key order included, needs a reviewed bump of this hash in the same PR.
-export const APPROVED_EXTENSION_SHA256 = "ecafac5055f9d073a2bf1daab0f3a74f268551c1a1eb3b930d468e9bbdadd6b2";
+export const APPROVED_EXTENSION_SHA256 = "d49c16d9750faf11bb088e85c69943da5947eb6917c6a51d6718af4f0099a215";
 
 type RegisteredIcon = { iconoirName: string; sourceSha256: string; drawings: IconElement[] };
 type Registration = {
