@@ -331,6 +331,48 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// CI on #1999 at c2bd3bb: a drag from the dots moved nothing. plugin-block 7.23.0 shows the handle at the block under
+// the pointer on its first move past a 200 ms throttle (lib/index.js, mousemoveCallback), pressed or not, so a pointer
+// held on the dots and then moved straight onto other words took the handle to them before Chromium began the drag,
+// which then had nothing under the press to drag (no dragstart fired; seen with the CPU slowed 6x). Pressed, the dots
+// stay with their block until they are let go.
+test("the_dots_stay_with_their_block_while_pressed_so_a_quick_drag_lands", async ({ page }) => {
+  const watched = watch(page);
+  const word = `held${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
+  const lines = editor.locator("p");
+  const handle = card.locator("[data-block-handle]");
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  const last = await lines.last().boundingBox();
+  const first = await lines.first().boundingBox();
+  if (last === null || first === null) throw new Error("no lines");
+  const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+  const handleMiddle = async () => {
+    const at = await handle.boundingBox();
+    return at === null ? Number.POSITIVE_INFINITY : middle(at);
+  };
+  await lines.last().hover();
+  await expect.poll(async () => Math.abs((await handleMiddle()) - middle(last))).toBeLessThan(8);
+  const start = await grip.boundingBox();
+  if (start === null) throw new Error("no grip");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  // Held longer than plugin-block's throttle, then moved in one step onto the first line's words.
+  await page.waitForTimeout(250);
+  await page.mouse.move(first.x + 4, first.y + 2);
+  // Two frames, for the handle to be placed wherever plugin-block would show it (floating-ui places it on a promise).
+  await page.evaluate(() => {
+    const frame = (globalThis as unknown as { requestAnimationFrame: (run: () => void) => number })
+      .requestAnimationFrame;
+    return new Promise((done) => frame(() => frame(() => done(null))));
+  });
+  expect(Math.abs((await handleMiddle()) - middle(last))).toBeLessThan(8);
+  await page.mouse.up();
+  await expect(lines).toHaveText(["third line", `${word} one`, "second line"]);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 // Codex on #1965: the dots of a quote or a list change the whole block, its container too. Text takes a quote's
 // paragraphs out of it, and a list turned into a quote is a quote of its items' words.
 test("the_dots_change_a_quote_or_a_list_as_a_whole", async ({ page }) => {
