@@ -53,7 +53,7 @@ const HEADING_LOOK = [
         type="checkbox"
         class="me-1.5 size-3.5 align-middle accent-primary"
         checked={entry.task === "done"}
-        aria-label={plainText(entry.text).trim()}
+        aria-label={plainText(entry.text).trim() || undefined}
         disabled
       />{/if}{@render inline(entry.text)}{#each entry.lists as sub, k (k)}{@render list(sub)}{/each}</li
   >
