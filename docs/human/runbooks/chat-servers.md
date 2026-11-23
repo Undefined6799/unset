@@ -34,23 +34,25 @@ Synapse runs as `991` (our image's `USER`, `deployment/images/synapse.Dockerfile
 
 ## Make the files
 
-Run in `unset-dev-secrets/` under `umask 077`. No command prints a value.
+Run in `unset-dev-secrets/` under `umask 077`. No command prints a value. Each random value is written with no
+trailing newline (`tr -d '\n'`, as in `dev-stack-secrets.md`): MAS refuses an `encryption_file` that holds one
+(staging, 2026-11-23).
 
 ```sh
 umask 077
-openssl rand -hex 32 > pg_synapse_password
-openssl rand -hex 32 > pg_mas_password
+openssl rand -hex 32 | tr -d '\n' > pg_synapse_password
+openssl rand -hex 32 | tr -d '\n' > pg_mas_password
 cp pg_mas_password mas_pg_password
 # libpq ignores a passfile that its group or others can read (PostgreSQL 18 libpq docs, "The Password File").
 printf 'postgres:5432:synapse:synapse:%s\n' "$(cat pg_synapse_password)" > synapse_pgpass
 docker run --rm --network none --entrypoint /opt/synapse/bin/generate_signing_key <the locked Synapse image> > synapse_signing_key
-openssl rand -hex 32 > synapse_macaroon_secret_key
-openssl rand -hex 32 > synapse_form_secret
-openssl rand -hex 32 > synapse_mas_secret
+openssl rand -hex 32 | tr -d '\n' > synapse_macaroon_secret_key
+openssl rand -hex 32 | tr -d '\n' > synapse_form_secret
+openssl rand -hex 32 | tr -d '\n' > synapse_mas_secret
 cp synapse_mas_secret mas_synapse_secret
-openssl rand -hex 32 > mas_encryption
+openssl rand -hex 32 | tr -d '\n' > mas_encryption
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out mas_signing_key
-openssl rand -hex 32 > mas_chat_admin_client_secret
+openssl rand -hex 32 | tr -d '\n' > mas_chat_admin_client_secret
 chown 999:999 pg_synapse_password pg_mas_password
 chown 991:991 synapse_pgpass synapse_signing_key synapse_macaroon_secret_key synapse_form_secret synapse_mas_secret
 chown 65532:65532 mas_synapse_secret mas_pg_password mas_encryption mas_signing_key mas_chat_admin_client_secret
@@ -66,7 +68,7 @@ public half goes into `chat_admin_keys` here):
 ```sh
 umask 077
 cp mas_chat_admin_client_secret chat_admin_client_secret
-openssl rand -base64 32 > pg_chat_auth_password
+openssl rand -base64 32 | tr -d '\n' > pg_chat_auth_password
 printf '{"active":"k1","keys":{"k1":"%s"}}' "$(openssl rand -base64 32)" > chat_auth_seal_keyring
 node -e 'const c = require("node:crypto"), fs = require("node:fs");
   const door = c.generateKeyPairSync("ed25519");
