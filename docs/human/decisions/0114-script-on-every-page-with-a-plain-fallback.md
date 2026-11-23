@@ -56,6 +56,19 @@ What it has protected. Member-written content reaches other people's browsers on
 stand there today: the content is never markup (a typed block tree drawn as text nodes; no `{@html}` anywhere, held
 by `scripts/guards/inner-html.ts`; links through `safeHref`), and the page could not run a script if that failed.
 
+Why it was recorded as a control. Plan §5.4: "Review 08 argued for serving the profile on the handle host to
+separate user content from editor cookies"; the plan kept the profile on the app's origin and answered with three
+reasons, the first being that the page runs no script under a strict CSP. ADR 0054 decision 4 states no reason of
+its own: it loosened the app group's policy for SvelteKit and listed the script-free groups under what holds. The
+concern was never our own script or the library's. It was a member's content running as script on the origin that
+holds sessions (Alex, 04:00Z: no concern "unless people could implement their own script").
+
+Why it no longer outweighs its cost. The second of the plan's three reasons is that "the app already shows user
+content elsewhere (directory, timeline)", on pages that run script. The script policy was always going to be the
+defence there, and it is the defence on the owner's page today: it refuses inline script and every file but ours,
+so markup that slipped through a rendering bug still could not run. The script-free rule added a second backstop on
+some pages, at the price above, and it could never cover the pages where members will spend their time.
+
 ## Decision
 
 1. **Our own script may run on any page of unset.sh**, the public profile, home and the legal pages included. No
