@@ -34,9 +34,7 @@ import {
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
-import { TEXT_READ_LIMITS } from "../../lib/server/limits.ts";
 import { ALLOW_PATH } from "../../lib/server/pds-failure.ts";
-import { pageTextReader } from "../../lib/server/text-reader.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
@@ -118,7 +116,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const readText = pageTextReader(TEXT_READ_LIMITS, locals.deadlineAt);
+  const readText = services().textReads.forPage(locals.deadlineAt);
   const cards = own.kind === "ok" ? cardViews(own.cards, readText, own.versions) : [];
   return {
     shell,

@@ -87,6 +87,10 @@ export const REVIEW_LANES = 2;
  * Reading a member's Markdown on the server, inside the page load (P1.21k; text-reader.ts has the measurements): at
  * most 150 ms for one card's text and 300 ms for all of a page's, past which a card is shown as plain text. A full
  * card of 20,000 characters reads in about 15 ms as prose and 35 to 60 ms as a dense list or table, so a normal page
- * reaches neither; text written to stall the parser costs the process no more than the page limit for each page load.
+ * reaches neither. What a read gave is kept for ten minutes, so a text is parsed once in that time however often its
+ * page is loaded: at most 200,000 nodes of results, at 100 to 250 bytes a node about 50 MB, which is 60 full cards of
+ * dense lists or tables and thousands of ordinary ones. A text stopped at its 150 ms is kept as stopped the same ten
+ * minutes, so text written to stall the parser costs the process 150 ms once in ten minutes, not on every page load,
+ * and a long text stopped in a busy moment comes back by itself.
  */
-export const TEXT_READ_LIMITS: TextReadLimits = { textMs: 150, pageMs: 300 };
+export const TEXT_READ_LIMITS: TextReadLimits = { textMs: 150, pageMs: 300, keptNodes: 200_000, keptForMs: 600_000 };

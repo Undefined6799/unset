@@ -26,9 +26,7 @@ import {
   type Viewer,
 } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
-import { TEXT_READ_LIMITS } from "../../lib/server/limits.ts";
 import { config } from "../../lib/server/runtime.ts";
-import { pageTextReader } from "../../lib/server/text-reader.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
 
 /** A visitor's copy may be kept a minute (book P3.12 "Caching"), so a hidden account leaves caches within it. */
@@ -86,7 +84,7 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
       : shownCards(
           cardViews(
             pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX),
-            pageTextReader(TEXT_READ_LIMITS, locals.deadlineAt),
+            services().textReads.forPage(locals.deadlineAt),
           ),
         );
   return {

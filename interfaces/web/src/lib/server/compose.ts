@@ -79,11 +79,12 @@ import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
 import { sweepOrphanImages } from "./image-orphans.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
 import { type AskWindow, createAskWindow, createPendingSends, type PendingSends } from "./invite-requests.ts";
-import { policiesFor } from "./limits.ts";
+import { policiesFor, TEXT_READ_LIMITS } from "./limits.ts";
 import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
 import { createSignInLock } from "./sign-in-lock.ts";
 import { startSweeps } from "./sweeps.ts";
+import { createTextReads, type TextReads } from "./text-reader.ts";
 
 /** How often idle rate-limit buckets are dropped. */
 const SWEEP_MS = 10_000;
@@ -112,6 +113,8 @@ export type Services = {
   readonly pool: Pool;
   readonly sessions: SessionStore;
   readonly limiter: RateLimiter;
+  /** The reader of Text cards and what it remembers between page loads (text-reader.ts). */
+  readonly textReads: TextReads;
   readonly health: ReturnType<typeof createHealth>;
   readonly oauth: OAuthServices;
   /**
@@ -452,6 +455,7 @@ async function build(): Promise<Services> {
     pool,
     sessions,
     limiter,
+    textReads: createTextReads(TEXT_READ_LIMITS),
     health,
     oauth,
     issuerOf,

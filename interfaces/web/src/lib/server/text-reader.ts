@@ -15,14 +15,27 @@
 //
 // A card stopped there is shown as plain text: every character escaped, nothing formatted. One page's cards share one
 // budget, and no parse starts past the request's own deadline (rule RE-1).
+//
+// What a read gave is remembered for the process (review of #2013): without that a page of two stalling cards cost
+// its whole budget on every load, and one address may load a page five times a second (limits.ts `default`). A text
+// is now parsed once in `keptForMs`, whoever asks and however often, and a stalling one costs its limit once in that
+// time. Nothing is kept longer, so a text a member changed or deleted leaves this memory by itself.
+import { createHash } from "node:crypto";
 import { createContext, Script } from "node:vm";
-import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
+import { type Block, MAX_CHARS, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
 
 /**
- * How long reading Markdown may hold the process (limits.ts TEXT_READ_LIMITS): `textMs` for one card's text, `pageMs`
- * for all of one page's.
+ * How long reading Markdown may hold the process, and how much of it is remembered (limits.ts TEXT_READ_LIMITS).
+ * `textMs` is for one card's text and `pageMs` for all of one page's. `keptNodes` is the size of what is kept between
+ * page loads, counted in the nodes of the results (a paragraph, a run of text, a link: 100 to 250 bytes each).
+ * `keptForMs` is how long a result is kept, a stop at `textMs` included, before the text is read afresh.
  */
-export type TextReadLimits = { readonly textMs: number; readonly pageMs: number };
+export type TextReadLimits = {
+  readonly textMs: number;
+  readonly pageMs: number;
+  readonly keptNodes: number;
+  readonly keptForMs: number;
+};
 
 // The task runs as a call from a script in a context of its own, because the timeout belongs to a script's run; the
 // task itself is this realm's function, so what it returns are ordinary objects.
@@ -46,22 +59,104 @@ export function within<T>(ms: number, task: () => T): { readonly value: T } | { 
   }
 }
 
+/** What reading one text gave, kept until `until`: its blocks, or null for a stop at a card's whole limit. */
+type Kept = { readonly blocks: readonly Block[] | null; readonly nodes: number; readonly until: number };
+
+/** What every kept text weighs besides its result: its key and its place in the map. */
+const ENTRY_NODES = 40;
+
+/** The objects in a read result. */
+function nodesIn(value: unknown): number {
+  if (typeof value !== "object" || value === null) return 0;
+  let nodes = Array.isArray(value) ? 0 : 1;
+  for (const inner of Object.values(value)) nodes += nodesIn(inner);
+  return nodes;
+}
+
+/** Freezes a read result all the way down: every page load that asks gets this one copy, so none may change it. */
+function frozen<T>(value: T): T {
+  if (typeof value !== "object" || value === null) return value;
+  for (const inner of Object.values(value)) frozen(inner);
+  return Object.freeze(value);
+}
+
+/** One text's name in what is kept: the parser reads no further than MAX_CHARS, so neither does the name. */
+const keyOf = (text: string): string => createHash("sha256").update(text.slice(0, MAX_CHARS)).digest("base64url");
+
+/** The process's reader of Text cards: `forPage` gives one page load its reader. */
+export type TextReads = { readonly forPage: (deadlineAt: number) => (text: string) => readonly Block[] };
+
 /**
- * One page's reader: each call reads a card's text as blocks within what is left of the limits and of the request
- * (`deadlineAt`, on the performance.now() clock), or gives it as plain text. `read` is the parser; tests pass their own.
+ * The reader a process keeps (compose.ts builds the one). `forPage` gives a page load its reader: each call reads a
+ * card's text as blocks, from what is kept or by parsing within what is left of the limits and of the request
+ * (`deadlineAt`, on `now`'s clock), or gives it as plain text. `read` is the parser and `now` the clock, in
+ * milliseconds; tests pass their own.
  */
-export function pageTextReader(
+export function createTextReads(
   limits: TextReadLimits,
-  deadlineAt: number,
   read: (text: string) => Block[] = parseReadme,
-): (text: string) => Block[] {
-  let left = limits.pageMs;
-  return (text) => {
-    const started = performance.now();
-    const ms = Math.floor(Math.min(limits.textMs, left, deadlineAt - started));
-    if (ms < 1) return plainText(text);
-    const outcome = within(ms, () => read(text));
-    left -= performance.now() - started;
-    return "value" in outcome ? outcome.value : plainText(text);
+  now: () => number = () => performance.now(),
+): TextReads {
+  // In the order they were last read, oldest first (a Map keeps insertion order).
+  const kept = new Map<string, Kept>();
+  let nodes = 0;
+  const forget = (key: string): void => {
+    nodes -= kept.get(key)?.nodes ?? 0;
+    kept.delete(key);
+  };
+  const keep = (key: string, entry: Kept): void => {
+    forget(key);
+    kept.set(key, entry);
+    nodes += entry.nodes;
+    for (const oldest of kept.keys()) {
+      if (nodes <= limits.keptNodes) break;
+      forget(oldest);
+    }
+  };
+  const recall = (key: string): Kept | undefined => {
+    const entry = kept.get(key);
+    if (entry === undefined) return undefined;
+    if (entry.until <= now()) {
+      forget(key);
+      return undefined;
+    }
+    // Read just now, so the last to be dropped.
+    kept.delete(key);
+    kept.set(key, entry);
+    return entry;
+  };
+
+  return {
+    forPage(deadlineAt) {
+      let left = limits.pageMs;
+      // A page that holds one text twice gets a copy of its own for each further use: SvelteKit writes a load's
+      // result into the page with devalue, which writes a value met twice once and then refers to it, and a page's
+      // data should not take another shape because two of its cards hold the same words.
+      const given = new Set<string>();
+      const once = (key: string, blocks: readonly Block[]): readonly Block[] => {
+        if (given.has(key)) return structuredClone(blocks);
+        given.add(key);
+        return blocks;
+      };
+      return (text) => {
+        const started = now();
+        const key = keyOf(text);
+        const known = recall(key);
+        if (known !== undefined) return known.blocks === null ? plainText(text) : once(key, known.blocks);
+        const ms = Math.floor(Math.min(limits.textMs, left, deadlineAt - started));
+        if (ms < 1) return plainText(text);
+        const outcome = within(ms, () => read(text));
+        left -= now() - started;
+        if ("value" in outcome) {
+          const blocks = frozen(outcome.value);
+          keep(key, { blocks, nodes: ENTRY_NODES + nodesIn(blocks), until: now() + limits.keptForMs });
+          return once(key, blocks);
+        }
+        // Only a read that had a card's whole limit says the text itself is slow. One cut short by what was left of
+        // the page's budget or of the request says nothing about it, and the next page load reads it.
+        if (ms >= limits.textMs) keep(key, { blocks: null, nodes: ENTRY_NODES, until: now() + limits.keptForMs });
+        return plainText(text);
+      };
+    },
   };
 }
