@@ -111,6 +111,23 @@ test("a_named_character_shows_on_the_page_in_the_editor_and_in_the_preview", asy
   await deleteNewest(page);
 });
 
+// The Preview draws code in the page's colours (P1.21v): plain for a moment, then coloured once its language has
+// loaded, and nothing is refused on the way.
+test("the_preview_shows_code_in_the_pages_colours", async ({ page }) => {
+  const watched = watch(page);
+  await addStored(page, "```js\nconst a = 1;\n```");
+  await textCards(page).last().getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("tab", { name: "Preview" }).click();
+  const code = dialog.getByRole("tabpanel", { name: "Preview" }).locator("pre code");
+  await expect(code).toHaveText("const a = 1;");
+  await expect(code.locator(".code-keyword")).toHaveText("const");
+  await page.keyboard.press("Escape");
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
+
 // The Preview's reader is its own file, asked for when Preview first opens, so the page's first load carries no
 // Markdown parser. When the file does not arrive the tab says so, and Write still holds the text.
 test("a_preview_whose_reader_does_not_arrive_says_so_and_write_keeps_the_text", async ({ page }) => {
