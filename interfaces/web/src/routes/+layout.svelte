@@ -248,7 +248,7 @@ let dockShown = $state(false);
 let dockFrame: HTMLIFrameElement | undefined = $state();
 let liveUnread: number | undefined = $state();
 const unread = $derived(liveUnread ?? chat?.unread ?? 0);
-/** A Message link's DID, waiting for the box to say it is ready. */
+/** A Message link's DID, sent with the hello when the box's page loads. */
 let dockAsk: string | undefined;
 
 function toDock(data: Record<string, unknown>) {
@@ -286,15 +286,18 @@ function messageLinkClick(event: MouseEvent) {
   if (openDock(decodeURIComponent(url.pathname.slice("/dm/".length)))) event.preventDefault();
 }
 
+/** The box's page has loaded (again, after a renewal): say hello first, so the box learns this origin from us. */
+function dockLoaded() {
+  toDock({ type: `${DOCK}hello` });
+  if (dockAsk !== undefined) toDock({ type: `${DOCK}open`, did: dockAsk });
+}
+
 async function dockMessage(event: MessageEvent) {
   if (dockFrame?.contentWindow == null || event.source !== dockFrame.contentWindow || event.origin !== chatOrigin)
     return;
   const message = event.data as { type?: unknown; state?: unknown; unread?: unknown } | null;
   if (typeof message !== "object" || message === null) return;
-  if (message.type === `${DOCK}ready`) {
-    toDock({ type: `${DOCK}hello` });
-    if (dockAsk !== undefined) toDock({ type: `${DOCK}open`, did: dockAsk });
-  } else if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
+  if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
     toDock({ type: `${DOCK}ticket`, ticket: await dockTicket(message.state) });
   } else if (
     message.type === `${DOCK}count` &&
@@ -759,6 +762,7 @@ const row =
     >
       <iframe
         bind:this={dockFrame}
+        onload={dockLoaded}
         src="{chatOrigin}/?dock"
         title={T.chat(0)}
         class="size-full"

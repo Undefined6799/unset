@@ -208,7 +208,8 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
   });
   const tell = (data: Record<string, unknown>) => origin !== null && parent.postMessage(data, origin);
   closeDock = () => tell({ type: `${DOCK}close` });
-  parent.postMessage({ type: `${DOCK}ready` }, "*");
+  // The shell speaks first, once the frame has loaded (core/dock.ts), so the box never posts to an origin it has not
+  // been told: the listener above is in place before the page's load event.
   const timeout = new Promise<"late">((resolve) => window.setTimeout(() => resolve("late"), DOCK_WAIT_MS));
   if ((await Promise.race([helloed, timeout])) === "late")
     return onState({ kind: "error", code: "chat.dock_no_shell" });

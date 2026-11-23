@@ -265,10 +265,10 @@ const DOCK_HOST = `<!doctype html><title>unset.sh</title>
 <script>
 const frame = document.querySelector("iframe");
 const to = (data) => frame.contentWindow.postMessage(data, "https://unset.cc");
+frame.addEventListener("load", () => to({ type: "unset.dock.hello" }));
 addEventListener("message", async (event) => {
   if (event.source !== frame.contentWindow || event.origin !== "https://unset.cc") return;
   const m = event.data;
-  if (m?.type === "unset.dock.ready") to({ type: "unset.dock.hello" });
   if (m?.type === "unset.dock.count") document.body.dataset.unread = String(m.unread);
   if (m?.type === "unset.dock.sign_in") {
     const r = await fetch("/chat/dock", { method: "POST", body: new URLSearchParams({ state: m.state }) });

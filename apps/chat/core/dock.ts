@@ -3,8 +3,8 @@
 // own to chat. A frame's navigation to unset.sh carries no unset.sh session (tested, Chromium 157, 2026-11-23), so the
 // box cannot take the sign-in hop; the shell does its middle step:
 //
-//   box -> shell   unset.dock.ready                 (targetOrigin "*": it says nothing)
-//   shell -> box   unset.dock.hello                 (the box keeps the sender's origin from here on)
+//   shell -> box   unset.dock.hello                 at the frame's load event, to unset.cc's origin; the box keeps
+//                                                   the sender's origin from here on, so it never posts to "*"
 //   box -> shell   unset.dock.sign_in { state }     the one-time value, also in the box's own cookie
 //   shell -> box   unset.dock.ticket { ticket }     web's ticket for that value (POST /chat/dock), or null
 //   box -> door    POST /sign-in/redeem?dock        as the hop's redeem; the door matches the value in the cookie
