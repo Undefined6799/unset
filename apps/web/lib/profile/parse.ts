@@ -485,19 +485,21 @@ function listItem(text: string, lists: readonly ListBlock[]): ListItem {
 function rowCells(line: string): string[] {
   const cells: string[] = [];
   let cell = "";
+  // A backslash takes the character after it, so `\\|` is a backslash and then a pipe that splits.
+  let lastSplit = -1;
   for (let i = 0; i < line.length; i += 1) {
-    if (line[i] === "\\" && line[i + 1] === "|") {
-      cell += "|";
+    if (line[i] === "\\" && i + 1 < line.length) {
+      cell += line[i + 1] === "|" ? "|" : line.slice(i, i + 2);
       i += 1;
     } else if (line[i] === "|") {
       cells.push(cell);
       cell = "";
+      lastSplit = i;
     } else cell += line[i];
   }
   cells.push(cell);
-  const trimmed = line.trim();
-  if (trimmed.startsWith("|")) cells.shift();
-  if (trimmed.endsWith("|") && !trimmed.endsWith("\\|") && cells.length > 0) cells.pop();
+  if (line.trimStart().startsWith("|")) cells.shift();
+  if (lastSplit >= 0 && lastSplit === line.trimEnd().length - 1 && cells.length > 0) cells.pop();
   return cells.map((c) => c.trim());
 }
 

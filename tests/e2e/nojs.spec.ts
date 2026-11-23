@@ -147,7 +147,6 @@ test.describe("javascript disabled", () => {
       ["core-menu", "More on unset.sh"],
       ["create-menu", "Create"],
       ["messages-menu", "Messages"],
-      ["notifications-menu", "Notifications"],
     ] as const) {
       const panel = page.locator(`#${id}`);
       await page.locator(`header button[popovertarget="${id}"]`).click();
@@ -157,6 +156,12 @@ test.describe("javascript disabled", () => {
       await expect(panel, id).toBeHidden();
     }
     await expect(page.locator("#core-menu").getByRole("link")).toHaveCount(0);
+    // ADR 0108 point 3: a page with no script cannot mark what a panel showed, so the bell is a link to the page.
+    await expect(page.locator("header").getByRole("link", { name: "Notifications", exact: true })).toHaveAttribute(
+      "href",
+      "/notifications",
+    );
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
     await expect(page.locator("footer").getByRole("link", { name: "Privacy" })).toHaveAttribute(
       "href",
       "/legal/privacy",
@@ -204,10 +209,8 @@ test.describe("javascript disabled", () => {
       "href",
       "/me",
     );
-    // P2.27: notifications are built; a visitor's panel asks them to sign in with the header's button.
-    const notifications = page.locator("#notifications-menu");
-    await expect(notifications).toContainText("Sign in to see your notifications.");
-    await expect(notifications.getByRole("link", { includeHidden: true })).toHaveCount(0);
+    // P2.27, ADR 0108: on a page with no script the bell is a link to the page, which asks a visitor to sign in.
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
   });
 
   // P2.05s: "No thanks" on the signed-out box is a form, so it works with no script, and it goes home.
