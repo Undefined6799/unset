@@ -88,6 +88,27 @@ test("the_client_follows_a_link_in_place_and_back", async ({ page }) => {
   expect(watched.pageErrors).toEqual([]);
 });
 
+// A visitor's copy of the profile follows the system and is the same bytes for everyone; a sign-in page follows the
+// theme the visitor chose (the `__Host-theme` cookie). The client follows the link in place, so the document stays:
+// the shell gives it the theme a full load of the new page would have, both ways.
+test("a_page_reached_in_place_has_the_theme_a_full_load_gives_it", async ({ page, context }) => {
+  await context.addCookies([{ name: "__Host-theme", value: "dark", url: PROD_ORIGIN, secure: true, sameSite: "Lax" }]);
+  await page.emulateMedia({ colorScheme: "light" });
+  const html = page.locator("html");
+  const scheme = page.locator('meta[name="color-scheme"]');
+  expect((await page.goto(PROFILE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  await expect(html).not.toHaveAttribute("data-theme", /./);
+  await page.locator('a[href^="/login"]').filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(scheme).toHaveAttribute("content", "dark");
+  await page.goBack();
+  await expect(page).toHaveURL(PROFILE);
+  await expect(html).not.toHaveAttribute("data-theme", /./);
+  await expect(scheme).toHaveAttribute("content", "dark light");
+});
+
 // A path that is no member is the one 404, which runs no script whatever the path holds.
 test("a_hostile_path_is_the_404_with_no_script", async ({ page }) => {
   const watched = watch(page);

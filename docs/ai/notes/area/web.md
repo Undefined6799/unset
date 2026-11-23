@@ -36,6 +36,8 @@ asks. A public page that asks also says `client: true` in its `policy.ts` (ADR 0
 SvelteKit's own CSP, narrowed, on that page's 200 answer only. The public profile is the first; its 404 runs no
 script (for a failed load kit takes `csr` from the layouts alone, 3.2.0 `page/index.js:276`) and keeps the fixed
 policy, as do its refusals and its data address. `gate.test.ts` names the pages switched on.
+A client navigation keeps the document, so the layout's `afterNavigate` applies the theme a full load of the new page
+would have (system where `prefs` is absent); without it a visitor's saved theme was lost from the profile to /login.
 
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
