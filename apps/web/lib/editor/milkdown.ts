@@ -224,10 +224,10 @@ export type MountOptions = {
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 const PAGE_LIST_DEPTH = 3;
 /**
- * How many flattened shapes `node` and what it holds carry, given its parent, its index there and how many lists hold
- * it: what the page would show differently from the editor.
+ * How many flattened shapes `node` and what it holds carry, given its parent, its index there, how many lists hold it
+ * and whether a table cell does: what the page would show differently from the editor.
  */
-function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number): number {
+function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number, cell = false): number {
   const holder = parent.type.name;
   const name = node.type.name;
   let count = 0;
@@ -236,13 +236,14 @@ function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: numb
   if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
   if (name === "hardbreak" && lists > 0) count += 1;
   // GFM: the page reads no footnotes (preset-gfm's footnote_reference and footnote_definition), and a table cell
-  // holds one line.
+  // holds one line. A cell holds a paragraph (preset-gfm 7.23.0 cellContent), so the break is the cell's grandchild.
   if (name.startsWith("footnote_")) count += 1;
-  if (name === "hardbreak" && (holder === "table_cell" || holder === "table_header")) count += 1;
+  if (name === "hardbreak" && cell) count += 1;
   if (!node.isBlock) return count;
   const inner = lists + (ITEM_LISTS.has(name) ? 1 : 0);
+  const inCell = cell || name === "table_cell" || name === "table_header";
   node.forEach((child, _offset, at) => {
-    count += shapesIn(child, node, at, inner);
+    count += shapesIn(child, node, at, inner, inCell);
   });
   return count;
 }
