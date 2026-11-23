@@ -83,6 +83,7 @@ class CodeBlockView implements NodeView {
         look,
         this.language.of([]),
         CodeMirror.updateListener.of((update) => this.forwardUpdate(update)),
+        CodeMirror.domEventHandlers({ keydown: (event) => this.outerKey(event) }),
       ],
     });
     this.dom.append(tools, host);
@@ -96,6 +97,14 @@ class CodeBlockView implements NodeView {
     input.placeholder = "Language";
     input.value = String(this.node.attrs.language ?? "");
     input.addEventListener("change", () => this.setLanguage(input.value.trim()));
+    // The field sits in the card's form, whose Enter would save the card (Codex on #2003): Enter sets the language and
+    // goes back to the code.
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      this.setLanguage(input.value.trim());
+      this.cm.focus();
+    });
     return input;
   }
 
@@ -178,6 +187,19 @@ class CodeBlockView implements NodeView {
       { key: "Shift-Mod-z", run: () => redo(view.state, view.dispatch) },
       { key: "Mod-y", run: () => redo(view.state, view.dispatch) },
     ];
+  }
+
+  /**
+   * The keys that move a block past its neighbour (menus.ts moveKeys, Mod-Shift-ArrowUp and Mod-Shift-ArrowDown) are
+   * the outer editor's, so the code block moves with the caret in it (Codex on #2003). The key goes to its keymaps as
+   * pressed, and the outer editor's focus puts the caret back in the moved block's code.
+   */
+  private outerKey(event: KeyboardEvent): boolean {
+    const move = event.shiftKey && (event.ctrlKey || event.metaKey) && /^Arrow(Up|Down)$/.test(event.key);
+    if (!move || !this.view.someProp("handleKeyDown", (handle) => handle(this.view, event))) return false;
+    event.preventDefault();
+    this.view.focus();
+    return true;
   }
 
   /** The caret at the end of the code, and nothing below the block. */
