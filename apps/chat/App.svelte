@@ -267,6 +267,14 @@ onMount(() => {
     {:else if view.kind === "locked"}
       <Card.Content>
         <form class="flex flex-col gap-4" onsubmit={tryKey}>
+          {#if dock}
+            <!-- The box keeps its own storage apart from a unset.cc tab (ADR 0115), so it asks once itself; Alex
+                 2026-11-23: keep it, and say so plainly (staging list item 3). -->
+            <p class="text-muted-foreground text-sm" data-dock-own-browser>
+              This chat box counts as its own browser, so it asks for your key once, even if you unlocked chat on
+              unset.cc.
+            </p>
+          {/if}
           <input class="hidden" name="username" autocomplete="username" value={KEY_NAME} readonly tabindex="-1" />
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium" for="unlock-key">Recovery key</label>
