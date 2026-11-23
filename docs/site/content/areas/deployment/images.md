@@ -32,6 +32,9 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5051` | runtime |
 | `newt` | `docker.io/fosrl/newt` | `1.20.0` | runtime |
 | `seaweedfs` | `docker.io/chrislusf/seaweedfs` | `4.53` | runtime |
+| `seaweedfs-next` | `docker.io/chrislusf/seaweedfs` | `4.54` | runtime |
+
+`seaweedfs-next` exists only while the objects image moves to 4.54. It lets `mirror.yml` copy 4.54 to the mirror before `objects.Dockerfile` names it. The re-pin that switches the `FROM` removes it.
 
 `deployment/mirror.list.json` lists the same seven sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>` (`seaweedfs` is `ghcr.io/undefined6799/mirror/seaweedfs`).
 
