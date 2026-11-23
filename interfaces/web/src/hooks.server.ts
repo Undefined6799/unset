@@ -275,7 +275,7 @@ function withGroupHeaders(
   const kit = out.headers.get("content-security-policy");
   if (group === "app" && kit !== null) {
     // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).
-    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN));
+    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN, config.CHAT_DOOR_ORIGIN));
   } else {
     out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
   }

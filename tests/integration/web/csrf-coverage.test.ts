@@ -118,8 +118,10 @@ describe("csrf coverage", () => {
     const gets = ROUTE_FILES.filter((route) => exports(route.source, "GET")).map((route) => route.path);
     // The unset.cc sign-in hop (build step 5) writes nothing: it signs a ticket bound to the one-time value the door
     // set in this browser, and sends it only to the configured door, so a cross-site link signs nobody in (ADR 0093).
+    // The chat icon's count (ADR 0115) only reads.
     expect(gets).toEqual([
       "/.well-known/security.txt",
+      "/chat/count",
       "/chat/sign-in",
       "/fonts/JetBrainsMono-Variable.woff2",
       "/fonts/SpaceGrotesk-Variable.woff2",

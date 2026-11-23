@@ -26,6 +26,13 @@ describe("web csp", () => {
     );
   });
 
+  test("narrowed_frames_only_the_chat_door", () => {
+    // The chat box (ADR 0115): app pages may frame the chat door's origin, and nothing else.
+    expect(narrowed(KIT, ORIGIN, "https://unset.cc")).toBe(
+      "default-src 'none'; script-src https://unset.sh/_app/ 'sha256-abc='; style-src https://unset.sh/_app/; font-src https://unset.sh/fonts/; img-src 'self'; connect-src 'self'; frame-src https://unset.cc",
+    );
+  });
+
   test("no_unsafe_tokens", () => {
     for (const [group, csp] of Object.entries(zeroScriptCsp(ORIGIN))) {
       for (const token of UNSAFE) expect(csp.includes(token), `${group} contains ${token}`).toBe(false);

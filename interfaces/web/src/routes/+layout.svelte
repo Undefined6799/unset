@@ -231,6 +231,113 @@ const markInBackground: SubmitFunction =
 // The chat icon (build step 10; ADR 0094 decision 5; Alex: no dock on a phone): for a member, Messages is a plain link to the chat page on
 // its own origin, with the number of chats with new messages, on every width (no dock); a visitor keeps the panel.
 const chat = $derived(data.chat);
+// The chat box (ADR 0115; Alex 2026-11-23, "what I want to see is chat inside unset.sh"): on a wider screen the icon
+// and a profile's Message link open the chat page in a frame on unset.cc's origin, here in the corner, instead of
+// leaving; a phone keeps the plain link (Alex: no dock on a phone). The frame is made at the first open, so a page
+// that never opens it runs no chat; it stays, hidden, while the member moves between pages. The shell only relays:
+// it posts the box's one-time value to POST /chat/dock and hands back web's ticket, which redeems only with that
+// value in the box's own cookie on unset.cc (apps/chat core/dock.ts has the whole exchange). Each message is taken
+// only from the frame's own window and origin (HTML web messaging: check source and origin). The icon's number is
+// read again every half minute while the box is not open (GET /chat/count), and from the box once it runs.
+const DOCK = "unset.dock.";
+const WIDE = "(min-width: 40rem)";
+const COUNT_EVERY_MS = 30_000;
+const chatOrigin = $derived(chat === undefined ? "" : new URL(chat.href).origin);
+let dockMade = $state(false);
+let dockShown = $state(false);
+let dockFrame: HTMLIFrameElement | undefined = $state();
+let liveUnread: number | undefined = $state();
+const unread = $derived(liveUnread ?? chat?.unread ?? 0);
+/** A Message link's DID, waiting for the box to say it is ready. */
+let dockAsk: string | undefined;
+
+function toDock(data: Record<string, unknown>) {
+  dockFrame?.contentWindow?.postMessage(data, chatOrigin);
+}
+
+/** Open the box (and the conversation with `did`); false on a phone or with no chat, where the link is followed. */
+function openDock(did?: string): boolean {
+  if (chat === undefined || !window.matchMedia(WIDE).matches) return false;
+  dockMade = true;
+  dockShown = true;
+  if (did !== undefined) {
+    if (dockFrame?.contentWindow) toDock({ type: `${DOCK}open`, did });
+    dockAsk = did;
+  }
+  return true;
+}
+
+function chatClick(event: MouseEvent) {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (dockShown && dockMade) {
+    dockShown = false;
+    event.preventDefault();
+  } else if (openDock()) event.preventDefault();
+}
+
+/** A click on a profile's Message link (`<door>/dm/<did>`, apps/web profile-header.svelte) opens it in the box. */
+function messageLinkClick(event: MouseEvent) {
+  if (chat === undefined || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    return;
+  const link = (event.target as Element | null)?.closest?.("a[href]");
+  if (!(link instanceof HTMLAnchorElement)) return;
+  const url = new URL(link.href);
+  if (url.origin !== chatOrigin || !url.pathname.startsWith("/dm/")) return;
+  if (openDock(decodeURIComponent(url.pathname.slice("/dm/".length)))) event.preventDefault();
+}
+
+async function dockMessage(event: MessageEvent) {
+  if (dockFrame?.contentWindow == null || event.source !== dockFrame.contentWindow || event.origin !== chatOrigin)
+    return;
+  const message = event.data as { type?: unknown; state?: unknown; unread?: unknown } | null;
+  if (typeof message !== "object" || message === null) return;
+  if (message.type === `${DOCK}ready`) {
+    toDock({ type: `${DOCK}hello` });
+    if (dockAsk !== undefined) toDock({ type: `${DOCK}open`, did: dockAsk });
+  } else if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
+    toDock({ type: `${DOCK}ticket`, ticket: await dockTicket(message.state) });
+  } else if (
+    message.type === `${DOCK}count` &&
+    typeof message.unread === "number" &&
+    Number.isSafeInteger(message.unread)
+  ) {
+    liveUnread = Math.max(0, message.unread);
+  } else if (message.type === `${DOCK}close`) {
+    dockShown = false;
+  }
+}
+
+/** web's ticket for the box's one-time value, or null when web refuses it or cannot be reached. */
+async function dockTicket(state: string): Promise<string | null> {
+  try {
+    const response = await fetch("/chat/dock", {
+      method: "POST",
+      body: new URLSearchParams({ state }),
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+    });
+    const body = (await response.json()) as { ticket?: unknown };
+    return response.ok && typeof body.ticket === "string" ? body.ticket : null;
+  } catch {
+    return null;
+  }
+}
+
+$effect(() => {
+  if (chat === undefined) return;
+  const timer = window.setInterval(async () => {
+    if (document.visibilityState !== "visible" || dockMade) return;
+    try {
+      const response = await fetch("/chat/count", { cache: "no-store", redirect: "error" });
+      const body = (await response.json()) as { unread?: unknown };
+      if (response.ok && typeof body.unread === "number" && Number.isSafeInteger(body.unread)) liveUnread = body.unread;
+    } catch {
+      // The number stays as it was; the next page load reads it again.
+    }
+  }, COUNT_EVERY_MS);
+  return () => window.clearInterval(timer);
+});
 const panelButtons = $derived(chat === undefined ? PANEL_BUTTONS : PANEL_BUTTONS.filter((b) => b.id !== MESSAGES));
 // The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
 // drawn as a small badge.
@@ -240,6 +347,8 @@ const letter = $derived(account?.name === undefined ? undefined : accountLetter(
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
+  // A page load read the icon's number afresh; the box, once running, keeps telling its own.
+  if (!dockMade) liveUnread = undefined;
   for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
@@ -264,7 +373,7 @@ const row =
   "flex items-center gap-3 rounded-md px-3 py-2 text-foreground no-underline hover:bg-muted aria-[current=page]:bg-muted aria-[current=page]:font-medium";
 </script>
 
-<svelte:window onpageshow={restoreSaved} />
+<svelte:window onpageshow={restoreSaved} onmessage={dockMessage} onclickcapture={messageLinkClick} />
 
 <svelte:head>
   <!-- As the Hono head had them (apps/web/src/shell/head.tsx): both fonts preloaded, in anonymous CORS mode because a
@@ -402,9 +511,16 @@ const row =
           <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
         </Button>
         {#if chat !== undefined}
-          <Button variant="outline" size="icon-sm" href={chat.href} class="{control} relative">
-            <Icon name="comment" size={20} label={T.chat(chat.unread)} />
-            {#if chat.unread > 0}<span aria-hidden="true" class={badge}>{N.badge(chat.unread)}</span>{/if}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            href={chat.href}
+            class="{control} relative"
+            onclick={chatClick}
+            aria-expanded={dockMade ? dockShown : undefined}
+          >
+            <Icon name="comment" size={20} label={T.chat(unread)} />
+            {#if unread > 0}<span aria-hidden="true" class={badge}>{N.badge(unread)}</span>{/if}
           </Button>
         {/if}
         {#each panelButtons as button (button.id)}
@@ -634,6 +750,23 @@ const row =
   {/if}
   <main id="main" tabindex="-1" class="mx-auto w-full flex-1 py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
   </div>
+  {#if dockMade && chat !== undefined}
+    <!-- The chat box (ADR 0115): sandboxed, so it can never navigate this page; it may open the full chat in a new tab. -->
+    <div
+      class="fixed right-4 bottom-4 z-50 h-[min(36rem,calc(100dvh-6rem))] w-96 overflow-hidden rounded-lg border bg-background shadow-lg"
+      hidden={!dockShown}
+      data-dock
+    >
+      <iframe
+        bind:this={dockFrame}
+        src="{chatOrigin}/?dock"
+        title={T.chat(0)}
+        class="size-full"
+        referrerpolicy="no-referrer"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
+      ></iframe>
+    </div>
+  {/if}
   <!-- Below the first screen on every page, short ones too: the header and main fill the viewport (Alex, 2026-11-18). -->
   <footer class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t px-5.5 py-6 text-sm text-muted-foreground max-sm:px-4">
     <p>{T.note}</p>

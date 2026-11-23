@@ -27,9 +27,13 @@ const FILE_DIRECTIVES: Readonly<Record<string, string>> = {
   "font-src": "/fonts/",
 };
 
-/** SvelteKit's header with 'self' in the file directives replaced by `${origin}<path>`; every other source kept. */
-export function narrowed(header: string, origin: string): string {
-  return header
+/**
+ * SvelteKit's header with 'self' in the file directives replaced by `${origin}<path>`; every other source kept. With
+ * `frames`, the chat door's origin, a `frame-src` of that origin alone is added for the chat box (ADR 0115); kit's
+ * `default-src 'none'` frames nothing else.
+ */
+export function narrowed(header: string, origin: string, frames?: string): string {
+  const policy = header
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part !== "")
@@ -40,4 +44,5 @@ export function narrowed(header: string, origin: string): string {
       return [name, ...sources.map((s) => (s === "'self'" ? `${origin}${path}` : s))].join(" ");
     })
     .join("; ");
+  return frames === undefined ? policy : `${policy}; frame-src ${frames}`;
 }
