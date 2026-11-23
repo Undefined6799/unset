@@ -58,9 +58,11 @@ still carries their own bell entries and a Sign in address their page does not d
 table, strikethrough, task and autolink extensions; no footnote, no math), the reader Milkdown uses, and narrows the
 tree to the card's `Block` types. micromark is not bounded: its readme's Security section says a small text can crash
 it, and at 20,000 characters `_*` repeated takes about 5 s and `+ ` repeated about 10 s before the stack runs out. So
-no server code calls `parseReadme` bare: a page load passes `pageTextReader` (`lib/server/text-reader.ts`), which
-stops each read with node:vm's `timeout` at `TEXT_READ_LIMITS` (limits.ts), shares one budget across the page's cards
-and shows a stopped card with `plainText`. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
+no server code calls `parseReadme` bare: a page load takes `services().textReads.forPage(deadlineAt)`
+(`lib/server/text-reader.ts`), which stops each read with node:vm's `timeout` at `TEXT_READ_LIMITS` (limits.ts), shares
+one budget across the page's cards and shows a stopped card with `plainText`. The process keeps what each read gave
+for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
+page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
 places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
 Preview, loaded when Preview opens, on the owner's own text. Vite's alias for `decode-named-character-reference`
 (`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
