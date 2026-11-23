@@ -1,6 +1,6 @@
 // The conversations the screens use (core/conversations.ts Conversations), run on matrix-js-sdk 43.0.0 as it ships.
 // What each call does, and where Element v1.12.35 does the same:
-// - find: an existing conversation (findDirect), making nothing; the start route opens it, or a composer for a new one.
+// - find: an existing conversation (findDirect), its rooms' members loaded first, making nothing; the start route opens it, or a composer for a new one.
 // - start: only on the first Send of that composer, as Element starts a DM on its first message (startDmOnFirstMessage
 //   and createRoomFromLocalRoom, apps/web/src/utils/direct-messages.ts:24-91). createRoom({ preset:
 //   trusted_private_chat, is_direct, invite: [them] }), the options Element's createRoom picks for a DM
@@ -324,7 +324,10 @@ export function createConversations(
         page.removeEventListener("visibilitychange", readIfSeen);
       };
     },
-    find(other) {
+    async find(other) {
+      // findDirect counts who is in each room, so each direct room with them has its members first (members above).
+      const withThem = [...direct()].filter(([, userId]) => userId === other).map(([roomId]) => client.getRoom(roomId));
+      await Promise.all(withThem.map((room) => (room === null ? undefined : membersIn(room))));
       const found = findDirect((roomId) => client.getRoom(roomId), direct(), other);
       return found === undefined ? null : (found.roomId as ConversationId);
     },

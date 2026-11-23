@@ -8,7 +8,7 @@
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership.js";
 import { createClient, MatrixEvent, Room, RoomEvent } from "matrix-js-sdk/lib/matrix.js";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import type { Conversation, ConversationId, ConversationView } from "../core/conversations.ts";
+import type { ChatId, Conversation, ConversationId, ConversationView } from "../core/conversations.ts";
 import { createConversations, forgetLocalChoices, type LocalChoices } from "./conversation-service.ts";
 
 const ME = "@uaaaaaaaaaaaaaaaaaaaa:unset.cc";
@@ -223,6 +223,17 @@ describe("pending request", () => {
     });
     await expect.poll(() => latest.find((c) => c.id === PENDING)?.with.name).toBe("claude-test");
     stop();
+  });
+});
+
+describe("find", () => {
+  test("chat.find_pending_second_browser: a Message link opens the pending request already sent, never a second one", async () => {
+    const crypto = client.getCrypto();
+    if (crypto === undefined) throw new Error("no crypto");
+    // A browser whose members have not been loaded yet: the invitee is not in the room's state.
+    await client.getRoom(PENDING)?.clearLoadedMembersIfNeeded();
+    const conversations = createConversations(client, crypto, ME, memory(), page("hidden"));
+    expect(await conversations.find(INVITED as ChatId)).toBe(PENDING);
   });
 });
 

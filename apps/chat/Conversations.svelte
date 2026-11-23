@@ -52,7 +52,7 @@ async function accept(id: ConversationId) {
   problem = (await conversations.accept(id)) ? null : "The request could not be accepted. Try again in a moment.";
 }
 
-onMount(() => {
+onMount(async () => {
   const asked = new URLSearchParams(window.location.search).has("with");
   if (!asked) return;
   const target = startTarget(window.location.search, me);
@@ -61,7 +61,7 @@ onMount(() => {
     problem = "That chat ID is not one we know.";
     return;
   }
-  open = conversations.find(target);
+  open = await conversations.find(target);
   if (open === null) draft = target;
 });
 

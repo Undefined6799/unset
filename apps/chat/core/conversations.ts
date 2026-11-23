@@ -159,7 +159,7 @@ export type Conversations = {
   /** Calls `onView` now and on every change of the conversation, marking it read as it is shown. */
   readonly watch: (id: ConversationId, onView: (view: ConversationView | null) => void) => () => void;
   /** The available conversation already had with this person, or null; it makes nothing. */
-  readonly find: (with_: ChatId) => ConversationId | null;
+  readonly find: (with_: ChatId) => Promise<ConversationId | null>;
   /**
    * Asks this person to talk with a first message: a new encrypted conversation with them invited, then `text` sent in
    * it. Null when no conversation could be made; `sent` false when it was made but the message did not go.
