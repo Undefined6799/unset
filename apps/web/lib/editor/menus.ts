@@ -34,7 +34,7 @@ import { createTable, toggleStrikethroughCommand } from "@milkdown/preset-gfm";
 import { findParent, posToDOMRect } from "@milkdown/prose";
 import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
-import type { Node as ProseNode, NodeType } from "@milkdown/prose/model";
+import type { NodeType, Node as ProseNode } from "@milkdown/prose/model";
 import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelection } from "@milkdown/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
@@ -111,8 +111,12 @@ const HOVER_MS = 50;
 /**
  * The dots change their whole block (Codex on #1965): a quote or a list is first taken apart into the lines it holds,
  * left in place and selected, so Text leaves them plain and any other item turns or wraps them all, as the commands do
- * over a selection of several lines. A block that is one line already is left as it is.
+ * over a selection of several lines. A block that is one line already is left as it is. Before a quote or a list wraps
+ * them, a heading or code block among them becomes plain text: the page shows a quote or a list item as words
+ * (milkdown.ts pageShapes), so a heading wrapped as it is would be refused.
  */
+const WRAPS: ReadonlySet<BlockItem> = new Set(["quote", "bullets", "numbers", "tasks"]);
+
 function unwrapBlock(view: EditorView) {
   const { $from } = view.state.selection;
   if ($from.depth < 2) return;
@@ -320,7 +324,10 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
     const typed = changing === null;
     close();
     if (typed) ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
-    else unwrapBlock(view);
+    else {
+      unwrapBlock(view);
+      if (WRAPS.has(item)) blockCommand(ctx, "text")();
+    }
     blockCommand(ctx, item)();
     if (!typed)
       view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, view.state.selection.to)));
