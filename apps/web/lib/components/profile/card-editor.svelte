@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
 import { tick } from "svelte";
+import { type CodeColourLimits, codeColourBudget } from "../../editor/code-colours.ts";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
 import { parseReadme } from "../../profile/parse.ts";
@@ -55,6 +56,7 @@ let {
   submit,
   max,
   textMax,
+  codeColours,
   enhance = () => undefined,
 }: {
   kind: Kind;
@@ -84,6 +86,8 @@ let {
   max: number;
   /** The README's maxlength (CardEditLimits text). */
   textMax?: number;
+  /** The page's code colouring limits (CardEditLimits codeColours): the preview colours what the page will. */
+  codeColours?: CodeColourLimits;
   enhance?: Enhance;
 } = $props();
 
@@ -217,7 +221,8 @@ $effect(() => {
   const blocks = previewBlocks;
   let current = true;
   colouredPreview = null;
-  colourBlocks(blocks).then((coloured) => {
+  if (codeColours === undefined) return;
+  colourBlocks(blocks, codeColourBudget(codeColours)).then((coloured) => {
     if (current) colouredPreview = coloured;
   });
   return () => {

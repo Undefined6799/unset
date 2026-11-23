@@ -34,6 +34,7 @@ import {
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
+import { CODE_COLOUR_LIMITS } from "../../lib/server/limits.ts";
 import { ALLOW_PATH } from "../../lib/server/pds-failure.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
@@ -116,7 +117,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? await cardViews(own.cards, own.versions) : [];
+  const cards = own.kind === "ok" ? await cardViews(own.cards, CODE_COLOUR_LIMITS, own.versions) : [];
   return {
     shell,
     account,
@@ -130,7 +131,12 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: { ...CARD_EDIT_LIMITS, text: TEXT_EDIT_BYTES, formBytes: CARD_FORM_LIMIT_BYTES },
+    cardEditLimits: {
+      ...CARD_EDIT_LIMITS,
+      text: TEXT_EDIT_BYTES,
+      formBytes: CARD_FORM_LIMIT_BYTES,
+      codeColours: CODE_COLOUR_LIMITS,
+    },
     // Drawn fresh on each load, so each add form names its own card (newKeyField).
     newCardKey: newCardKey(),
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,

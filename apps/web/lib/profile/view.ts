@@ -3,7 +3,7 @@
 // dropped unsafe ones (two layers for the output every visitor will see). Runs on the server; the components only
 // render what this returns.
 import { safeHref } from "@unset/shared-safe-href";
-import { colourCode } from "../editor/code-colours.ts";
+import { type CodeColourBudget, type CodeColourLimits, codeColourBudget, colourCode } from "../editor/code-colours.ts";
 import { CARD_TEXT } from "./messages.ts";
 import { type Block as ParsedBlock, parseReadme } from "./parse.ts";
 import type {
@@ -57,20 +57,23 @@ function shownButtons(buttons: Buttons): ShownButton[] {
   return shown;
 }
 
-/** README blocks as a card shows them: code in colours where its language is known, the language itself dropped. */
-export const colourBlocks = (blocks: readonly ParsedBlock[]): Promise<Block[]> =>
+/**
+ * README blocks as a card shows them: code in colours where its language is known and the page's colouring budget
+ * allows, else plain; the language itself is dropped.
+ */
+export const colourBlocks = (blocks: readonly ParsedBlock[], budget: CodeColourBudget): Promise<Block[]> =>
   Promise.all(
     blocks.map(async (block): Promise<Block> => {
       if (block.kind !== "code") return block;
-      const runs = await colourCode(block.text, block.language);
-      return runs === null ? { kind: "code", text: block.text } : { kind: "code", text: block.text, runs };
+      const coloured = await colourCode(block.text, block.language, budget);
+      return "runs" in coloured ? { kind: "code", runs: coloured.runs } : { kind: "code", text: block.text };
     }),
   );
 
-async function shownOf(content: CardContent): Promise<CardShown> {
+async function shownOf(content: CardContent, budget: CodeColourBudget): Promise<CardShown> {
   switch (content.kind) {
     case "readme":
-      return { kind: "readme", blocks: await colourBlocks(parseReadme(content.text)) };
+      return { kind: "readme", blocks: await colourBlocks(parseReadme(content.text), budget) };
     case "links":
       return {
         kind: "links",
@@ -107,7 +110,10 @@ async function shownOf(content: CardContent): Promise<CardShown> {
   }
 }
 
-/** The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at. */
+/**
+ * The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at.
+ * `codeColours` (interfaces/web limits.ts) bounds the colouring of the whole page's code: one budget for all cards.
+ */
 export const cardViews = (
   cards: readonly {
     readonly key: string;
@@ -115,15 +121,18 @@ export const cardViews = (
     readonly surface?: CardSurface;
     readonly content: CardContent;
   }[],
+  codeColours: CodeColourLimits,
   versions?: ReadonlyMap<string, string>,
-): Promise<CardView[]> =>
-  Promise.all(
+): Promise<CardView[]> => {
+  const budget = codeColourBudget(codeColours);
+  return Promise.all(
     cards.map(async ({ key, width, surface = "filled", content }) => {
       const version = versions?.get(key);
-      const shown = { key, width, surface, content, shown: await shownOf(content) };
+      const shown = { key, width, surface, content, shown: await shownOf(content, budget) };
       return version === undefined ? shown : { ...shown, version };
     }),
   );
+};
 
 /**
  * The cards for a page that edits nothing (the public profile): what each shows, without `content`, which only the
