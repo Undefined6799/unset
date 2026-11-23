@@ -289,8 +289,15 @@ function messageLinkClick(event: MouseEvent) {
 /** The box's page has loaded (again, after a renewal): say hello first, so the box learns this origin from us. */
 function dockLoaded() {
   toDock({ type: `${DOCK}hello` });
+  toDock({ type: `${DOCK}shown`, shown: dockShown });
   if (dockAsk !== undefined) toDock({ type: `${DOCK}open`, did: dockAsk });
 }
+
+// Hiding the box leaves its page "visible" to itself, so it is told, and sends read receipts only while open
+// (apps/chat core/dock.ts boxVisibility).
+$effect(() => {
+  toDock({ type: `${DOCK}shown`, shown: dockShown });
+});
 
 async function dockMessage(event: MessageEvent) {
   if (dockFrame?.contentWindow == null || event.source !== dockFrame.contentWindow || event.origin !== chatOrigin)

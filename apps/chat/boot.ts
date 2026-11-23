@@ -11,7 +11,7 @@
 // browser out of chat (core/sign-out.ts signOutHere) and goes back to unset.sh.
 import type { ChatSession, ChatState } from "./core/chat.ts";
 import { dmTarget, startPathFor } from "./core/contact.ts";
-import { DOCK, dockMessage, stateCookie, unreadChats } from "./core/dock.ts";
+import { boxVisibility, DOCK, dockMessage, stateCookie, unreadChats } from "./core/dock.ts";
 import { publicNames } from "./core/public-name.ts";
 import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
@@ -24,7 +24,7 @@ import {
   signOutHere,
 } from "./core/sign-out.ts";
 import { announceHop, HOP_CHANNEL, holdTabLock } from "./core/tab-lock.ts";
-import { openChat, openToLogOut } from "./matrix/client.ts";
+import { type ChatOptions, openChat, openToLogOut } from "./matrix/client.ts";
 
 const DOOR_DEADLINE_MS = 10_000;
 const TOO_SOON_MS = 60_000;
@@ -76,6 +76,8 @@ type Renewal = {
   readonly renew: () => void;
   /** The session, once redeemed: the chat box opens a Message link's conversation with it. */
   readonly onSession?: (session: ChatSession) => void;
+  /** Whether the member sees the chat: the box's own, as the shell can hide it (core/dock.ts boxVisibility). */
+  readonly page?: ChatOptions["page"];
 };
 const TAB: Renewal = { renew: () => hop() };
 
@@ -124,6 +126,7 @@ async function signIn(
     pushKey: () => askPushKey(door, session.deviceId, deadline()),
     signOut: () => signOutDevice(door, session.deviceId, deadline()),
     names: publicNames(door, session.deviceId, deadline),
+    page: renewal.page,
     onState,
     onSignedOut: () => {
       if (gone.aborted) return;
@@ -187,6 +190,7 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
   const helloed = new Promise<void>((resolve) => (hello = resolve));
   const tickets: ((ticket: string | null) => void)[] = [];
   const door = window.fetch.bind(window);
+  const seen = boxVisibility(document);
   const openWith = async (did: string) => {
     if (session === null) {
       asked = did;
@@ -204,6 +208,7 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
       return hello();
     }
     if (message.kind === "ticket") return tickets.shift()?.(message.ticket);
+    if (message.kind === "shown") return seen.setShown(message.shown);
     void openWith(message.did);
   });
   const tell = (data: Record<string, unknown>) => origin !== null && parent.postMessage(data, origin);
@@ -234,6 +239,7 @@ export async function bootDock(onState: (state: ChatState) => void, onOpen: () =
     await signIn(got, elsewhere.signal, (s) => elsewhere.signal.aborted || report(s), {
       redeemPath: DOCK_REDEEM_PATH,
       renew: () => window.location.replace(DOCK_PATH),
+      page: seen,
       onSession: (s) => {
         session = s;
         if (asked !== null) void openWith(asked);

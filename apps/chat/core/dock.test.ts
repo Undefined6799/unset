@@ -2,7 +2,7 @@
 // value's cookie. The box trusts a message only from its own parent window, whose origin the page's frame-ancestors
 // pins to unset.sh, and only in the shapes below.
 import { describe, expect, test } from "vitest";
-import { dockMessage, isDock, stateCookie, unreadChats } from "./dock.ts";
+import { boxVisibility, dockMessage, isDock, stateCookie, unreadChats } from "./dock.ts";
 
 const parent = {} as MessageEventSource;
 const other = {} as MessageEventSource;
@@ -36,11 +36,51 @@ describe("dockMessage", () => {
     expect(known({ type: "unset.dock.ticket", ticket: null })).toEqual({ kind: "ticket", ticket: null });
     expect(known({ type: "unset.dock.open", did: "did:plc:abc" })).toEqual({ kind: "open", did: "did:plc:abc" });
     expect(known({ type: "unset.dock.open", did: "not a did" })).toBeNull();
+    expect(known({ type: "unset.dock.shown", shown: true })).toEqual({ kind: "shown", shown: true });
+    expect(known({ type: "unset.dock.shown", shown: false })).toEqual({ kind: "shown", shown: false });
+    expect(known({ type: "unset.dock.shown", shown: "yes" })).toBeNull();
     expect(known({ type: "unset.dock.ticket", ticket: 7 })).toBeNull();
     expect(known({ type: "unset.dock.ticket", ticket: "x".repeat(5000) })).toBeNull();
     expect(known("unset.dock.hello")).toBeNull();
     expect(known(null)).toBeNull();
     expect(known({ type: "something.else" })).toBeNull();
+  });
+});
+
+describe("boxVisibility", () => {
+  // Hiding the frame's container leaves the box's own document "visible" (CSS display does not change
+  // visibilityState), so the box is seen only while the tab is seen and the shell says the box is open; read receipts
+  // follow it (matrix/conversation-service.ts readIfSeen; Codex review on PR #1963).
+  const tab = (visibilityState: DocumentVisibilityState) =>
+    Object.assign(new EventTarget(), { visibilityState }) as EventTarget & { visibilityState: DocumentVisibilityState };
+
+  test("chat.dock_seen_only_open: hidden until the shell says open, and again once it says closed", () => {
+    const page = tab("visible");
+    const box = boxVisibility(page);
+    expect(box.visibilityState).toBe("hidden");
+    box.setShown(true);
+    expect(box.visibilityState).toBe("visible");
+    box.setShown(false);
+    expect(box.visibilityState).toBe("hidden");
+  });
+
+  test("chat.dock_seen_only_tab_seen: an open box in a hidden tab is not seen", () => {
+    const page = tab("hidden");
+    const box = boxVisibility(page);
+    box.setShown(true);
+    expect(box.visibilityState).toBe("hidden");
+  });
+
+  test("chat.dock_seen_changes: a change of either says visibilitychange", () => {
+    const page = tab("hidden");
+    const box = boxVisibility(page);
+    const seen: DocumentVisibilityState[] = [];
+    box.addEventListener("visibilitychange", () => seen.push(box.visibilityState));
+    box.setShown(true);
+    page.visibilityState = "visible";
+    page.dispatchEvent(new Event("visibilitychange"));
+    box.setShown(false);
+    expect(seen).toEqual(["hidden", "visible", "hidden"]);
   });
 });
 

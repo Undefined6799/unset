@@ -11,6 +11,7 @@
 //   box -> shell   unset.dock.count { unread }      for the chat icon
 //   box -> shell   unset.dock.close                 the box's Close
 //   shell -> box   unset.dock.open { did }          a profile's Message link
+//   shell -> box   unset.dock.shown { shown }       with the hello and at each change: whether the box is open
 //
 // The box takes a message only from its parent window (MessageEvent.source), whose origin the page's frame-ancestors
 // pins to unset.sh (interfaces/chat-auth door.ts rootDocument), and after the hello only from that origin
@@ -26,7 +27,8 @@ const DID = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2048}$/;
 export type DockMessage =
   | { readonly kind: "hello"; readonly origin: string }
   | { readonly kind: "ticket"; readonly ticket: string | null }
-  | { readonly kind: "open"; readonly did: string };
+  | { readonly kind: "open"; readonly did: string }
+  | { readonly kind: "shown"; readonly shown: boolean };
 
 /** The box: the page's root with `?dock`, in a frame. */
 export const isDock = (location: { pathname: string; search: string }, framed: boolean): boolean =>
@@ -43,7 +45,7 @@ export function dockMessage(
 ): DockMessage | null {
   if (event.source === null || event.source !== parent) return null;
   if (origin !== null && event.origin !== origin) return null;
-  const data = event.data as { type?: unknown; ticket?: unknown; did?: unknown } | null;
+  const data = event.data as { type?: unknown; ticket?: unknown; did?: unknown; shown?: unknown } | null;
   if (typeof data !== "object" || data === null) return null;
   if (data.type === `${DOCK}hello`) return { kind: "hello", origin: event.origin };
   if (origin === null) return null;
@@ -56,6 +58,7 @@ export function dockMessage(
   if (data.type === `${DOCK}open` && typeof data.did === "string" && DID.test(data.did)) {
     return { kind: "open", did: data.did };
   }
+  if (data.type === `${DOCK}shown` && typeof data.shown === "boolean") return { kind: "shown", shown: data.shown };
   return null;
 }
 
@@ -70,3 +73,32 @@ export const stateCookie = (state: string): string =>
 /** The chat icon's number: the chats with new messages, and the requests waiting (ADR 0094's count, read here). */
 export const unreadChats = (list: readonly Pick<Conversation, "available" | "request" | "unread">[]): number =>
   list.filter((c) => c.available && (c.request || c.unread > 0)).length;
+
+/** Whether a page is seen, and the event that says it changed (the shape matrix/conversation-service.ts reads). */
+type Visibility = Pick<Document, "visibilityState" | "addEventListener" | "removeEventListener">;
+
+/**
+ * The box as seen by the member: its tab is seen and the shell says the box is open. The shell hides the box with
+ * its container, which leaves the box's own document "visible" (HTML "Page visibility",
+ * https://html.spec.whatwg.org/multipage/interaction.html#page-visibility, read 2026-11-23: a document's visibility
+ * follows its top-level traversable, not CSS), so without this a closed box would send read receipts for messages
+ * nobody saw. It starts closed until the shell says otherwise (fail closed).
+ */
+export function boxVisibility(page: Visibility): Visibility & { setShown: (shown: boolean) => void } {
+  const events = new EventTarget();
+  let shown = false;
+  const changed = () => events.dispatchEvent(new Event("visibilitychange"));
+  page.addEventListener("visibilitychange", changed);
+  return {
+    get visibilityState(): DocumentVisibilityState {
+      return shown && page.visibilityState === "visible" ? "visible" : "hidden";
+    },
+    addEventListener: events.addEventListener.bind(events) as Visibility["addEventListener"],
+    removeEventListener: events.removeEventListener.bind(events) as Visibility["removeEventListener"],
+    setShown(next) {
+      if (next === shown) return;
+      shown = next;
+      changed();
+    },
+  };
+}

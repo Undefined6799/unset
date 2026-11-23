@@ -21,7 +21,7 @@ import {
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
-import { createConversations, forgetLocalChoices } from "./conversation-service.ts";
+import { createConversations, forgetLocalChoices, type PageVisibility } from "./conversation-service.ts";
 import { BACKUP_WAIT_MS, type BackupWatch, watchBackup } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
@@ -76,6 +76,8 @@ export type ChatOptions = {
   readonly signOut: () => Promise<boolean>;
   /** The door's public name for a chat partner (core/public-name.ts, ADR 0107), passed on to the page as is. */
   readonly names: (chatId: string) => Promise<string | null>;
+  /** Whether the member sees the page, for read receipts; the chat box passes core/dock.ts boxVisibility. */
+  readonly page?: PageVisibility;
 };
 
 /**
@@ -200,7 +202,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   await client.startClient({ lazyLoadMembers: true });
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
   const keys: Keys = { client, crypto, holder };
-  const conversations = createConversations(client, crypto, session.userId);
+  const conversations = createConversations(client, crypto, session.userId, undefined, options.page);
   // The count's pusher, registered once per sign-in when the page is first ready, and waited for before the page says
   // ready, so signup's chat step (book P6.17) never sends the tab back before it is registered (ADR 0094
   // Consequences: the count starts once a member has opened chat). A failure leaves chat as it is: the count on

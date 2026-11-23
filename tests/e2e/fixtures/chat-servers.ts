@@ -265,7 +265,10 @@ const DOCK_HOST = `<!doctype html><title>unset.sh</title>
 <script>
 const frame = document.querySelector("iframe");
 const to = (data) => frame.contentWindow.postMessage(data, "https://unset.cc");
-frame.addEventListener("load", () => to({ type: "unset.dock.hello" }));
+frame.addEventListener("load", () => {
+  to({ type: "unset.dock.hello" });
+  to({ type: "unset.dock.shown", shown: true });
+});
 addEventListener("message", async (event) => {
   if (event.source !== frame.contentWindow || event.origin !== "https://unset.cc") return;
   const m = event.data;
