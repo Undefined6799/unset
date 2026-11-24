@@ -114,3 +114,13 @@ test.each([
   expect(pipesAsTex(tex)).not.toMatch(/(?<!\\)\|/);
   expect(shown(pipesAsTex(tex))).toBe(shown(tex));
 });
+
+// Codex on #2020 (e7cf785): {\char"7C} is ten characters for one, so 201 pipes drew in the editor and passed the
+// page's MAX_TEX_CHARS once written. Past it, the pipes are written as \vert, half the length, for math.
+test("pipes that would pass the page's limit as char are written as vert", () => {
+  const tex = "|".repeat(201);
+  const written = pipesAsTex(tex);
+  expect(written.length).toBeLessThanOrEqual(MAX_TEX_CHARS);
+  expect(written).not.toMatch(/(?<!\\)\|/);
+  expect(shown(written)).toBe(shown(tex));
+});
