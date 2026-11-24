@@ -128,9 +128,13 @@ async function clickTo(page: Page, origin: string, actor: string): Promise<Drawn
   const note = (url: string, what: string) => requests.push(`${what} ${url.replaceAll(encodeURI(actor), "ACTOR")}`);
   const asked = (request: Request) => note(request.url(), `${request.method()} ${request.resourceType()}`);
   // The answers the client reads (a data address, a document); when the favicon's image arrives is the browser's own.
+  // So is the status of a build file under /_app/, which no actor is part of: when a navigation ends at 400 or above
+  // SvelteKit asks for /_app/version.json with `cache-control: no-cache` (kit 3.2.0 src/runtime/client/client.js
+  // 2070-2072 and src/runtime/app/state/client.svelte.js 160-165), and from its second asking Firefox sends a validator
+  // and is told 304 where Chromium is told 200. That it was asked for is still held equal, by the request.
   const answered = (response: Response) => {
-    if (["fetch", "xhr", "document"].includes(response.request().resourceType()))
-      note(response.url(), String(response.status()));
+    const read = ["fetch", "xhr", "document"].includes(response.request().resourceType());
+    if (read && !new URL(response.url()).pathname.startsWith("/_app/")) note(response.url(), String(response.status()));
   };
   page.on("request", asked);
   page.on("response", answered);
