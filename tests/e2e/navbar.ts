@@ -41,6 +41,38 @@ export async function openMenu(page: Page, which: HeaderMenu): Promise<Locator> 
   return menu;
 }
 
+/** A header panel as a test names it: its button, the stock panel's title, and the id of its native twin. */
+export type HeaderPanel = { readonly button: string | RegExp; readonly title: string; readonly native: string };
+export const MESSAGES_PANEL: HeaderPanel = { button: "Messages", title: "Messages", native: "messages-menu" };
+/** The bell: its name carries the count ("Notifications, 3 waiting"). */
+export const BELL_PANEL: HeaderPanel = {
+  button: /^Notifications/,
+  title: "Notifications",
+  native: "notifications-menu",
+};
+/** Search on a phone: an icon whose panel says search is coming. */
+export const SEARCH_PANEL: HeaderPanel = {
+  button: "Search unset.sh, coming soon",
+  title: "Search unset.sh",
+  native: "search-menu",
+};
+
+/** A header panel's button: the native popover button before the client is ready, the stock trigger after. */
+export const panelButton = (page: Page, which: HeaderPanel): Locator =>
+  page.locator("header").getByRole("button", { name: which.button, exact: true });
+
+/** A stock header panel: a dialog named by its title. It is in the document only while it is open. */
+export const stockPanel = (page: Page, which: HeaderPanel): Locator =>
+  page.getByRole("dialog", { name: which.title, exact: true });
+
+/** Opens a stock header panel by a press on its button. */
+export async function openPanel(page: Page, which: HeaderPanel): Promise<Locator> {
+  await panelButton(page, which).click();
+  const panel = stockPanel(page, which);
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
 /**
  * Waits until the menu's opening animation has ended. Until then the library draws it smaller and part see-through
  * (the stock classes' fade and zoom), so a colour read then is of the blend, not of the menu.

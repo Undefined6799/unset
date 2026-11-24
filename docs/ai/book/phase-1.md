@@ -5694,6 +5694,25 @@ visitor too, and one hand-over walks the menus that have a stock version. Two th
 `tests/e2e/navbar-menus.spec.ts` holds both menus as part 1's spec holds the account menu, a visitor on the home
 page included.
 
+**Built 2026-11-24: part 3, Messages, the bell's panel and Search on a phone.** The stock Popover is copied in
+(`apps/web/lib/components/ui/popover`, six files from the 1.8.1 registry, listed in `inventory.json`; no new
+package). The three panels are `apps/web/lib/components/shell/header-panel.svelte`: the Popover as a dialog named by
+its title, with the native panel's title row and Close button, holding what the layout passes. The library sets no
+role on a popover's content, so the file sets `role="dialog"` and `aria-labelledby`. What the part settled:
+
+- **The bell has two states in the header, not three.** It is the server's link until the stock panel is ready, then
+  the panel's button. P1.22g's native popover button for it is gone from the header; if the stock file never
+  arrives the bell stays the link. Focus on the link is on the button after the swap, which P1.22g left for here.
+- **A control found open is opened after focus is on its new button.** Mounted already open, the Popover gave focus
+  back, on closing, to the native button, which was gone (bits-ui focus-scope remembers where focus was when the
+  panel opened). The hand-over now focuses the new button, then opens; the menus take the same path.
+- **The seen form is one**, outside the panels, so the stock panel and the native one post the same mark.
+- **Three native panels stay until part 4:** Create, Messages and Notifications, for More actions' rows on a phone.
+  Search is a header button on a phone and is fully the stock panel.
+
+`tests/e2e/navbar-panels.spec.ts` holds the panels; `bell-panel.spec.ts` and `notifications.spec.ts` find the bell's
+panel as the dialog.
+
 ---
 
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)

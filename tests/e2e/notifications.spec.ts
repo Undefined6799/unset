@@ -6,6 +6,7 @@
 // one (each test has its own browser context, so the split's stored width starts fresh); the integration tests own
 // dismissing. Its Sign-in history tab (P2.27c) has INBOX_SIZE sign-ins, and nothing here deletes one either.
 import { expect, type Page, test } from "@playwright/test";
+import { BELL_PANEL, stockPanel } from "./navbar.ts";
 import { openPage } from "./observe.ts";
 import { BELL_SIZE, INBOX_SIZE, type PageFixture } from "./pages.ts";
 
@@ -94,7 +95,7 @@ test.describe("wide screen", () => {
     // Its newest row: a link to ?n=<its id>, which the page keeps on screen (SvelteKit keeps its state).
     await page.getByRole("button", { name: "Notifications", exact: true }).click();
     const id = await rows(page).first().locator("input[name=id]").getAttribute("value");
-    await page.locator(`[popover] a[href="/notifications?n=${id}"]`).click();
+    await stockPanel(page, BELL_PANEL).locator(`a[href="/notifications?n=${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`n=${id}$`));
     await expect(page.locator("#notification-detail-title")).toHaveText(newest);
   });
