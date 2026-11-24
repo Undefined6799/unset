@@ -58,7 +58,8 @@ export function picturesFor(did: Did, deps: PictureDeps, deadline: AbortSignal):
     use: async (id, key) => (images.open ? images.store.addUse(did, id, uri(key), deadline) : null),
     release: (id, key, lease) => images.store.removeUse(did, id, uri(key), lease, settling()),
     main: async (id) => {
-      const read = await drafts.get(`drafts/${did}/i/${id}/main.jpeg`);
+      // The main version, a WebP since ADR 0088 (domains/content standard.ts); an older JPEG draft reads as missing.
+      const read = await drafts.get(`drafts/${did}/i/${id}/main.webp`);
       if (!read.ok) return { kind: "unavailable" };
       return read.bytes === null ? { kind: "missing" } : { kind: "ok", bytes: read.bytes };
     },

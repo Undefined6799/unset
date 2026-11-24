@@ -18,6 +18,13 @@ export type Call = {
 const MARGIN_MS = 5_000;
 
 /**
+ * The label every container a test starts carries, valued with the pid of the process that started it; test images
+ * and the edge test's volumes carry it too, so whatever a killed run leaked can be found with
+ * `--filter label=sh.unset.test-owner` (P1.11i).
+ */
+export const OWNER_LABEL = "sh.unset.test-owner";
+
+/**
  * A call's kill budget inside a test or hook of `budgetMs`: just under it, so the kill fires first and names the call.
  */
 export function killBefore(budgetMs: number): number {
@@ -57,7 +64,10 @@ export function subcommand(args: readonly string[]): string {
   return GROUPS.has(first) && second !== undefined && WORD.test(second) ? `${first} ${second}` : first;
 }
 
-/** Runs `file args` to completion or to `timeoutMs`; a kill throws `<file> <subcommand> killed after <ms> ms`. */
+/**
+ * Runs `file args` to completion or to `timeoutMs`; a kill throws `<file> <subcommand> killed after <ms> ms`, then the
+ * call's last stderr lines when it printed any.
+ */
 export function runOrKill(file: string, args: readonly string[], { timeoutMs, input, env }: Call): Ran {
   // spawnSync reads a zero timeout as none at all, so only a positive one keeps the kill.
   if (!(timeoutMs > 0)) throw new RangeError(`timeoutMs must be positive, got ${timeoutMs}`);
@@ -70,9 +80,22 @@ export function runOrKill(file: string, args: readonly string[], { timeoutMs, in
     killSignal: "SIGKILL",
   });
   if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
-    throw new Error(`${[basename(file), subcommand(args)].filter(Boolean).join(" ")} killed after ${timeoutMs} ms`);
+    const killed = `${[basename(file), subcommand(args)].filter(Boolean).join(" ")} killed after ${timeoutMs} ms`;
+    throw new Error(killed + lastOutput(result.stderr ?? ""));
   }
   return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
+}
+
+const LAST_OUTPUT = 2_000;
+
+/**
+ * What a killed call printed last, so a kill says where it hung: spawnSync keeps the stderr read before the kill (Node
+ * 26 child_process docs, "Synchronous process creation": `stderr`), and BuildKit's plain progress prints each
+ * step there as it starts. A hung build named only itself before (#1992's image-tests, job 137719574414).
+ */
+function lastOutput(stderr: string): string {
+  const tail = stderr.trimEnd().slice(-LAST_OUTPUT);
+  return tail === "" ? "" : `; its last output:\n${tail}`;
 }
 
 export const docker = (args: readonly string[], call: Call): Ran => runOrKill("docker", args, call);
@@ -140,4 +163,56 @@ export function cleanUpAll(...cleanups: (() => void)[]): void {
     }
   }
   if (failures.length > 0) throw new AggregateError(failures, failures.map(messageOf).join("; "));
+}
+
+/**
+ * Removes every labelled test container whose owner process has ended, and returns their names: a run that ended
+ * before its teardown (scripts/test/run.ts kills a run past its limit with SIGKILL) leaves them running. A pid that
+ * is alive, or that this user may not signal, is kept, so another checkout's run is never touched (Node 26
+ * process.kill: signal 0 tests for existence, ESRCH when there is no such process). The daemon is this machine's, as
+ * for every test call; every removal is tried before a failed one is reported.
+ */
+export function removeOrphans(timeoutMs: number): string[] {
+  const format = `{{.Names}}\t{{.Label "${OWNER_LABEL}"}}`;
+  const listed = docker(["ps", "-a", "--filter", `label=${OWNER_LABEL}`, "--format", format], { timeoutMs });
+  if (listed.code !== 0) throw new Error(`docker ps failed: ${listed.err.trim()}`);
+  const orphans = listed.out
+    .split("\n")
+    .map((line) => line.split("\t"))
+    .filter(([name, owner]) => name !== undefined && name !== "" && hasEnded(Number(owner)))
+    .map(([name]) => name as string);
+  cleanUpAll(
+    ...orphans.map((name) => () => {
+      const ran = docker(["rm", "-f", "-v", name], { timeoutMs });
+      if (ran.code !== 0 && !ran.err.includes("No such container")) throw new Error(`docker rm failed (${name})`);
+    }),
+  );
+  return orphans;
+}
+
+function hasEnded(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
+/**
+ * Runs `cleanup` when this process exits, for what it started and has not removed yet. Vitest 5.0.5 answers Ctrl-C
+ * and SIGTERM with process.exit and runs no afterAll or globalSetup teardown (dist/chunks/index.1TqnEahn.js,
+ * addCleanupListeners), so without this the containers kept running. An exit listener may only do synchronous work
+ * (Node 26 process docs, "Event: 'exit'"), as every docker call here is; its failure is printed, never thrown. A
+ * SIGKILL runs no listener: removeOrphans catches that.
+ */
+export function cleanUpAtExit(cleanup: () => void): void {
+  process.once("exit", () => {
+    try {
+      refuseAsync(cleanup(), "cleanUpAtExit takes a synchronous cleanup, not a promise");
+    } catch (failure) {
+      process.stderr.write(`test cleanup at exit failed: ${messageOf(failure)}\n`);
+    }
+  });
 }

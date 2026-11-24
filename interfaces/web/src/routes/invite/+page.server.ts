@@ -27,7 +27,7 @@ export const load: ServerLoad = async (event) => {
   event.setHeaders({ "x-robots-tag": "noindex" });
   const listed = await services().invites.store.list(did, event.locals.deadline);
   const left = event.url.searchParams.get("left");
-  const shell: ShellData = { kind: "core", noindex: true, account: { path: `/${did}` } };
+  const shell: ShellData = { kind: "core", noindex: true }; // the account button is the layout's
   return {
     shell,
     // A new id per render: a second press of the same form is one invite, a new render is a new one (rule 12a).

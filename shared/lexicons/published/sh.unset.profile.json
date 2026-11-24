@@ -1,69 +1,58 @@
 {
   "lexicon": 1,
   "id": "sh.unset.profile",
-  "description": "An unset.sh profile: the side column of the page at unset.sh/@handle and the order of its cards. One per account. Kept minimal (ADR 0051): anything richer lives in sh.unset.section cards.",
   "defs": {
     "main": {
       "type": "record",
       "key": "literal:self",
-      "description": "The account's unset.sh profile. Absent means the account has no published unset.sh profile.",
+      "description": "Who an account is on unset.sh: the name, picture and details shown at the top of its pages. One per account; its presence means the account uses unset.sh, and deleting it removes the account's pages from readers. The cards shown are in sh.unset.page.",
       "record": {
         "type": "object",
-        "required": ["displayName", "createdAt"],
         "properties": {
           "displayName": {
             "type": "string",
             "maxGraphemes": 64,
             "maxLength": 640,
-            "description": "Name shown at the top of the profile."
+            "description": "Name shown at the top of the page. Absent means readers show the handle."
           },
           "headline": {
             "type": "string",
             "maxGraphemes": 200,
             "maxLength": 2000,
-            "description": "One line under the name."
+            "description": "One line shown under the name."
           },
           "avatar": {
             "type": "blob",
-            "accept": ["image/png", "image/jpeg", "image/webp", "image/avif"],
+            "accept": ["image/*"],
             "maxSize": 2000000,
-            "description": "Square profile picture."
+            "description": "Profile picture. Readers crop it to a square."
           },
           "avatarShape": {
             "type": "string",
             "maxLength": 32,
-            "knownValues": ["round", "roundedSquare"],
-            "description": "How the avatar is cropped. Absent or unknown means round."
+            "knownValues": ["round", "rounded-square"],
+            "description": "How readers crop the avatar. Absent or unknown means round."
           },
           "location": {
             "type": "string",
             "maxGraphemes": 100,
             "maxLength": 1000,
-            "description": "Free-text place, as the member writes it."
+            "description": "A place, as free text the member writes. Not a precise location."
           },
           "website": {
             "type": "string",
             "format": "uri",
             "maxLength": 2000,
-            "description": "The member's website: an http or https URL. A reader drops any other scheme."
+            "description": "The member's website. An http or https URL; readers ignore any other scheme."
           },
           "listed": {
             "type": "boolean",
-            "description": "True: listed in the unset.sh directory. Absent or false: not listed; the page is still public at its URL."
-          },
-          "cards": {
-            "type": "array",
-            "maxLength": 100,
-            "items": {
-              "type": "string",
-              "format": "record-key"
-            },
-            "description": "Record keys of this account's sh.unset.section records, in page order. A key with no record is skipped; a record not listed shows after the listed ones, oldest first."
+            "description": "True asks directories to list the account. Absent or false means not listed; its pages are still reachable at their addresses."
           },
           "createdAt": {
             "type": "string",
             "format": "datetime",
-            "description": "When the profile was first published."
+            "description": "When the profile was first created."
           }
         }
       }

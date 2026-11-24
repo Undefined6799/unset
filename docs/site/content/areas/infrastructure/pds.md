@@ -18,7 +18,7 @@ The atproto network adapter. Package `@unset/infrastructure-pds`. Identity looku
 | `infrastructure/pds/pds-errors.ts` | `isDpopNonceHandshake`. |
 | `infrastructure/pds/profile-record.ts` | `loadProfileRecord`, `saveProfileRecord`, `PROFILE_COLLECTION`, `PROFILE_RKEY`. Reads and writes `sh.unset.profile/self` on the member's PDS, swap on the stored cid. |
 | `infrastructure/pds/repo-record.ts` | `loadRecord`, `saveRecord`: one record of the member's own repo by collection and key. `saveRecord` reads, lets the caller build, and writes with `swapRecord` set to the cid it read; a change in between is `conflict`. |
-| `infrastructure/pds/card-records.ts` | `listCardRecords` (first 100 `sh.unset.section` records, own repo only), `createCardRecord` (the PDS picks the key), `saveCardRecord` (swap on the stored cid; a card that is gone is refused as `card.missing`, never recreated), `deleteCardRecord`. Only the list is retried. |
+| `infrastructure/pds/card-records.ts` | `listCardRecords` (first 100 `sh.unset.card` records, own repo only), `createCardRecord` (the PDS picks the key), `saveCardRecord` (swap on the stored cid; a card that is gone is refused as `card.missing`, never recreated), `deleteCardRecord`. Only the list is retried. |
 
 `createIdentityNetwork` throws `ConfigError` on `PLC_URL` unless the URL is `https:` and its host is in the `plc` policy's host list. `get` uses policy `plc` when the request target is `plc`, and `atproto` otherwise. A body cap in this file is 64 KiB, and the call also passes `Math.min(request.maxBytes, MAX_BYTES)`. `txt` uses `resolveTxt`. Net-guard errors map through the `FAILURE` record onto `unavailable`, `refused` and `no_such_host`. Any other thrown value is rethrown.
 
@@ -58,7 +58,7 @@ Declared in `infrastructure/pds/package.json`:
 | Package export `.` | `infrastructure/pds/index.ts` |
 | Composition | `interfaces/web/src/lib/server/compose.ts` |
 
-No `main.ts` and no Compose service for this package. The `pds` service in `deployment/compose.dev.yaml` runs the first-party `ghcr.io/undefined6799/unset/pds` image by lock digest, built from `deployment/pds/Dockerfile` (P2.24y), not this folder. `deployment/compose.dev.source.yaml` builds `pds` from `deployment/pds/Dockerfile`.
+No `main.ts` and no Compose service for this package. The `pds` service in `deployment/compose.dev.yaml` runs the first-party `ghcr.io/undefined6799/unset/pds` image by lock digest, built from `deployment/pds/pds.Dockerfile` (P2.24y), not this folder. `deployment/compose.dev.source.yaml` builds `pds` from `deployment/pds/pds.Dockerfile`.
 
 ## Data
 

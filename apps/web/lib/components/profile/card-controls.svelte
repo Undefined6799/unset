@@ -10,11 +10,67 @@
   staging walkthrough 2026-11-18, finding 8). A card moved from its menu keeps focus on its menu button; with no script
   the page reloads. A
   deleted card's place goes to the card that takes it (its first control), or the one before when it was last, or Add
-  card when none is left; the page stays where it was (the page's enhance refreshes in place).
+  card when none is left; the page stays where it was (the page's enhance refreshes in place). On the owner's page with
+  the editor in place (ADR 0074 item 4), a Text card's menu also holds its Width and Style as radio groups: a choice is
+  handed to `onchoose` and waits, with the card's words, for the page's one Save; and Show Markdown, which `markdown`
+  turns on and off (the page swaps the editor for the plain field).
 -->
 <script module lang="ts">
+type Move = { key: string; to: "up" | "down" };
 /** The card a move button was pressed on, and which, until the new order arrives. */
-let pendingMove: { key: string; to: "up" | "down" } | null = null;
+let pendingMove: Move | null = null;
+/**
+ * Presses made while a move is on its way, in order. Each waits for the order before it, so it is built from the
+ * order it changes: two quick presses on Move down used to post the same order twice, and the card moved once (staging
+ * bug hunt 2026-11-21).
+ */
+const queuedMoves: Move[] = [];
+/**
+ * How each card on the page takes part in the queue, by key: `send` posts a move and says whether there was one to
+ * post (a card already last has no Move down), `mark` shows the card as moving or not.
+ */
+const movers = new Map<string, { send: (to: Move["to"]) => boolean; mark: (on: boolean) => void }>();
+/** How long a moving card stays dimmed, and the queue waits, when no new order comes (a refused or lost move). */
+const MOVE_SHOWN_MS = 10_000;
+/** Ends a move whose answer never came, so later presses are not held for ever. */
+let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * While a move is on its way the card is dimmed and busy, so a press is seen at once (staging test 2026-11-21: a move
+ * took about 2 s with no sign). The new order, or MOVE_SHOWN_MS, ends it.
+ */
+function markMoving(group: HTMLElement | undefined, on: boolean) {
+  const shown = group?.closest<HTMLElement>("[data-surface]");
+  if (shown == null) return;
+  if (on) {
+    shown.dataset.moving = "";
+    shown.setAttribute("aria-busy", "true");
+    setTimeout(() => markMoving(group, false), MOVE_SHOWN_MS);
+  } else {
+    delete shown.dataset.moving;
+    shown.removeAttribute("aria-busy");
+  }
+}
+
+/** The move on its way is over: nothing holds the next press. */
+function endMove() {
+  pendingMove = null;
+  clearTimeout(pendingTimer);
+}
+
+/** Drops the presses queued behind a move that did not happen: they were built on the order it would have made. */
+function dropQueue() {
+  for (const queued of queuedMoves.splice(0)) movers.get(queued.key)?.mark(false);
+}
+
+/** Sends the next queued press, skipping those with nothing to post (a Move down on a card that has become last). */
+function sendNext() {
+  for (let next = queuedMoves.shift(); next !== undefined; next = queuedMoves.shift()) {
+    const mover = movers.get(next.key);
+    if (mover?.send(next.to) === true) return;
+    mover?.mark(false);
+  }
+}
 
 /** After a delete: the first control of the card now at `at`, or of the last card, or Add card when none is left. */
 function focusAfterRemove(at: number) {
@@ -29,7 +85,8 @@ function focusAfterRemove(at: number) {
 <script lang="ts">
 import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, cardName, LINKS_EDIT } from "../../profile/messages.ts";
 import { tick } from "svelte";
-import type { CardContent, CardEditLimits, CardView, Enhance, SubmitHandler } from "../../profile/types.ts";
+import type { CardContent, CardEditLimits, CardSurface, CardView, CardWidth, Enhance, SubmitHandler } from "../../profile/types.ts";
+import type { CardChange } from "../../profile/unsaved.ts";
 import { opensHere, PANEL_ANCHOR } from "../../profile/panel.ts";
 import { Icon } from "../icon/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
@@ -43,10 +100,28 @@ let {
   index,
   limits,
   enhance = () => undefined,
-}: { cards: readonly CardView[]; index: number; limits: CardEditLimits; enhance?: Enhance } = $props();
+  chosen,
+  onchoose,
+  markdown,
+}: {
+  cards: readonly CardView[];
+  index: number;
+  limits: CardEditLimits;
+  enhance?: Enhance;
+  /** The Text card's Width and Style as the member last chose them, saved or not. */
+  chosen?: { readonly width: CardWidth; readonly surface: CardSurface };
+  onchoose?: (change: CardChange) => void;
+  /** Whether the Text card shows its plain Markdown field instead of the editor, and how to turn that over. */
+  markdown?: { readonly shown: boolean; readonly toggle: () => void };
+} = $props();
+
 
 const card = $derived(cards[index]);
 const keys = $derived(cards.map((c) => c.key));
+
+const WIDTHS: readonly CardWidth[] = ["full", "half"];
+const SURFACES: readonly CardSurface[] = ["filled", "outlined", "plain"];
+const choosesHere = $derived(onchoose !== undefined && card?.content.kind === "readme");
 
 /** Whether the page runs script: false while the server renders and until the first effect runs in the browser. */
 let hydrated = $state(false);
@@ -165,10 +240,14 @@ $effect(() => {
 // does (Codex review of f14b5ab); the page's own alert would sit behind the modal. The message is the action's
 // catalog text (`fail(status, { code, message })`), or ours when the answer carried none or never came.
 let removeRefused: string | undefined = $state();
+/** The delete is on its way: its button says so and waits (staging test 2026-11-21: no sign for about 2 s). */
+let removingNow = $state(false);
 const removeCard: SubmitHandler = () => {
   const at = index;
   removeRefused = undefined;
+  removingNow = true;
   return async ({ result, update }) => {
+    removingNow = false;
     if (result.type === "failure") {
       const message = result.data?.message;
       removeRefused = typeof message === "string" ? message : CARD_EDIT.removeRefused;
@@ -183,17 +262,67 @@ const removeCard: SubmitHandler = () => {
     focusAfterRemove(at);
   };
 };
-// Runs when the new order arrives (cards changes); pendingMove itself is not reactive, so a press alone does nothing.
-$effect(() => {
-  const moved = cards[index];
-  const pending = pendingMove;
-  if (pending === null || moved?.key !== pending.key || group === undefined) return;
-  pendingMove = null;
+/**
+ * Sends a move, or queues it while another is on its way. The next press goes once this move's own answer has come and
+ * the page holds the order it made, not on any change of the cards (a Save's refresh while the move is on its way
+ * changes them too; Codex review of #1978). A refused or failed move drops the presses queued after it; the page
+ * shows why, as before.
+ */
+function moveCard(to: Move["to"]): SubmitHandler {
+  return ({ cancel }) => {
+    const key = card?.key ?? "";
+    markMoving(group, true);
+    if (pendingMove !== null) {
+      cancel();
+      queuedMoves.push({ key, to });
+      return async () => undefined;
+    }
+    const move = { key, to };
+    pendingMove = move;
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(() => {
+      if (pendingMove !== move) return;
+      endMove();
+      dropQueue();
+    }, MOVE_SHOWN_MS);
+    return async ({ result, update }) => {
+      await update();
+      // Given up on after MOVE_SHOWN_MS: later presses have gone on without it.
+      if (pendingMove !== move) return;
+      endMove();
+      markMoving(group, false);
+      if (result.type === "failure" || result.type === "error") {
+        dropQueue();
+        return;
+      }
+      await tick();
+      focusMoved(to);
+      sendNext();
+    };
+  };
+}
+/** After a move from the menu, focus stays on the moved card's menu button (or its move button with no script). */
+function focusMoved(to: Move["to"]) {
   const target =
-    group.querySelector<HTMLElement>("[data-card-menu]") ??
-    group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ??
-    group.querySelector<HTMLElement>("[data-move]");
+    group?.querySelector<HTMLElement>("[data-card-menu]") ??
+    group?.querySelector<HTMLElement>(`[data-move="${to}"]`) ??
+    group?.querySelector<HTMLElement>("[data-move]");
   target?.focus();
+}
+$effect(() => {
+  const key = card?.key;
+  if (key === undefined) return;
+  movers.set(key, {
+    send: (direction) => {
+      const form = moveForms[direction];
+      // A form no longer drawn is null (bind:this clears it), not undefined.
+      if (form == null) return false;
+      form.requestSubmit();
+      return true;
+    },
+    mark: (on) => markMoving(group, on),
+  });
+  return () => movers.delete(key);
 });
 </script>
 
@@ -204,8 +333,7 @@ $effect(() => {
     method="POST"
     action="?/reorder"
     hidden={hydrated}
-    use:enhance
-    onsubmit={() => (pendingMove = { key: card?.key ?? "", to: direction })}
+    use:enhance={moveCard(direction)}
   >
     {#each swapped(index, to) as key (key)}<input type="hidden" name="order" value={key} />{/each}
     {#if !hydrated}
@@ -236,6 +364,7 @@ $effect(() => {
       submit={CARD_EDIT.save}
       max={maxOf(card.content.kind)}
       textMax={limits.text}
+      codeColours={limits.codeColours}
       {enhance}
     />
     {#if index > 0}{@render move(index - 1, CARD_EDIT.up)}{/if}
@@ -258,7 +387,32 @@ $effect(() => {
               ><Icon name="down" size={16} />{CARD_EDIT.down}</DropdownMenu.Item
             >
           {/if}
-          {#if cards.length > 1}<DropdownMenu.Separator />{/if}
+          {#if choosesHere && onchoose !== undefined}
+            {#if index > 0 || index < cards.length - 1}<DropdownMenu.Separator />{/if}
+            <DropdownMenu.Label>{CARD_EDIT.width}</DropdownMenu.Label>
+            <DropdownMenu.RadioGroup
+              bind:value={() => chosen?.width ?? card.width, (width) => onchoose({ width: width as CardWidth })}
+            >
+              {#each WIDTHS as width (width)}
+                <DropdownMenu.RadioItem value={width} closeOnSelect={false}>{CARD_EDIT[width]}</DropdownMenu.RadioItem>
+              {/each}
+            </DropdownMenu.RadioGroup>
+            <DropdownMenu.Label>{CARD_EDIT.style}</DropdownMenu.Label>
+            <DropdownMenu.RadioGroup
+              bind:value={() => chosen?.surface ?? card.surface, (surface) => onchoose({ surface: surface as CardSurface })}
+            >
+              {#each SURFACES as surface (surface)}
+                <DropdownMenu.RadioItem value={surface} closeOnSelect={false}>{CARD_EDIT[surface]}</DropdownMenu.RadioItem>
+              {/each}
+            </DropdownMenu.RadioGroup>
+            {#if markdown !== undefined}
+              <DropdownMenu.Separator />
+              <DropdownMenu.CheckboxItem bind:checked={() => markdown.shown, () => markdown.toggle()}
+                >{CARD_EDIT.showMarkdown}</DropdownMenu.CheckboxItem
+              >
+            {/if}
+          {/if}
+          {#if cards.length > 1 || choosesHere}<DropdownMenu.Separator />{/if}
           <DropdownMenu.Item variant="destructive" onSelect={removeFromMenu}
             ><Icon name="delete" size={16} />{CARD_EDIT.remove}</DropdownMenu.Item
           >
@@ -295,7 +449,9 @@ $effect(() => {
           <Dialog.Close class={buttonVariants({ variant: "outline" })}>{CARD_EDIT.cancel}</Dialog.Close>
           <form method="POST" action="?/remove" use:enhance={removeCard}>
             <input type="hidden" name="key" value={card.key} />
-            <Button type="submit" variant="destructive">{CARD_EDIT.remove}</Button>
+            <Button type="submit" variant="destructive" disabled={removingNow} aria-busy={removingNow}
+              >{removingNow ? CARD_EDIT.removing : CARD_EDIT.remove}</Button
+            >
           </form>
         </Dialog.Footer>
       </Dialog.Content>

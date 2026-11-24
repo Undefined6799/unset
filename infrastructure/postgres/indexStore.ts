@@ -12,6 +12,8 @@ import {
   type IndexAccount,
   type IndexChange,
   type IndexWrite,
+  MAIN_PAGE_RKEY,
+  MAX_PAGE_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
 } from "@unset/domains-profile";
@@ -90,6 +92,7 @@ export const INGEST_COUNTERS = [
   "ingest_inactive",
   "ingest_invalid",
   "ingest_capped",
+  "ingest_over_budget",
   "ingest_account_inactive",
   "ingest_account_confirm",
   "ingest_dead_letter",
@@ -286,11 +289,11 @@ async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount)
   if (plan.kind === "unsigned") return count(tx, "ingest_unsigned");
   if (plan.kind === "inactive") await count(tx, "ingest_inactive");
   else {
-    // Deletes first, so a section created in the same commit as one is deleted finds room under the cap. Order changes
-    // nothing else: the reader proves every op against the commit's one signed tree and refuses the frame if any op
-    // is unproven (infrastructure/firehose, commitFrame), so a put and a delete of the same path cannot both arrive.
-    const ordered = [...plan.writes].sort((a, b) => Number(b.kind === "delete") - Number(a.kind === "delete"));
-    for (const write of ordered) await applyWrite(tx, frame.did, plan.rev, write);
+    // Order changes nothing else: the reader proves every op against the commit's one signed tree and refuses the frame
+    // if any op is unproven (infrastructure/firehose, commitFrame), so a put and a delete of the same path cannot both
+    // arrive.
+    for (const write of await inApplyOrder(tx, frame.did, plan.writes))
+      await applyWrite(tx, frame.did, plan.rev, write);
     if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
   }
   await tx.query(
@@ -356,12 +359,40 @@ export async function queueJob(tx: PoolClient, did: string, kind: JobKind): Prom
   );
 }
 
+/**
+ * A commit's writes in the order they are applied, so each one is judged with room the others make: deletes first,
+ * then the profile, then the sections that shrink the account, then the other sections, as the save sends them, then
+ * the page
+ * (domains/profile `inSizeOrder`). A commit that keeps the account within MAX_PAGE_BYTES then never passes it
+ * partway (the sizes in between only fall, then rise to the commit's own total), so a Save that grows one card and
+ * shrinks another is indexed whole (Codex review of #1911).
+ */
+export async function inApplyOrder(tx: PoolClient, did: string, writes: readonly IndexWrite[]): Promise<IndexWrite[]> {
+  const sections = writes.filter((write) => write.kind === "section");
+  const { rows } = await tx.query(
+    `SELECT rkey, coalesce(bytes, octet_length(record::text)) AS bytes
+       FROM idx.section WHERE did = $1 AND rkey = ANY($2::text[])`,
+    [did, sections.map((write) => write.rkey)],
+  );
+  const stored = new Map(rows.map((row) => [String(row.rkey), Number(row.bytes)]));
+  const change = (write: (typeof sections)[number]) => write.bytes - (stored.get(write.rkey) ?? 0);
+  return [
+    ...writes.filter((write) => write.kind === "delete"),
+    ...writes.filter((write) => write.kind === "profile"),
+    ...sections.filter((write) => change(write) < 0),
+    ...sections.filter((write) => change(write) >= 0),
+    // Last, so the cards' places are set over the commit's own cards (a new card's row is there by then).
+    ...writes.filter((write) => write.kind === "page"),
+  ];
+}
+
 export async function applyWrite(tx: PoolClient, did: string, rev: string, write: IndexWrite): Promise<void> {
   if (write.kind === "profile") return putProfile(tx, did, rev, write);
+  if (write.kind === "page") return putPage(tx, did, rev, write);
   if (write.kind === "section") return putSection(tx, did, rev, write);
   const uri = `at://${did}/${write.collection}/${write.rkey}`;
   // A delete older than the row it would remove leaves the row: the row came from a later commit.
-  const table = write.collection === "sh.unset.profile" ? "idx.profile" : "idx.section";
+  const table = TABLES[write.collection];
   const { rowCount } = await tx.query(`DELETE FROM ${table} WHERE did = $1 AND uri = $2 AND rev <= $3`, [
     did,
     uri,
@@ -369,8 +400,15 @@ export async function applyWrite(tx: PoolClient, did: string, rev: string, write
   ]);
   if (rowCount === 0) return;
   await replaceBlobs(tx, did, uri, []);
-  if (table === "idx.profile") await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
+  if (table === "idx.page") await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
 }
+
+/** The table each indexed collection's rows live in; the name is chosen from these, never from input. */
+const TABLES = {
+  "sh.unset.profile": "idx.profile",
+  "sh.unset.page": "idx.page",
+  "sh.unset.card": "idx.section",
+} as const;
 
 async function putProfile(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "profile" }>) {
   const uri = `at://${did}/sh.unset.profile/self`;
@@ -385,41 +423,74 @@ async function putProfile(tx: PoolClient, did: string, rev: string, write: Extra
   );
   if (rowCount === 0) return;
   await replaceBlobs(tx, did, uri, write.blobs);
-  // Each section's place in the profile's `cards` list (ADR 0051), or null when the profile does not list it.
+}
+
+/** The main page (ADR 0091), and each card's place in its `cards` list of at:// addresses, or null when not listed. */
+async function putPage(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "page" }>) {
+  const uri = `at://${did}/sh.unset.page/${MAIN_PAGE_RKEY}`;
+  const { rowCount } = await tx.query(
+    `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at) VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (did) DO UPDATE SET uri = excluded.uri, cid = excluded.cid, rev = excluded.rev,
+       record = excluded.record, indexed_at = excluded.indexed_at
+     WHERE excluded.rev >= idx.page.rev`,
+    [did, uri, write.cid, rev, write.record],
+  );
+  if (rowCount === 0) return;
   await tx.query(
     `UPDATE idx.section s SET position = (
-       SELECT (o.ord - 1)::integer FROM jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
-        WHERE o.rkey = s.rkey ORDER BY o.ord LIMIT 1)
-       FROM idx.profile p WHERE p.did = s.did AND s.did = $1`,
+       SELECT (o.ord - 1)::integer FROM jsonb_array_elements(g.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
+        WHERE o.ref ->> 'uri' = s.uri ORDER BY o.ord LIMIT 1)
+       FROM idx.page g WHERE g.did = s.did AND s.did = $1`,
     [did],
   );
 }
 
 async function putSection(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "section" }>) {
-  const uri = `at://${did}/sh.unset.section/${write.rkey}`;
-  if (!(await sectionFits(tx, did, uri))) return count(tx, "ingest_capped");
+  const uri = `at://${did}/sh.unset.card/${write.rkey}`;
+  const room = await sectionRoom(tx, did, uri, write.bytes);
+  if (room === "count") return count(tx, "ingest_capped");
+  if (room === "bytes") {
+    // As for a record planCommit refuses: the older version under this key goes, so the page never shows a card
+    // its member has since changed (a backfill of the repo would not index it either).
+    await applyWrite(tx, did, rev, { kind: "delete", collection: "sh.unset.card", rkey: write.rkey });
+    return count(tx, "ingest_over_budget");
+  }
   const { rowCount } = await tx.query(
-    `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-     VALUES ($1, $2::types.did, $3, $4, $5, $6, (
-       SELECT (o.ord - 1)::integer FROM idx.profile p,
-              jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
-        WHERE p.did = $2::types.did AND o.rkey = $3 ORDER BY o.ord LIMIT 1), now())
+    `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, bytes, position, indexed_at)
+     VALUES ($1, $2::types.did, $3, $4, $5, $6, $7, (
+       SELECT (o.ord - 1)::integer FROM idx.page g,
+              jsonb_array_elements(g.record -> 'cards') WITH ORDINALITY AS o(ref, ord)
+        WHERE g.did = $2::types.did AND o.ref ->> 'uri' = $1::types.at_uri::text ORDER BY o.ord LIMIT 1), now())
      ON CONFLICT (uri) DO UPDATE SET cid = excluded.cid, rev = excluded.rev, record = excluded.record,
-       position = excluded.position, indexed_at = excluded.indexed_at
+       bytes = excluded.bytes, position = excluded.position, indexed_at = excluded.indexed_at
      WHERE excluded.rev >= idx.section.rev AND idx.section.did = excluded.did`,
-    [uri, did, write.rkey, write.cid, rev, write.record],
+    [uri, did, write.rkey, write.cid, rev, write.record, write.bytes],
   );
   if (rowCount !== 0) await replaceBlobs(tx, did, uri, write.blobs);
 }
 
-/** A section already indexed may change; a new one fits while the account holds fewer than the cap. */
-async function sectionFits(tx: PoolClient, did: string, uri: string): Promise<boolean> {
+/**
+ * Whether the section fits its account: a section already indexed may change, and a new one fits while the account
+ * holds fewer than the cap ("count" when not); and the account's other sections and this one together stay within
+ * MAX_PAGE_BYTES ("bytes" when not), as the save counts them (domains/profile `fitsPage`). The frame holds the account
+ * row's lock (lockAccount), so no other write to this account's sections runs between this count and the write (DA-4).
+ * A size an older indexer left out counts as its jsonb text, as migration 0040 fills it.
+ */
+async function sectionRoom(tx: PoolClient, did: string, uri: string, bytes: number): Promise<"ok" | "count" | "bytes"> {
   const { rows } = await tx.query(
     `SELECT EXISTS (SELECT 1 FROM idx.section WHERE did = $1 AND uri = $2) AS known,
-            (SELECT count(*) FROM idx.section WHERE did = $1) AS held`,
+            (SELECT count(*) FROM idx.section WHERE did = $1) AS held,
+            (SELECT coalesce(sum(coalesce(bytes, octet_length(record::text))), 0)
+               FROM idx.section WHERE did = $1 AND uri <> $2) AS others,
+            (SELECT coalesce(bytes, octet_length(record::text)) FROM idx.section WHERE did = $1 AND uri = $2) AS mine`,
     [did, uri],
   );
-  return rows[0]?.known === true || Number(rows[0]?.held) < MAX_SECTIONS_PER_ACCOUNT;
+  const row = rows[0];
+  if (row?.known !== true && !(Number(row?.held) < MAX_SECTIONS_PER_ACCOUNT)) return "count";
+  // A card that does not grow never makes the page worse, so it is kept even on a page indexed past the budget before
+  // the budget existed (Codex review of #1911); the public read still stops at the budget.
+  if (row?.mine !== null && row?.mine !== undefined && bytes <= Number(row.mine)) return "ok";
+  return Number(row?.others) + bytes <= MAX_PAGE_BYTES ? "ok" : "bytes";
 }
 
 export async function replaceBlobs(tx: PoolClient, did: string, uri: string, blobs: readonly BlobRef[]): Promise<void> {

@@ -1,25 +1,34 @@
-// The member's profile cards: sh.unset.section records in their own repo (ADR 0051), over pdsCall. Values are
+// The member's profile cards: sh.unset.card records in their own repo (ADR 0051), over pdsCall. Values are
 // returned unparsed; domains/profile reads them. Calls and errors: @atproto/api 0.30.3 com.atproto.repo.listRecords,
-// createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
+// applyWrites (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
 // record keys: atproto.com/specs/record-key.
 import { TID } from "@atproto/common-web";
 import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
+import { MAIN_PAGE_RKEY, PAGE_COLLECTION } from "./page-record.ts";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
 import { type BuiltRecord, isXrpcError, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
 
-export const CARD_COLLECTION = "sh.unset.section";
+export const CARD_COLLECTION = "sh.unset.card";
 
 /**
  * How the cards are read (Codex on #1657; coordinator 2026-11-17 07:04Z). Every PDS response is capped at 1 MiB
- * (net-guard libraryFetch), and one card may be about 900 KB, so the cards come in pages of PAGE records; a page past
- * the cap is read again one record at a time. One page load makes at most MAX_CALLS calls and keeps at most
- * MAX_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.profile.cardsMax), all inside the request's deadline.
+ * (net-guard libraryFetch), and one card may be about 900 KB, so the cards come in pages of at most PAGE records; a
+ * page past the cap is read again with half as many, down to one, and a page well under the cap lets the next hold
+ * twice as many again (GROW_BYTES), so a page of large cards is read in a few calls, not one per card (Codex review
+ * of #1911: 29 cards of 120 KB took 33 calls). One page load makes at most MAX_CALLS calls and keeps at most
+ * CARD_LIST_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.page.cardsMax), all inside the request's deadline.
  * When it stops early, the list says it is incomplete, and the caller shows what it has, never more.
  */
 const PAGE = 10;
+/** A page whose records come to at most this many bytes lets the next one hold twice as many (half the 1 MiB cap). */
+const GROW_BYTES = 512 * 1024;
 const MAX_CALLS = 24;
-const MAX_BYTES = 4 * 1024 * 1024;
+/**
+ * Equal to the most one member's cards may hold together (MAX_PAGE_BYTES in domains/profile, index-plan.ts; a test in
+ * interfaces/web, record-size.test.ts, holds them equal), so a list of cards the page can show always reads complete.
+ */
+export const CARD_LIST_BYTES = 4 * 1024 * 1024;
 const MAX_CARDS = 100;
 
 export type StoredCard = { readonly key: string; readonly value: unknown; readonly cid: string };
@@ -92,26 +101,24 @@ export async function listCardRecords(
   const cards: StoredCard[] = [];
   let bytes = 0;
   let cursor: string | undefined;
-  // After a page past the cap, the next PAGE cards are read one at a time, then pages resume.
-  let single = 0;
+  let limit = PAGE;
   for (let calls = 0; calls < MAX_CALLS; calls += 1) {
-    const limit = single > 0 ? 1 : PAGE;
     if (ctx?.deadline.aborted === true) break;
     const page = await readPage(pdsCall, ctx, did, limit, cursor);
     if (page.kind !== "ok") return cards.length === 0 || page.kind !== "transient" ? page : partial(cards);
     if (page.value === TOO_LARGE) {
       // One record alone past the cap cannot be read, and its key is unknown, so the read stops before it.
       if (limit === 1) break;
-      single = PAGE;
+      limit = Math.floor(limit / 2);
       continue;
     }
-    single = Math.max(0, single - 1);
+    if (page.value.bytes <= GROW_BYTES) limit = Math.min(PAGE, limit * 2);
     cards.push(...page.value.records);
     bytes += page.value.bytes;
     if (page.value.cursor === undefined) return listed(cards, cards.length <= MAX_CARDS);
     cursor = page.value.cursor;
     // One page past MAX_CARDS is read, so exactly MAX_CARDS cards still end with an empty last page and count as all.
-    if (cards.length > MAX_CARDS || bytes > MAX_BYTES) break;
+    if (cards.length > MAX_CARDS || bytes > CARD_LIST_BYTES) break;
   }
   return partial(cards);
 }
@@ -133,54 +140,11 @@ export function latestCommit(pdsCall: PdsCall, ctx: PdsContext | null, did: Did)
   });
 }
 
-export type CreateOutcome =
-  | { readonly kind: "created"; readonly key: string; readonly rev?: string }
-  /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was created. */
-  | { readonly kind: "changed" };
-
 /**
  * A new card's record key, for a card web must name before it is written (a picture card records its picture's use
  * first): a TID as the PDS itself would pick one (atproto.com/specs/tid; @atproto/common-web 0.5.17 TID.nextStr).
  */
 export const newCardKey = (): string => TID.nextStr();
-
-/**
- * Creates a card, only if the repo's head is still `swapCommit` (compare-and-swap on the whole repo: createRecord
- * `swapCommit`; @atproto/pds 0.5.51 checks it inside the repo's write transaction, processWrites, and answers
- * InvalidSwap, writing nothing). The PDS picks the key (a TID) unless `rkey` names one (newCardKey). Not retried: a
- * retry could create it twice.
- */
-export function createCardRecord(
-  pdsCall: PdsCall,
-  ctx: PdsContext | null,
-  did: Did,
-  record: Readonly<Record<string, unknown>>,
-  swapCommit: string,
-  rkey?: string,
-): Promise<PdsResult<CreateOutcome>> {
-  return pdsCall(
-    ctx,
-    did,
-    async (agent): Promise<CreateOutcome> => {
-      try {
-        const { data } = await agent.com.atproto.repo.createRecord({
-          repo: did,
-          collection: CARD_COLLECTION,
-          record: { ...record },
-          swapCommit,
-          ...(rkey === undefined ? {} : { rkey }),
-        });
-        const key = ownCardKey(data.uri, did);
-        if (key === null) throw new Error("createRecord returned a record outside this repo");
-        return data.commit === undefined ? { kind: "created", key } : { kind: "created", key, rev: data.commit.rev };
-      } catch (error: unknown) {
-        if (isXrpcError(error, "InvalidSwap")) return { kind: "changed" };
-        throw error;
-      }
-    },
-    { idempotent: false },
-  );
-}
 
 /**
  * Edits one card with compare-and-swap (saveRecord). A card that is gone is refused as `card.missing`, never
@@ -198,15 +162,24 @@ export function saveCardRecord<C extends string>(
   );
 }
 
-/** `rev`: the last landed commit's revision (a TID), when the PDS gave one. */
+/**
+ * `rev`: the last landed commit's revision (a TID), when the PDS gave one. `versions`: each written card's new record
+ * CID, for the cards the PDS named in its answer (absent when it named none).
+ */
+export type WrittenVersion = { readonly key: string; readonly cid: string };
 export type SaveManyOutcome =
-  | { readonly kind: "saved"; readonly rev?: string }
+  | { readonly kind: "saved"; readonly rev?: string; readonly versions?: readonly WrittenVersion[] }
   /** The repo's head was no longer `swapCommit`: something was written first, and none of the cards was written. */
   | { readonly kind: "changed" }
   /** This card alone would pass the PDS's JSON body limit, so nothing was sent and nothing was written. */
   | { readonly kind: "too_large"; readonly key: string }
   /** The cards did not fit one call; the first calls landed, a later one did not. `saved` are the cards written. */
-  | { readonly kind: "partial"; readonly saved: readonly string[]; readonly rev?: string };
+  | {
+      readonly kind: "partial";
+      readonly saved: readonly string[];
+      readonly rev?: string;
+      readonly versions?: readonly WrittenVersion[];
+    };
 
 /**
  * The most bytes of JSON one applyWrites body may hold. @atproto/pds 0.5.51 parses most JSON bodies up to 150 KiB
@@ -226,6 +199,16 @@ type CardWriteOp = {
   readonly rkey: string;
   readonly value: Record<string, unknown>;
 };
+/** An applyWrites write (@atproto/api 0.30.3 com.atproto.repo.applyWrites Create, Update, Delete). */
+type WriteOp =
+  | CardWriteOp
+  | {
+      readonly $type: "com.atproto.repo.applyWrites#create" | "com.atproto.repo.applyWrites#update";
+      readonly collection: string;
+      readonly rkey: string;
+      readonly value: Record<string, unknown>;
+    }
+  | { readonly $type: "com.atproto.repo.applyWrites#delete"; readonly collection: string; readonly rkey: string };
 type Batch = { readonly keys: string[]; readonly writes: CardWriteOp[] };
 
 /**
@@ -286,8 +269,9 @@ export async function saveCardRecords(
   const saved: string[] = [];
   let head: string | undefined = swapCommit;
   let rev: string | undefined;
-  const partial = (): SaveManyOutcome =>
-    rev === undefined ? { kind: "partial", saved } : { kind: "partial", saved, rev };
+  const versions: WrittenVersion[] = [];
+  const landed = () => ({ ...(rev === undefined ? {} : { rev }), ...(versions.length === 0 ? {} : { versions }) });
+  const partial = (): SaveManyOutcome => ({ kind: "partial", saved, ...landed() });
   for (const batch of packed) {
     if (head === undefined) return { kind: "ok", value: partial() };
     const result = await applyCardWrites(pdsCall, ctx, did, batch.writes, head);
@@ -295,10 +279,25 @@ export async function saveCardRecords(
     if (result.kind !== "ok") return first ? result : { kind: "ok", value: partial() };
     if (result.value === "changed") return { kind: "ok", value: first ? { kind: "changed" } : partial() };
     saved.push(...batch.keys);
+    versions.push(...writtenVersions(did, batch.keys, result.value.results));
     head = result.value.commit;
     rev = result.value.rev;
   }
-  return { kind: "ok", value: rev === undefined ? { kind: "saved" } : { kind: "saved", rev } };
+  return { kind: "ok", value: { kind: "saved", ...landed() } };
+}
+
+/**
+ * The new CID of each card the call wrote, from applyWrites' `results` (@atproto/api 0.30.3, UpdateResult
+ * { uri, cid }): only a result for one of `keys`, at its own record's URI in this repo, counts.
+ */
+function writtenVersions(did: Did, keys: readonly string[], results: unknown): WrittenVersion[] {
+  if (!Array.isArray(results)) return [];
+  return results.flatMap((result: unknown) => {
+    if (typeof result !== "object" || result === null) return [];
+    const { uri, cid } = result as Record<string, unknown>;
+    const key = keys.find((k) => uri === `at://${did}/${CARD_COLLECTION}/${k}`);
+    return key === undefined || typeof cid !== "string" ? [] : [{ key, cid }];
+  });
 }
 
 /** One applyWrites call: the new head's CID and revision when it landed (absent if the PDS did not say), or `changed`. */
@@ -306,16 +305,20 @@ function applyCardWrites(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
-  writes: CardWriteOp[],
+  writes: WriteOp[],
   swapCommit: string,
-): Promise<PdsResult<{ readonly commit: string | undefined; readonly rev: string | undefined } | "changed">> {
+): Promise<
+  PdsResult<
+    { readonly commit: string | undefined; readonly rev: string | undefined; readonly results: unknown } | "changed"
+  >
+> {
   return pdsCall(
     ctx,
     did,
     async (agent) => {
       try {
         const { data } = await agent.com.atproto.repo.applyWrites({ repo: did, swapCommit, writes });
-        return { commit: data.commit?.cid, rev: data.commit?.rev };
+        return { commit: data.commit?.cid, rev: data.commit?.rev, results: data.results };
       } catch (error: unknown) {
         if (isXrpcError(error, "InvalidSwap")) return "changed" as const;
         throw error;
@@ -325,19 +328,61 @@ function applyCardWrites(
   );
 }
 
-/** Deletes one card. Not retried. */
-export function deleteCardRecord(
+/** A card created or deleted with the page write that lists or unlists it. */
+export type CardChange =
+  | { readonly kind: "create"; readonly key: string; readonly record: Readonly<Record<string, unknown>> }
+  | { readonly kind: "delete"; readonly key: string };
+/** The main page record to write, and whether one is stored (a first one is created, never written over another). */
+export type PageChange = { readonly record: Readonly<Record<string, unknown>>; readonly exists: boolean };
+export type ListedOutcome =
+  | { readonly kind: "written"; readonly rev?: string }
+  /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was written. */
+  | { readonly kind: "changed" }
+  /** The writes do not fit one applyWrites body (APPLY_WRITES_BODY_BYTES), so nothing was sent. */
+  | { readonly kind: "too_large" };
+
+/**
+ * A card and the main page that lists it, written in one commit and only if the repo's head is still `swapCommit`
+ * (ADR 0086 point 3, ADR 0091: a card shows only when the page lists it, so the two never land apart). One applyWrites call
+ * is all or none: @atproto/pds 0.5.51 applies it in one processWrites transaction and answers InvalidSwap with
+ * nothing written when the head moved (dist/api/com/atproto/repo/applyWrites.js). An update or delete of a record
+ * that is not stored fails the whole call there (dist/actor-store/repo/transactor.js, BadRecordSwapError), so the
+ * caller says whether the page exists and deletes only a card it read. Not retried: the caller re-reads and decides.
+ */
+export async function writeCardAndList(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
-  key: string,
-): Promise<PdsResult<void>> {
-  return pdsCall(
-    ctx,
-    did,
-    async (agent) => {
-      await agent.com.atproto.repo.deleteRecord({ repo: did, collection: CARD_COLLECTION, rkey: key });
-    },
-    { idempotent: false },
-  );
+  change: { readonly card?: CardChange; readonly page?: PageChange },
+  swapCommit: string,
+): Promise<PdsResult<ListedOutcome>> {
+  const writes: WriteOp[] = [];
+  const { card, page } = change;
+  if (card?.kind === "create") {
+    writes.push({
+      $type: "com.atproto.repo.applyWrites#create",
+      collection: CARD_COLLECTION,
+      rkey: card.key,
+      value: { ...card.record },
+    });
+  }
+  if (card?.kind === "delete") {
+    writes.push({ $type: "com.atproto.repo.applyWrites#delete", collection: CARD_COLLECTION, rkey: card.key });
+  }
+  if (page !== undefined) {
+    writes.push({
+      $type: page.exists ? "com.atproto.repo.applyWrites#update" : "com.atproto.repo.applyWrites#create",
+      collection: PAGE_COLLECTION,
+      rkey: MAIN_PAGE_RKEY,
+      value: { ...page.record },
+    });
+  }
+  if (writes.length === 0) return { kind: "ok", value: { kind: "written" } };
+  const body = Buffer.byteLength(JSON.stringify({ repo: did, swapCommit, writes })) + BODY_SLACK_BYTES;
+  if (body > APPLY_WRITES_BODY_BYTES) return { kind: "ok", value: { kind: "too_large" } };
+  const result = await applyCardWrites(pdsCall, ctx, did, writes, swapCommit);
+  if (result.kind !== "ok") return result;
+  if (result.value === "changed") return { kind: "ok", value: { kind: "changed" } };
+  const { rev } = result.value;
+  return { kind: "ok", value: rev === undefined ? { kind: "written" } : { kind: "written", rev } };
 }

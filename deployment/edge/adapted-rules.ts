@@ -238,6 +238,28 @@ const ROUTE_CLASS: Json[] = [
   { handler: "log_append", key: "route_class", value: "{route_class}" },
 ];
 /**
+ * (app-route-class) as adapted, first on the dev app site (staging 2026-11-21): a closed set of names with no capture,
+ * so no path segment of a member's reaches the log.
+ */
+const APP_ROUTE_CLASS: Json[] = [
+  {
+    handler: "map",
+    source: "{http.request.orig_uri}",
+    destinations: ["{route_class}"],
+    mappings: [
+      { input_regexp: "^/_app/immutable/", outputs: ["build"] },
+      { input_regexp: "^/_app/version\\.json(?:\\?[^#]*)?$", outputs: ["version"] },
+      { input_regexp: "^/fonts/", outputs: ["fonts"] },
+      { input_regexp: "^[^?#]*/__data\\.json(?:\\?[^#]*)?$", outputs: ["data"] },
+      { input_regexp: "^[^?#]*\\?/", outputs: ["action"] },
+      { input_regexp: "^/images(?:\\?[^#]*)?$", outputs: ["images"] },
+      { input_regexp: "^/health(?:\\?[^#]*)?$", outputs: ["health"] },
+    ],
+    defaults: ["other"],
+  },
+  { handler: "log_append", key: "route_class", value: "{route_class}" },
+];
+/**
  * (pds-fonts) as adapted (P2.24e): woff2 files by one plain name from the image's /etc/caddy/static, anything else
  * under /_unset/ a 404, and one deferred CSP append on HTML responses naming the exact origin and path. The file
  * server's `hide` is Caddy's own list of the config files it read, which no rule reads.
@@ -1015,7 +1037,7 @@ function snippetProblems(name: string, site: Obj[], routes: Obj[], host: Host, m
   }
   const found = required.filter(([present]) => !present).map(([, snippet]) => `${name}: does not import ${snippet}`);
   const classes = handlersIn(site).filter((each) => each.handler === "map" || each.handler === "log_append");
-  const own = pds ? ROUTE_CLASS : [];
+  const own = pds ? ROUTE_CLASS : host === "APP_HOST" && mode === "dev" ? APP_ROUTE_CLASS : [];
   const exact = classes.length === own.length && own.every((part, at) => same(site[at], part));
   return exact ? found : [...found, `${name}: the route class is not the ruled one`];
 }

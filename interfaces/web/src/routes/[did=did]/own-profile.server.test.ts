@@ -15,8 +15,8 @@ const T1 = "2026-11-01T00:00:00.000Z";
 const T2 = "2026-11-02T00:00:00.000Z";
 const ok = <T>(value: T): PdsResult<T> => ({ kind: "ok", value });
 const readme = (text: string, createdAt = T1) => ({
-  $type: "sh.unset.section",
-  content: { $type: "sh.unset.section#readme", text },
+  $type: "sh.unset.card",
+  content: { $type: "sh.unset.block.text", text },
   createdAt,
 });
 const profile = (extra: Record<string, unknown> = {}): StoredRecord => ({
@@ -24,28 +24,54 @@ const profile = (extra: Record<string, unknown> = {}): StoredRecord => ({
   cid: "c",
 });
 const card = (key: string, value: unknown): StoredCard => ({ key, value, cid: "c" });
-const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, complete = true) =>
-  loadOwnProfile({
+const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as Parameters<typeof loadOwnProfile>[0];
+/** The main page listing these cards, as it is written: the owner's card addresses (ADR 0086, ADR 0091). */
+const page = (...keys: string[]): StoredRecord => ({
+  value: {
+    $type: "sh.unset.page",
+    cards: keys.map((k) => ({ uri: `at://${OWNER}/sh.unset.card/${k}` })),
+    createdAt: T1,
+  },
+  cid: "g",
+});
+const load = (
+  p: PdsResult<StoredRecord | null>,
+  c: PdsResult<StoredCard[]>,
+  complete = true,
+  g: PdsResult<StoredRecord | null> = ok(null),
+) =>
+  loadOwnProfile(OWNER, {
     profile: async () => p,
+    page: async () => g,
     cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete, overflow: false } } : c),
   });
 
 describe("loadOwnProfile", () => {
-  test("reads the profile fields and the cards in the profile's order", async () => {
+  test("reads the profile fields and the cards in the main page's order", async () => {
     const result = await load(
-      ok(profile({ headline: "Hi", cards: ["b", "a"] })),
+      ok(profile({ headline: "Hi" })),
       ok([card("a", readme("A")), card("b", readme("B", T2)), card("c", readme("C"))]),
+      true,
+      ok(page("b", "a")),
     );
     expect(result).toMatchObject({
       kind: "ok",
       profile: { displayName: "Alice", headline: "Hi", location: "", website: "" },
     });
-    expect(result.kind === "ok" && result.cards.map((c) => c.key)).toEqual(["b", "a", "c"]);
+    // ADR 0086 point 3: only listed cards show, on the owner's own page too.
+    expect(result.kind === "ok" && result.cards.map((c) => c.key)).toEqual(["b", "a"]);
+  });
+
+  // ADR 0074: the one Save names the version each card's editor opened, so the page carries each card's record CID.
+  test("each card's version is its record's CID, and one that is not a CID is left out", async () => {
+    const cid = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
+    const result = await load(ok(profile()), ok([{ key: "a", value: readme("A"), cid }, card("b", readme("B"))]));
+    expect(result.kind === "ok" && Object.fromEntries(result.versions)).toEqual({ a: cid });
   });
 
   test("a card list the read cut short is shown, and says so", async () => {
-    const whole = await load(ok(profile()), ok([card("a", readme("A"))]));
-    const cut = await load(ok(profile()), ok([card("a", readme("A"))]), false);
+    const whole = await load(ok(profile()), ok([card("a", readme("A"))]), true, ok(page("a")));
+    const cut = await load(ok(profile()), ok([card("a", readme("A"))]), false, ok(page("a")));
     expect(whole).toMatchObject({ kind: "ok", cardsComplete: true });
     expect(cut).toMatchObject({ kind: "ok", cardsComplete: false });
     expect(cut.kind === "ok" && cut.cards.map((c) => c.key)).toEqual(["a"]);
@@ -55,14 +81,27 @@ describe("loadOwnProfile", () => {
     const result = await load(
       ok(profile()),
       ok([card("a", readme("A")), card("bad/key", readme("B")), card("v", { $type: "x" })]),
+      true,
+      ok(page("a", "bad/key", "v")),
     );
     expect(result.kind === "ok" && result.cards.map((c) => c.key)).toEqual(["a"]);
   });
 
-  test("no profile record reads as no profile, and its cards still show", async () => {
+  test("a card list kept on the profile, as before ADR 0091, places no card", async () => {
+    const old = { cards: [{ uri: `at://${OWNER}/sh.unset.card/a` }] };
+    const result = await load(ok(profile(old)), ok([card("a", readme("A"))]));
+    expect(result.kind === "ok" && result.cards).toHaveLength(0);
+  });
+
+  test("a page that cannot be read leaves the page up without the profile", async () => {
+    const result = await load(ok(profile()), ok([]), true, { kind: "transient", code: "pds_unavailable" });
+    expect(result).toEqual({ kind: "unavailable" });
+  });
+
+  test("no profile record reads as no profile, and with no page no card shows", async () => {
     const result = await load(ok(null), ok([card("a", readme("A"))]));
     expect(result).toMatchObject({ kind: "ok", profile: null });
-    expect(result.kind === "ok" && result.cards).toHaveLength(1);
+    expect(result.kind === "ok" && result.cards).toHaveLength(0);
   });
 
   test("an outage leaves the page up without the profile", async () => {

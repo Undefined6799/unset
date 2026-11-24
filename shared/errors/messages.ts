@@ -40,6 +40,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "profile.name_required": "Add a name before you save your profile.",
   "profile.conflict": "Your profile changed somewhere else since you opened it. Reload to see it, then save again.",
   "profile.pds_unavailable": "Your sign-in server is not answering, so your profile was not saved. Try again.",
+  "page.invalid": "Your page could not be read, so nothing was changed.",
+  "page.too_long": "Your page is too long to add this card. Remove a card, then try again.",
   "card.invalid": "Something in this card could not be read. Check it and try again.",
   "card.kind_unknown": "That kind of card is not available.",
   "card.required": "Fill in the fields this card needs.",
@@ -52,6 +54,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.order_invalid": "Your cards changed since you opened the page. Reload, then move them again.",
   "card.missing": "That card is gone. Reload to see your cards.",
   "card.too_many": "You have the most cards a page can hold. Delete one to add another.",
+  "card.page_full": "Your cards together are more than one page can hold. Shorten or delete a card, then save again.",
   "card.overflow": "You have more cards than your page can show. Delete one to bring a hidden card back.",
   "card.cards_changed":
     "Your cards changed somewhere else while you were adding this one. Nothing was saved. Save again to add it.",
@@ -61,8 +64,12 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
     "Some of your cards could not be read just now, so nothing was changed. Try again in a moment.",
   "card.conflict": "This card changed somewhere else since you opened it. Reload to see it, then save again.",
   "card.pds_unavailable": "Your sign-in server is not answering, so your card was not saved. Try again.",
+  "card.scope_missing":
+    "unset.sh needs a permission your sign-in has not given it yet, so your card was not saved. Allow access, then save again.",
   "card.image_missing": "This picture is no longer available. Upload it again, then save.",
   "card.image_unavailable": "Your picture could not be saved just now. Nothing was changed. Try again.",
+  "card.image_too_large":
+    "Your sign-in server would not take a picture this large. Nothing was saved. Choose a smaller picture.",
   "welcome.date_invalid": "That date is not a real calendar date.",
   "welcome.terms_required": "Tick the box to accept the terms and the privacy notice.",
   "welcome.country_required": "Tick the box about where you live.",

@@ -33,8 +33,8 @@ test("images.normal_use_fits: a 64 MiB picture with the longest alt and caption 
   const form = new FormData();
   form.set("image", new Blob([new Uint8Array(UPLOAD_LIMITS.maxBytes)], { type: "image/jpeg" }), "IMG_0001.jpeg");
   // A grapheme can take several UTF-8 bytes: five each bounds what any alt or caption adds.
-  form.set("alt", "é".repeat(LIMITS.section.imageAlt * 5));
-  form.set("caption", "é".repeat(LIMITS.section.imageCaption * 5));
+  form.set("alt", "é".repeat(LIMITS.card.imageAlt * 5));
+  form.set("caption", "é".repeat(LIMITS.card.imageCaption * 5));
   const bytes = (await new Response(form).arrayBuffer()).byteLength;
   expect(bytes).toBeGreaterThan(UPLOAD_LIMITS.maxBytes);
   expect(bytes).toBeLessThanOrEqual(IMAGE_UPLOAD_LIMIT_BYTES);

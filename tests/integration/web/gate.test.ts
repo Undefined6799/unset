@@ -3,7 +3,7 @@
 // adds its own file beside this one. Postgres as `web` (TE-2); nothing is stood in. The routes under /test-routes/
 // exist for this file and are served only when TEST_ROUTES is on (interfaces/web/src/routes/test-routes/README.md).
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { connect, createServer, type Socket } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test server only
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -533,6 +533,46 @@ describe("policies and logs", () => {
   test("every_route_has_a_policy", () => {
     const missing = routeFolders().filter((dir) => !readdirSync(dir).includes("policy.ts"));
     expect(missing.map((dir) => relative(ROUTES, dir))).toEqual([]);
+  });
+
+  // ADR 0116 points 1 and 4 (book P1.22k): every page runs SvelteKit's client unless it is named here, with its
+  // reason. Such a route's policy.ts says `client: false`, which keeps the script policy off its page whatever the page
+  // holds (hooks.server.ts), and its +page.ts says `csr = false`; the two must agree on every route. A page that
+  // turns the client off without being named, a policy that says it for a page that runs the client, or a layout that
+  // says anything for the pages under it, fails. A step that switches a page on takes its line out of this list.
+  test("every_page_runs_the_client_but_the_named_ones", async () => {
+    const WITHOUT: Readonly<Record<string, string>> = {
+      join: "a plain form, until book P1.22l",
+      login: "a plain form, until book P1.22l",
+      welcome: "only ever sends a member on, until book P1.22l",
+      "welcome/blocked": "a notice and one link, until book P1.22l",
+      "login/continue": "nobody reads it: the hop to the sign-in server, which must not wait for a script file",
+      "prefs/theme": "nobody reads it: a form's target with no screen",
+      "privacy-notice/seen": "nobody reads it: a form's target with no screen",
+      "test-routes/plain-page": "the tests' own page without the client",
+    };
+    const setsCsr = (file: string): boolean | undefined => {
+      const said = /^export const csr = (true|false);$/m.exec(existsSync(file) ? readFileSync(file, "utf8") : "")?.[1];
+      return said === undefined ? undefined : said === "true";
+    };
+    const without: string[] = [];
+    const disagree: string[] = [];
+    for (const dir of routeFolders()) {
+      const name = relative(ROUTES, dir);
+      const { policy } = (await import(join(dir, "policy.ts"))) as { policy: { client?: boolean } };
+      const csr = setsCsr(join(dir, "+page.ts"));
+      if (policy.client !== undefined && policy.client !== false) disagree.push(`${name}: client ${policy.client}`);
+      if (policy.client === false) without.push(name);
+      if ((csr === false) !== (policy.client === false)) disagree.push(`${name}: csr ${csr}, client ${policy.client}`);
+    }
+    expect(disagree).toEqual([]);
+    expect(without.sort()).toEqual(Object.keys(WITHOUT).sort());
+    // The root layout turns the client on for the error page, and no other layout says anything.
+    const layouts = readdirSync(ROUTES, { recursive: true, encoding: "utf8" }).filter((file) =>
+      /(^|\/)\+layout\.(ts|js)$/.test(file),
+    );
+    expect(layouts).toEqual(["+layout.ts"]);
+    expect(setsCsr(join(ROUTES, "+layout.ts"))).toBe(true);
   });
 
   test("only_health_skips_the_rate_limit", async () => {

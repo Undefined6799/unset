@@ -6,26 +6,29 @@
   four tiles by the card's own width (a container query), and when more are left a part of the next one shows and
   the count says to scroll; the scrolling area and its buttons are carousel.svelte. Everything shown was built by
   apps/web/lib/profile/view.ts. On the owner's page `controls` puts each card's own at the top right of the card, and
-  `add` closes the grid, full width (the Add card button). No cards and no `add` renders nothing.
+  `add` closes the grid, full width (the Add card button), and `text`, when given, draws a Text card's words in place
+  of its rendered blocks (card-text.svelte, the editor in place, ADR 0074). No cards and no `add` renders nothing.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { CARD_TEXT } from "../../profile/messages.ts";
-import type { CardLayout, CardSurface, CardView } from "../../profile/types.ts";
+import type { CardLayout, CardSurface, ShownCard } from "../../profile/types.ts";
 import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import Carousel from "./carousel.svelte";
-import Readme from "./readme.svelte";
+import Readme from "./readme-copy.svelte";
 
 let {
   cards,
   controls,
   add,
+  text,
 }: {
-  cards: readonly CardView[];
+  cards: readonly ShownCard[];
   controls?: Snippet<[number]>;
   add?: Snippet;
+  text?: Snippet<[number]>;
 } = $props();
 
 /** A list longer than this scrolls inside its card. */
@@ -70,7 +73,8 @@ const label = "shrink-0 font-mono text-xs leading-6 tracking-wider text-muted-fo
 /** A link's host hides on a phone, where the row has no room for it; an entry's tag is its own text and stays. */
 const site = `${label} max-sm:hidden`;
 /** A card the owner drags another onto is ringed (card-controls.svelte sets data-drop). */
-const card = "min-w-0 gap-0 rounded-sm py-0 [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring";
+const card =
+  "min-w-0 gap-0 rounded-sm py-0 [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring data-moving:opacity-60 data-moving:transition-opacity";
 /** Surface changes only the outer card; nested tiles and dividers keep their own structure. */
 const SURFACE: Record<CardSurface, string> = {
   filled: "border-0 bg-card shadow-md",
@@ -83,7 +87,7 @@ const CONTACT_FILLED =
 const PLAIN_FOCUS =
   "outline-offset-2 has-focus-visible:outline has-focus-visible:outline-1 has-focus-visible:outline-ring";
 /** The outer card's surface classes; Contact's Filled keeps its own tint and edge. */
-function outer(shown: CardView): string {
+function outer(shown: ShownCard): string {
   const surface =
     shown.surface === "filled" && shown.shown.kind === "buttons" ? CONTACT_FILLED : SURFACE[shown.surface];
   return shown.surface === "plain" && controls !== undefined ? `${surface} ${PLAIN_FOCUS}` : surface;
@@ -95,6 +99,13 @@ const head = "flex items-start justify-between gap-3";
  */
 const TEXT_INSET: Record<CardSurface, string> = { filled: "p-5 md:p-7", outlined: "p-5 md:p-7", plain: "p-0" };
 const count = "font-mono text-xs text-muted-foreground";
+/**
+ * On the owner's page with a mouse, room left of every card for a Text card's + and six dots, which sit outside the
+ * card (Alex 2026-11-22 00:12Z, the target look's decision 1): between the two columns, and before the first where the
+ * page's own margin is narrower than them (the handle is two 1.75rem buttons 0.5rem off the card, menus.ts). Touch
+ * screens never show them (text-menus.svelte), so a phone keeps the whole width.
+ */
+const HANDLE_ROOM = "pointer-fine:md:gap-x-20 pointer-fine:max-[75rem]:ps-20";
 </script>
 
 {#snippet listHead(title: string, counted: string, scrolls: boolean, index: number, sideways = -1)}
@@ -121,15 +132,19 @@ const count = "font-mono text-xs text-muted-foreground";
 {/snippet}
 
 {#if cards.length > 0 || add !== undefined}
-  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 {controls === undefined ? '' : HANDLE_ROOM}">
     {#each cards as shown, index (shown.key)}
       {@const span = shown.width === "half" ? "" : "md:col-span-2"}
       {#if shown.shown.kind === "readme"}
         <!-- No bar and no automatic heading (P1.21p): the member's own text leads, its headings are the card's. -->
         <Card.Root class="group/card {card} {span} {outer(shown)} {TEXT_INSET[shown.surface]}" data-surface={shown.surface}>
-          <div class="flex items-start gap-3">
-            <div class="min-w-0 flex-1"><Readme blocks={shown.shown.blocks} /></div>
-            {@render controls?.(index)}
+          <!-- On a phone the owner's controls sit in a row above the text, so the text keeps the card's whole width
+               (staging test 2026-11-21, u5); from sm up they stand beside it. -->
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
+            {#if controls !== undefined}<div class="flex justify-end sm:order-last">{@render controls(index)}</div>{/if}
+            <div class="min-w-0 flex-1">
+              {#if text === undefined}<Readme blocks={shown.shown.blocks} />{:else}{@render text(index)}{/if}
+            </div>
           </div>
         </Card.Root>
       {:else if shown.shown.kind === "links"}

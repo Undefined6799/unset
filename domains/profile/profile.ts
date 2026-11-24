@@ -3,8 +3,8 @@
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
-import type { CardKey } from "./cards.ts";
-import type { ProfileVisibility } from "./visibility.ts";
+import { fitsIndex } from "./index-plan.ts";
+import { isPlainName, isPlainText } from "./member-text.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
@@ -20,8 +20,8 @@ export const EMPTY_PROFILE: ProfileFields = {
 };
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
-/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, Settings › Privacy). */
-export type ProfileEdit = Partial<ProfileFields> & { readonly visibility?: ProfileVisibility };
+/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile). */
+export type ProfileEdit = Partial<ProfileFields>;
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };
@@ -61,7 +61,10 @@ function checkField(field: ProfileField, raw: unknown, limits: FieldLimits = APP
   if (typeof raw !== "string") return { ok: false, code: "profile.invalid" };
   const trimmed = raw.trim();
   const value = field === "website" && trimmed !== "" ? withScheme(trimmed) : trimmed;
-  if (/[\r\n]/.test(value)) return { ok: false, code: "profile.invalid" };
+  // One line of printable text; the name also has no bidi control or invisible character (member-text.ts).
+  if (!(field === "displayName" ? isPlainName(value) : isPlainText(value, false))) {
+    return { ok: false, code: "profile.invalid" };
+  }
   const tooLong =
     field === "website" ? bytes(value) > LIMITS.profile.websiteBytes : graphemes(value, limits[field]) > limits[field];
   if (tooLong) return { ok: false, code: "profile.too_long" };
@@ -108,7 +111,7 @@ function storedObject(existing: unknown): Readonly<Record<string, unknown>> {
 
 /**
  * The record to write over `existing` (the stored value, or null for a first profile). The fields sent are replaced, an
- * emptied one removed (a visibility of public too, ADR 0078); every other field (one not sent, avatar, listed, cards,
+ * emptied one removed; every other field (one not sent, avatar, listed,
  * ...) is kept as it was, createdAt too.
  * A stored field the lexicon does not define (another client's, or a newer release's) is kept too: unexpected fields
  * are ignored and kept, never a reason to refuse (atproto.com/specs/lexicon, "Authority and Control"; ADR 0038).
@@ -122,18 +125,13 @@ export function toProfileRecord(
   now: string,
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   const stored = storedObject(existing);
-  const sent: readonly string[] = [
-    ...PROFILE_FIELDS.filter((field) => fields[field] !== undefined),
-    ...(fields.visibility === undefined ? [] : ["visibility"]),
-  ];
+  const sent: readonly string[] = PROFILE_FIELDS.filter((field) => fields[field] !== undefined);
   const kept = Object.fromEntries(Object.entries(stored).filter(([key]) => !sent.includes(key) && key !== "$type"));
   const set: Record<string, string> = {};
   for (const field of PROFILE_FIELDS) {
     const value = fields[field];
     if (value !== undefined && value !== "") set[field] = value;
   }
-  // Public is what an absent field means, so choosing it clears the field (ADR 0078).
-  if (fields.visibility !== undefined && fields.visibility !== "public") set.visibility = fields.visibility;
   const merged: Record<string, unknown> = { ...kept, ...set };
   if (typeof merged.displayName !== "string" || merged.displayName === "") {
     return { ok: false, code: "profile.name_required" };
@@ -141,31 +139,16 @@ export function toProfileRecord(
   const createdAt = typeof stored.createdAt === "string" ? stored.createdAt : now;
   const record: ProfileRecord = { $type: "sh.unset.profile", ...merged, createdAt };
   if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
-  return { ok: true, record };
-}
-
-/**
- * The profile record with its card order set (ADR 0051: the `cards` list of record keys); every other field is kept,
- * as toProfileRecord keeps it. An empty order is no order. There is no order without a profile to hold it.
- */
-export function withCardOrder(
-  order: readonly CardKey[],
-  existing: unknown,
-  now: string,
-): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
-  const built = toProfileRecord({}, existing, now);
-  if (!built.ok) return built;
-  const { cards: _old, ...rest } = built.record;
-  if (order.length > LIMITS.profile.cardsMax) return { ok: false, code: "profile.too_long" };
-  const record: ProfileRecord = order.length === 0 ? rest : { ...rest, cards: [...order] };
-  // "read" as in toProfileRecord: a field another client added is kept, and every field the lexicon defines is checked.
-  if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
+  // The index must keep what is written, or the public page would go missing (index-plan.ts, book P3.12v).
+  if (!fitsIndex(record)) return { ok: false, code: "profile.too_long" };
   return { ok: true, record };
 }
 
 /** How the avatar is cropped (ADR 0051; the lexicon's avatarShape known values). */
 export type AvatarShape = "round" | "roundedSquare";
 const AVATAR_SHAPES: readonly AvatarShape[] = ["round", "roundedSquare"];
+/** Each shape as the record stores it: the lexicon's kebab-case known values (ADR 0086). */
+const AVATAR_SHAPE_VALUES: Readonly<Record<AvatarShape, string>> = { round: "round", roundedSquare: "rounded-square" };
 
 /** A form's shape, or null when it is not one we know (DM-1). */
 export function parseAvatarShape(input: unknown): AvatarShape | null {
@@ -174,7 +157,8 @@ export function parseAvatarShape(input: unknown): AvatarShape | null {
 
 /** The stored shape: absent or unknown means round (the lexicon's description). */
 export function readAvatarShape(value: unknown): AvatarShape {
-  return parseAvatarShape(storedObject(value).avatarShape) ?? "round";
+  const stored = storedObject(value).avatarShape;
+  return AVATAR_SHAPES.find((shape) => AVATAR_SHAPE_VALUES[shape] === stored) ?? "round";
 }
 
 /** The profile record with its avatar shape set; every other field is kept, as toProfileRecord keeps it. */
@@ -185,7 +169,7 @@ export function withAvatarShape(
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   const built = toProfileRecord({}, existing, now);
   if (!built.ok) return built;
-  const record: ProfileRecord = { ...built.record, avatarShape: shape };
+  const record: ProfileRecord = { ...built.record, avatarShape: AVATAR_SHAPE_VALUES[shape] };
   if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
   return { ok: true, record };
 }

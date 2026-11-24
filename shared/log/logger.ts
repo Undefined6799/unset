@@ -67,6 +67,8 @@ const EVENTS = [
   // was not one of the expected ones. `kind` is the class name, never the message (it can carry a DID).
   "pds.401_with_live_set",
   "pds.unexpected",
+  // A call the member's grant does not cover (a session from before the app asked for a permission). No field.
+  "pds.scope_missing",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
   // P2.08j, signing out of every browser: a count with no DID, and the case where the grant was ended but the
@@ -105,6 +107,7 @@ const EVENTS = [
   // P2.27, notifications: the bell's or the page's read failed, so it says so and the page renders. `kind` is the class
   // name. No DID and no count.
   "notifications.read_failed",
+  "notifications.mark_seen_failed",
   "notifications.send_failed",
   "sign_ins.read_failed",
   // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), it stopped (`kind` "finished",

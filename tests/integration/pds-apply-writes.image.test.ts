@@ -49,30 +49,36 @@ const call = async (method, nsid, body, token) => {
   });
   if (made.status !== 200) return console.log(JSON.stringify({ made }));
   const { did, accessJwt: token } = made.body;
-  const card = (text) => ({ $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text },
+  const card = (text) => ({ $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text },
     createdAt: new Date().toISOString() });
   const keys = [];
   for (const text of ["a", "b"]) {
-    const made = await call("POST", "com.atproto.repo.createRecord", { repo: did, collection: "sh.unset.section",
+    const made = await call("POST", "com.atproto.repo.createRecord", { repo: did, collection: "sh.unset.card",
       record: card(text) }, token);
     keys.push(made.body.uri.split("/").at(-1));
   }
   const [a, b] = keys;
   const headOf = async () =>
     (await call("GET", "com.atproto.sync.getLatestCommit?did=" + encodeURIComponent(did), undefined, token)).body.cid;
-  const update = (rkey, text) => ({ $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section",
+  const update = (rkey, text) => ({ $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.card",
     rkey, value: card(text) });
   const save = (writes, swapCommit) => call("POST", "com.atproto.repo.applyWrites", { repo: did, writes, swapCommit },
     token);
   const texts = async () => {
-    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.section&repo=" +
+    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.card&repo=" +
       encodeURIComponent(did), undefined, token);
     const byKey = Object.fromEntries((listed.body.records ?? []).map((r) => [r.uri.split("/").at(-1), r.value.content.text]));
     return { a: byKey[a], b: byKey[b], count: Object.keys(byKey).length };
   };
+  const cids = async () => {
+    const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.card&repo=" +
+      encodeURIComponent(did), undefined, token);
+    return Object.fromEntries((listed.body.records ?? []).map((r) => [r.uri, r.cid]));
+  };
   const head = await headOf();
   const both = await save([update(a, "A1"), update(b, "B1")], head);
   const afterBoth = await headOf();
+  const storedCids = await cids();
   const stale = await save([update(a, "A2")], head);
   const missing = await save([update(a, "A3"), update("3jzfcijpj2z2z", "G")], afterBoth);
   const before = await texts();
@@ -82,6 +88,9 @@ const call = async (method, nsid, body, token) => {
   console.log(JSON.stringify({
     both: both.status,
     oneCommit: typeof both.body.commit?.cid === "string" && both.body.commit.cid === afterBoth,
+    // Each update's result names its record and the CID it now has (P1.21v: the page settles on these).
+    resultsNameEachCard: (both.body.results ?? []).length === 2 && both.body.results.every((r) =>
+      r.$type === "com.atproto.repo.applyWrites#updateResult" && storedCids[r.uri] === r.cid),
     stale: [stale.status, stale.body.error],
     missing: missing.status === 200 ? 200 : missing.status >= 400,
     nearLimit: nearLimit.status,
@@ -146,6 +155,7 @@ describe("applyWrites on the pinned PDS", () => {
         expect(outcome).toEqual({
           both: 200,
           oneCommit: true,
+          resultsNameEachCard: true,
           stale: [400, "InvalidSwap"],
           missing: true,
           nearLimit: 200,

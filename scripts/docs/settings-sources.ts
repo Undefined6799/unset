@@ -29,13 +29,18 @@ const CONSTANTS = [
   },
   { file: "domains/profile/profile.ts", names: ["APP_LIMITS"], note: "profile editor" },
   { file: "domains/profile/card-edit.ts", names: ["CARD_EDIT_LIMITS"], note: "card editor rows per list" },
+  { file: "domains/profile/card-edit.ts", names: ["TEXT_EDIT_BYTES"], note: "card editor Markdown bytes" },
   { file: "domains/profile/discoverability.ts", names: ["DISCOVERABILITY_LIMITS"], note: "Search and AI text" },
   {
     file: "domains/profile/crawlers.ts",
     names: ["MAX_AI_SEARCH_PAGES", "MAX_SITEMAP_PAGES"],
     note: "robots and sitemap",
   },
-  { file: "domains/profile/index-plan.ts", names: ["MAX_RECORD_BYTES", "MAX_SECTIONS_PER_ACCOUNT"], note: "indexer" },
+  {
+    file: "domains/profile/index-plan.ts",
+    names: ["MAX_PAGE_BYTES", "MAX_RECORD_BYTES", "MAX_SECTIONS_PER_ACCOUNT"],
+    note: "indexer",
+  },
   { file: "infrastructure/postgres/accountStore.ts", names: ["MAX_CONFIRM_DAYS"], note: "account status retries" },
   { file: "infrastructure/seal/seal.ts", names: ["MAX_PLAINTEXT"], note: "sealed storage" },
 ] as const;

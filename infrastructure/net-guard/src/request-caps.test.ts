@@ -94,15 +94,15 @@ describe("request body caps", () => {
     expect(await send(policy, "http://review:8080/v1/process", 66 * MiB + 1)).toBe("egress.too_large");
   });
 
-  test("caps.object_store: a 2,000,000-byte main version is stored; past 2 MiB is refused", async () => {
+  test("caps.object_store: a 5,000,000-byte main version is stored; past 5 MiB is refused (ADR 0088)", async () => {
     const policy = objectStore("http://objects:8333");
-    expect(policy.requestBytes).toBe(2 * MiB);
-    expect(await send(policy, "http://objects:8333/unset-private/drafts/k", 2_000_000)).toBe("sent");
-    expect(await send(policy, "http://objects:8333/unset-private/drafts/k", 2 * MiB + 1)).toBe("egress.too_large");
+    expect(policy.requestBytes).toBe(5 * MiB);
+    expect(await send(policy, "http://objects:8333/unset-private/drafts/k", 5_000_000)).toBe("sent");
+    expect(await send(policy, "http://objects:8333/unset-private/drafts/k", 5 * MiB + 1)).toBe("egress.too_large");
   });
 
-  test("caps.blob_upload: uploadBlob alone carries 2 MiB; any other atproto call keeps 1 MiB", async () => {
-    expect(atprotoBlobUpload).toEqual({ name: "atproto-upload", kind: "public", requestBytes: 2 * MiB });
+  test("caps.blob_upload: uploadBlob alone carries 5 MiB; any other atproto call keeps 1 MiB (ADR 0088)", async () => {
+    expect(atprotoBlobUpload).toEqual({ name: "atproto-upload", kind: "public", requestBytes: 5 * MiB });
     const fetch = libraryFetch(guardOn(https.port));
     const post = async (path: string, bytes: number, method = "POST") => {
       try {
@@ -113,8 +113,8 @@ describe("request body caps", () => {
       }
     };
     const UPLOAD = "/xrpc/com.atproto.repo.uploadBlob";
-    expect(await post(UPLOAD, 2_000_000)).toBe("sent");
-    expect(await post(UPLOAD, 2 * MiB + 1)).toBe("egress.too_large");
+    expect(await post(UPLOAD, 5_000_000)).toBe("sent");
+    expect(await post(UPLOAD, 5 * MiB + 1)).toBe("egress.too_large");
     expect(await post("/xrpc/com.atproto.repo.createRecord", MiB + 1)).toBe("egress.too_large");
     expect(await post(`${UPLOAD}/extra`, MiB + 1)).toBe("egress.too_large");
     expect(await post(`/x${UPLOAD}`, MiB + 1)).toBe("egress.too_large");

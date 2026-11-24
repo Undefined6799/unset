@@ -6,7 +6,7 @@
 // The shape follows Bluesky's app.bsky.notification (read in @atproto/api 0.32.5, dist/client/lexicons.js): a list
 // per account, newest first, a `reason` per item, and no PDS record; the rows are private server state.
 
-/** Every reason a notification may have. Closed: the database CHECK holds the same list (migrations 0036, 0039). */
+/** Every reason a notification may have. Closed: the database CHECK holds the same list (migrations 0036, 0044). */
 export const REASONS = ["sign_in", "privacy_notice", "invite_mail_failed"] as const;
 export type Reason = (typeof REASONS)[number];
 
@@ -55,6 +55,8 @@ export type Entry = {
   readonly reason: Reason;
   readonly topic: string | null;
   readonly sentAt: Date;
+  /** This browser has shown it, on the page or by opening the bell (ADR 0085): the badge no longer counts it. */
+  readonly seen: boolean;
 };
 
 /** The store, bound by the caller to the member and this browser's session (rule AB-2: ports are I/O only). */
@@ -65,6 +67,11 @@ export type Inbox = {
   readonly dismiss: (ids: readonly NotificationId[]) => Promise<readonly Entry[]>;
   /** Deletes every entry this browser may see sent no later than `upTo`, and says which; one sent after stays. */
   readonly dismissUpTo: (upTo: NotificationId) => Promise<readonly Entry[]>;
+  /**
+   * Marks `upTo` and every older entry seen in this browser only (ADR 0085), so the badge counts newer ones only. An id
+   * this browser may not see marks nothing, and the mark never moves back.
+   */
+  readonly markSeen: (upTo: NotificationId) => Promise<void>;
 };
 
 /** Where a sent notification is stored, bound by the caller to a member (and a transaction, when it needs one). */
@@ -101,7 +108,10 @@ export async function notify(outbox: Outbox, notification: Notification): Promis
 export type NotificationList = {
   /** Newest first. */
   readonly entries: readonly Entry[];
-  /** How many this browser has, counted up to COUNT_CAP: an entry stays until it is dismissed (ADR 0081). */
+  /**
+   * How many this browser has not seen yet, counted up to COUNT_CAP: the badge. A seen entry stays listed until it is
+   * dismissed (ADR 0081), but no longer counts (ADR 0085).
+   */
   readonly count: number;
   /** More exist than `entries` holds. */
   readonly more: boolean;
@@ -116,9 +126,14 @@ export const readSize = (limit: number): number => Math.max(limit, COUNT_CAP) + 
  */
 export const BELL_READ = readSize(BELL_LIMIT);
 
-/** Up to `limit` entries and the badge's count, from a newest-first read of `readSize(limit)` entries. */
+/**
+ * Up to `limit` entries and the badge's count, from a newest-first read of `readSize(limit)` entries. The mark moves
+ * only forward over the newest-first list, so the unseen entries are its newest and the read counts them exactly up to
+ * the cap.
+ */
 export function listOf(read: readonly Entry[], limit: number): NotificationList {
-  return { entries: read.slice(0, limit), count: Math.min(read.length, COUNT_CAP), more: read.length > limit };
+  const unseen = read.filter((entry) => !entry.seen).length;
+  return { entries: read.slice(0, limit), count: Math.min(unseen, COUNT_CAP), more: read.length > limit };
 }
 
 /** Up to `limit` entries, and the count the badge shows, from one read. */

@@ -39,6 +39,14 @@ The list, the detail, the badge and dismissing do not change. Removing a source 
   is dragged (or moved with the arrow keys) between 2/5 and 3/5 and kept on this device, and a row whose title is cut
   off is lifted over the detail after the pointer rests on it. On a phone the detail is its own screen.
 - The bell counts the entries waiting, up to "9+", and its rows link to their detail.
+- The count is of entries not yet seen: opening the bell or the page marks what it showed seen on every browser of the
+  member (ADR 0085, ADR 0090). A sign-in alert is seen everywhere once any browser signed in before it has shown it
+  (ADR 0108); the browser that signed in never sees its own alert, so it cannot clear it.
+- The server draws the bell as a link to `/notifications`, whose visit marks the list seen (ADR 0108). Wherever the
+  client runs, the error page included, it takes the link over once it has started: the bell opens its panel, which
+  the client draws from the entries in the page's data, and opening it posts the mark (ADR 0116 points 8 and 9). With
+  no script, or before the client is ready, a press follows the link. A page that runs no client is sent the count
+  and no entries.
 - Every entry is deleted 30 days after it was sent, dismissed or not (web's sweep). No text a person typed is stored.
 - The bell's data comes with each page; there is no polling. Times show in UTC with no script and in the device's
   zone with it.

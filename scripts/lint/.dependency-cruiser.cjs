@@ -33,6 +33,9 @@ const SDK_ADAPTERS = [
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
   { sdk: "@milkdown/[^/]*", adapter: "apps/web/lib/editor/" },
   { sdk: "prosemirror-[^/]*", adapter: "apps/web/lib/editor/" },
+  // The Text editor's code block (P1.21v, code-block.ts): CodeMirror and its parsers' highlighting tags.
+  { sdk: "@codemirror/[^/]*", adapter: "apps/web/lib/editor/" },
+  { sdk: "@lezer/[^/]*", adapter: "apps/web/lib/editor/" },
   // ADR 0070 point 2.2: pictures are decoded only in infrastructure/image's sandboxed children, never in web.
   { sdk: "sharp", adapter: "infrastructure/image/" },
   { sdk: "@img/[^/]+", adapter: "infrastructure/image/" },
@@ -83,9 +86,11 @@ const WEB_SERVER_BUILD = { from: "interfaces/web/server.ts", modules: ["#kit/han
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
 // An app's Vite build config (P1.23v; architecture record 2026-10-06-p116-retention-usage-and-p124-icon-source.md,
-// amendments 20:20Z and 20:55Z): it runs in Node at build time only, so it may import node:crypto and
-// scripts/ui/css-scope.ts, and nothing imports it. Three rules implement that one allowance: app-only-shared exempts
-// the config, app-build-config-imports narrows what it may reach, and app-build-config-not-imported keeps it a leaf. Exactly apps/<app>/vite.config.ts; a file of that name deeper in an app is product code.
+// amendments 20:20Z and 20:55Z): it runs in Node at build time only, so it may import Node built-ins, and nothing
+// imports it. It once also reached scripts/ui/css-scope.ts, which left with the React screens (a25d62a, P1.38v).
+// Three rules implement that one allowance: app-only-shared exempts the config, app-build-config-imports narrows what
+// it may reach, and app-build-config-not-imported keeps it a leaf. Exactly apps/<app>/vite.config.ts; a file of that
+// name deeper in an app is product code.
 const APP_BUILD_CONFIG = "^apps/[^/]+/vite\\.config\\.ts$";
 // Root files count as tooling only when they are config files (vitest.config.ts); so does an app's build config.
 const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|tsx|mts|cts)$|${APP_BUILD_CONFIG}`;
@@ -234,7 +239,6 @@ const MATRIX = [
 // The web process's server-side files (ADR 0056 decision 2): only these may reach a domain or infrastructure.
 const WEB_SERVER_FILES = [
   "^interfaces/web/server\\.ts$",
-  "^interfaces/web/check\\.ts$",
   "^interfaces/web/vite\\.config\\.ts$",
   "^interfaces/web/src/hooks\\.server\\.ts$",
   "^interfaces/web/src/lib/server/",
@@ -457,10 +461,10 @@ module.exports = {
     ),
     forbidden(
       "app-build-config-imports",
-      "An app's vite.config.ts imports only Node built-ins, npm, its own app, shared/ and scripts/ui/css-scope.ts (P1.23v).",
+      "An app's vite.config.ts imports only Node built-ins, npm, its own app and shared/ (P1.23v).",
       { path: "^apps/([^/]+)/vite\\.config\\.ts$" },
       {
-        pathNot: ["^apps/$1/", "^shared/", "^scripts/ui/css-scope\\.ts$"],
+        pathNot: ["^apps/$1/", "^shared/"],
         dependencyTypesNot: ["core", ...NPM.dependencyTypes],
       },
     ),

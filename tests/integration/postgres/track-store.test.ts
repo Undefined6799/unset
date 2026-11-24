@@ -56,14 +56,30 @@ const profile = (displayName = "Ada"): IndexChange => ({
   collection: "sh.unset.profile",
   rkey: "self",
   cid: CID,
-  record: { $type: "sh.unset.profile", displayName, createdAt: T, cards: [CARD_1, CARD_2] },
+  record: {
+    $type: "sh.unset.profile",
+    displayName,
+    createdAt: T,
+  },
 });
+/** The main page listing CARD_1 then CARD_2 (ADR 0091). */
+const page: IndexChange = {
+  kind: "put",
+  collection: "sh.unset.page",
+  rkey: "self",
+  cid: CID,
+  record: {
+    $type: "sh.unset.page",
+    cards: [CARD_1, CARD_2].map((rkey) => ({ uri: `at://${A}/sh.unset.card/${rkey}` })),
+    createdAt: T,
+  },
+};
 const section = (rkey: string): IndexChange => ({
   kind: "put",
-  collection: "sh.unset.section",
+  collection: "sh.unset.card",
   rkey,
   cid: CID,
-  record: { $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text: "hi" }, createdAt: T },
+  record: { $type: "sh.unset.card", content: { $type: "sh.unset.block.text", text: "hi" }, createdAt: T },
 });
 const request = (did: string) => sql(`INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now())`);
 const activate = (did: string) => sql(`UPDATE idx.account SET pds_active = true WHERE did = '${did}'`);
@@ -125,7 +141,7 @@ describe("track store", () => {
 
   test("track.backfill_writes_the_snapshot", async () => {
     activate(A);
-    await snapshot(A, rev(3), [profile(), section(CARD_1), section(CARD_2)]);
+    await snapshot(A, rev(3), [profile(), page, section(CARD_1), section(CARD_2)]);
     expect(lines(`SELECT rkey, position FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual([
       `${CARD_1}|0`,
       `${CARD_2}|1`,
@@ -150,7 +166,7 @@ describe("track store", () => {
       seq,
       did: A,
       rev: rev(6),
-      changes: [section("3jzfcijpj2z2c"), { kind: "delete", collection: "sh.unset.section", rkey: CARD_1 }],
+      changes: [section("3jzfcijpj2z2c"), { kind: "delete", collection: "sh.unset.card", rkey: CARD_1 }],
     });
     await snapshot(A, rev(5), [profile("Old"), section(CARD_1)]);
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual(["3jzfcijpj2z2c"]);
@@ -163,7 +179,7 @@ describe("track store", () => {
 
   test("track.backfill_drops_an_older_version_of_a_record_it_now_skips", async () => {
     await snapshot(A, rev(7), [
-      { kind: "put", collection: "sh.unset.section", rkey: CARD_1, cid: CID, record: { $type: "sh.unset.section" } },
+      { kind: "put", collection: "sh.unset.card", rkey: CARD_1, cid: CID, record: { $type: "sh.unset.card" } },
     ]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
     expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);

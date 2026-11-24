@@ -2,6 +2,7 @@
 // index is written as the superuser here, as idx-schema.test.ts writes moderator state: the indexer's own paths have
 // their tests. One database of its own container; the tests run in order.
 import { join } from "node:path";
+import { MAX_PAGE_BYTES } from "@unset/domains-profile";
 import {
   createDiscoverabilityStore,
   createPublicProfileStore,
@@ -38,7 +39,7 @@ const HIDDEN = [INACTIVE, DELISTED, SUSPENDED, NO_PROFILE];
 
 const store = () => createPublicProfileStore(web);
 
-/** An account row, its profile unless `profile` is false, and one card. */
+/** An account row, its profile unless `profile` is false, its main page (ADR 0091) and one card. */
 function account(did: string, handle: string, opts: { active?: boolean; status?: string; profile?: boolean } = {}) {
   const { active = true, status = "verified", profile = true } = opts;
   const profileRow = `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
@@ -48,8 +49,10 @@ function account(did: string, handle: string, opts: { active?: boolean; status?:
     `INSERT INTO idx.account (did, handle, handle_status, pds_active, updated_at)
        VALUES ('${did}', '${handle}', '${status}', ${active}, now());
      ${profile ? profileRow : ""}
+     INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', '{"cards":[]}', now());
      INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-       VALUES ('at://${did}/sh.unset.section/3k', '${did}', '3k', 'cid-s', '3l', '{"type":"x"}', 0, now());`,
+       VALUES ('at://${did}/sh.unset.card/3k', '${did}', '3k', 'cid-s', '3l', '{"type":"x"}', 0, now());`,
   );
 }
 
@@ -96,6 +99,7 @@ describe("public profile store", () => {
       handle: "alice.unset.test",
       cid: "cid-p",
       record: { displayName: "N" },
+      page: { cards: [] },
       sections: [{ key: "3k", cid: "cid-s", value: { type: "x" } }],
       discoverability: { searchEngines: false, aiSearch: false, title: "", description: "" },
     });
@@ -117,7 +121,7 @@ describe("public profile store", () => {
   test("web_sees_no_hidden_row_in_the_views", async () => {
     const dids = await withClient(web, null, (c) =>
       c.query<{ did: string }>(
-        "SELECT did FROM idx.public_profile UNION SELECT did FROM idx.public_section ORDER BY did",
+        "SELECT did FROM idx.public_profile UNION SELECT did FROM idx.public_section UNION SELECT did FROM idx.public_page ORDER BY did",
       ),
     );
     expect(dids.rows.map((r) => r.did)).toEqual([SHOWN, UNVERIFIED]);
@@ -156,21 +160,35 @@ describe("public profile store", () => {
     expect(await store().listed("searchEngines", 1, null)).toHaveLength(1);
   });
 
-  // ADR 0078: a page shown to fewer than everyone is never listed, whatever its switches say; unknown fails closed.
+  // ADR 0078: a page shown to fewer than everyone is never listed, whatever its switches say; unknown fails closed. The
+  // choice is the main page's (ADR 0091), and one left on the profile by the older shape no longer counts.
   test("a_page_that_is_not_public_is_never_listed", async () => {
     const setVisibility = (value: string) =>
-      postgres.sql(
-        "unset",
-        `UPDATE idx.profile SET record = record || '{"visibility":${value}}' WHERE did = '${SHOWN}'`,
-      );
-    for (const value of ['"signedIn"', '"ownerOnly"', '"friends"', "null"]) {
+      postgres.sql("unset", `UPDATE idx.page SET record = record || '{"visibility":${value}}' WHERE did = '${SHOWN}'`);
+    for (const value of ['"signed-in"', '"owner-only"', '"friends"', "null"]) {
       setVisibility(value);
       expect(await store().listed("searchEngines", 10, null), value).toEqual([{ did: UNVERIFIED, handle: null }]);
       expect(await store().listed("aiSearch", 10, null), value).toEqual([]);
     }
     setVisibility('"public"');
     expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
+    postgres.sql("unset", `UPDATE idx.page SET record = record - 'visibility' WHERE did = '${SHOWN}'`);
+    postgres.sql(
+      "unset",
+      `UPDATE idx.profile SET record = record || '{"visibility":"owner-only"}' WHERE did = '${SHOWN}'`,
+    );
+    expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
     postgres.sql("unset", `UPDATE idx.profile SET record = record - 'visibility' WHERE did = '${SHOWN}'`);
+  });
+
+  test("an_account_with_no_main_page_has_made_no_choice_and_is_listed", async () => {
+    postgres.sql("unset", `DELETE FROM idx.page WHERE did = '${SHOWN}'`);
+    expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
+    postgres.sql(
+      "unset",
+      `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${SHOWN}', 'at://${SHOWN}/sh.unset.page/self', 'cid-g', '3l', '{"cards":[]}', now())`,
+    );
   });
 
   test("all_off_keeps_no_row", async () => {
@@ -191,6 +209,22 @@ describe("public profile store", () => {
     await expect(
       own.save(SHOWN, { searchEngines: true, aiSearch: false, title: "x".repeat(71), description: "" }, null),
     ).rejects.toMatchObject({ code: "23514" });
+  });
+
+  // Review of #1911: web reads the cards in page order and stops at MAX_PAGE_BYTES, whatever the index holds.
+  test("cards_come_in_page_order_and_stop_at_the_page_budget", async () => {
+    const card = (rkey: string, position: number | null, bytes: number) =>
+      `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, bytes, indexed_at)
+         VALUES ('at://${UNVERIFIED}/sh.unset.card/${rkey}', '${UNVERIFIED}', '${rkey}', 'cid-${rkey}', '3l',
+                 '{"type":"${rkey}"}', ${position}, ${bytes}, now());`;
+    postgres.sql(
+      "unset",
+      [card("3a", null, 200), card("3n", 1, MAX_PAGE_BYTES - 100), card("3m", null, 5), card("3z", null, 1)].join("\n"),
+    );
+    // 3k (position 0, its size counted from its jsonb), then 3n; then the unlisted ones by key, but 3a would pass the
+    // budget, so neither it nor the smaller ones after it are read.
+    const sections = (await store().find({ did: UNVERIFIED }, null))?.sections ?? [];
+    expect(sections.map((s) => s.key)).toEqual(["3k", "3n"]);
   });
 
   test("erased_account_reads_as_missing", async () => {

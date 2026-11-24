@@ -4890,6 +4890,18 @@ edge rules and C18 accept exactly that site and that bind. Publishing is the man
 `docs/human/runbooks/docs-site.md`; DNS, the Pangolin resource and the deploy are Alex's. Proposed ADR 0075; it
 merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs/site.
 
+### P1.21t — Retire the app docs mirror at the organisation cutover (added step, 2026-11-22)
+
+**Tags:** trusted · **Depends on:** P1.21w · **Plan:** §7, §8
+
+The docs-pipeline step used by #1957 and #1985 is recorded here. Alex's accepted org-0002 keeps docs.unset.sh to
+organisation repositories, with the old site up until replaced; on 2026-11-22 he authorised the deployment sequence
+and asked for HTTPS. ADR 0112 records the app-side retirement without rewriting ADR 0111. Once the first real org
+export and replacement build are green, remove the app publisher, exporter and their dedicated tests and root-file
+copies. Keep app documentation and the Hugo CI job. Drain old runs and remove the app's write credential access before the new
+framework publishes; key and environment cleanup remain Alex's. Staging-edge removal stays in #1985. Done when the
+ordinary gate and retained docs build pass, the cutover runbook is current, and the durable AI note is updated.
+
 ### P1.21x — Keep one profile layout (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21o · **Plan:** §5.4
@@ -4913,6 +4925,79 @@ calls only past the PDS's 1 MB body), each card checked against the version its 
 sticky unsaved-changes bar under the header, Width and Style in the card's menu, Show Markdown, device-only drafts;
 (3) Milkdown's block handle, slash menu and floating bar for a fine pointer. No script keeps per-card saves.
 Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; apps/web (page).
+
+Follow-up booked (review of #1857, 2026-11-21): after a Save, the page settles unsaved edits and offered drafts on the
+version the refresh reads, not the one applyWrites answered. If the member's other device writes the card in that gap,
+a later Save from this page could overwrite those words without a conflict. Return each written card's new CID in the
+`?/saveAll` answer and settle on it. Done in the P1.21v follow-up PR: the answer names each written card's CID
+(`versions`), and unsaved edits and offered drafts settle on that CID only.
+
+Slice 3 (2026-11-21; Alex: "Ok you do your 400 lines of code", "But it better work the same"): on Milkdown 7.23.0's
+own @milkdown/plugin-block, plugin-slash and plugin-tooltip, with Crepe 7.23.0's behaviour as the model and our own
+markup (editor/menus.ts, text-menus.svelte): "/" opens the block menu (a listbox the editor names by
+aria-activedescendant, arrows, Enter, Escape, a press), selected words show a floating bar (bold, italic, inline
+code), and a pointer that can hover shows the side handle, whose "+" adds a line with the menu open and whose grip
+drags the block. Differences from the playground are listed in the PR.
+
+Slice 4 (2026-11-21, the two gaps of slice 3 a member notices first): the floating bar's Link opens a link editor
+over the selected words (Enter sets it, Escape or a press elsewhere closes it; on linked words Link takes it off),
+and a pointer resting on a link shows its address with Copy, Edit and Remove, as Crepe 7.23.0's link-tooltip does
+(its code is Vue, in @milkdown/components, so ours is drawn in text-menus.svelte and placed by plugin-tooltip). Only
+an address safeHref takes as http or https is set, since the page shows no other link. An empty line with the caret
+says "Type / to choose a block", Crepe's placeholder feature (Milkdown ships no placeholder plugin). Mod+Shift+Up
+and Down move the block with the caret (its list item, or the top-level block) past its neighbour: the grip's move
+by keys, which neither plugin-block nor Crepe has.
+
+Slice 5 (2026-11-21, Alex: "Perfect yes get the lucide"): the grip is Crepe's six dots, Lucide 1.72.0's
+grip-vertical copied and pinned under ADR 0087, drawn at Iconoir's 1.5 stroke in place of the `menu` placeholder.
+
+Slice 6 (2026-11-21, staging comparison with the playground): pressing the grip made the text jump 24 px (the
+page's margins for class-less paragraphs stopped applying once plugin-block selected the block), so the drop fell
+outside the editor and nothing moved; the editor now sets its own block margins. A drag shows a drop line
+(prosemirror-dropcursor) and the gap caret is on (prosemirror-gapcursor), both as Crepe's cursor feature. The bar
+skips a selection of only spaces, the block menu's chosen row is visible (the theme's accent equals the popover),
+Enter right after typing a filter picks from the new filter, and on a phone the menu is drawn before it is placed
+so it flips above a low line. Arrow down at the end of a last code block leaves it (gapcursor cannot, since a code
+block is a textblock). The 3 px ring while editing became a light outline 8 px out, kept for keyboard users.
+
+Slice 7 (2026-11-21, Alex: "swap the enter and shift enter everywhere"): in every Text editor, the dialog's and
+the page's (enter-keys.ts), in a paragraph, a quote's included, Enter
+breaks the line (a Markdown hard break, which the page shows) and Shift+Enter starts a new block; a second Enter at a
+line's end also starts one. A heading is one line, and a list item's line break would not show on the page, so there
+both keys start the next block (a new item in a list). In a code block Enter is a new line and Shift+Enter leaves it.
+An open block menu still takes Enter. The empty line's hint says "Shift+Enter for a new one".
+
+Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
+raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
+the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
+click before the editor mounts on idle is lost; both are fixed in slice 3.
+
+### P1.21r — Fix the in-place editor's first press and the way back (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21v · **Plan:** staging test of #1857, 2026-11-21
+
+Found on staging in Brave and WebKit after #1857 deployed. The owner's public page (/@handle) now shows the owner a
+plain link back to the page they edit (/did); it runs no script, and the owner's copy is private and never stored, so
+no visitor's copy carries the link. The editor's script loads as soon as the page is up, and a press on a Text card
+before the editor is drawn opens it at once, with the caret where the press was and the keys typed meanwhile. A press
+before the page's own script runs stays the browser's. Only the card pressed last keeps those keys, a press or focus
+anywhere else lets go of them, and the first key it cannot replay (Backspace, Enter, an arrow) ends them (Codex on
+#1909). A press on the card around the words puts the caret at the
+nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
+member was typing. Tabbing into the words shows the same focus ring as every other field.
+
+### P1.21s — Make Markdown in a Text card behave as typed (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21r · **Plan:** staging test of #1857, 2026-11-21 (Alex: "its the markdown")
+
+Pasted Markdown becomes formatting, as on the Milkdown playground, through the official @milkdown/plugin-clipboard
+7.23.0. An empty line no longer saves as a visible "<br />": the editor drops Milkdown's empty-line placeholder from
+what it stores, and the page's parser drops one it still finds. Enter in a quote starts the quote's next paragraph and
+Shift+Enter breaks the line; the page draws both. After a Save from the Show Markdown field, typing goes on there
+(Codex on #1902). No editor machinery of our own is added while Crepe (Milkdown's ready-made editor) is weighed
+against ADR 0073 (Alex, 2026-11-21: "do not reinvent the wheel"). Pasted HTML is read by prosemirror-view in a
+detached document, so nothing in it loads; a pasted style is refused by the CSP and reported (known noise, left until Crepe is decided). A pasted image
+shows as its alt text, as the page shows it, until the media proxy. Headings keep their level through a paste.
 
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
@@ -4945,6 +5030,38 @@ tags); a page that is not public is never listed in the sitemap or robots.txt, a
 ADR 0078 supersedes decision 37's "never hides on unset.sh" sentence and decision 35 D7 for this page.
 Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postgres for the listing queries.
 
+### P1.21k — Parse Text cards with micromark (added step, 2026-11-22)
+
+**Tags:** trusted · **Depends on:** P1.21v · **Plan:** §5.1
+
+Hard precondition for text and table styles (design `/mnt/project-files/plans/lexicons/styling/design.md`, version 3
+§8): a style is anchored by a spec-defined block count under one whole-text fingerprint, so a block-counting bug would
+misplace styles, and the page, the editor and other apps must cut blocks as CommonMark plus GFM tables say (math and
+footnotes stay out of the count). The page reader (`apps/web/lib/profile/parse.ts`, `readme-scan.ts`) is a hand-written CommonMark
+subset; the editor (Milkdown 7.23.0) reads with remark-parse 11.0.0, that is mdast-util-from-markdown 2.1.0 on
+micromark 4.0.3, plus remark-gfm 4.0.1 (micromark-extension-gfm 3.0.0, mdast-util-gfm 3.1.0). Decision (editor thread, reuse over reinvent; review of #1980): the block count that anchors styles is taken with
+micromark 4.0.3 through mdast-util-from-markdown 2.1.0 plus the GFM table extension only (micromark-extension-gfm-table
+2.1.2 and mdast-util-gfm-table 2.0.1, pinned exactly), with no footnote and no math extension, on the page and in the editor
+alike. The editor still edits with remark-gfm 4.0.1 (Milkdown 7.23.0), but counts blocks with that same table-only
+parse of its saved string, since remark-gfm makes `[^1]:` a block and remark-math makes a `$$` block one block where
+CommonMark makes two, so another app could not reproduce a count taken from them. The page parses with these
+packages as direct dependencies of apps/web and maps mdast to the existing `Block`/`Inline` view types, so
+`readme.svelte` and its escaping do not change.
+
+Why it is safe and cheap: parsing runs on the server in `view.ts`, so the public page still runs no script and no
+parser reaches its bundle; the owner's editor chunk already carries micromark. The mapping keeps the page's rules:
+`html` nodes render as text, links and images keep `safeHref` (http and https only), image syntax stays a link.
+The packages meet ADR 0057 (established, maintained, in the lockfile through remark-gfm once the editor's GFM PR lands, audit green), so no ADR.
+
+Tests first: a shared corpus of samples (fenced code with its closing fence, lists and quotes, a GFM table, lazy
+continuation lines, reference definitions, raw HTML, a footnote definition `[^1]:` and a `$$` math block, and list
+items with a blank line between them, each counted as CommonMark counts it) that the page and the editor's block count must cut to the same blocks and the same block
+count; the existing parse tests keep passing or are updated where the subset was not CommonMark, each such change
+named in the PR. One known such change (review of #1968, 2026-11-22): `takeList` in `parse.ts` ends a list at a blank
+line, so `- one\n\n- two` is drawn as two lists, where CommonMark 0.31.2 §5.3 makes one loose list (as the editor
+does); the page must draw one. Ownership: apps/web/lib/profile
+(parser) → apps/web (Text card). Styles build only after this merges.
+
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1
@@ -4974,7 +5091,7 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
 c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), f (card
-surfaces), g (split client), h (limit budget tests), i (leaving in the terms), l, m, q.
+surfaces), g (split client), h (limit budget tests), i (leaving in the terms), k (micromark page parser), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
@@ -5220,6 +5337,294 @@ fallbacks the font swap shifts layout, which the CLS budget would catch late.
   blocks fetching the font. On Android the mono face therefore has no metric-matched fallback until the webfont loads,
   so mono text alone may shift slightly on the swap. `tokens_android_fallback_faces` checks the faces that exist.
 - **P1.26 adds the missing metrics** (below). The build never invents metrics for a face.
+
+---
+
+### P1.22c — Say "Privacy saved" once the public page follows
+Tags: —            Depends on: P1.22a
+`interfaces/web/src/lib/server/index-catch-up.ts`, `routes/settings/search-and-ai`, `routes/settings/privacy`;
+staging break test 2026-11-21, second pass.
+
+**What:** a visitor could still load a page for about 2 s after "Privacy saved" (Only me), and un-hiding took about 3 s:
+the save writes the choice to the member's PDS, but the public page reads the index, which the indexer updates from
+the PDS stream a moment later (ADR 0052). The save now reads the index every 250 ms, for at most 5 s and inside the
+request's deadline, until it has the new choice; then it says "Privacy saved." If the wait runs out it still answers,
+and says the public page is catching up. Reads only, outside any transaction. A visitor's own cached copy may still
+live up to the page's max-age of 60 s (book P3.12, unchanged). Closing the gap fully would need the choice in an
+app-owned table that the public page also reads (rule DA-1), a data-model change left for Alex.
+
+### P1.22d — Record that our own script may run on every page (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.4, §6.1
+
+Docs only. Alex decided on 2026-11-23 (03:48Z and 03:49Z) that script is for whoever has it and must hold nothing
+back, public pages included, and that a page without script stays as a decent fallback. Proposed ADR 0114 records
+it: our own script may run on any page under the app group's policy, unchanged; member content stays data; the
+no-script page is the floor, not the ceiling. No code, header or test changes here. The record loosens a security
+control (ADR 0054 decision 4 kept the public group free of script), so its PR merges on Alex's typed line. Nothing
+below starts before that line. The letter is the next free id; the step is about the web shell, not base styles.
+
+Accepted: Alex's line "Merge 1962 at d7c6cd6 and 1994 at 18d5a0a", 2026-11-23 13:00Z, in the project chat; merged
+as 810d3dbb (#1994). The steps below may start.
+
+### P1.22e — Run the client on the public profile under the app's script policy (added step, 2026-11-23)
+
+**Tags:** [SEC], trusted · **Depends on:** P1.22d (ADR 0114 accepted), P1.22h · **Plan:** §5.4, §6.1, §8 Phase 3
+
+`interfaces/web/src/lib/server/csp.ts`, `hooks.server.ts`, `routes/@[actor]`. The first page ADR 0114 switches on is
+the one it is about: `/@handle`, where another member's text is shown. The page sets `csr = true`, and the hook sends
+it the app group's policy (SvelteKit's own header, narrowed to our paths as today) in place of the public group's
+fixed one; every other public page, every refusal and the error page keep the header they have (ADR 0114 point 3).
+How the hook knows a page runs the client is this step's design: one fact per route, beside its policy, never read
+from the request. The page keeps its cache rules and varies on no preference cookie. No new control, no feature:
+with script the page looks as it does now. The owner's "View as public" copy follows the page.
+
+As built: the fact is `client: true` in the route's `policy.ts`, beside `csr = true` in its `+page.ts`;
+`gate.test.ts` `only_the_named_public_pages_run_the_client` names every route that has it and fails when the two
+disagree. The route stays in the `public` group, so its cache rules, the system theme and the bell as a link are
+untouched. The hook keeps SvelteKit's header only on that route's 200 page. Its 404 runs no script and keeps the
+fixed header: for a failed load kit takes `csr` from the layouts alone (kit 3.2.0
+`src/runtime/server/page/index.js:276-291`), so the one 404 stays identical whoever asks (rule SE-2). The route's
+refusals, its redirect and its data address keep the fixed header too. The browser tests are in
+`public-profile-script.spec.ts`; `csp.spec.ts` and `a11y.spec.ts` take the page from `pages.ts`.
+
+Tests, each changed for this page only and written first: `public-profile.test.ts` (the header is the app policy
+pinned by value, no `'unsafe-inline'`, no eval; a visitor's and a member's copy), `headers.spec.ts`, `pages.ts`
+(`expectJs`), `csp.spec.ts` (no violation with script on), `lighthouserc.json` (this address moves from script
+size 0 to the app pages' 120 KiB warning). New: in a browser with script on, a profile whose name, headline, card
+titles and text hold `</script><script>`, an `onerror` attribute and a `javascript:` link as text runs nothing,
+reports no CSP violation and shows the words; the same page with script off and with its script files refused
+still reads whole (`nojs.spec.ts` keeps it). `csp.test.ts` `zero_script_groups_pinned` still pins the other groups.
+
+What the browser is sent (rule SE-3), also new and written first. With the client on, the whole result of the page
+load and of the root layout load goes into the start-up script, drawn or not. For a visitor, a signed-in member,
+the owner and the limited page (ADR 0078), the test reads the serialised data out of the HTML and out of
+`/@handle/__data.json` and holds that every value in it is one the page shows that viewer: no field of a hidden
+card, no draft, nothing of the member's that the limited page leaves out, and for a signed-in viewer only their own
+shell data (account, bell). A load field the page does not draw is removed from the load, not hidden in the markup.
+The profile load calls no `fetch`, so SvelteKit inlines no fetched response (`data-sveltekit-fetched`); the test
+fails if one appears. P1.22h's data-address tests are re-run with the client on: the "data address" blocks of
+`public-profile.test.ts`, `public-pages.test.ts` and `search-and-ai.test.ts` in `tests/integration/web/public/`,
+read back with `tests/integration/web/data-address.ts`.
+
+Docs in the same PR: the plan's §5.4 ("Zero JavaScript", the group's CSP line, the first Q5 reason), §6.1 (the
+`/@handle` budget row) and §8 (Phase 3 exit) say what ADR 0114 decided; the ASVS V3.4.3 row;
+`features/profile-and-cards.md`; the notes `area/web` and `area/profile`; and the fallback rule (ADR 0114 points 5
+and 6) in `features/core-shell.md` and as one line under UI in `CLAUDE.md`.
+
+**Threats.** The boundary is a member's content in another person's browser. A rendering bug that lets member text
+through as markup: before, nothing could run; now `script-src` (our `/_app/` files and the start-up script's hash)
+and Trusted Types are what stop it, and the new browser test holds both with hostile text. Member text inside the
+start-up script: SvelteKit encodes it with `devalue.uneval`, which writes `<` as an escape (kit 3.2.0
+`data_serializer.js:99`, devalue 5.9.4 `utils.js:5`); the hostile-text test covers the route parameter and every
+field the page loads. A load field that was returned but never drawn: once the client runs it is in every
+visitor's browser and at `__data.json`, so the load returns explicit view types only and the data test above holds
+each viewer's copy to what their page shows. The data address answering differently from the page (a hidden
+profile found, a member's copy stored by a shared cache, a page kept out of search engines indexed through its
+data): P1.22h's tests, re-run here. A script on the page acting for a signed-in visitor: only our own files can
+run, the session cookie stays `HttpOnly`, and the page still writes nothing. A page switched on by mistake: the
+header is pinned per route, and a route that runs the client without saying so fails a test.
+
+### P1.22h — Test what a public page's data address answers (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.4
+
+Tests only, and independent of ADR 0114: it can be built now. SvelteKit answers `<page>/__data.json` for every page
+route with the result of its loads, whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js:648`,
+`data/index.js`), so `/@handle/__data.json`, `/__data.json` and `/legal/<document>/__data.json` are answered today
+and no test names them. In `tests/integration/web/public/`, against the built server, hold for each that the data
+address gives the page's own answers: the same result for a missing, hidden, erased or unknown profile (rule SE-2)
+and the limited page's data for a viewer the member's choice leaves out; `cache-control` `public, max-age=60` only
+on a visitor's copy, a member's copy private and never stored, `Vary: Cookie` as the page; the page's
+`x-robots-tag`; the route's own policy, limits and deadline at the gate; and that the data holds nothing the page
+does not show that viewer (rule SE-3). A failing case is a bug on main: fix it in this step's PR if it is a
+header or a field to drop, and stop for Alex if it shows anything a viewer should not have seen. The letter is the
+next free id; the step comes before P1.22e in build order.
+
+### P1.22f — Check that visitors who share an address fit the edge's file allowance (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** P1.22e · **Plan:** §6.1
+
+Tests and a measurement, before P1.22e reaches staging. A cold page that runs the client asks for about 30 build
+files; the dev app edge counts them in `app_files`, 120 per 10 seconds per address (ADR 0069), sized for two members
+behind one address. A shared link can bring more visitors than that from one address at once. Measure a cold and a
+warm `/@handle` through the edge's own zones, as P1.20u did, and add the case to the edge limit tests
+(`tests/integration/deployment/edge/`): how many visitors behind one address open a cold profile in the same 10
+seconds, and that one refused file leaves the server's page readable. If the allowance should change, stop: a limit
+change is its own decision with Alex's line (ADR 0059). No limit changes in this step.
+
+Changed 2026-11-23 (ADR 0116, P1.22i): P1.22e merged as 60228f5 and is not on staging; this step still comes before
+it, and before P1.22k, P1.22g and P1.22l, reach staging. Every page will run the client, so measure three cold
+pages, not one: `/@handle`, home, and an address no route matches (the error page). Add to the edge tests that a
+refusal page asks for no build file, so a visitor who is refused does not spend more of the allowance by reading
+the refusal.
+
+### P1.22g — Open the bell's panel on every page that runs the client (added step, 2026-11-23)
+
+**Tags:** [SEC], trusted · **Depends on:** P1.22k · **Plan:** §5.4, §6.1
+
+Changed 2026-11-23 (ADR 0116, P1.22i): the step now depends on P1.22k, takes in `/request-invite`, and switches
+pages on by removing a line. Home, the legal pages and `/request-invite` drop the `csr = false` P1.22j gave them, so
+they follow the root layout and run the client; each moves its row in the every-answer test (P1.22j), its header
+tests and its Lighthouse line (script size 0 to the app pages' 120 KiB warning), written first. On every page that
+runs the client, the error page included, the bell opens its panel, marks what it showed as seen and shows times
+in the device's zone (ADR 0085 point 3), as it does in the app today; in a browser without script it stays the link
+to `/notifications` (ADR 0108 point 3, now the fallback, ADR 0114). `notifications.test.ts` and `nojs.spec.ts` hold
+both. `/login`, `/join` and the welcome pages follow in P1.22l; the gate's refusal pages stay without script (ADR
+0116 point 4). The plan's §5.4 and §6.1 rows for these pages change here.
+
+Built 2026-11-24, where the code differs from the words above. (1) The three pages say `csr = true` in their own
+`+page.ts` instead of dropping the line: P1.22j's test holds every page with something to draw to its own line.
+(2) The server never draws the bell's panel, on an app page either: it draws the link everywhere, and the client
+draws the panel once it has started (ADR 0116 point 9). So an app page with script off now has the link too; before,
+its native panel opened and could mark nothing. (3) The error page of a route that says `client: false` is sent the
+count alone, so its bell stays the link: the root load runs before the page's load fails and cannot know. After
+P1.22l that is three routes nobody reads. (4) `/request-invite` never gave a form's values back: a refused post
+answers with a catalog code in `?error=`, so `?sent`, read as a flag, is the one thing of the query its load returns.
+
+**Threats.** The boundary is text a visitor or a link supplies, written into the start-up script the server
+hashes. `/request-invite` reads `?sent` and, after a refused post, gives the form's own values back; home and the
+legal pages read the `?error=` code. Each is held to a parsed shape before a load or an action returns it (rule
+DM-1), and a browser test with hostile values in every one runs nothing, reports no violation and shows the words.
+What a load returns is what the page draws for that viewer (rule SE-3): the data test of P1.22e, on these pages.
+
+What the shell sends a signed-in member (rule SE-3; asked by the review of P1.22h). On a page whose bell is only a
+link, the root layout's data still carries the member's own latest bell entries (`id`, `reason`, `sentAt`) and a
+`signInHref`, and the page draws neither. They are the member's own, in a private copy that is never stored, so
+nothing leaks; it is short of SE-3 all the same. P1.22h pins both by name in `public-profile.test.ts`
+(`BELL_ENTRY_FIELDS`, and `signInHref` as the one undrawn value). This step ends it: where the bell opens its panel
+the entries are drawn; where it stays a link the shell's view type holds the count and no entries; `signInHref`
+goes only to a visitor. The pins move with it, written first. (`signInHref` leaves the server's data altogether in
+P1.22k, ADR 0116 point 6; what is left for this step is the bell's entries.)
+
+### P1.22i — Record that every page runs our script, the error page included (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** P1.22d · **Plan:** §5.4, §6.1
+
+Docs only. Alex decided on 2026-11-23 (20:52Z) that script runs wherever the navbar shows, the error page
+included, that a browser without script gets a decent fallback and only then the plain link, and that the navbar
+uses Bits UI. The error page takes `csr` from the root layout alone (kit 3.2.0
+`src/runtime/server/page/respond_with_error.js:44-46`, `page/index.js:272-291`), so this turns the app's default
+round: script unless a page says no. Proposed ADR 0116 records it and supersedes ADR 0114 point 3. It keeps the one
+script policy unchanged, names what stays without script (the gate's refusal page, SvelteKit's last-resort page
+and three routes nobody reads), keeps the one 404 (rule SE-2), keeps request text out of the error page's start-up
+script, and replaces the fail-closed default with a test over every answer. No code, header or test changes here.
+The record loosens a security default, so its PR merges on Alex's typed line. P1.22j may be built before that line
+(it changes no behaviour); P1.22k and the steps after it wait for it. That line is also his line for P1.22k, P1.22g
+and P1.22l (Alex, 21:23Z: "One line for all"; ADR 0116 point 10): each merges on the reviewer's SAFE at its exact
+head with the checks green. The line covers only the loosenings point 10 lists, (a) to (e). Anything else that
+loosens a security control, or could (another load result, a new value read from the request, a directive, a limit,
+a cookie rule, a refusal page, a dependency), goes to its own pull request or waits for its own line; in doubt it is
+outside. P1.22j, P1.22f and P1.22m are not covered.
+
+### P1.22j — Name every page's script setting and pin every answer's header (added step, 2026-11-23)
+
+**Tags:** trusted · **Depends on:** P1.22e · **Plan:** §5.4
+
+A refactor and tests; no page, header or byte a browser gets changes. Two commits.
+
+1. Every page that runs no client today says so itself: `export const csr = false;` in the `+page.ts` of home,
+   `/request-invite`, `/login`, `/login/continue`, `/join`, `/welcome`, `/welcome/blocked`, `/prefs/theme` and
+   `/privacy-notice/seen` (the legal page has it). The root layout still says false. After this, turning the root
+   round changes the error page and nothing else.
+2. The every-answer test, in `tests/integration/web/` against the built server, beside `gate.test.ts`. One table
+   names every route id in the route table (`lib/server/route-table.ts` `ROUTES`) with what its answers carry. The
+   test asks, as a visitor and as a member: each page, each page's `__data.json`, an address no route matches, a
+   failed load (`/@` a handle that does not exist), each of the gate's refusals (405, 413, 415, 429, the deadline's
+   503, a route with no policy), a redirect, each endpoint, a build file and a font. For each answer it holds:
+   - the `content-security-policy` is, by value, one of the pinned ones: the app policy (the start-up hash replaced
+     by a placeholder, as `gate.test.ts` does), the public group's fixed one, or the static one;
+   - the app policy is on HTML documents only, and a document has SvelteKit's start-up script exactly when its
+     header is the app policy with a hash, which is the hash of that script;
+   - `script-src` holds no `'unsafe-inline'`, no eval source, no `'self'` and no host but our origin's `/_app/`;
+     the body holds no `<script src>` and no `modulepreload` outside `/_app/`, and one inline script at most.
+   A route id missing from the table fails, a table row with no route fails, and a layout other than the root that
+   sets `csr` fails. `only_the_named_public_pages_run_the_client` stays as it is until P1.22k.
+
+The table is the list a reviewer reads to see which answers may run script. Written against today's answers, it
+passes on main; P1.22k, P1.22g and P1.22l each move rows in it, first.
+
+### P1.22k — Turn the default round: the error page runs the client (added step, 2026-11-23)
+
+**Tags:** [SEC], trusted · **Depends on:** P1.22i (ADR 0116 accepted), P1.22j · **Plan:** §5.4
+
+`interfaces/web/src/routes/+layout.ts`, `+layout.server.ts`, `hooks.server.ts`, `lib/server/policy.ts`. The root
+layout says `csr = true`. Because P1.22j made every other page say false itself, the only documents that change
+are error pages: an address no route matches, and a failed load on any route.
+
+The hook follows ADR 0116 point 3: SvelteKit's own header, narrowed, goes out on an HTML document SvelteKit drew
+with its client, and the fixed one on everything else. How the hook knows is this step's design, within two rules:
+it reads only what the server itself did (the route's policy for a page; for an error page, that SvelteKit drew
+one), never the request; and the every-answer test holds header and document to each other in both directions. That
+SvelteKit sent a header cannot be the signal: it sends its own on every page it draws, whatever `csr` says (kit
+3.2.0 `page/render.js:577-579`). The `client` field of `policy.ts` and `only_the_named_public_pages_run_the_client`
+turn round with the default: the test now names the pages that do not run the client, each with its reason, and
+`scripts/docs/endpoints.ts` follows the field.
+
+The error page's data (ADR 0116 point 6). The Sign in link's return path and the theme form's return path leave
+the root layout's server data and are worked out where they are drawn, from the page's own address (the universal
+load has `url`; what it returns is not written into the page). P1.22h's pin of `signInHref` as the one undrawn
+value goes with it.
+
+Tests, written first and shown failing:
+- the every-answer table: the error rows move from the fixed header to the app policy; nothing else moves;
+- the one 404 (rule SE-2), in `tests/integration/web/public/`: for a missing, a hidden, an erased and an
+  unknown profile, asked by a visitor and by a member, the status, every header (the policy with its hash
+  among them) and the body are equal once the handle typed is replaced by a placeholder; the same on the data
+  address (P1.22h's tests, re-run); and in a browser with script on, a click from a page that runs the client to
+  each of the four draws the same error page and makes the same requests;
+- request text (point 6): two different unmatched addresses of one depth give a visitor the same start-up script,
+  byte for byte, and so do a failed load on `/@` a hostile handle and on `/@` a missing one of the same depth (kit
+  writes the route's parameters into the script only with `router.resolution: "server"` or an embedded build,
+  `page/render.js:476-486`; we use neither, and this case fails if that changes); a member's differs from the
+  visitor's only by their own shell data;
+- hostile addresses, in a browser with script on: paths and queries holding `</script><script>`, `<!--`, a quote,
+  U+2028 and a `javascript:` return path run nothing, report no violation and show the error page;
+- the fallback: the error page read with script off, with its script files refused, and with the client failing
+  at start (`nojs.spec.ts` keeps it); an `internal.error` page still shows its request id;
+- the gate's refusal page and SvelteKit's `error.html` still carry no script, and neither do the own pages of the
+  three routes nobody reads; a load that fails on one of those three draws the shared error page, with script.
+
+Docs in the same PR: `features/core-shell.md` ("The three shells": the default), the `area/web` note, the ASVS
+V3.4.3 row, the plan's §5.4 words on the error page, and the Script line under UI in `CLAUDE.md` (it is at its 120
+line cap: change the line, add none).
+
+**Threats.** The boundary is a link: anyone can send anyone an address on unset.sh that does not exist, and the
+page behind it now runs our client. Request text inside the script the server hashes: the policy cannot catch a
+fault there, so none is written (the same-bytes test), and the hostile-address test holds the browser's side. A
+profile's state shown by its error page: the four cases are held equal on the page, on the data address and by a
+click. A member's session used by a script on the error page: only our own files run, the cookie stays `HttpOnly`,
+and the error page writes nothing. A page switched on by accident with the default: every page says its own
+setting (P1.22j) and the every-answer table names each route, so a page nobody named fails. The error page
+failing with its script: it is drawn whole by the server and the fallback tests read it three ways.
+
+### P1.22l — Run the client on the sign-in, join and welcome pages (added step, 2026-11-23)
+
+**Tags:** [SEC], trusted · **Depends on:** P1.22k · **Plan:** §5.4
+
+`/login`, `/join`, `/welcome` and `/welcome/blocked` drop their `csr = false`. After this the named list of pages
+without the client is the three routes nobody reads (`/login/continue`, `/prefs/theme`, `/privacy-notice/seen`),
+each with its reason, and ADR 0116 point 4 holds as written. Rows in the every-answer test, header tests and
+`nojs.spec.ts` cases move first, as in P1.22g.
+
+**Threats.** These pages start a sign-in or take an invite. `/login` reads `next` and `handle`; `/join` reads the
+invite code. A load returns a value only after it is parsed to its shape, returns nothing the page does not draw,
+and returns no value that authorises anything: the OAuth state, nonce and PKCE verifier stay on the server, and
+the test reads each page's start-up script and data address for them. Hostile text in each query value runs
+nothing. `/login/continue` keeps no script, so the hop to the sign-in server never waits for a file.
+
+### P1.22m — Move the navbar's controls to the stock components (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** P1.22g · **Plan:** §5.4
+
+ADR 0116 points 8 and 9. With script, the navbar's menu, Create panel, account menu and bell panel are the stock
+shadcn-svelte components over Bits UI (pinned 2.20.6), for their keyboard handling, focus return and ARIA roles,
+in place of our native popovers. The server still draws each control so that it works with a full page: a plain
+link or the native control. Once the client is ready it takes over; until then a press does the plain thing and is
+never lost. Before building, list for Alex what the library already offers for each control and what, if
+anything, would still be ours. `inventory.json` lists what is added; `a11y.spec.ts`, `csp.spec.ts` (no violation
+with each control open) and `nojs.spec.ts` hold both versions, and a keyboard test walks each control. Refined
+when it is next: split by control if the change passes about 400 lines.
 
 ---
 
@@ -16778,6 +17183,59 @@ decision 4 (book edit 2026-10-20-adr-0031-no-login). A tightening, so nothing is
 tolerance for CSAM and the vault note `research/atproto-blob-serving-security` forbid. Each deny gets a
 property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
 ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
+
+### P1.38w — Fix three local test failures at their cause (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Three failures earlier threads saw locally, each reproduced first and fixed at its cause, never re-run (Alex: flaky
+tests are fixed). `generate_builds_outside_the_repo` watched the shared system temp folder, so another build there
+at the same time failed it; the build now gets a temp folder of its own. `pds-key.test.ts` got a SeaweedFS 500, not
+from a cold bucket: the image sizes its volume count from the free space on /data and each bucket claims 7, so below
+about 21 GB free on Docker's disk the third bucket had none; the test store runs on a 40 GB tmpfs. Test containers
+outlived a run stopped by Ctrl-C or a kill, since vitest then runs no teardown; the helpers remove what they started
+when their process exits, and the integration setup removes containers whose owner has ended. Ownership: tests/support,
+tests/integration/setup, shared/lexicons/scripts.
+
+---
+
+### P1.38x — Mark a multi-line ADR status superseded
+Tags: [SEC] trusted            Depends on: —
+Trusted base (`scripts/docs/docs.ts` and its test, a `# checks:` path, so the PR carries `security-review`). It adds
+one change the ADR check could not express and allows nothing else, so nothing is needed from Alex.
+
+**What:** `adr_immutable` reads an ADR's status as its first `Status` line, so an accepted ADR whose status runs over
+several lines (0072, superseded by 0077) cannot be marked superseded: replacing the paragraph edits lines the check
+counts as body. The check now also accepts exactly one shape: a new paragraph `Status: Superseded by NNNN.` above the
+old status paragraph, which is kept byte for byte except that its first word `Status:` becomes `Earlier status:`;
+NNNN must be an existing ADR. A changed word, a dropped, added or rewrapped line, a second new paragraph, extra words
+on the new line, an unrelabelled old paragraph and any body edit stay refused, each with a test. It also closes a gap
+the reviewer found on main: a status starting "Superseded" counted as not accepted, so later PRs could edit a
+superseded ADR freely. A superseded ADR, in either form, now never changes again: no edit, no second mark, no
+deletion. Marking 0072 itself is a later docs PR.
+
+### P1.38y — Generate the ADR index from each ADR
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+Trusted base (`scripts/docs/`, a `# checks:` path, so the PR carries `security-review`). It carries ADR 0083 and the
+CLAUDE.md D8 sentence, so it needs Alex's typed line naming the reviewed head (ADR 0059).
+
+**What:** each ADR file becomes the only thing an ADR pull request edits (ADR 0083). New ADRs carry front matter in
+one checked format; the index is generated by `npm run adr:index` and by the docs site's Hugo build, and no
+longer committed; the older ADRs' rows are frozen in `decisions/legacy-index.yaml`; supersession is derived from the later ADR; the ADR 0001 log closes with
+one last entry, after which the check refuses any change to it. Tests show each refused key and value, the derived
+supersession, a fixed accepted ADR, the frozen rows and the closed log.
+
+---
+
+### P1.38v — Name only files on the tree in the lint rules
+Tags: —            Depends on: —
+`scripts/lint/` and the docs that describe its rules; issues #1775 and #1781 (docs checker, 2026-11-19).
+
+**What:** `app-build-config-imports` still allowed `scripts/ui/css-scope.ts`, and `WEB_SERVER_FILES` still listed
+`interfaces/web/check.ts`; neither file is on the tree (css-scope left with the React screens in a25d62a, #1684).
+Both names come out, which only tightens the rules. `depcruise-paths.test.ts` fails on any exact file a rule names
+that is not on the tree, so the next removal breaks CI instead of leaving a dead allowance. A path named ahead of
+its folder (today only `RENDER_ENTRIES.admin`) is listed there with its reason.
 
 ---
 

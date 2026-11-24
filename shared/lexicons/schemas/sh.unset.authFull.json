@@ -1,0 +1,25 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.authFull",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "unset.sh profile page",
+      "title:lang": {
+        "en": "unset.sh profile page"
+      },
+      "detail": "Create and edit your unset.sh profile, its pages and their cards. Nothing else in your account.",
+      "detail:lang": {
+        "en": "Create and edit your unset.sh profile, its pages and their cards. Nothing else in your account."
+      },
+      "description": "Everything unset.sh writes in an account's repository.",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": ["sh.unset.profile", "sh.unset.page", "sh.unset.card"]
+        }
+      ]
+    }
+  }
+}

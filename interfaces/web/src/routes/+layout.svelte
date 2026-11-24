@@ -2,7 +2,9 @@
   The shell of every page (P1.20d), as the React AppShell drew it before P1.20k; src/lib/shell.ts says what a
   page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the site shell.
   Neither shell offers Sign in when the gate read a live session for the route (+layout.server.ts). Everything here works with no script: links, plain forms, and a native popover for the menu drawer
-  (https://html.spec.whatwg.org/multipage/popover.html). The `?error=` callout shows only the catalog's text.
+  (https://html.spec.whatwg.org/multipage/popover.html). The bell is the one control the client takes over: the server
+  draws it as a link to /notifications, and where the client runs it opens its panel (ADR 0116 points 8 and 9). The
+  `?error=` callout shows only the catalog's text.
 -->
 <script lang="ts">
 import "@unset/apps-web/app.css";
@@ -16,7 +18,7 @@ import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
 import { NOTIFICATIONS as N } from "@unset/apps-web/lib/notifications/messages.ts";
 import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
-import type { Snippet } from "svelte";
+import { onMount, type Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { page, updated } from "$app/state";
@@ -205,9 +207,41 @@ const panel =
   "fixed top-16 bottom-auto m-0 w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:w-auto";
 // The member the page passed (their own page and settings, with a name there) or the gate found (+layout.server.ts).
 const account = $derived(shell.account ?? data.account);
-// The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
+// The bell's count and, where the client runs, its list (P2.27), read by +layout.server.ts on every page a member
+// opens; undefined for a visitor.
 const notes = $derived(data.notifications);
-const waiting = $derived(notes?.state === "ready" ? notes.count : 0);
+// The server draws the bell as a plain link to /notifications, whose visit marks the list seen (ADR 0108 point 3): that
+// is the bell in a browser with no script, and until the client is ready, so a press is never lost (ADR 0116 point 9).
+// Once the client has started it takes the bell over, on every page it runs on, the error page included (point 8):
+// the bell is the panel's button, and the panel and its seen form are drawn here in the browser, never by the server,
+// so the panel's times are always the device's own. A page that runs no client was sent the count and no entries
+// (+layout.server.ts); when the client reaches one by a link from a page it runs on, the bell is the link again.
+let clientReady = $state(false);
+onMount(() => {
+  clientReady = true;
+});
+const bellOpens = $derived(clientReady && notes?.state !== "count");
+// Opening the bell marks what it shows seen (ADR 0085, 0090 and 0108): the badge goes at once and comes back only with
+// a newer entry. The hidden form posts it in the background.
+const newest = $derived(notes?.state === "ready" ? notes.entries[0]?.id : undefined);
+let seenUpTo = $state<string | undefined>(undefined);
+const unseen = $derived(notes?.state === "ready" || notes?.state === "count" ? notes.count : 0);
+const waiting = $derived(newest !== undefined && newest === seenUpTo ? 0 : unseen);
+let seenForm = $state<HTMLFormElement | undefined>(undefined);
+function markSeen(event: ToggleEvent): void {
+  if (event.newState !== "open" || newest === undefined || waiting === 0) return;
+  seenUpTo = newest;
+  seenForm?.requestSubmit();
+}
+// The mark needs nothing back: the page stays as it is, and the next page's bell reads the stored mark. The action
+// answers a 303, which enhance reads as a "redirect" result; anything else (a dropped connection gives an "error"
+// result: @sveltejs/kit 3.2.0 src/runtime/app/forms/client.js, handle_submit's catch) stored nothing, so the badge
+// comes back and the next opening tries again (Codex review of #1910).
+const markInBackground: SubmitFunction =
+  () =>
+  async ({ result }) => {
+    if (result.type !== "redirect") seenUpTo = undefined;
+  };
 // The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
 // drawn as a small badge.
 const badge =
@@ -220,6 +254,13 @@ afterNavigate(() => {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
+});
+// A client navigation keeps the document too, and with it the theme the server drew the first page with. The server
+// draws a page every visitor shares in the system's theme and a page with the theme form in the choice
+// (hooks.server.ts readsTheme, +layout.server.ts prefs), so the page now shown gets the one a full load of it would
+// have. It matters since the public profile runs the client (P1.22e): its Sign in link is followed in place.
+afterNavigate(({ type }) => {
+  if (type !== "enter") applyTheme(prefs === undefined ? "system" : current);
 });
 // A tab that has seen a newer build (SvelteKit checks version.json when the tab is shown or focused, and reads the
 // version on every data response) loads the next page in full, as kit 3.2.0 documents for version.name
@@ -375,16 +416,25 @@ const row =
           <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
         </Button>
         {#each PANEL_BUTTONS as button (button.id)}
-          <Button
-            variant="outline"
-            size="icon-sm"
-            popovertarget={button.id}
-            popovertargetaction="toggle"
-            class="{control} relative max-sm:hidden"
-          >
-            <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
-            {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
-          </Button>
+          {#if button.id === NOTIFICATIONS && !bellOpens}
+            <!-- ADR 0108 point 3, ADR 0116 point 9: what the server draws. The bell is the way to the page, whose visit
+                 marks it seen, until the client is ready to open the panel. -->
+            <Button variant="outline" size="icon-sm" href="/notifications" class="{control} relative max-sm:hidden">
+              <Icon name={button.icon} size={20} label={N.bell(waiting)} />
+              {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+            </Button>
+          {:else}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              popovertarget={button.id}
+              popovertargetaction="toggle"
+              class="{control} relative max-sm:hidden"
+            >
+              <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
+              {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+            </Button>
+          {/if}
         {/each}
         <Button
           variant="outline"
@@ -408,7 +458,7 @@ const row =
             <span class="sr-only">{T.accountMenu}</span>
           </Button>
         {:else}
-          <!-- A visitor signs in here and comes back to this page (signInHref, +layout.server.ts). -->
+          <!-- A visitor signs in here and comes back to this page (signInHref, lib/return-paths.ts). -->
           <Button variant="outline" size="icon-sm" href={data.signInHref} class={control}>
             <Icon name="profile" size={20} label={T.signIn} />
           </Button>
@@ -457,11 +507,11 @@ const row =
     {:else}
       {#if notes.state === "failed"}
         <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
-      {:else if notes.entries.length === 0}
-        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
-      {:else}
+      {:else if notes.state === "ready" && notes.entries.length > 0}
         <NotificationList entries={notes.entries} />
         <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
+      {:else}
+        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
       {/if}
       <ul class="flex flex-col gap-1 border-t pt-1">
         <li>
@@ -507,11 +557,25 @@ const row =
       </li>
     </ul>
   </section>
-  {#each PANEL_BUTTONS as button (button.id)}
-    <section id={button.id} popover="auto" ontoggle={backToActions} aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+  {#each PANEL_BUTTONS.filter((b) => b.id !== NOTIFICATIONS || bellOpens) as button (button.id)}
+    <section
+      id={button.id}
+      popover="auto"
+      ontoggle={(event) => {
+        backToActions(event);
+        if (button.id === NOTIFICATIONS) markSeen(event);
+      }}
+      aria-labelledby="{button.id}-title"
+      class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2"
+    >
       {@render panelTitle(button.id, button.label, true)}
       {#if button.id === NOTIFICATIONS}
         {@render notificationsBody()}
+        {#if newest !== undefined}
+          <form bind:this={seenForm} method="POST" action="/notifications?/seen" hidden use:enhance={markInBackground}>
+            <input type="hidden" name="upTo" value={newest} />
+          </form>
+        {/if}
       {:else}
         <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
         <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
@@ -533,12 +597,21 @@ const row =
       </li>
       {#each PANEL_BUTTONS as button (button.id)}
         <li>
-          <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
-            <Icon name={button.icon} size={20} /><span>{button.label}</span>
-            {#if button.id === NOTIFICATIONS && waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
-                ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
-              >{/if}
-          </button>
+          {#if button.id === NOTIFICATIONS && !bellOpens}
+            <a href="/notifications" class="{row} w-full">
+              <Icon name={button.icon} size={20} /><span>{button.label}</span>
+              {#if waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
+                  ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
+                >{/if}
+            </a>
+          {:else}
+            <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
+              <Icon name={button.icon} size={20} /><span>{button.label}</span>
+              {#if button.id === NOTIFICATIONS && waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
+                  ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
+                >{/if}
+            </button>
+          {/if}
         </li>
       {/each}
     </ul>

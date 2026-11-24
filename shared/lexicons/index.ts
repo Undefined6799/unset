@@ -12,7 +12,7 @@ export { type Mode, type RecordNsid, recordToJson, type ValidationResult, valida
  */
 export const NSID = {
   profile: sh.unset.profile.$nsid,
-  section: sh.unset.section.$nsid,
-  follow: sh.unset.follow.$nsid,
-  authApp: sh.unset.authApp.$nsid,
+  page: sh.unset.page.$nsid,
+  card: sh.unset.card.$nsid,
+  authFull: sh.unset.authFull.$nsid,
 } as const;

@@ -4,7 +4,9 @@
 // what every response needs, files and SvelteKit's early refusals included: the host check, the base headers, the log
 // line and the drain. This hook adds, in order: the route's policy (none = refused), test routes, form-only bodies,
 // the body size, the client address and its limit, the session and the DID limit, then the route under its deadline,
-// and last the group's CSP. Every check fails closed. Kit docs: https://svelte.dev/docs/kit/hooks (3.2.0).
+// and last the response's CSP: SvelteKit's own, narrowed, on a document it drew with its client (ADR 0116 point 3);
+// the group's fixed one on everything else. Every check fails closed. Kit docs: https://svelte.dev/docs/kit/hooks
+// (3.2.0).
 import { randomUUID } from "node:crypto";
 import { isRedirect, type RequestEvent, redirect } from "@sveltejs/kit";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
@@ -15,7 +17,7 @@ import { openApp } from "./lib/server/app-gate.ts";
 import { services, startServices } from "./lib/server/compose.ts";
 import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
 import type { PolicyName } from "./lib/server/limits.ts";
-import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
+import { type PageGroup, type RoutePolicy, runsClient } from "./lib/server/policy.ts";
 import { refusalPage, wantsPage } from "./lib/server/refusal-page.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote, stylesheet } from "./lib/server/runtime.ts";
@@ -215,6 +217,7 @@ export const handle: Handle = async (input) => {
   const note = requestNote() ?? { reqId: randomUUID() };
   note.route = event.route.id ?? "/unmatched";
   event.locals.reqId = note.reqId;
+  event.locals.erred = false;
   let response: Response;
   try {
     response = await gate(input);
@@ -223,28 +226,51 @@ export const handle: Handle = async (input) => {
     services().log.logError(error);
     response = caughtResponse(error);
   }
-  const group = policyOf(event.route.id)?.group ?? "static";
+  const policy = policyOf(event.route.id);
+  const route: Headed = { group: policy?.group ?? "static", client: runsClient(policy), erred: event.locals.erred };
   const refused = REFUSALS.get(response);
-  const optional = policyOf(event.route.id)?.session === "optional";
+  const optional = policy?.session === "optional";
   const audience: Audience = { member: event.locals.did !== undefined, optional };
   if (refused !== undefined && event.request.headers.has("x-sveltekit-action")) {
-    return withGroupHeaders(actionFailure(refused, response), group, event.isDataRequest, audience);
+    return withGroupHeaders(actionFailure(refused, response), route, event.isDataRequest, audience);
   }
   if (refused !== undefined && wantsPage(event.request, event.isDataRequest)) {
-    const styled = group === "app" || group === "public";
+    const styled = route.group === "app" || route.group === "public";
     response = refusalPage(refused, response.status, response.headers, styled ? stylesheet() : undefined);
     // A styled refusal page runs no script and loads only the build's styles and our fonts: the public policy. The app
     // group's fallback (default-src 'none') would block its stylesheet.
-    if (styled) return withGroupHeaders(response, group, event.isDataRequest, audience, "public");
+    if (styled) return withGroupHeaders(response, route, event.isDataRequest, audience, "public");
   }
-  return withGroupHeaders(response, group, event.isDataRequest, audience);
+  return withGroupHeaders(response, route, event.isDataRequest, audience);
 };
+
+/**
+ * What the response headers follow: the route's group, whether its own page runs the client, and whether SvelteKit
+ * reported an error for this request (handleError below), which is when it draws the error page.
+ */
+type Headed = Readonly<{ group: PageGroup; client: boolean; erred: boolean }>;
+
+/**
+ * SvelteKit names a script by its hash in its own policy only when it wrote its start-up script into the document,
+ * which it does exactly for a page drawn with `csr` on (kit 3.2.0 src/runtime/server/page/render.js:339 and 552;
+ * kit.csp mode "hash" in vite.config.ts). So this reads what the server put in the document, never the request.
+ */
+const namesStartUpScript = (kit: string): boolean => /(?:^|;)\s*script-src\s[^;]*'sha256-/.test(kit);
 
 /** Who a response was rendered for: a member (the gate read a live session), and whether the route reads one if sent. */
 type Audience = Readonly<{ member: boolean; optional: boolean }>;
 
 /**
- * An `app` page keeps SvelteKit's CSP, narrowed to our paths; every other response gets its group's fixed one. An
+ * The header follows the document (ADR 0116 point 3). SvelteKit's CSP, narrowed to our paths, goes out on a document
+ * SvelteKit drew with its client, and that takes two facts of what the server did, both needed: its policy names the
+ * start-up script it wrote into the document, and that document is one that may run it, which is the route's own page
+ * unless its policy says `client: false`, or the error page, drawn when SvelteKit reported an error (for it SvelteKit
+ * takes `csr` from the layouts alone, kit 3.2.0 src/runtime/server/page/index.js:272-291, and the root layout says
+ * true). That SvelteKit sent a policy is not the signal: it sends one with every page it draws (page/render.js:577-579).
+ * A page that says `client: false` and still carried a start-up script gets the fixed policy, in either group, and
+ * runs nothing. Every other response gets its group's fixed one: refusals, redirects, the data address, files. One
+ * exception stays as it was: an `app` page without the client (/login, the form targets) keeps SvelteKit's policy
+ * while that names no hash, so no inline script runs there; book P1.22l settles what those pages carry. An
  * `app` page, and the data its client loads (__data.json), may differ per member, so it is private, never stored and
  * varies on Cookie, as interfaces/http/prefs/theme.ts has it. So is any other response rendered for a member, or one
  * that clears a cookie, whatever the page asked for. A page with an `optional` session varies on Cookie even for a
@@ -253,11 +279,12 @@ type Audience = Readonly<{ member: boolean; optional: boolean }>;
  */
 function withGroupHeaders(
   response: Response,
-  group: PageGroup,
+  route: Headed,
   dataRequest: boolean,
   audience: Audience,
-  cspGroup: PageGroup = group,
+  cspGroup: PageGroup = route.group,
 ): Response {
+  const { group } = route;
   const out = new Response(response.body, response); // SvelteKit's own responses may have immutable headers
   const html = out.headers.get("content-type")?.startsWith("text/html") === true;
   // A redirect is never stored, as interfaces/http's redirect.ts sends it (a 303 is not cacheable without explicit
@@ -273,14 +300,19 @@ function withGroupHeaders(
     out.headers.append("vary", "Cookie");
   }
   const kit = out.headers.get("content-security-policy");
-  if (group === "app" && kit !== null) {
-    // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).
-    if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN));
-  } else {
-    out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
-  }
+  const mayRunClient = route.client || route.erred;
+  // With a start-up script in the document, SvelteKit's policy only where that document may run it; with none, only
+  // on an app page, as before.
+  const keepsKit = kit !== null && (namesStartUpScript(kit) ? mayRunClient : group === "app");
+  out.headers.set("content-security-policy", keepsKit ? kitPolicy(kit) : ZERO_SCRIPT[cspGroup]);
   return out;
 }
+
+/**
+ * SvelteKit's own policy for a page that runs its client, narrowed to our paths. Under `vite dev` Vite serves files
+ * from other paths, so 'self' stays (ADR 0054 decision 5).
+ */
+const kitPolicy = (kit: string): string => (dev ? kit : narrowed(kit, config.PUBLIC_ORIGIN));
 
 /**
  * An error a route did not answer itself. SvelteKit's own (a 404, a bad request) is shown by its code with nothing
@@ -288,6 +320,7 @@ function withGroupHeaders(
  * message (kit 3.2.0 types: CaughtError's `kind`).
  */
 export const handleError: HandleServerError = (caught) => {
+  caught.event.locals.erred = true; // SvelteKit draws the error page for this request; `handle` reads it for the CSP
   if (caught.kind === "framework" || caught.kind === "validation")
     return { message: caught.error.status === 404 ? "http.not_found" : "http.bad_request" };
   if (caught.kind === "app") return caught.error;

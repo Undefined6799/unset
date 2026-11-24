@@ -14,9 +14,9 @@ export const ROUTES: Readonly<Record<string, RoutePolicy>> = Object.freeze(
   Object.fromEntries(Object.entries(files).map(([file, mod]) => [routeIdOf(file), mod.policy])),
 );
 
-/** A path no route matches (a 404): it still passes the host check and the default limit, and runs no script. Its
- * session is read when sent (P1.20k), so the not-found page shows a member signed in, in their theme; their copy is
- * private (hooks.server.ts). */
+/** A path no route matches (a 404): it still passes the host check and the default limit, and its page is the error
+ * page, which runs the client like every error page (ADR 0116 point 1). Its session is read when sent (P1.20k), so the
+ * not-found page shows a member signed in, in their theme; their copy is private (hooks.server.ts). */
 export const UNMATCHED: RoutePolicy = { group: "public", limit: "default", session: "optional" };
 
 /** The policy of a request's route: the route's row, UNMATCHED for no route, undefined for a route with no row. */

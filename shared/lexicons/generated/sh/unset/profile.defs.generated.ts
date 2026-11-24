@@ -10,86 +10,68 @@ type $nsid = typeof $nsid;
 
 export { $nsid };
 
-/** The account's unset.sh profile. Absent means the account has no published unset.sh profile. */
+/** Who an account is on unset.sh: the name, picture and details shown at the top of its pages. One per account; its presence means the account uses unset.sh, and deleting it removes the account's pages from readers. The cards shown are in sh.unset.page. */
 type Main = {
   $type: "sh.unset.profile";
 
   /**
-   * Name shown at the top of the profile.
+   * Name shown at the top of the page. Absent means readers show the handle.
    */
-  displayName: string;
+  displayName?: string;
 
   /**
-   * One line under the name.
+   * One line shown under the name.
    */
   headline?: string;
 
   /**
-   * Square profile picture.
+   * Profile picture. Readers crop it to a square.
    */
   avatar?: l.BlobRef;
 
   /**
-   * How the avatar is cropped. Absent or unknown means round.
+   * How readers crop the avatar. Absent or unknown means round.
    */
-  avatarShape?: "round" | "roundedSquare" | l.UnknownString;
+  avatarShape?: "round" | "rounded-square" | l.UnknownString;
 
   /**
-   * Free-text place, as the member writes it.
+   * A place, as free text the member writes. Not a precise location.
    */
   location?: string;
 
   /**
-   * The member's website: an http or https URL. A reader drops any other scheme.
+   * The member's website. An http or https URL; readers ignore any other scheme.
    */
   website?: l.UriString;
 
   /**
-   * Who unset.sh shows the page to: public (everyone), signedIn (people signed in to unset.sh), ownerOnly (only the account itself; others see that the account exists and nothing more). Absent means public; an unknown value is read as ownerOnly. A request to apps, not access control: the record stays readable by anyone on the network.
-   */
-  visibility?: "public" | "signedIn" | "ownerOnly" | l.UnknownString;
-
-  /**
-   * True: listed in the unset.sh directory. Absent or false: not listed; the page is still public at its URL.
+   * True asks directories to list the account. Absent or false means not listed; its pages are still reachable at their addresses.
    */
   listed?: boolean;
 
   /**
-   * Record keys of this account's sh.unset.section records, in page order. A key with no record is skipped; a record not listed shows after the listed ones, oldest first.
+   * When the profile was first created.
    */
-  cards?: l.RecordKeyString[];
-
-  /**
-   * When the profile was first published.
-   */
-  createdAt: l.DatetimeString;
+  createdAt?: l.DatetimeString;
 };
 
 export type { Main };
 
-/** The account's unset.sh profile. Absent means the account has no published unset.sh profile. */
+/** Who an account is on unset.sh: the name, picture and details shown at the top of its pages. One per account; its presence means the account uses unset.sh, and deleting it removes the account's pages from readers. The cards shown are in sh.unset.page. */
 const main = /*#__PURE__*/ l.record<"literal:self", Main>(
   "literal:self",
   $nsid,
   /*#__PURE__*/ l.object({
-    displayName: /*#__PURE__*/ l.string({ maxGraphemes: 64, maxLength: 640 }),
+    displayName: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 64, maxLength: 640 })),
     headline: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 200, maxLength: 2000 })),
-    avatar: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.blob({ accept: ["image/png", "image/jpeg", "image/webp", "image/avif"], maxSize: 2000000 }),
-    ),
+    avatar: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.blob({ accept: ["image/*"], maxSize: 2000000 })),
     avatarShape: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["round", "roundedSquare"] }>({ maxLength: 32 }),
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["round", "rounded-square"] }>({ maxLength: 32 }),
     ),
     location: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
     website: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
-    visibility: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["public", "signedIn", "ownerOnly"] }>({ maxLength: 32 }),
-    ),
     listed: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
-    cards: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.array(/*#__PURE__*/ l.string({ format: "record-key" }), { maxLength: 100 }),
-    ),
-    createdAt: /*#__PURE__*/ l.string({ format: "datetime" }),
+    createdAt: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "datetime" })),
   }),
 );
 

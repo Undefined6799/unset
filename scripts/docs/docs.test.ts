@@ -92,6 +92,54 @@ describe("ADRs", () => {
     expect(change(log, log.replace("- two\n", "- two, reversed\n"), "0001-log.md")).toMatch(/only gain lines/);
     expect(change(log, null, "0001-log.md")).toMatch(/only gain lines/);
   });
+
+  test("adr_supersede_status_paragraph", () => {
+    // P1.38x: a status that runs over several lines (0072) is kept word for word under "Earlier status:", below one
+    // new "Status: Superseded by NNNN." paragraph. Nothing else about an accepted ADR may change.
+    const adrs = new Set(["0072", "0077"]);
+    const change = (after: string) => adrChangeProblem("0072-x.md", accepted, after, adrs);
+    const old = "Status: Accepted by Alex, 2026-11-20, against 6b6abe4\n(his line, merged as 89f2918).";
+    const accepted = `# 0072 — X\n\n${old}\n\n## Context\nWhy.\n`;
+    const kept = old.replace(/^Status:/, "Earlier status:");
+    const marked = (by: string, earlier = kept) => accepted.replace(old, `Status: Superseded by ${by}.\n\n${earlier}`);
+
+    expect(change(marked("0077"))).toBe(null);
+    const refused = /may only change/;
+    expect(change(marked("0078"))).toMatch(refused); // not an existing ADR
+    expect(change(marked("0077", kept.replace("6b6abe4", "6b6abe5")))).toMatch(refused); // a word changed
+    expect(change(marked("0077", kept.replace("\n(his line, merged as 89f2918).", "")))).toMatch(refused); // line dropped
+    expect(change(marked("0077", `${kept}\nAlso X.`))).toMatch(refused); // a line added to the old paragraph
+    expect(change(marked("0077", kept.replace("\n", " ")))).toMatch(refused); // rewrapped
+    expect(change(marked("0077", old))).toMatch(refused); // old paragraph not relabelled: two status paragraphs
+    expect(change(marked("0077", kept.replace("Earlier status:", "Earlier status: ")))).toMatch(refused);
+    expect(change(marked("0077").replace("0077.\n\n", "0077.\n\nAlso X.\n\n"))).toMatch(refused); // second paragraph
+    expect(change(marked("0077").replace("0077.\n\n", "0077.\n"))).toMatch(refused); // no blank line between
+    expect(change(marked("0077").replace("0077.", "0077; also X."))).toMatch(refused); // extra words in the new line
+    expect(change(marked("0077").replace("Why.", "Why not."))).toMatch(refused); // body edited
+    expect(change(marked("0077").replace("# 0072 — X", "# 0072 — Y"))).toMatch(refused); // title edited
+    expect(change(accepted.replace(old, kept))).toMatch(refused); // relabelled without a new status
+  });
+
+  test("adr_superseded_stays_immutable", () => {
+    // Once marked superseded, in either form, an ADR changes no further: no second mark, no edit, no deletion.
+    const adrs = new Set(["0009", "0012", "0013"]);
+    const change = (before: string, after: string | null) => adrChangeProblem("0009-x.md", before, after, adrs);
+    const line = "# 0009 — X\n\nStatus: Superseded by 0012.\n\n## Context\nWhy.\n";
+    const paragraph =
+      "# 0009 — X\n\nStatus: Superseded by 0012.\n\nEarlier status: Accepted\n(by Alex).\n\n## Context\nWhy.\n";
+    for (const before of [line, paragraph]) {
+      expect(change(before, before)).toBe(null);
+      expect(change(before, before.replace("Why.", "Why not."))).toMatch(/superseded ADR/);
+      expect(change(before, before.replace("0012.", "0013."))).toMatch(/superseded ADR/);
+      expect(change(before, before.replace("Status: Superseded by 0012.", "Status: Accepted."))).toMatch(/superseded/);
+      expect(change(before, null)).toMatch(/superseded ADR/);
+    }
+    const twice = paragraph.replace(
+      "Status: Superseded by 0012.",
+      "Status: Superseded by 0013.\n\nEarlier status: Superseded by 0012.",
+    );
+    expect(change(paragraph, twice)).toMatch(/superseded ADR/);
+  });
 });
 
 describe("other documents", () => {

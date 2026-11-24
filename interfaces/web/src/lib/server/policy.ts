@@ -3,11 +3,22 @@
 // page and its rules live together and no shared table needs editing. This file imports nothing that imports it.
 import type { PolicyName } from "./limits.ts";
 
-/** The CSP group of a response (csp.ts). `app` runs SvelteKit's client; the others run no script (`csr = false`). */
+/**
+ * The CSP group of a response (csp.ts): `app` and `public` are pages, `static` is never one. Whether a page runs
+ * SvelteKit's client is not the group's to say: every page does unless its policy says `client: false` (ADR 0116).
+ */
 export type PageGroup = "app" | "public" | "static";
 
 export type RoutePolicy = Readonly<{
   group: PageGroup;
+  /**
+   * `false` on a route whose own page does not run SvelteKit's client (ADR 0116 points 1 and 4): its +page.ts says
+   * `csr = false`, and the hook never sends that page the script policy, whatever it holds. Every other page runs the
+   * client, and so does the error page of every route, this one included (for it SvelteKit takes `csr` from the
+   * layouts alone). A fact of the route, never read from the request; gate.test.ts names every route that says it,
+   * with its reason, and fails when `csr` and this disagree.
+   */
+  client?: false;
   /** The rate-limit policy (a key of limits.ts `policies`). */
   limit: PolicyName;
   /** The policy a POST counts against instead of `limit`, address and member buckets both (a page whose writes cost
@@ -49,6 +60,13 @@ export type RoutePolicy = Readonly<{
   /** Served only when TEST_ROUTES is on, which only the test profile allows (config.ts). */
   testOnly?: true;
 }>;
+
+/**
+ * Whether a route's own page runs SvelteKit's client: every page does unless its policy says `client: false` (ADR
+ * 0116 points 1 and 4), and a route with no policy has no page. Read from the route's policy alone, never from the
+ * request, so nothing a visitor sends turns it on.
+ */
+export const runsClient = (policy: RoutePolicy | undefined): boolean => policy !== undefined && policy.client !== false;
 
 /** Typed helper for a route's policy.ts: `export const policy = definePolicy({ ... })`. */
 export const definePolicy = (policy: RoutePolicy): RoutePolicy => policy;

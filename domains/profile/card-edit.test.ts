@@ -1,8 +1,9 @@
 // Writing profile cards (ADR 0051): the editor's input checked once, and the record that goes to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
+import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, TEXT_EDIT_BYTES, toCardRecord } from "./card-edit.ts";
 import { parseCardKey } from "./cards.ts";
+import { MAX_RECORD_BYTES } from "./index-plan.ts";
 
 const NOW = "2026-11-17T05:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
@@ -12,14 +13,36 @@ const key = (raw: string) => {
   return parsed;
 };
 const stored = (content: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
-  $type: "sh.unset.section",
+  $type: "sh.unset.card",
   content,
   createdAt: T1,
   ...extra,
 });
-const ref = (kind: string) => `sh.unset.section#${kind}`;
+/** Each kind's block (ADR 0086), and the buttons block's two button defs. */
+const REFS: Record<string, string> = {
+  readme: "sh.unset.block.text",
+  links: "sh.unset.block.links",
+  collection: "sh.unset.block.showcase",
+  buttons: "sh.unset.block.buttons",
+  image: "sh.unset.block.images",
+  emailButton: "sh.unset.block.buttons#email",
+  linkButton: "sh.unset.block.buttons#link",
+};
+const ref = (kind: string) => REFS[kind] ?? `sh.unset.block.${kind}`;
 
 describe("parseCardInput", () => {
+  test("text.edit_limit: the editor writes at most 10,000 bytes of Markdown, under the lexicon's 20,000", () => {
+    // Alex 2026-11-21 18:55Z. Counted in UTF-8 bytes, as the lexicon counts: "é" is two.
+    expect(TEXT_EDIT_BYTES).toBe(10_000);
+    expect(TEXT_EDIT_BYTES).toBeLessThan(LIMITS.card.textBytes);
+    expect(parseCardInput({ kind: "readme", text: "é".repeat(5_000) })).toMatchObject({ ok: true });
+    expect(parseCardInput({ kind: "readme", text: `${"é".repeat(5_000)}a` })).toEqual({
+      ok: false,
+      code: "card.too_long",
+      field: "text",
+    });
+  });
+
   test("trims fields, adds https to bare addresses and drops empty optional fields", () => {
     const parsed = parseCardInput({
       kind: "links",
@@ -45,6 +68,10 @@ describe("parseCardInput", () => {
       width: "full",
       content: { kind: "readme", text: "# Hi\n\nThere" },
     });
+  });
+
+  test("multi-line text keeps its tabs", () => {
+    expect(parseCardInput({ kind: "readme", text: "a\n\tb" })).toMatchObject({ ok: true, content: { text: "a\n\tb" } });
   });
 
   test.each([
@@ -74,6 +101,12 @@ describe("parseCardInput", () => {
     [{ kind: "readme", text: "x", width: "third" }, "card.invalid"],
     [{ kind: "links", title: ["x"], items: [] }, "card.invalid", "title"],
     [{ kind: "links", title: "a\nb", items: [] }, "card.invalid", "title"],
+    // Staging break test 2026-11-21: the index leaves out a record with a NUL, so the save refuses it.
+    [{ kind: "readme", text: "a\u0000b" }, "card.invalid", "text"],
+    [{ kind: "readme", text: "a\ud800b" }, "card.invalid", "text"],
+    [{ kind: "links", title: "a\u0007b", items: [] }, "card.invalid", "title"],
+    [{ kind: "links", items: [{ uri: "https://a.example/", label: "a\u0000" }] }, "card.invalid", "items.0.label"],
+    [{ kind: "buttons", heading: "Hi", text: "a\u001bb", buttons: [] }, "card.invalid", "text"],
   ])("refuses %j with %s, naming the field to blame", (input, code, field?: string) => {
     expect(parseCardInput(input)).toEqual(field === undefined ? { ok: false, code } : { ok: false, code, field });
   });
@@ -93,6 +126,17 @@ describe("parseCardInput", () => {
     expect(parseCardInput({ kind: "links", items })).toEqual({ ok: false, code: "card.too_long" });
     const buttons = Array.from({ length: 6 }, () => ({ kind: "email", address: "a@b.example" }));
     expect(parseCardInput({ kind: "buttons", heading: "Hi", buttons })).toEqual({ ok: false, code: "card.too_long" });
+  });
+});
+
+// What the save accepts, the index keeps (book P3.12v): a record the index would skip is refused at save, the stored
+// fields an edit keeps included, so the owner never sees a card the public page leaves out.
+describe("a card the index would leave out is refused at save", () => {
+  test("kept fields past the index's size refuse the edit as too long", () => {
+    const input = parseCardInput({ kind: "readme", text: "hi" });
+    if (!input.ok) throw new Error(input.code);
+    const existing = stored({ $type: ref("readme"), text: "old" }, { note: "x".repeat(MAX_RECORD_BYTES) });
+    expect(toCardRecord(input.content, input.width, existing, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 });
 
@@ -121,7 +165,7 @@ describe("toCardRecord", () => {
     const built = toCardRecord(content, width, null, NOW);
     expect(built.ok).toBe(true);
     expect(built.ok && built.record.createdAt).toBe(NOW);
-    expect(built.ok && validateRecord("sh.unset.section", built.record, "write")).toMatchObject({ ok: true });
+    expect(built.ok && validateRecord("sh.unset.card", built.record, "write")).toMatchObject({ ok: true });
   });
 
   test("empty optional fields and the default width are not written", () => {
@@ -129,7 +173,7 @@ describe("toCardRecord", () => {
     expect(toCardRecord(content, width, null, NOW)).toEqual({
       ok: true,
       record: {
-        $type: "sh.unset.section",
+        $type: "sh.unset.card",
         content: { $type: ref("collection"), layout: "carousel", items: [{ title: "A" }] },
         createdAt: NOW,
       },
@@ -142,7 +186,7 @@ describe("toCardRecord", () => {
     expect(toCardRecord(content, width, existing, NOW)).toEqual({
       ok: true,
       record: {
-        $type: "sh.unset.section",
+        $type: "sh.unset.card",
         pinned: true,
         width: "half",
         content: { $type: ref("readme"), mood: "calm", text: "new" },
@@ -243,9 +287,9 @@ describe("toCardRecord", () => {
   });
 
   test("the editor adds at most its own limit of rows, under the lexicon's", () => {
-    expect(CARD_EDIT_LIMITS.links).toBeLessThanOrEqual(LIMITS.section.linksMax);
-    expect(CARD_EDIT_LIMITS.collection).toBeLessThanOrEqual(LIMITS.section.entriesMax);
-    expect(CARD_EDIT_LIMITS.buttons).toBeLessThanOrEqual(LIMITS.section.buttonsMax);
+    expect(CARD_EDIT_LIMITS.links).toBeLessThanOrEqual(LIMITS.card.linksMax);
+    expect(CARD_EDIT_LIMITS.collection).toBeLessThanOrEqual(LIMITS.card.entriesMax);
+    expect(CARD_EDIT_LIMITS.buttons).toBeLessThanOrEqual(LIMITS.card.buttonsMax);
     const links = (n: number) => Array.from({ length: n }, (_, i) => ({ uri: `https://x.example/${i}` }));
     const at = parsed({ kind: "links", items: links(CARD_EDIT_LIMITS.links) });
     expect(toCardRecord(at.content, at.width, null, NOW).ok).toBe(true);
@@ -306,7 +350,7 @@ describe("card surfaces", () => {
     expect(built.ok).toBe(true);
     if (!built.ok) throw new Error("record refused");
     expect(built.record.surface).toBe(surface === "filled" ? undefined : surface);
-    expect(validateRecord("sh.unset.section", built.record, "write").ok).toBe(true);
+    expect(validateRecord("sh.unset.card", built.record, "write").ok).toBe(true);
   });
 
   test.each(["", "future", " Plain ", null, 1, {}])("refuses new surface %j", (surface) => {

@@ -12,6 +12,7 @@ import { notifyOwner } from "../../lib/server/invite-requests.ts";
 import { sendInviteMailFailed } from "../../lib/server/notification-sources.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { single } from "../../lib/server/sign-in.ts";
+import type { ShellData } from "../../lib/shell.ts";
 
 const PAGE = "/request-invite";
 /** The send's own deadline, apart from the request's: the answer never waits for it (ADR 0080 point 4). */
@@ -33,11 +34,17 @@ async function mailFailed(owner: Did): Promise<void> {
   }
 }
 
+/** The core shell, as the legal pages have, so a visitor keeps the app's navigation (staging test 2026-11-21, u7). */
+const SHELL: ShellData = { kind: "core", noindex: true };
+
 export const load: ServerLoad = ({ url, locals, setHeaders }) => {
   setHeaders({ "x-robots-tag": "noindex" });
   return {
+    shell: SHELL,
     open: services().inviteRequests !== null,
     signedIn: locals.did !== undefined,
+    // The one thing of the query this load reads, and only as a flag (rule DM-1): the page's data is written into the
+    // start-up script the server hashes (ADR 0116), so no text of the query may be in it.
     received: url.searchParams.get("sent") === "1",
     minAge: config.MIN_AGE,
     countryRule: config.INVITE_COUNTRY_RULE === "on",

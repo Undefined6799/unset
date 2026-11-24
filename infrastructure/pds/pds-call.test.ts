@@ -272,6 +272,49 @@ describe("pdsCall", () => {
     expect(wrong).toEqual({ kind: "rejected", xrpcError: "ScopeMissing", status: 403 });
   });
 
+  test("pdsCall.scope_missing_from_the_pds_answer", async () => {
+    // What a PDS sends for a write its grant does not cover: @atproto/oauth-scopes 0.5.14 ScopeMissingError (status
+    // 403, name "ScopeMissingError"), which @atproto/xrpc-server 0.13.10 errors.js fromError writes as
+    // {error: name, message}. The real Agent then throws @atproto/xrpc 0.8.18's XRPCError: `error` is that name, while
+    // `name` stays "Error" (types.js sets none). Staging, 2026-11-21: this read as an outage.
+    const scope = "repo:sh.unset.card?action=create";
+    const { pdsCall, lines } = harness({
+      fetch: async () =>
+        Response.json({ error: "ScopeMissingError", message: `Missing required scope "${scope}"` }, { status: 403 }),
+    });
+    const result = await pdsCall(
+      null,
+      DID,
+      (agent) =>
+        agent.com.atproto.repo.createRecord({
+          repo: DID,
+          collection: "sh.unset.card",
+          record: { $type: "sh.unset.card" },
+        }),
+      { idempotent: false },
+    );
+    expect(result).toEqual({ kind: "scope_missing", scope });
+    expect(lines).toEqual(["pds.scope_missing"]);
+  });
+
+  test("pdsCall.insufficient_scope_challenge", async () => {
+    // RFC 6750 section 3.1: a 403 whose WWW-Authenticate names error="insufficient_scope" is the same refusal.
+    const { pdsCall } = harness({
+      fetch: async () =>
+        new Response(JSON.stringify({ error: "Forbidden", message: "nope" }), {
+          status: 403,
+          headers: { "content-type": "application/json", "www-authenticate": 'DPoP error="insufficient_scope"' },
+        }),
+    });
+    const result = await pdsCall(
+      null,
+      DID,
+      (agent) => agent.com.atproto.repo.deleteRecord({ repo: DID, collection: "sh.unset.card", rkey: "3l2" }),
+      { idempotent: false },
+    );
+    expect(result).toEqual({ kind: "scope_missing" });
+  });
+
   test("pdsCall.timeout", async () => {
     const { pdsCall } = harness();
     const started = Date.now();

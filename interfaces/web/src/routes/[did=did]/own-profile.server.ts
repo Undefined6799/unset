@@ -1,13 +1,16 @@
 // Ported from interfaces/http/own-profile.ts (P1.20i); that copy went with P1.20k.
-// The member's own profile and cards for their page (ADR 0051), read from their own PDS. Every record is checked by
+// The member's own profile, main page and cards (ADR 0051, ADR 0091), read from their own PDS. Every record is checked by
 // domains/profile on the way in: a bad field reads as unset, a bad card is hidden, a key that is not a record key
 // is dropped, and `pageCards` sets the order. Visitors never reach this: public pages wait for the indexer
 // (ADR 0052), so there is no live PDS read for anyone but the owner.
 import {
   type AvatarShape,
   type Card,
+  type CardVersion,
   type ProfileFields,
   pageCards,
+  parseCardVersion,
+  type RepoDid,
   readAvatarShape,
   readProfileRecord,
 } from "@unset/domains-profile";
@@ -21,6 +24,8 @@ export type OwnProfile =
       /** The avatar's crop; round when unset or unknown. */
       readonly avatarShape: AvatarShape;
       readonly cards: readonly Card[];
+      /** Each card's record CID by key, the version its editor opens (ADR 0074); a card without a valid one is absent. */
+      readonly versions: ReadonlyMap<string, CardVersion>;
       /** False when the read stopped early (card-records.ts budget): the page says some cards are missing. */
       readonly cardsComplete: boolean;
       /** True when more cards are stored than the page shows: the page asks the member to delete one. */
@@ -31,16 +36,20 @@ export type OwnProfile =
 
 export type OwnProfileReads = {
   readonly profile: () => Promise<PdsResult<StoredRecord | null>>;
+  /** The main page, whose list says which cards show, in order. */
+  readonly page: () => Promise<PdsResult<StoredRecord | null>>;
   readonly cards: () => Promise<PdsResult<CardList>>;
 };
 
 /**
- * The profile first, then the cards, one after the other on the same session: a failed first read skips the second.
- * Either failing hides the profile, and an ended session sends the member to sign in.
+ * The profile first, then the page, then the cards, one after the other on the same session: a failed read skips the
+ * rest. Any failing hides the profile, and an ended session sends the member to sign in.
  */
-export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile> {
+export async function loadOwnProfile(owner: RepoDid, reads: OwnProfileReads): Promise<OwnProfile> {
   const profile = await reads.profile();
   if (profile.kind !== "ok") return failure(profile);
+  const page = await reads.page();
+  if (page.kind !== "ok") return failure(page);
   const cards = await reads.cards();
   if (cards.kind !== "ok") return failure(cards);
   const record = profile.value?.value;
@@ -49,7 +58,13 @@ export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
     avatarShape: readAvatarShape(record),
-    cards: pageCards(record, cards.value.cards),
+    cards: pageCards(owner, page.value?.value, cards.value.cards),
+    versions: new Map(
+      cards.value.cards.flatMap((stored) => {
+        const version = parseCardVersion(stored.cid);
+        return version === null ? [] : [[stored.key, version] as const];
+      }),
+    ),
     cardsComplete: cards.value.complete,
     cardsOverflow: cards.value.overflow,
   };

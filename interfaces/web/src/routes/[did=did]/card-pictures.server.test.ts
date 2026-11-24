@@ -7,10 +7,11 @@ import { describe, expect, test } from "vitest";
 import { type CardStore, type CardWrites, cardWrites, type PictureStore } from "./card-writes.server.ts";
 
 type ListResult = Awaited<ReturnType<CardStore["list"]>>;
-type CardKey = Parameters<CardStore["remove"]>[0];
+type CardKey = Parameters<CardWrites["remove"]>[0];
 type CardContent = Parameters<CardWrites["create"]>[0];
 type CardVersion = Parameters<CardWrites["saveAll"]>[0][number]["version"];
 type DraftId = Parameters<PictureStore["use"]>[0];
+const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as Parameters<typeof cardWrites>[0];
 
 const NOW = "2026-11-20T23:00:00.000Z";
 const T1 = "2026-11-01T00:00:00.000Z";
@@ -39,15 +40,15 @@ const picture = (draft: DraftId | null = DRAFT): CardContent => ({
   fit: "contain",
 });
 const readme = (text: string) => ({
-  $type: "sh.unset.section",
-  content: { $type: "sh.unset.section#readme", text },
+  $type: "sh.unset.card",
+  content: { $type: "sh.unset.block.text", text },
   createdAt: T1,
 });
 const storedPicture = {
-  $type: "sh.unset.section",
+  $type: "sh.unset.card",
   content: {
-    $type: "sh.unset.section#image",
-    image: { image: { ...BLOB, ref: { $link: OLD }, size: 9 }, alt: "Old", aspectRatio: { width: 4, height: 3 } },
+    $type: "sh.unset.block.images",
+    images: [{ image: { ...BLOB, ref: { $link: OLD }, size: 9 }, alt: "Old", aspectRatio: { width: 4, height: 3 } }],
   },
   createdAt: T1,
 };
@@ -68,21 +69,19 @@ function stack(over: Over = {}) {
       log.push("head");
       return ok(HEAD);
     },
+    profile: async () => ok({ value: { $type: "sh.unset.profile", displayName: "A", createdAt: T1 }, cid: "p" }),
+    page: async () => ok(null),
     newKey: () => NEW_KEY,
-    create: async (record, _swap, key) => {
-      log.push(`create ${key ?? "pds-picks"}`);
-      written.push(record);
-      return ok({ kind: "created", key: key ?? "pds", rev: REV });
+    write: async ({ card }) => {
+      if (card?.kind === "create") written.push(card.record);
+      if (card !== undefined) log.push(`${card.kind === "create" ? "create" : "remove"} ${card.key}`);
+      return ok({ kind: "written", rev: REV });
     },
     save: async (key, build) => {
       const built = build(storedPicture);
       log.push(`save ${key}`);
       if (built.ok) written.push(built.record);
       return ok(built.ok ? { kind: "saved", rev: REV } : { kind: "refused", code: built.code });
-    },
-    remove: async (key) => {
-      log.push(`remove ${key}`);
-      return ok(undefined);
     },
     saveMany: async (updates) => {
       log.push(`saveMany ${updates.map((u) => u.key).join(",")}`);
@@ -119,13 +118,12 @@ function stack(over: Over = {}) {
     },
     ...over.pictures,
   };
-  return { writes: cardWrites(store, () => NOW, pictures), log, written };
+  return { writes: cardWrites(OWNER, store, () => NOW, pictures), log, written };
 }
 
 const PUBLISHED = {
-  $type: "sh.unset.section#image",
-  image: { image: BLOB, alt: "A lake", aspectRatio: { width: 2560, height: 1707 } },
-  caption: "Morning",
+  $type: "sh.unset.block.images",
+  images: [{ image: BLOB, alt: "A lake", aspectRatio: { width: 2560, height: 1707 }, caption: "Morning" }],
   fit: "contain",
 };
 
@@ -142,7 +140,21 @@ describe("a new picture card", () => {
       `create ${NEW_KEY}`,
       `settle ${NEW_KEY} ${REV} ${LINK} ${DRAFT}`,
     ]);
-    expect(written).toEqual([{ $type: "sh.unset.section", content: PUBLISHED, createdAt: NOW }]);
+    expect(written).toEqual([{ $type: "sh.unset.card", content: PUBLISHED, createdAt: NOW }]);
+  });
+
+  test("picture.create_once: a picture card sent again matches the stored one, its blob decoded as the client reads it", async () => {
+    const first = stack();
+    expect(await first.writes.create(picture(), "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    const stored = JSON.parse(JSON.stringify(first.written[0]));
+    // As @atproto/api hands back a listed record: the blob a decoded BlobRef whose toJSON gives the JSON form
+    // (@atproto/lexicon blob-refs.js toJSON, ipldToJson), its keys in another order.
+    const image = stored.content.images[0];
+    const decoded = { size: image.image.size, mimeType: image.image.mimeType, toJSON: () => image.image };
+    stored.content.images[0] = { alt: image.alt, ...image, image: decoded };
+    const again = stack({ cards: [{ key: NEW_KEY, value: stored, cid: "cn" }] });
+    expect(await again.writes.create(picture(), "full", undefined, NEW_KEY)).toEqual({ kind: "saved" });
+    expect(again.log.some((line) => line.startsWith("create"))).toBe(false);
   });
 
   test("picture.create_full: a page with no room is refused before any use or upload", async () => {
@@ -179,6 +191,25 @@ describe("a new picture card", () => {
     expect(written).toEqual([]);
   });
 
+  test("picture.pds_too_large: a PDS refusing the picture's size names the picture, releases the use, writes nothing", async () => {
+    const tooLarge = { kind: "rejected", xrpcError: "PayloadTooLarge", status: 413 } as const;
+    const sent: number[] = [];
+    const upload = async (bytes: Uint8Array) => {
+      sent.push(bytes.length);
+      return tooLarge;
+    };
+    const { writes, log, written } = stack({ pictures: { upload } });
+    expect(await writes.create(picture(), "full")).toEqual({
+      kind: "failed",
+      code: "card.image_too_large",
+      field: "image",
+    });
+    expect(log.at(-1)).toBe(`release ${DRAFT} ${NEW_KEY} ${LEASE}`);
+    // Sent once, as it was: no smaller copy is made and retried (Alex, 2026-11-21 17:43Z).
+    expect(sent).toEqual([3]);
+    expect(written).toEqual([]);
+  });
+
   test("picture.note_throws: the database failing after the upload releases the use, then the error surfaces", async () => {
     const broken = new Error("database down");
     const published = async () => {
@@ -191,23 +222,24 @@ describe("a new picture card", () => {
   });
 
   test("picture.create_unknown: a create the PDS did not answer may have landed, so its use stays", async () => {
-    const { writes, log } = stack({ store: { create: async () => down } });
+    const { writes, log } = stack({ store: { write: async () => down } });
     expect(await writes.create(picture(), "full")).toEqual({ kind: "failed", code: "card.pds_unavailable" });
     expect(log.at(-1)).toBe(`published ${DRAFT} ${LINK}`);
     expect(log.some((line) => line.startsWith("release"))).toBe(false);
   });
 
   test("picture.create_changed: a repo that keeps moving uploads once and releases the use at the end", async () => {
-    const { writes, log } = stack({ store: { create: async () => ok({ kind: "changed" }) } });
+    const { writes, log } = stack({ store: { write: async () => ok({ kind: "changed" }) } });
     expect(await writes.create(picture(), "full")).toEqual({ kind: "failed", code: "card.cards_changed" });
     expect(log.filter((line) => line === "upload")).toHaveLength(1);
     expect(log.at(-1)).toBe(`release ${DRAFT} ${NEW_KEY} ${LEASE}`);
   });
 
-  test("picture.other_kinds: a new Text card still lets the PDS pick its key and touches no picture", async () => {
+  test("picture.other_kinds: a new Text card touches no picture", async () => {
+    // Web names every new card's key, so the profile's list can name it in the same write (ADR 0086 point 3).
     const { writes, log } = stack();
     await writes.create({ kind: "readme", text: "Hi" } as CardContent, "full");
-    expect(log).toEqual(["head", "create pds-picks"]);
+    expect(log).toEqual(["head", `create ${NEW_KEY}`]);
   });
 });
 
@@ -230,7 +262,7 @@ describe("an edited picture card", () => {
     const { writes, log, written } = stack();
     expect(await writes.save("p" as CardKey, picture(null), "full")).toEqual({ kind: "saved" });
     expect(log).toEqual(["save p", `settle p ${REV} ${OLD} -`]);
-    expect(written).toMatchObject([{ content: { image: { image: { size: 9 }, alt: "A lake" } } }]);
+    expect(written).toMatchObject([{ content: { images: [{ image: { size: 9 }, alt: "A lake" }] } }]);
   });
 
   test("picture.save_refused: a write the PDS refuses releases the new use", async () => {
@@ -307,9 +339,9 @@ describe("an edited picture card", () => {
   });
 
   test("picture.remove: deleting a card drops every use its record had", async () => {
-    const { writes, log } = stack();
+    const { writes, log } = stack({ cards: [{ key: "p", value: storedPicture, cid: "cp" }] });
     expect(await writes.remove("p" as CardKey)).toEqual({ kind: "saved" });
-    expect(log).toEqual(["remove p", "drop p"]);
+    expect(log).toEqual(["head", "remove p", "drop p"]);
   });
 });
 

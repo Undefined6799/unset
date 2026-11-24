@@ -1,0 +1,48 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.page",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "any",
+      "description": "One page of an account on unset.sh: the cards it shows, in order, under the account's profile (sh.unset.profile). The page under the record key self is the account's main page, shown at its profile's address. An account may hold other pages under other keys; readers show none of them until they know where it goes. Deleting self leaves the profile shown to everyone, with no cards.",
+      "record": {
+        "type": "object",
+        "properties": {
+          "cards": {
+            "type": "array",
+            "maxLength": 100,
+            "items": {
+              "type": "ref",
+              "ref": "#cardRef"
+            },
+            "description": "The cards shown on the page, in display order. Only the cards named here are shown: a card not named here is not shown on this page, a reference to a missing card is skipped, and a card named more than once is shown once, at its first place. A card may be named on more than one page."
+          },
+          "visibility": {
+            "type": "string",
+            "maxLength": 32,
+            "knownValues": ["public", "signed-in", "owner-only"],
+            "description": "Who apps should show this page to. Absent means public; an unknown value means owner-only. The main page's choice is the account's: readers apply it to the profile's details shown with the page and wherever they show the account. A request to apps, not access control: the records stay public."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the page was first created."
+          }
+        }
+      }
+    },
+    "cardRef": {
+      "type": "object",
+      "required": ["uri"],
+      "description": "One place in the page order.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "at:// address of an sh.unset.card record, written with the DID. Readers accept only a card record in this page's own repository, named by that DID, and skip any other entry (a handle-form address, another account, another kind of record)."
+        }
+      }
+    }
+  }
+}

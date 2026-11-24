@@ -3,10 +3,15 @@
 // (@atproto/lex-schema 0.2.8, dist/schema/object.js); reading keeps that rule for forward compatibility.
 import { jsonToLex, lexToJson } from "@atproto/lex-json";
 import { app, sh } from "../generated/index.generated.ts";
-import shared from "../schemas/sh.unset.defs.json" with { type: "json" };
-import follow from "../schemas/sh.unset.follow.json" with { type: "json" };
+import buttons from "../schemas/sh.unset.block.buttons.json" with { type: "json" };
+import blockDefs from "../schemas/sh.unset.block.defs.json" with { type: "json" };
+import images from "../schemas/sh.unset.block.images.json" with { type: "json" };
+import links from "../schemas/sh.unset.block.links.json" with { type: "json" };
+import showcase from "../schemas/sh.unset.block.showcase.json" with { type: "json" };
+import text from "../schemas/sh.unset.block.text.json" with { type: "json" };
+import card from "../schemas/sh.unset.card.json" with { type: "json" };
+import page from "../schemas/sh.unset.page.json" with { type: "json" };
 import profile from "../schemas/sh.unset.profile.json" with { type: "json" };
-import section from "../schemas/sh.unset.section.json" with { type: "json" };
 import actorProfile from "../vendor/app.bsky.actor.profile.json" with { type: "json" };
 
 /** "write" refuses fields the schema does not define; "read" accepts and ignores them. */
@@ -21,8 +26,8 @@ type Defs = Record<string, { type: string; record?: { properties: Props }; prope
 
 const RECORDS = {
   "sh.unset.profile": { validator: sh.unset.profile.main, defs: profile.defs, strict: true },
-  "sh.unset.section": { validator: sh.unset.section.main, defs: section.defs, strict: true },
-  "sh.unset.follow": { validator: sh.unset.follow.main, defs: follow.defs, strict: true },
+  "sh.unset.page": { validator: sh.unset.page.main, defs: page.defs, strict: true },
+  "sh.unset.card": { validator: sh.unset.card.main, defs: card.defs, strict: true },
   "app.bsky.actor.profile": { validator: app.bsky.actor.profile.main, defs: actorProfile.defs, strict: false },
 } satisfies Record<string, { validator: Validator; defs: object; strict: boolean }>;
 
@@ -56,11 +61,13 @@ function toLex(value: Record<string, unknown>): unknown {
   }
 }
 
-/** Defs other schemas refer to by NSID (`sh.unset.defs#image`); a ref to any other lexicon is not followed. */
-const SHARED: Record<string, Defs> = { [shared.id]: shared.defs as Defs };
+/** Defs other schemas refer to by NSID (a card's block, `sh.unset.block.defs#image`); no other lexicon is followed. */
+const SHARED: Record<string, Defs> = Object.fromEntries(
+  [blockDefs, buttons, images, links, showcase, text].map((doc) => [doc.id, doc.defs as Defs]),
+);
 
 /**
- * Fields of `value` that the def does not define, following `#refs` and refs into sh.unset.defs into nested objects
+ * Fields of `value` that the def does not define, following `#refs` and refs into the sh.unset.block files into nested objects
  * and array items. A nested object may name its own def in `$type` (atproto.com/specs/lexicon, "$type"); the root's was
  * checked already. A union member is followed through the local ref its `$type` names; the generated validator has
  * already refused a member a closed union does not list. Properties are looked up as own keys only, so a field named
@@ -70,7 +77,8 @@ function unknownFields(nsid: string, defs: Defs, name: string, value: Record<str
   const def = defs[name];
   const props = def?.record?.properties ?? def?.properties ?? {};
   return Object.entries(value).flatMap(([key, child]) => {
-    if (key === "$type" && (path === "$" || child === `${nsid}#${name}`)) return [];
+    if (key === "$type" && (path === "$" || child === `${nsid}#${name}` || (name === "main" && child === nsid)))
+      return [];
     const prop = Object.hasOwn(props, key) ? props[key] : undefined;
     if (!prop) return [`${path}.${key}: unknown field`];
     const field = prop.type === "array" ? prop.items : prop;
@@ -90,8 +98,8 @@ type Followed = { nsid: string; defs: Defs; name: string };
 function followedRef(nsid: string, defs: Defs, field: Field, item: Record<string, unknown>): Followed | undefined {
   if (field.type === "ref") return field.ref === undefined ? undefined : refTarget(nsid, defs, field.ref);
   if (field.type !== "union" || typeof item.$type !== "string") return undefined;
-  const member = item.$type.startsWith(`${nsid}#`) ? item.$type.slice(nsid.length) : undefined;
-  return member !== undefined && field.refs?.includes(member) ? { nsid, defs, name: member.slice(1) } : undefined;
+  const member = item.$type.startsWith(`${nsid}#`) ? item.$type.slice(nsid.length) : item.$type;
+  return field.refs?.includes(member) ? refTarget(nsid, defs, member) : undefined;
 }
 
 function refTarget(nsid: string, defs: Defs, ref: string): Followed | undefined {

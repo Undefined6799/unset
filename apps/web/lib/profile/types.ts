@@ -2,12 +2,14 @@
 // fills its fields from `content`), and beside it what the card shows, built on the server: the README's blocks and
 // every address already through safeHref, so a component never decides whether a link is safe.
 
+import type { CodeColourLimits, CodeRun } from "../editor/code-colours.ts";
+
 export type CardLayout = "list" | "carousel" | "grid";
 /** How the avatar is cropped (sh.unset.profile avatarShape). */
 export type AvatarShape = "round" | "roundedSquare";
 export type CardSurface = "filled" | "outlined" | "plain";
 /** Who sees the member's page (ADR 0078), as domains/profile reads it. */
-export type ProfileVisibility = "public" | "signedIn" | "ownerOnly";
+export type PageVisibility = "public" | "signedIn" | "ownerOnly";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
 
@@ -44,22 +46,40 @@ export type CardContent =
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
+  | { readonly kind: "break" }
   | { readonly kind: "strong"; readonly children: readonly Inline[] }
   | { readonly kind: "em"; readonly children: readonly Inline[] }
+  | { readonly kind: "del"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: string; readonly children: readonly Inline[] };
 
 export type Block =
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
-  | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
+  | { readonly kind: "heading"; readonly level: 1 | 2 | 3 | 4 | 5 | 6; readonly children: readonly Inline[] }
+  | { readonly kind: "paragraph"; readonly children: readonly Inline[] }
+  | { readonly kind: "quote"; readonly paragraphs: readonly (readonly Inline[])[] }
   | ListBlock
+  /**
+   * Code as plain `text`, or as coloured `runs` that join back to it (lib/editor/code-colours.ts) when its language
+   * is one CodeMirror knows and the page's limits allow; never both, which would send the code twice.
+   */
   | { readonly kind: "code"; readonly text: string }
-  | { readonly kind: "rule" };
+  | { readonly kind: "code"; readonly runs: readonly CodeRun[] }
+  | { readonly kind: "rule" }
+  | {
+      readonly kind: "table";
+      readonly align: readonly ("left" | "center" | "right" | null)[];
+      readonly head: readonly (readonly Inline[])[];
+      readonly rows: readonly (readonly (readonly Inline[])[])[];
+    };
 
 export type ListBlock = {
   readonly kind: "list";
   readonly ordered: boolean;
   readonly start?: number;
-  readonly items: readonly { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] }[];
+  readonly items: readonly {
+    readonly text: readonly Inline[];
+    readonly lists: readonly ListBlock[];
+    readonly task?: "open" | "done";
+  }[];
 };
 
 /** A link, entry or button as the card shows it; a row with no safe address is left out. */
@@ -100,18 +120,25 @@ export type CardShown =
       readonly buttons: readonly ShownButton[];
     };
 
-export type CardView = {
+/** A card as a page that edits nothing draws it: what it shows, never the record's fields behind it (rule SE-3). */
+export type ShownCard = {
   readonly key: string;
   readonly width: CardWidth;
   readonly surface: CardSurface;
-  readonly content: CardContent;
   readonly shown: CardShown;
+};
+
+/** A card on the owner's page: what it shows, and `content`, the record's fields its editor fills from. */
+export type CardView = ShownCard & {
+  /** The record CID the card was read at: what an edit of it names (ADR 0074). */
+  readonly version?: string;
+  readonly content: CardContent;
 };
 
 /**
  * How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS), and `text`, the README's maxlength:
- * the lexicon's limit in UTF-8 bytes (shared/lexicons LIMITS.section.textBytes). maxlength counts UTF-16 code units,
- * never more than a text's UTF-8 bytes, so it never stops a README the lexicon accepts, and it keeps a no-script save
+ * the editor's limit in UTF-8 bytes (domains/profile TEXT_EDIT_BYTES). maxlength counts UTF-16 code units,
+ * never more than a text's UTF-8 bytes, so it never stops a README the editor accepts, and it keeps a no-script save
  * far under the form's body cap (staging walkthrough 2026-11-18 round two: 2.2 MiB pasted, the text lost).
  */
 export type CardEditLimits = {
@@ -119,6 +146,10 @@ export type CardEditLimits = {
   readonly collection: number;
   readonly buttons: number;
   readonly text: number;
+  /** The card form's body cap in bytes (interfaces/web policy.ts): the one Save checks it before sending (ADR 0074). */
+  readonly formBytes: number;
+  /** The page's code colouring limits (interfaces/web limits.ts), so the Text editor's preview colours what it will. */
+  readonly codeColours: CodeColourLimits;
 };
 
 /**

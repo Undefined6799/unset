@@ -36,7 +36,18 @@ for (const fixture of ALL_PAGES) {
       const csp = header(headers, "content-security-policy") ?? "";
       expect(csp).toContain("default-src 'none'");
       if (fixture.group === "public") {
-        expect(csp).not.toContain("script-src");
+        // A public page that runs the client (ADR 0114, ADR 0116: the profile, home, the legal pages, the invite
+        // request) has the app group's script policy and keeps its own cache rule (the profile's is a minute); a
+        // public page without the client allows no script at all.
+        if (fixture.expectJs) {
+          expect(csp).toContain(`script-src ${originOf(fixture)}/_app/ 'sha256-`);
+          expect(csp).toContain("require-trusted-types-for 'script'");
+          expect(csp).not.toContain("unsafe-inline");
+          expect(csp).not.toContain("unsafe-eval");
+          if (fixture.route === "/@:actor") expect(header(headers, "cache-control")).toBe("public, max-age=60");
+        } else {
+          expect(csp).not.toContain("script-src");
+        }
         expect(header(headers, "vary")).toBe(OPTIONAL_SESSION.has(fixture.path) ? "Cookie" : undefined);
       } else {
         expect(csp).toContain("script-src");

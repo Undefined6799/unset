@@ -15,27 +15,31 @@ import {
   parseCardInput,
   parseCardKey,
   parseCardVersion,
+  parseNewCardKey,
+  parseRepoDid,
+  TEXT_EDIT_BYTES,
 } from "@unset/domains-profile";
 import {
-  createCardRecord,
-  deleteCardRecord,
   latestCommit,
   listCardRecords,
+  loadPageRecord,
   loadProfileRecord,
   newCardKey,
   saveCardRecord,
   saveCardRecords,
   saveProfileRecord,
   uploadImageBlob,
+  writeCardAndList,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
-import { LIMITS } from "@unset/shared-lexicons";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
+import { CODE_COLOUR_LIMITS } from "../../lib/server/limits.ts";
+import { ALLOW_PATH } from "../../lib/server/pds-failure.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
-import { type CardEdit, type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
+import { type CardEdit, type CardStore, type CardWrite, type CardWritten, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
 import { picturesFor } from "./picture-store.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
@@ -89,12 +93,15 @@ function cardPanel(query: URLSearchParams, cards: readonly CardView[], editable:
 
 export const load: ServerLoad = async ({ params, locals, request, url }) => {
   const did = ownDid(params.did, locals.did, "GET");
+  const owner = parseRepoDid(did);
+  if (owner === null) error(404);
   const { pdsCall } = services().pds;
   const ctx = pdsContext(locals);
   const [account, own] = await Promise.all([
     accountView(services(), did, locals.issuerOrigin, locals.deadline),
-    loadOwnProfile({
+    loadOwnProfile(owner, {
       profile: () => loadProfileRecord(pdsCall, ctx, did),
+      page: () => loadPageRecord(pdsCall, ctx, did),
       cards: () => listCardRecords(pdsCall, ctx, did),
     }),
   ]);
@@ -110,7 +117,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? cardViews(own.cards) : [];
+  const cards = own.kind === "ok" ? await cardViews(own.cards, CODE_COLOUR_LIMITS, own.versions) : [];
   return {
     shell,
     account,
@@ -124,7 +131,14 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes },
+    cardEditLimits: {
+      ...CARD_EDIT_LIMITS,
+      text: TEXT_EDIT_BYTES,
+      formBytes: CARD_FORM_LIMIT_BYTES,
+      codeColours: CODE_COLOUR_LIMITS,
+    },
+    // Drawn fresh on each load, so each add form names its own card (newKeyField).
+    newCardKey: newCardKey(),
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
     cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",
@@ -144,16 +158,20 @@ function writesFor(did: Did, locals: App.Locals) {
   const store: CardStore = {
     list: () => listCardRecords(pdsCall, ctx, did),
     head: () => latestCommit(pdsCall, ctx, did),
+    profile: () => loadProfileRecord(pdsCall, ctx, did),
+    page: () => loadPageRecord(pdsCall, ctx, did),
     newKey: () => newCardKey() as CardKey,
-    create: (record, swapCommit, key) => createCardRecord(pdsCall, ctx, did, record, swapCommit, key),
+    write: (change, swapCommit) => writeCardAndList(pdsCall, ctx, did, change, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
-    remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
     saveMany: (updates, swapCommit) => saveCardRecords(pdsCall, ctx, did, updates, swapCommit),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };
   const { images, drafts, pds } = services();
   const upload = (bytes: Uint8Array) => uploadImageBlob(pds.pdsCall, ctx, did, bytes);
+  const owner = parseRepoDid(did);
+  if (owner === null) error(404);
   return cardWrites(
+    owner,
     store,
     () => new Date().toISOString(),
     picturesFor(did, { images, drafts, upload }, locals.deadline),
@@ -176,6 +194,16 @@ function keyField(form: URLSearchParams): CardKey {
   if (key === null) throw new AppError("http.not_found");
   form.delete("key");
   return key;
+}
+
+/**
+ * The key the add form was given when the page was drawn (load's `newCardKey`), so the same form sent twice adds one
+ * card. One that is missing or not a TID (a page drawn before this field) just means a fresh key, as before.
+ */
+function newKeyField(form: URLSearchParams): CardKey | undefined {
+  const keys = form.getAll("newKey");
+  form.delete("newKey");
+  return (keys.length === 1 ? parseNewCardKey(keys[0]) : null) ?? undefined;
 }
 
 /**
@@ -247,46 +275,59 @@ function refused(
     readonly values?: Record<string, string> | undefined;
     readonly card?: string | undefined;
     readonly saved?: readonly string[] | undefined;
+    readonly versions?: readonly CardWritten[] | undefined;
     readonly message?: string | undefined;
   } = {},
 ) {
-  const { field, values, card, saved, message } = shown;
+  const { field, values, card, saved, versions, message } = shown;
   return fail(new AppError(code).status, {
     code,
     message: message ?? ERROR_MESSAGES[code],
     ...(field === undefined ? {} : { field }),
     ...(card === undefined ? {} : { card }),
     ...(saved === undefined ? {} : { saved }),
+    ...(versions === undefined ? {} : { versions }),
     ...(values === undefined ? {} : { values }),
   });
 }
 
 /**
  * One card write for the signed-in owner: the DID from the session, the body read once, then the write. Saved goes
- * back to the page; a refusal shows the page with its code; a dead grant goes to sign in.
+ * back to the page, or with `answered` (the one Save, which only the page's script posts) is answered with each
+ * written card's new version; a refusal shows the page with its code; a dead grant goes to sign in. With `echo` a
+ * refusal carries what was typed, but only to a page drawn again with no script: the page's script (kit's
+ * `use:enhance`, which sends x-sveltekit-action, kit 3.2.0 src/runtime/app/forms/client.js) keeps the words in its
+ * open editor, so its answer stays small however long the card (staging change test 2026-11-21, finding 5).
  */
 async function write(
   { params, locals, request }: { params: Partial<Record<string, string>>; locals: App.Locals; request: Request },
   run: (form: URLSearchParams, did: Did) => CardWrite | Promise<CardWrite>,
   echo = false,
   explain: (written: Extract<CardWrite, { kind: "failed" }>) => string | undefined = () => undefined,
+  answered = false,
 ) {
   const did = ownDid(params.did, locals.did, "POST");
   let written: CardWrite;
   let typed: Record<string, string> | undefined;
   try {
     const form = await formText(request);
-    if (echo) typed = Object.fromEntries(form);
+    if (echo && !request.headers.has("x-sveltekit-action")) typed = Object.fromEntries(form);
     written = await run(form, did);
   } catch (cause) {
     if (!(cause instanceof AppError) || !isShown(cause.code)) throw cause;
     return refused(cause.code, { values: typed });
   }
+  // A card editor's write the grant does not cover keeps the editor open with every field as typed and links to /allow
+  // in a new tab (card-editor.svelte), so nothing is lost while the member allows access; the other writes go there.
+  if (written.kind === "redirect" && echo && written.location === ALLOW_PATH) {
+    return refused("card.scope_missing", { values: typed });
+  }
   if (written.kind === "redirect") redirect(303, written.location);
   if (written.kind === "failed") {
-    const { code, field, card, saved } = written;
-    return refused(code, { field, values: typed, card, saved, message: explain(written) });
+    const { code, field, card, saved, versions } = written;
+    return refused(code, { field, values: typed, card, saved, versions, message: explain(written) });
   }
+  if (answered) return { versions: written.versions ?? [] };
   redirect(303, `/${did}`);
 }
 
@@ -295,8 +336,11 @@ export const actions: Actions = {
     write(
       event,
       (form, did) => {
+        const key = newKeyField(form);
         const input = cardInput(form);
-        return input.ok ? writesFor(did, event.locals).create(input.content, input.width, input.surface) : input.failed;
+        return input.ok
+          ? writesFor(did, event.locals).create(input.content, input.width, input.surface, key)
+          : input.failed;
       },
       true,
     ),
@@ -326,6 +370,7 @@ export const actions: Actions = {
       },
       false,
       (written) => (written.saved === undefined ? undefined : partialMessage(edits, written.saved)),
+      true,
     );
   },
   remove: (event) =>

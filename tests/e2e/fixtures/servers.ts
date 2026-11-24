@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import { type Did, PRIVACY_VERSION, parseDid, TERMS_VERSION } from "@unset/domains-identity";
-import { toCardRecord } from "@unset/domains-profile";
+import { type CardContent, toCardRecord } from "@unset/domains-profile";
 import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
 import type { SavedSession } from "@unset/infrastructure-pds";
 import {
@@ -37,10 +37,14 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { buildOnce, PDS_HOST, type Postgres, type RunningWeb, startWeb } from "../../integration/web/built-server.ts";
 import { readyMember } from "../../integration/web/members.ts";
+import { removeOrphans } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 import {
   ACCOUNT,
+  BELL_SIZE,
+  HIDDEN,
   HOST,
+  HOSTILE,
   INBOX_SIZE,
   INDEXED,
   INNER,
@@ -75,6 +79,10 @@ function scratch(): string {
 /** Postgres with the migrations applied, then `seed` run as the superuser, connected to as `web` for this run. */
 async function database(seed = ""): Promise<Postgres> {
   process.on("exit", () => stopAllPostgres());
+  // A run killed before its exit listener ran (SIGKILL, a lost machine) left its container; an integration run
+  // removes those too (setup/pg.setup.ts), but a run of only e2e specs would never reach that.
+  const orphans = removeOrphans(60_000);
+  if (orphans.length > 0) process.stderr.write(`Removed test containers an ended run left: ${orphans.join(", ")}\n`);
   const migratorPassword = randomPassword();
   const postgres = await startPostgres({
     initDir: join(ROOT, "deployment/postgres/init"),
@@ -216,34 +224,98 @@ function connectProxy(): Promise<void> {
   return new Promise((done) => proxy.listen(Number(new URL(PROXY).port), "127.0.0.1", () => done()));
 }
 
+const INDEXED_AT = "2026-11-19T00:00:00.000Z";
+/** Record keys for a seeded member's cards, in page order. */
+const CARD_KEYS = ["3jzfcijpj2z2a", "3jzfcijpj2z2b", "3jzfcijpj2z2c", "3jzfcijpj2z2d"] as const;
+
+/** A value as a dollar-quoted SQL string, so no quote in a member's text ends it; the tag itself must not occur. */
+function quoted(text: string): string {
+  if (text.includes("$j$")) throw new Error("e2e seed: the text holds the quote tag");
+  return `$j$${text}$j$`;
+}
+
 /**
- * INDEXED as the indexer leaves a member with a profile and one card (P3.12s), so the public profile page at /@did
- * is a page under test. Constants only; the records are dollar-quoted JSON.
+ * A member as the indexer leaves one with a profile, a main page and its cards (P3.12s), so the public profile page at
+ * /@did is a page under test. Constants only; names and records are dollar-quoted.
  */
-function indexedMember(): string {
-  const at = "2026-11-19T00:00:00.000Z";
-  const card = toCardRecord({ kind: "readme", text: "A card on a public page." }, "full", null, at);
-  if (!card.ok) throw new Error(`e2e card did not build: ${card.code}`);
-  const profile = {
-    $type: "sh.unset.profile",
-    displayName: "Public Member",
-    headline: "On the open web",
-    createdAt: at,
-  };
-  const did = INDEXED.did;
+function indexedMember(
+  did: string,
+  name: string,
+  headline: string,
+  contents: readonly CardContent[],
+  active = true,
+): string {
+  const profile = { $type: "sh.unset.profile", displayName: name, headline, createdAt: INDEXED_AT };
+  const uris = contents.map((_, at) => `at://${did}/sh.unset.card/${CARD_KEYS[at]}`);
+  // The main page lists each card, so it shows (ADR 0086 point 3, ADR 0091).
+  const page = { $type: "sh.unset.page", cards: uris.map((uri) => ({ uri })), createdAt: INDEXED_AT };
+  const sections = contents.map((content, at) => {
+    const card = toCardRecord(content, "full", null, INDEXED_AT);
+    if (!card.ok || CARD_KEYS[at] === undefined) throw new Error("e2e card did not build");
+    return `
+    INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+      VALUES ('${uris[at]}', '${did}', '${CARD_KEYS[at]}', 'cid-s', '3l',
+        ${quoted(JSON.stringify(card.record))}, ${at}, now());`;
+  });
   return `
     INSERT INTO idx.account (did, handle_status, pds_active, track_requested_at, updated_at)
-      VALUES ('${did}', 'unresolved', true, now(), now());
+      VALUES ('${did}', 'unresolved', ${active}, now(), now());
     INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
-      VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', $j$${JSON.stringify(profile)}$j$,
-        'Public Member', false, now());
-    INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
-      VALUES ('at://${did}/sh.unset.section/3jzfcijpj2z2a', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l',
-        $j$${JSON.stringify(card.record)}$j$, 0, now());`;
+      VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', ${quoted(JSON.stringify(profile))},
+        ${quoted(name)}, false, now());
+    INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+      VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'cid-g', '3l', ${quoted(JSON.stringify(page))}, now());${sections.join("")}`;
+}
+
+/**
+ * The hostile member's cards (pages.ts HOSTILE): one of each kind, every text field hostile, and a script address
+ * beside a real one, as a PDS would store whatever its member wrote.
+ */
+const HOSTILE_CARDS: readonly CardContent[] = [
+  { kind: "readme", text: `${HOSTILE.close} [link](${HOSTILE.address}) ${HOSTILE.handler}` },
+  {
+    kind: "links",
+    title: HOSTILE.close,
+    layout: "list",
+    items: [
+      { uri: "https://hostile.example/one", label: HOSTILE.handler, description: HOSTILE.address },
+      { uri: HOSTILE.address, label: "Script address", description: "" },
+    ],
+  },
+  {
+    kind: "collection",
+    title: HOSTILE.handler,
+    layout: "grid",
+    items: [{ title: HOSTILE.close, tag: "", description: HOSTILE.handler, uri: "https://hostile.example/piece" }],
+  },
+  {
+    kind: "buttons",
+    heading: HOSTILE.close,
+    text: HOSTILE.handler,
+    buttons: [
+      { kind: "link", preset: "custom", uri: "https://hostile.example/call", label: HOSTILE.handler },
+      { kind: "link", preset: "custom", uri: HOSTILE.address, label: "Script button" },
+    ],
+  },
+];
+
+/** HIDDEN (pages.ts): a whole page in the index that no one is shown, because the account is not active. */
+const hiddenMember = (): string =>
+  indexedMember(HIDDEN.did, "Hidden Member", "Not shown", [{ kind: "readme", text: "A card no one reads." }], false);
+
+/** The production server's indexed members: INDEXED, a plain page under test, HOSTILE, and HIDDEN. */
+function indexedMembers(): string {
+  return [
+    indexedMember(INDEXED.did, "Public Member", "On the open web", [
+      { kind: "readme", text: "A card on a public page." },
+    ]),
+    indexedMember(HOSTILE.did, HOSTILE.close, HOSTILE.handler, HOSTILE_CARDS),
+    hiddenMember(),
+  ].join("\n");
 }
 
 async function serveProd(): Promise<void> {
-  const pg = await database(indexedMember());
+  const pg = await database(indexedMembers());
   const dir = scratch();
   const web = await startWeb(pg, { UNSET_ENV: "dev", TEST_ROUTES: "false", ...frontedEnv("prod") });
   await tlsFront(dir, LISTEN.prod, INNER.prod);
@@ -263,7 +335,7 @@ const didOf = (letter: string): Did => {
  */
 const MEMBERS: Record<
   MemberName,
-  { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" | "notice" | "inbox" }
+  { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" | "notice" | "inbox" | "bell" }
 > = {
   age: { did: didOf("b"), step: "age" },
   terms: { did: didOf("c"), step: "terms" },
@@ -275,23 +347,37 @@ const MEMBERS: Record<
   // Done, with more notifications and sign-ins than the pages' lists show at once (P2.27b, P2.27c): the notifications
   // spec reads them and deletes none, so the lists scroll and a cut-off title can be lifted.
   inbox: { did: didOf("g"), step: "inbox" },
+  // Done, with BELL_SIZE notifications this browser has not seen: only the bell spec's failed mark opens its bell, so
+  // its count is still there (ADR 0085). Its own session, as a seen mark is the session's.
+  bell: { did: didOf("h"), step: "bell" },
 };
 
-/** INBOX_SIZE notifications, oldest first, each a millisecond apart so their order is fixed. */
-async function seedInbox(pool: ReturnType<typeof createPool>, did: Did): Promise<void> {
+/** `size` notifications, oldest first, each a millisecond apart so their order is fixed. */
+async function seedNotifications(pool: ReturnType<typeof createPool>, did: Did, size: number): Promise<void> {
   const inbox = createNotificationStore();
-  for (let n = 0; n < INBOX_SIZE; n += 1) {
+  for (let n = 0; n < size; n += 1) {
     const notification =
       n % 3 === 0 ? { reason: "privacy_notice" as const, topic: `e2e-${n}` } : { reason: "sign_in" as const };
     await withClient(pool, null, (db) => inbox.insert(db, did, notification));
     await new Promise((done) => setTimeout(done, 2));
   }
+}
+
+/** INBOX_SIZE notifications, and as many sign-ins. */
+async function seedInbox(pool: ReturnType<typeof createPool>, did: Did): Promise<void> {
+  await seedNotifications(pool, did, INBOX_SIZE);
   // As many sign-ins in the Sign-in history tab (P2.27c), so its list scrolls too.
   const history = createSignInStore();
   for (let n = 0; n < INBOX_SIZE; n += 1) {
     await withClient(pool, null, (db) => history.record(db, did));
     await new Promise((done) => setTimeout(done, 2));
   }
+}
+
+/** The notifications (and sign-ins) a member at `step` starts with: only "inbox" and "bell" have any. */
+async function seedInboxOf(pool: ReturnType<typeof createPool>, did: Did, step: string): Promise<void> {
+  if (step === "inbox") await seedInbox(pool, did);
+  if (step === "bell") await seedNotifications(pool, did, BELL_SIZE);
 }
 
 /** Each member's grant (so the session's foreign key holds) and session, stepped to where MEMBERS puts them. */
@@ -332,11 +418,11 @@ async function seedMembers(pg: Postgres, keyring: string): Promise<Record<Member
     const deadline = AbortSignal.timeout(5000);
     if (step === "terms" || step === "chat") await accounts.confirmAdult(did, deadline);
     if (step === "chat") await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, deadline);
-    if (step === "verify" || step === "done" || step === "notice" || step === "inbox") {
+    if (step === "verify" || step === "done" || step === "notice" || step === "inbox" || step === "bell") {
       await readyMember(pool, did, step !== "verify");
     }
     if (step === "notice") await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", deadline);
-    if (step === "inbox") await seedInbox(pool, did);
+    await seedInboxOf(pool, did, step);
     cookies[name] = `__Host-sid=${created.cookieValue}`;
   }
   await pool.end();
@@ -344,7 +430,7 @@ async function seedMembers(pg: Postgres, keyring: string): Promise<Record<Member
 }
 
 async function serveTest(): Promise<void> {
-  const pg = await database();
+  const pg = await database(hiddenMember());
   const dir = scratch();
   const keyring = JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } });
   const keyringFile = join(dir, "seal_keyring");

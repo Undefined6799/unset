@@ -40,8 +40,8 @@ checked: 2026-11-16
   stores `age_confirmed_at` only. Column-list grants for `web`, and `app.account.did` is in the erasure registry.
 - `migrations/0016_audit_actor.sql`: `audit.event_body.actor` (P1.15k, ADR 0043) and `audit.append` replaced to
   fill it; the column is in the erasure registry. See [[audit]].
-- `accountRepository.ts`: `app.account` behind identity's `AccountRepository` contract (P2.12g; it was
-  `interfaces/http/account.ts`). The under-age block's audit row is written by a function the composition root
+- `accountRepository.ts`: `app.account` behind identity's `AccountRepository` contract (P2.12g; it
+  began in the deleted Hono server's `account.ts`). The under-age block's audit row is written by a function the composition root
   passes in, on the block's transaction, because this folder may not import `infrastructure/audit`.
 - `oauthStores.ts`: the OAuth client's state and token-set stores (P2.04, migration 0013), each value sealed with
   its own row's context; a value that does not open is deleted and reads as missing (`oauth.unseal_failed`). The

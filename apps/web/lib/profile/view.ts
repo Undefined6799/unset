@@ -3,9 +3,19 @@
 // dropped unsafe ones (two layers for the output every visitor will see). Runs on the server; the components only
 // render what this returns.
 import { safeHref } from "@unset/shared-safe-href";
+import { type CodeColourBudget, type CodeColourLimits, codeColourBudget, colourCode } from "../editor/code-colours.ts";
 import { CARD_TEXT } from "./messages.ts";
-import { parseReadme } from "./parse.ts";
-import type { CardContent, CardShown, CardSurface, CardView, CardWidth, ShownButton } from "./types.ts";
+import { type Block as ParsedBlock, parseReadme } from "./parse.ts";
+import type {
+  Block,
+  CardContent,
+  CardShown,
+  CardSurface,
+  CardView,
+  CardWidth,
+  ShownButton,
+  ShownCard,
+} from "./types.ts";
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 
@@ -47,10 +57,23 @@ function shownButtons(buttons: Buttons): ShownButton[] {
   return shown;
 }
 
-function shownOf(content: CardContent): CardShown {
+/**
+ * README blocks as a card shows them: code in colours where its language is known and the page's colouring budget
+ * allows, else plain; the language itself is dropped.
+ */
+export const colourBlocks = (blocks: readonly ParsedBlock[], budget: CodeColourBudget): Promise<Block[]> =>
+  Promise.all(
+    blocks.map(async (block): Promise<Block> => {
+      if (block.kind !== "code") return block;
+      const coloured = await colourCode(block.text, block.language, budget);
+      return "runs" in coloured ? { kind: "code", runs: coloured.runs } : { kind: "code", text: block.text };
+    }),
+  );
+
+async function shownOf(content: CardContent, budget: CodeColourBudget): Promise<CardShown> {
   switch (content.kind) {
     case "readme":
-      return { kind: "readme", blocks: parseReadme(content.text) };
+      return { kind: "readme", blocks: await colourBlocks(parseReadme(content.text), budget) };
     case "links":
       return {
         kind: "links",
@@ -87,7 +110,10 @@ function shownOf(content: CardContent): CardShown {
   }
 }
 
-/** The page's cards, in page order, each with what it shows. */
+/**
+ * The page's cards, in page order, each with what it shows; on the owner's page, with the version each was read at.
+ * `codeColours` (interfaces/web limits.ts) bounds the colouring of the whole page's code: one budget for all cards.
+ */
 export const cardViews = (
   cards: readonly {
     readonly key: string;
@@ -95,14 +121,25 @@ export const cardViews = (
     readonly surface?: CardSurface;
     readonly content: CardContent;
   }[],
-): CardView[] =>
-  cards.map(({ key, width, surface = "filled", content }) => ({
-    key,
-    width,
-    surface,
-    content,
-    shown: shownOf(content),
-  }));
+  codeColours: CodeColourLimits,
+  versions?: ReadonlyMap<string, string>,
+): Promise<CardView[]> => {
+  const budget = codeColourBudget(codeColours);
+  return Promise.all(
+    cards.map(async ({ key, width, surface = "filled", content }) => {
+      const version = versions?.get(key);
+      const shown = { key, width, surface, content, shown: await shownOf(content, budget) };
+      return version === undefined ? shown : { ...shown, version };
+    }),
+  );
+};
+
+/**
+ * The cards for a page that edits nothing (the public profile): what each shows, without `content`, which only the
+ * owner's editors read. A visitor's browser is sent what their page draws and no more (rule SE-3; book P1.22h).
+ */
+export const shownCards = (cards: readonly CardView[]): ShownCard[] =>
+  cards.map(({ key, width, surface, shown }) => ({ key, width, surface, shown }));
 
 /** The profile's website as a link, or null when unset or not http(s). */
 export function websiteLink(website: string): { readonly href: string; readonly text: string } | null {
@@ -115,7 +152,7 @@ export function websiteLink(website: string): { readonly href: string; readonly 
  * Contact card, as that card shows it, or null. The profile record holds no contact field (ADR 0051), and an account's
  * own email is never read here.
  */
-export function contactAction(cards: readonly CardView[]): { readonly href: string; readonly label: string } | null {
+export function contactAction(cards: readonly ShownCard[]): { readonly href: string; readonly label: string } | null {
   const contact = cards.find((card) => card.shown.kind === "buttons")?.shown;
   const first = contact?.kind === "buttons" ? contact.buttons[0] : undefined;
   return first === undefined ? null : { href: first.href, label: first.label };

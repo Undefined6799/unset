@@ -68,16 +68,16 @@ Every change:
   from the design sheet (a reference). A stock one needs no approval; changing one or adding a non-shadcn one is called
   out in the PR; `inventory.json` lists all. Tailwind classes only there and in the shell, never in pages.
   `shared/ui` keeps only the theme, the sheet's tokens, fonts and icon data. The 0x40 "v2e" look is superseded.
+- **Script (ADR 0114, 0116):** our own script runs on every page, the error page included, unless its `+page.ts` says `csr = false`. Without it a page still reads and saves by plain links and forms: the floor, never the ceiling.
 - **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in
-  `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm
-  package (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG.
+  `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm package
+  (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG (exceptions: ADR 0087's Lucide `grip` and ADR 0109's `h1` to `h6`, pinned the same way).
 
 ## Protocol work: read the source of truth first
 - AT Protocol: the specs at atproto.com/specs and the `@atproto/*` source for the pinned version. Pin `@atproto/*`
   exactly and cite the spec URL in code that depends on it.
 - Matrix (chat module): read how Element (`apps/web/src`), cinny or hydrogen does it, confirm in spec.matrix.org, read
-  the pinned `matrix-js-sdk` source, then implement our way. Cite client file:line and spec URL in the comment and the
-  commit.
+  the pinned `matrix-js-sdk` source, then implement our way. Cite client file:line and spec URL in the comment and the commit.
 
 ## Delivery (decision 35: rules DL-1, DL-2, DL-6, DO-1, DO-2, DC-1)
 - **D2 Commits:** subject = step id + capitalised imperative summary, no trailing period, at most 50 characters
@@ -91,9 +91,9 @@ Every change:
   Run `gh pr list --state open` before starting a step; if three are waiting, pick up review feedback instead.
 - **D8 Decisions:** anything expensive to reverse (data model, external or lexicon contract, process, role or network
   boundary, a service or a package touching auth, crypto, egress or personal data, new pattern or top-level folder,
-  security mechanism) gets its own ADR in `docs/human/decisions/`, in the first PR that depends on it. Never edit an
-  accepted ADR except to mark it superseded; ADR 0001 is an append-only log. Contradicting an accepted ADR: stop and
-  ask. Small means our own code, not the package count: other packages meet ADR 0057's bar in the PR, no ADR.
+  security mechanism) gets its own ADR in `docs/human/decisions/`, in the first PR that depends on it, its status in
+  its front matter; edit no shared index; ADR 0001 is closed (ADR 0083). Never edit an accepted ADR except, before
+  0083, to mark it superseded. Contradicting one: stop and ask. Small means our own code, not the package count: other packages meet ADR 0057's bar in the PR, no ADR.
 - **Merging (decision 40; ADR 0008; ADR 0017 superseding ADR 0009; ADR 0019):** agents open PRs and never push to
   `main`; author threads never merge them. A separate verifier may merge checked PRs; ADR 0019 says what stays Alex's.
 - **D1 Functions:** one job at one level of abstraction, usually fitting on a screen; never split to meet a line

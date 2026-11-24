@@ -25,24 +25,36 @@ export function loadRecord(
   did: Did,
   at: RecordAddress,
 ): Promise<PdsResult<StoredRecord | null>> {
+  return pdsCall(ctx, did, (agent) => getRecord(agent, did, at), { idempotent: true });
+}
+
+/**
+ * Two records of the same repo in one PDS call, so the session is restored once for both (the query budget counts
+ * each restore's grant reads: tests/integration/web/query-budget.test.ts). Either both are read or the call fails.
+ */
+export function loadRecordPair(
+  pdsCall: PdsCall,
+  ctx: PdsContext | null,
+  did: Did,
+  first: RecordAddress,
+  second: RecordAddress,
+): Promise<PdsResult<readonly [StoredRecord | null, StoredRecord | null]>> {
   return pdsCall(
     ctx,
     did,
-    async (agent) => {
-      try {
-        const { data } = await agent.com.atproto.repo.getRecord({
-          repo: did,
-          collection: at.collection,
-          rkey: at.rkey,
-        });
-        return { value: data.value, cid: data.cid ?? null };
-      } catch (error: unknown) {
-        if (isXrpcError(error, "RecordNotFound")) return null;
-        throw error;
-      }
-    },
+    async (agent) => [await getRecord(agent, did, first), await getRecord(agent, did, second)] as const,
     { idempotent: true },
   );
+}
+
+async function getRecord(agent: Agent, did: Did, at: RecordAddress): Promise<StoredRecord | null> {
+  try {
+    const { data } = await agent.com.atproto.repo.getRecord({ repo: did, collection: at.collection, rkey: at.rkey });
+    return { value: data.value, cid: data.cid ?? null };
+  } catch (error: unknown) {
+    if (isXrpcError(error, "RecordNotFound")) return null;
+    throw error;
+  }
 }
 
 export type BuiltRecord<C extends string> =

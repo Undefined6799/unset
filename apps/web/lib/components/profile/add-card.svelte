@@ -37,7 +37,7 @@ export function cardKinds(limits: CardEditLimits): readonly CardKindOption[] {
 export const maxRows = (limits: CardEditLimits, kind: Kind) => (kind === "readme" ? 0 : limits[kind]);
 /** The look of a kind in the picker, as a button (dialog) or a link (in place). */
 export const OPTION_LOOK =
-  "flex w-full flex-col items-start gap-0.5 rounded-sm border bg-card px-3.5 py-3 text-left transition-colors hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
+  "flex w-full flex-col items-start gap-0.5 rounded-sm border bg-card px-3.5 py-3 text-left text-foreground no-underline transition-colors hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 </script>
 
 <script lang="ts">
@@ -48,7 +48,12 @@ import { Icon } from "../icon/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import CardEditor from "./card-editor.svelte";
 
-let { limits, enhance }: { limits: CardEditLimits; enhance?: Enhance } = $props();
+let {
+  limits,
+  newKey,
+  enhance,
+}: { limits: CardEditLimits; /** The page's newCardKey, for the card the form adds. */ newKey?: string; enhance?: Enhance } =
+  $props();
 
 const KINDS = $derived(cardKinds(limits));
 
@@ -110,6 +115,8 @@ const backToAdd = () => document.getElementById(triggerId);
     submit={CARD_EDIT.add}
     max={maxRows(limits, option.kind)}
     textMax={limits.text}
+    codeColours={limits.codeColours}
+    {newKey}
     {enhance}
   />
 {/each}

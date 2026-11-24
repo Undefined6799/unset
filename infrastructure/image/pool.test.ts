@@ -4,7 +4,7 @@ import { closeSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import type { ProcessResult, VersionSpec } from "@unset/domains-content";
+import { imageVersions, type ProcessResult, type VersionSpec } from "@unset/domains-content";
 import sharp from "sharp";
 import { afterAll, describe, expect, test } from "vitest";
 import { createImagePool, type PoolEvent } from "./pool.ts";
@@ -183,6 +183,52 @@ describe("processing: what is kept", () => {
     expect(versions[0]?.bytes.length).toBeLessThanOrEqual(2_000_000);
     expect(await run(noise, [{ ...MAIN, maxBytes: 1000 }])).toEqual({ kind: "refused", code: "image.too_large" });
   }, 60_000);
+});
+
+describe("processing: the main version (ADR 0088)", () => {
+  const noisy = (width: number, height: number, sigma: number) =>
+    sharp({
+      create: { width, height, channels: 3, background: "#808080", noise: { type: "gaussian", mean: 128, sigma } },
+    });
+
+  test("main.webp_4096: a photo becomes a 4,096 px WebP within 5,000,000 bytes, inside review's 20 s", async () => {
+    const photo = await noisy(6000, 4000, 20).jpeg({ quality: 95 }).toBuffer();
+    const started = Date.now();
+    const { versions } = ok(await run(photo, imageVersions()));
+    const main = versions.find((v) => v.name === "main");
+    expect([main?.format, main?.width, main?.height]).toEqual(["webp", 4096, 2731]);
+    expect(main?.bytes.length).toBeLessThanOrEqual(5_000_000);
+    expect(Date.now() - started).toBeLessThan(20_000);
+  }, 60_000);
+
+  test("main.smaller_first: a picture too large at q75 gives up pixels before quality", async () => {
+    const photo = await noisy(1200, 800, 60).jpeg({ quality: 95 }).toBuffer();
+    const spec: VersionSpec = {
+      ...MAIN,
+      format: "webp",
+      size: 1200,
+      quality: 90,
+      minQuality: 75,
+      maxBytes: 200_000,
+      smaller: [
+        { size: 900, minQuality: 75 },
+        { size: 400, minQuality: 45 },
+      ],
+    };
+    const [main] = ok(await run(photo, [spec])).versions;
+    expect(main?.width).toBeLessThan(1200);
+    expect(main?.bytes.length).toBeLessThanOrEqual(200_000);
+  }, 60_000);
+
+  test("main.png_lossless: a flat PNG drawing within the cap is kept lossless, its transparency too", async () => {
+    const drawing = await sharp({ create: { width: 1600, height: 900, channels: 4, background: "#3366aa80" } })
+      .png()
+      .toBuffer();
+    const [main] = ok(await run(drawing, imageVersions().slice(0, 1))).versions;
+    // A lossless WebP is a VP8L chunk (RFC 9649 section 2.7: the chunk FourCC at bytes 12 to 15).
+    expect(Buffer.from(main?.bytes.slice(12, 16) ?? []).toString("latin1")).toBe("VP8L");
+    expect((await sharp(main?.bytes).metadata()).hasAlpha).toBe(true);
+  });
 });
 
 describe("processing: what is refused", () => {

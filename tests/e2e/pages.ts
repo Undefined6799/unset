@@ -22,15 +22,33 @@ export const PROD_ORIGIN = `https://${HOST}:${LISTEN.prod}`;
 export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
 
 /** The signed-in members the test server seeds, by where each stands (fixtures/servers.ts MEMBERS). */
-export type MemberName = "age" | "terms" | "chat" | "verify" | "account" | "notice" | "inbox";
+export type MemberName = "age" | "terms" | "chat" | "verify" | "account" | "notice" | "inbox" | "bell";
 /** How many notifications, and how many sign-ins, the test server gives the "inbox" member (fixtures/servers.ts). */
 export const INBOX_SIZE = 16;
+/** How many notifications the test server gives the "bell" member, whose bell nothing but a failed mark opens. */
+export const BELL_SIZE = 3;
 /** The finished member, whose repo the stand-in PDS holds. */
 /** A code of the PDS's shape for /join; nothing ever redeems it. */
 export const JOIN_CODE = "pds-test-abcde-fghij";
 export const ACCOUNT = { did: `did:plc:${"a".repeat(24)}` } as const;
 /** A member the indexer has copied (fixtures/servers.ts seeds it on the production server), shown at /@did. */
 export const INDEXED = { did: `did:plc:${"p".repeat(24)}` } as const;
+/**
+ * A second indexed member whose name, headline and every card field are text that would be markup, a handler or a
+ * script address if anything read it as one (book P1.22e; public-profile-script.spec.ts). `ran` is the global each
+ * piece would set if it ran.
+ */
+export const HOSTILE = {
+  did: `did:plc:${"x".repeat(24)}`,
+  close: "</script><script>globalThis.ran = 1</script>",
+  handler: '<img src=x onerror="globalThis.ran = 1">',
+  address: "javascript:globalThis.ran=1",
+} as const;
+/**
+ * A member the index holds and does not show (their PDS says the account is not active), seeded on both servers: its
+ * page is the one 404, the same as for an address that is nobody's (rule SE-2; error-page-script.spec.ts).
+ */
+export const HIDDEN = { did: `did:plc:${"r".repeat(24)}` } as const;
 /**
  * The test server writes each member's session cookie here once it listens; the specs read it. Outside test-results,
  * which Playwright empties when a run starts (outputDir).
@@ -51,7 +69,7 @@ export type PageFixture = {
   /** The route it matches, as pages.test.ts names route folders. */
   readonly route: string;
   readonly group: PageGroup;
-  /** The page runs SvelteKit's client (csr, +page.ts): most app pages; never a public page. */
+  /** The page runs SvelteKit's client (csr, +page.ts): every page but the ones book P1.22l still has to switch on. */
   readonly expectJs: boolean;
   /** Opened on the test server signed in as this member; without one, on the production server signed out. */
   readonly member?: MemberName;
@@ -73,12 +91,14 @@ const signedIn = (path: string, member: MemberName, route = path): PageFixture =
 
 /** Documents the production server renders to a visitor with no session. */
 export const PAGES: readonly PageFixture[] = [
-  signedOut("/", "public"),
-  signedOut("/legal/terms", "public", "/legal/:document"),
-  signedOut("/legal/privacy", "public", "/legal/:document"),
-  signedOut("/legal/domains", "public", "/legal/:document"),
-  signedOut(`/@${INDEXED.did}`, "public", "/@:actor"),
-  // The sign-in page and the blocked page run no script, as on Hono: nothing on them needs it (lighthouserc.json's
+  // The public pages run the client under the app group's script policy (ADR 0114, ADR 0116): the profile since book
+  // P1.22e; home, the legal pages and the invite request since book P1.22g.
+  signedOut("/", "public", "/", true),
+  signedOut("/legal/terms", "public", "/legal/:document", true),
+  signedOut("/legal/privacy", "public", "/legal/:document", true),
+  signedOut("/legal/domains", "public", "/legal/:document", true),
+  signedOut(`/@${INDEXED.did}`, "public", "/@:actor", true),
+  // The sign-in page, the blocked page and the join page run no script until book P1.22l (lighthouserc.json's
   // zero-script row).
   signedOut("/login", "app", "/login", false),
   signedOut("/signed-out", "app"),
@@ -86,7 +106,7 @@ export const PAGES: readonly PageFixture[] = [
   // P2.10: the page an invite link opens, with a well-formed code (it never checks or spends it).
   signedOut(`/join?invite=${JOIN_CODE}`, "public", "/join"),
   // P2.10r: asking for an invite (closed on the test servers, which send no mail; ADR 0080).
-  signedOut("/request-invite", "public"),
+  signedOut("/request-invite", "public", "/request-invite", true),
 ];
 
 /** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */
@@ -95,6 +115,7 @@ export const MEMBER_PAGES: readonly PageFixture[] = [
   signedIn("/welcome/terms", "terms"),
   signedIn("/welcome/chat", "chat"),
   signedIn("/verify-email", "verify"),
+  signedIn("/allow", "account"),
   signedIn(`/${ACCOUNT.did}`, "account", "/:did"),
   signedIn("/settings/profile", "account"),
   signedIn("/settings/privacy", "account"),

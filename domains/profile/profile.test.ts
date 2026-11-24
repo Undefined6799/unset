@@ -2,7 +2,7 @@
 // input once into checked fields; toProfileRecord builds the sh.unset.profile record we write to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import type { CardKey } from "./cards.ts";
+import { MAX_RECORD_BYTES } from "./index-plan.ts";
 import {
   APP_LIMITS,
   EMPTY_PROFILE,
@@ -12,7 +12,6 @@ import {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
-  withCardOrder,
 } from "./profile.ts";
 
 const good = {
@@ -67,6 +66,31 @@ describe("parseProfileFields", () => {
     expect(parseProfileFields({ headline: "a\nb" })).toEqual({ ok: false, field: "headline", code: "profile.invalid" });
   });
 
+  // Staging break test 2026-11-21: a NUL in the location was saved, and the index then left the record out.
+  test.each(["displayName", "headline", "location", "website"] as const)("%s refuses a control character", (field) => {
+    for (const bad of ["a\u0000b", "a\u0007b", "a\u0085b", "a\ud800b"]) {
+      expect(parseProfileFields({ [field]: `https://x.example/${bad}` })).toEqual({
+        ok: false,
+        field,
+        code: "profile.invalid",
+      });
+    }
+  });
+
+  test("the display name refuses bidirectional controls and invisible characters, other fields keep them", () => {
+    for (const mark of ["\u202e", "\u2067", "\u200b", "\ufeff"]) {
+      expect(parseProfileFields({ displayName: `Ali${mark}ce` })).toEqual({
+        ok: false,
+        field: "displayName",
+        code: "profile.invalid",
+      });
+    }
+    expect(parseProfileFields({ displayName: "👩‍💻 Ada", headline: "a\u200bb" })).toEqual({
+      ok: true,
+      fields: { displayName: "👩‍💻 Ada", headline: "a\u200bb" },
+    });
+  });
+
   test.each(["javascript:alert(1)", "ftp://x.example", "mailto:a@x.example", "https://user:pw@x.example"])(
     "website must be a plain http or https URL: %s",
     (website) => {
@@ -76,6 +100,11 @@ describe("parseProfileFields", () => {
 });
 
 describe("toProfileRecord", () => {
+  test("a save the index would leave out is refused, so the public page never goes missing", () => {
+    const existing = { $type: "sh.unset.profile", createdAt: NOW, ...goodStored, note: "x".repeat(MAX_RECORD_BYTES) };
+    expect(toProfileRecord({ headline: "Hi" }, existing, NOW)).toEqual({ ok: false, code: "profile.too_long" });
+  });
+
   const NOW = "2026-10-23T04:00:00.000Z";
 
   test("a first profile writes only filled fields and passes the strict validator", () => {
@@ -92,7 +121,6 @@ describe("toProfileRecord", () => {
       $type: "sh.unset.profile",
       displayName: "Old",
       headline: "Old line",
-      cards: ["3jzfcijpj2z2a"],
       listed: true,
       createdAt: "2026-10-01T00:00:00.000Z",
     };
@@ -101,7 +129,6 @@ describe("toProfileRecord", () => {
       ok: true,
       record: {
         $type: "sh.unset.profile",
-        cards: ["3jzfcijpj2z2a"],
         listed: true,
         displayName: good.displayName,
         location: good.location,
@@ -165,6 +192,11 @@ describe("readProfileRecord", () => {
     expect(readProfileRecord(stored)).toEqual({ ...good, website: "", headline: "", location: "" });
   });
 
+  test("a field another client wrote with a control character, or a name with a bidi override, reads as unset", () => {
+    const stored = { ...goodStored, location: "a\u0000b", displayName: "\u202eecilA" };
+    expect(readProfileRecord(stored)).toEqual({ ...good, location: "", displayName: "" });
+  });
+
   test("a field another client wrote within the lexicon's limit shows, even past the editor's", () => {
     const headline = "h".repeat(APP_LIMITS.headline + 30);
     expect(readProfileRecord({ ...goodStored, headline }).headline).toBe(headline);
@@ -177,30 +209,6 @@ describe("readProfileRecord", () => {
   });
 });
 
-describe("withCardOrder", () => {
-  const T = "2026-10-23T03:00:00.000Z";
-  const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1 };
-
-  test("sets the order and keeps every other field", () => {
-    const built = withCardOrder(["b", "a"] as CardKey[], stored, "2027-01-01T00:00:00.000Z");
-    expect(built).toEqual({ ok: true, record: { ...stored, cards: ["b", "a"] } });
-  });
-
-  test("an empty order is written as no order", () => {
-    const built = withCardOrder([], { ...stored, cards: ["a"] }, T);
-    expect(built.ok && "cards" in built.record).toBe(false);
-  });
-
-  test("there is no order without a profile", () => {
-    expect(withCardOrder(["a"] as CardKey[], null, T)).toEqual({ ok: false, code: "profile.name_required" });
-  });
-
-  test("an order past the lexicon's count is too long", () => {
-    const order = Array.from({ length: LIMITS.profile.cardsMax + 1 }, (_, i) => `k${i}`) as CardKey[];
-    expect(withCardOrder(order, stored, T)).toEqual({ ok: false, code: "profile.too_long" });
-  });
-});
-
 describe("avatar shape", () => {
   const T = "2026-11-18T05:00:00.000Z";
   const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1 };
@@ -208,7 +216,8 @@ describe("avatar shape", () => {
   test("reads round when absent or unknown, and the stored known value otherwise", () => {
     expect(readAvatarShape(stored)).toBe("round");
     expect(readAvatarShape({ ...stored, avatarShape: "hexagon" })).toBe("round");
-    expect(readAvatarShape({ ...stored, avatarShape: "roundedSquare" })).toBe("roundedSquare");
+    expect(readAvatarShape({ ...stored, avatarShape: "rounded-square" })).toBe("roundedSquare");
+    expect(readAvatarShape({ ...stored, avatarShape: "roundedSquare" })).toBe("round");
     expect(readAvatarShape(null)).toBe("round");
   });
 
@@ -221,7 +230,7 @@ describe("avatar shape", () => {
 
   test("sets the shape and keeps every other field", () => {
     const built = withAvatarShape("roundedSquare", stored, "2027-01-01T00:00:00.000Z");
-    expect(built).toEqual({ ok: true, record: { ...stored, avatarShape: "roundedSquare" } });
+    expect(built).toEqual({ ok: true, record: { ...stored, avatarShape: "rounded-square" } });
   });
 
   test("there is no shape without a profile to hold it", () => {

@@ -61,5 +61,37 @@
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false
+  },
+  "seaweedfs-next": {
+    "ref": "docker.io/chrislusf/seaweedfs",
+    "tag": "4.54",
+    "digest": "sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": false
+  },
+  "python": {
+    "ref": "docker.io/library/python",
+    "tag": "3.13-slim-trixie",
+    "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+    "source": "upstream",
+    "stage": "build",
+    "buildStage": false
+  },
+  "python3-debian13": {
+    "ref": "gcr.io/distroless/python3-debian13",
+    "tag": "nonroot",
+    "digest": "sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": false
+  },
+  "mas": {
+    "ref": "ghcr.io/element-hq/matrix-authentication-service",
+    "tag": "1.29.0",
+    "digest": "sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": false
   }
 }

@@ -5,6 +5,7 @@ import { definePolicy } from "../../lib/server/policy.ts";
 // Its one form starts a sign-up at our PDS and counts against the sign-in limit (10 a minute per address).
 export const policy = definePolicy({
   group: "public",
+  client: false,
   limit: "default",
   writeLimit: "login",
   session: "optional",

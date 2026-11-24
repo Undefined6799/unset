@@ -27,6 +27,19 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // Book P1.22k (ADR 0116): the error page runs the client, and with script off it is still the server's whole page:
+  // what went wrong, its code, a Sign in link that comes back here and a way home, each a plain link. With script on,
+  // and with the script's files refused or failing, error-page-script.spec.ts reads the same page.
+  test("the_error_page_reads_whole_without_js", async ({ page }) => {
+    const response = await page.goto("/no/such/page?a=b");
+    expect(response?.status()).toBe(404);
+    await expect(page.locator("h1")).toHaveText("That page does not exist.");
+    await expect(page.locator("main")).toContainText("http.not_found");
+    await expect(page.locator('header a[href="/login?next=%2Fno%2Fsuch%2Fpage"]').first()).toBeVisible();
+    await page.locator("main").getByRole("link", { name: "Go to the home page" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test.describe("phone search", () => {
     test.use(phone({ width: 375, height: 800 }));
 
@@ -147,7 +160,6 @@ test.describe("javascript disabled", () => {
       ["core-menu", "More on unset.sh"],
       ["create-menu", "Create"],
       ["messages-menu", "Messages"],
-      ["notifications-menu", "Notifications"],
     ] as const) {
       const panel = page.locator(`#${id}`);
       await page.locator(`header button[popovertarget="${id}"]`).click();
@@ -157,10 +169,30 @@ test.describe("javascript disabled", () => {
       await expect(panel, id).toBeHidden();
     }
     await expect(page.locator("#core-menu").getByRole("link")).toHaveCount(0);
+    // ADR 0108 point 3, ADR 0116 point 9: with no script nothing can mark what a panel showed, so the bell is the
+    // server's link to the page.
+    await expect(page.locator("header").getByRole("link", { name: "Notifications", exact: true })).toHaveAttribute(
+      "href",
+      "/notifications",
+    );
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
     await expect(page.locator("footer").getByRole("link", { name: "Privacy" })).toHaveAttribute(
       "href",
       "/legal/privacy",
     );
+  });
+
+  // Book P1.22g (ADR 0116 point 9): the server draws the bell as a link on every page, an app page too (it drew a
+  // panel there until this step, which opened with no script and could mark nothing). The press goes to the page,
+  // whose visit marks the list seen.
+  test("the_bell_is_a_link_to_the_page_on_an_app_page_without_js", async ({ page }) => {
+    await openPage(page, SETTINGS);
+    const bell = page.locator("header").getByRole("link", { name: "Notifications", exact: true });
+    await expect(bell).toHaveAttribute("href", "/notifications");
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
+    await bell.click();
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(page.locator("main")).toBeVisible();
   });
 
   // Alex, 2026-11-18 12:59Z: the footer sits below the first screen, seen only on scrolling, on short pages too. Home
@@ -204,10 +236,8 @@ test.describe("javascript disabled", () => {
       "href",
       "/me",
     );
-    // P2.27: notifications are built; a visitor's panel asks them to sign in with the header's button.
-    const notifications = page.locator("#notifications-menu");
-    await expect(notifications).toContainText("Sign in to see your notifications.");
-    await expect(notifications.getByRole("link", { includeHidden: true })).toHaveCount(0);
+    // P2.27, ADR 0108: with no script the bell is a link to the page, which asks a visitor to sign in.
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
   });
 
   // P2.05s: "No thanks" on the signed-out box is a form, so it works with no script, and it goes home.

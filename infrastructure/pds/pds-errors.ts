@@ -96,15 +96,39 @@ function xrpcName(error: unknown): string | undefined {
   return error.name;
 }
 
+/**
+ * A 403 for a grant that does not cover the call. A PDS throws @atproto/oauth-scopes 0.5.14 ScopeMissingError (status
+ * 403), which @atproto/xrpc-server 0.13.10 errors.js `fromError` sends as `{error: "ScopeMissingError", message}`; the
+ * client's @atproto/xrpc 0.8.18 XRPCError carries that word as `error` and keeps `name` "Error" (types.js). The class
+ * itself (`name`) is matched too, and RFC 6750 section 3.1's `error="insufficient_scope"` challenge.
+ */
+function scopeMissing(error: unknown): boolean {
+  if (errorCode(error) === "ScopeMissingError") return true;
+  if (error instanceof Error && error.name === "ScopeMissingError") return true;
+  return authenticate(error)?.includes('error="insufficient_scope"') === true;
+}
+
+/** ScopeMissingError's message is `Missing required scope "<scope>"` (scope-missing-error.js); a `scope` field wins. */
+function missingScope(error: unknown): string | undefined {
+  const scope = record(error)?.scope;
+  if (typeof scope === "string") return scope;
+  const message = error instanceof Error ? error.message : undefined;
+  return message === undefined ? undefined : /^Missing required scope "([^"\s]{1,256})"$/.exec(message)?.[1];
+}
+
 /** How one XRPC attempt failed. A handshake is not a 401 logout. */
 export function opFailure(error: unknown): OpFailure {
   if (isDpopNonceHandshake(error)) return { kind: "handshake" };
   const status = statusOf(error);
   if (status === 401) return { kind: "unauthorized" };
   if (status === 429) return { kind: "rate_limited" };
-  if (status === 403 && error instanceof Error && error.name === "ScopeMissingError") {
-    const scope = record(error)?.scope;
-    return typeof scope === "string" ? { kind: "scope_missing", scope } : { kind: "scope_missing" };
+  // A body the PDS will not take (ADR 0088). uploadBlob defines no error of its own, so @atproto/xrpc 0.8.18 throws a
+  // plain XRPCError (dist/types.js: no `name` of its own, `error` from the body, else "PayloadTooLarge" from the code),
+  // which the rule below would read as unexpected. A proxy's bare 413 reads the same.
+  if (status === 413) return { kind: "rejected", xrpcError: errorCode(error) ?? "PayloadTooLarge", status };
+  if (status === 403 && scopeMissing(error)) {
+    const scope = missingScope(error);
+    return scope === undefined ? { kind: "scope_missing" } : { kind: "scope_missing", scope };
   }
   if (status !== undefined && status >= 400 && status < 500) {
     const name = xrpcName(error);

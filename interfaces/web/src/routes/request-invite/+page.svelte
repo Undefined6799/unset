@@ -1,7 +1,7 @@
 <!--
   The invite-request page (book P2.10r; ADR 0080): one email field and the confirmations the sign-up asks for, or what
-  happened. No script. The trap field is `hidden`, so people and screen readers never meet it; a bot that fills every
-  field gives itself away.
+  happened. The form posts plainly, so it needs no script. The trap field is `hidden`, so people and screen readers
+  never meet it; a bot that fills every field gives itself away.
 -->
 <script lang="ts">
 import { Button } from "@unset/apps-web/lib/components/ui/button";
@@ -19,7 +19,8 @@ const showForm = $derived(data.open && !data.signedIn && !data.received);
 <Card.Root>
   <Card.Header>
     <Card.Title><h1>{T.title}</h1></Card.Title>
-    <Card.Description>{T.lead}</Card.Description>
+    <!-- The lead asks for an address, so it shows only with the form (staging test 2026-11-21, u7). -->
+    {#if showForm}<Card.Description>{T.lead}</Card.Description>{/if}
   </Card.Header>
   <Card.Content>
     {#if data.signedIn}

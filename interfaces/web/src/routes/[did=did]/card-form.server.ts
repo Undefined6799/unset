@@ -22,15 +22,15 @@ const SHAPES: Readonly<Record<string, Shape>> = {
   readme: { fields: ["text"] },
   links: {
     fields: ["title", "layout"],
-    list: { name: "items", row: ["uri", "label", "description"], max: LIMITS.section.linksMax },
+    list: { name: "items", row: ["uri", "label", "description"], max: LIMITS.card.linksMax },
   },
   collection: {
     fields: ["title", "layout"],
-    list: { name: "items", row: ["title", "tag", "description", "uri"], max: LIMITS.section.entriesMax },
+    list: { name: "items", row: ["title", "tag", "description", "uri"], max: LIMITS.card.entriesMax },
   },
   buttons: {
     fields: ["heading", "text"],
-    list: { name: "buttons", row: ["kind", "address", "preset", "uri", "label"], max: LIMITS.section.buttonsMax },
+    list: { name: "buttons", row: ["kind", "address", "preset", "uri", "label"], max: LIMITS.card.buttonsMax },
     preset: ["kind", "preset"],
     byKind: { email: ["address"], link: ["uri", "label"] },
   },
@@ -125,8 +125,8 @@ export function readCardForm(form: URLSearchParams): {
   return { body, fieldName };
 }
 
-/** The most cards one Save carries: every card a page shows (LIMITS.profile.cardsMax). */
-const SAVE_CARDS_MAX = LIMITS.profile.cardsMax;
+/** The most cards one Save carries: every card a page shows (LIMITS.page.cardsMax). */
+const SAVE_CARDS_MAX = LIMITS.page.cardsMax;
 /** Each card's form, with its `key` and `version`. */
 const SAVE_FIELDS_MAX = SAVE_CARDS_MAX * (CARD_FORM_MAX_FIELDS + 2);
 const CARD_FIELD = /^cards\.(0|[1-9][0-9]*)\.(.+)$/;

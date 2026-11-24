@@ -1,0 +1,71 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.block.buttons",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["buttons"],
+      "description": "A short pitch with buttons. The first button is the main one.",
+      "properties": {
+        "heading": {
+          "type": "string",
+          "maxGraphemes": 120,
+          "maxLength": 1200,
+          "description": "The pitch's heading."
+        },
+        "text": {
+          "type": "string",
+          "maxGraphemes": 400,
+          "maxLength": 4000,
+          "description": "A few lines under the heading."
+        },
+        "buttons": {
+          "type": "array",
+          "maxLength": 5,
+          "items": {
+            "type": "union",
+            "refs": ["#email", "#link"]
+          },
+          "description": "In display order. Readers skip kinds they do not know."
+        }
+      }
+    },
+    "email": {
+      "type": "object",
+      "required": ["address"],
+      "description": "Opens an email to a published address.",
+      "properties": {
+        "address": {
+          "type": "string",
+          "maxLength": 254,
+          "description": "An email address. Readers check that it is a single plain address before building a mailto link from it."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["uri"],
+      "description": "Opens a link.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL. Readers ignore any other scheme."
+        },
+        "preset": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["book-call", "hire", "subscribe"],
+          "description": "What the button is for; readers word it in the viewer's language. Absent or unknown means readers show the label."
+        },
+        "label": {
+          "type": "string",
+          "maxGraphemes": 40,
+          "maxLength": 400,
+          "description": "Button text, used when the preset is absent or unknown. Without a label, readers show the link's site name."
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 // Field limits of our records, the one place code reads them (P1.31). Strings count graphemes unless the name ends in
-// Bytes; arrays count items; *MaxSize counts blob bytes. Each value equals the schema's constraint, which
+// Bytes; arrays count items; *MaxSize counts blob bytes; *Highest is the largest integer allowed. Each value equals the schema's constraint, which
 // limits.test.ts proves with one record at the limit and one past it.
 export const LIMITS = {
   profile: {
@@ -7,22 +7,33 @@ export const LIMITS = {
     headline: 200,
     avatarMaxSize: 2_000_000,
     avatarShapeBytes: 32,
-    visibilityBytes: 32,
     location: 100,
     websiteBytes: 2000,
-    cardsMax: 100,
   },
-  section: {
+  page: {
+    cardsMax: 100,
+    visibilityBytes: 32,
+  },
+  card: {
     widthBytes: 32,
     surfaceBytes: 32,
-    textBytes: 100_000,
+    textBytes: 20_000,
+    styledTablesMax: 20,
+    tableEdgesMax: 250,
+    edgeDirectionBytes: 32,
+    edgeLineHighest: 999,
+    edgeCellHighest: 999,
+    alignedBlocksMax: 200,
+    alignValueBytes: 32,
+    lookLinesMax: 1000,
+    lineFingerprintBytes: 8,
     title: 100,
     layoutBytes: 32,
-    linksMax: 100,
+    linksMax: 50,
     linkUriBytes: 2000,
     linkLabel: 100,
     linkDescription: 200,
-    entriesMax: 100,
+    entriesMax: 50,
     entryTitle: 120,
     entryTag: 40,
     entryDescription: 300,
@@ -34,12 +45,12 @@ export const LIMITS = {
     presetBytes: 32,
     buttonUriBytes: 2000,
     buttonLabel: 40,
-    imageMaxSize: 2_000_000,
+    imageMaxSize: 5_000_000,
     imageAlt: 2000,
     imageCaption: 300,
     fitBytes: 32,
     galleryTitle: 100,
-    galleryMax: 12,
+    galleryMax: 20,
   },
 } as const;
 

@@ -56,7 +56,7 @@ export async function runJob(
   const versions: ImageVersion[] = [];
   try {
     for (const spec of specs) {
-      const made = await makeVersion(open, spec, width, height);
+      const made = await makeVersion(open, spec, { format, bytes: bytes.length }, width, height);
       if (made === "too_large") return { kind: "refused", code: "image.too_large" };
       if (made !== "omitted") versions.push(made);
     }
@@ -72,25 +72,35 @@ function refusal(error: unknown): JobResult {
 }
 
 /**
- * The version at falling qualities until it fits. One that never fits is `too_large` when required, which refuses the
+ * The version at each of `attempts` until it fits. One that never fits is `too_large` when required, which refuses the
  * upload, and `omitted` when optional: a hard photo never fails on a display size, and the page uses another one.
  */
 async function makeVersion(
   open: () => Sharp,
   spec: VersionSpec,
+  source: Source,
   width: number,
   height: number,
 ): Promise<ImageVersion | "too_large" | "omitted"> {
-  let smallest: { data: Buffer; info: OutputInfo } | undefined;
-  for (const quality of qualitySteps(spec.quality, spec.minQuality)) {
-    const out = await encode(shaped(open().rotate(), spec, width, height), spec.format, quality).toBuffer({
-      resolveWithObject: true,
-    });
-    if (smallest === undefined || out.data.length < smallest.data.length) smallest = out;
-    if (out.data.length <= spec.maxBytes) break;
+  let fitting: { data: Buffer; info: OutputInfo } | undefined;
+  // Each size is decoded and resized once, then encoded at each quality from its pixels: decoding a 100-megapixel
+  // upload again for every try is what would cost the time (ADR 0088, measured in the PR).
+  let pixels: { size: number; data: Buffer; info: OutputInfo } | undefined;
+  for (const step of attempts(spec, source)) {
+    if (pixels?.size !== step.size) {
+      const sized = shaped(open().rotate(), { ...spec, size: step.size }, width, height);
+      pixels = { size: step.size, ...(await sized.raw().toBuffer({ resolveWithObject: true })) };
+    }
+    const { info } = pixels;
+    const raw = sharp(pixels.data, { raw: { width: info.width, height: info.height, channels: info.channels } });
+    const out = await encode(raw, spec.format, step).toBuffer({ resolveWithObject: true });
+    if (out.data.length <= spec.maxBytes) {
+      fitting = out;
+      break;
+    }
   }
-  if (smallest === undefined || smallest.data.length > spec.maxBytes) return spec.required ? "too_large" : "omitted";
-  const { data, info } = smallest;
+  if (fitting === undefined) return spec.required ? "too_large" : "omitted";
+  const { data, info } = fitting;
   return {
     name: spec.name,
     format: spec.format,
@@ -99,6 +109,29 @@ async function makeVersion(
     bytes: new Uint8Array(data),
     sha256: createHash("sha256").update(data).digest("hex"),
   };
+}
+
+/** One encoding to try: a size and a quality, or lossless. */
+export type Attempt =
+  | { readonly size: number; readonly quality: number }
+  | { readonly size: number; readonly lossless: true };
+
+/** What `attempts` reads of the upload: its format, and its length in bytes. */
+export type Source = { readonly format: SourceFormat; readonly bytes: number };
+
+/**
+ * The encodings to try, in order (ADR 0088): lossless at the full size first when the source is one of `losslessFrom`
+ * and no longer than `maxBytes` (WebP lossless comes out smaller than the PNG it reads, so a PNG photo past the cap is
+ * not spent five seconds on), then each size, the largest first, from `quality` down to that size's own minimum.
+ */
+export function attempts(spec: VersionSpec, source: Source): Attempt[] {
+  const lossless = spec.losslessFrom?.includes(source.format) === true && source.bytes <= spec.maxBytes;
+  const steps: Attempt[] = lossless ? [{ size: spec.size, lossless: true }] : [];
+  const sizes = [{ size: spec.size, minQuality: spec.minQuality }, ...(spec.smaller ?? [])];
+  for (const { size, minQuality } of sizes) {
+    for (const quality of qualitySteps(spec.quality, minQuality)) steps.push({ size, quality });
+  }
+  return steps;
 }
 
 /** The qualities to try, from `quality` down in steps of 10, always ending on `minQuality`. */
@@ -123,8 +156,14 @@ function shaped(image: Sharp, spec: VersionSpec, width: number, height: number):
     .resize(spec.size, spec.size);
 }
 
-function encode(image: Sharp, format: VersionSpec["format"], quality: number): Sharp {
+function encode(image: Sharp, format: VersionSpec["format"], step: Attempt): Sharp {
+  // sharp 0.35.5 dist/output.mjs `webp`: `lossless` keeps every pixel; an alpha channel is kept either way.
+  if ("lossless" in step) return image.webp({ lossless: true });
+  const { quality } = step;
   if (format === "jpeg") return image.flatten({ background: "#ffffff" }).jpeg({ quality, mozjpeg: true });
   if (format === "webp") return image.webp({ quality });
-  return image.avif({ quality, effort: 4 });
+  // Effort 3, not sharp's default 4 (sharp 0.35.5 dist/output.mjs `avif`, 0 fastest to 9 slowest). Measured in
+  // review's one-thread child on a 12-megapixel photo: the 1600 px AVIF took 3.6 s at effort 4 and 0.5 s at 3, at
+  // 45 KB instead of 32 KB (its cap is 400,000 bytes). Effort 4 put a phone photo past review's 20 s on staging.
+  return image.avif({ quality, effort: 3 });
 }

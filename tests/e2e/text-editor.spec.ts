@@ -3,9 +3,11 @@
 // policy under the app's real CSP with no violation; text the member opens and saves untouched is stored as it was;
 // on a phone the editor fills the screen with its formatting bar at the top. The cards added are deleted again.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, deleteCard, OWN_PAGE, postedText, writeText } from "./cards.ts";
+import { addCard, deleteCard, OWN_PAGE, paceWrites, postedText, writeText } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 import { phone } from "./phone.ts";
+
+paceWrites(test);
 
 async function openNewText(page: Page) {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
@@ -37,7 +39,10 @@ test("the_toolbar_and_shortcuts_write_markdown_into_the_posted_field", async ({ 
   await editor.getByText("Title", { exact: true }).click();
   await chooseStyle(page, dialog, "Heading 2");
   await expect(postedText(dialog)).toHaveValue("## Title\n\n**a word**");
-  await writeText(editor, ["- one", "two"]);
+  // In a list Enter makes the next point; Shift+Enter would leave the list (Alex 2026-11-22 00:02Z).
+  await writeText(editor, ["- one"]);
+  await editor.press("Enter");
+  await editor.pressSequentially("two");
   await expect(postedText(dialog)).toHaveValue("- one\n- two");
   await page.keyboard.press("Escape");
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
@@ -238,7 +243,10 @@ test("a_save_sent_in_the_same_moment_as_an_edit_posts_it", async ({ page }) => {
 test("quote_wraps_paragraphs_and_leaves_headings_and_lists_alone", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
   const quote = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Quote" });
-  await writeText(editor, ["- one", "two"]);
+  // In a list Enter makes the next point; Shift+Enter would leave the list (Alex 2026-11-22 00:02Z).
+  await writeText(editor, ["- one"]);
+  await editor.press("Enter");
+  await editor.pressSequentially("two");
   await editor.press("ControlOrMeta+a");
   await expect(quote).toBeDisabled();
   await expect(postedText(dialog)).toHaveValue("- one\n- two");
@@ -311,26 +319,40 @@ test("a_paste_with_two_paragraphs_in_a_list_item_is_refused", async ({ page }) =
 
 // Codex review of #1827: a line break in a list item is written as a continuation line the page moves out of the
 // list, so it is refused there.
-test("a_line_break_in_a_list_item_is_refused", async ({ page }) => {
+// Alex, 2026-11-21: "swap the enter and shift enter everywhere", the dialog's editor as the one on the page.
+test("enter_breaks_the_line_and_shift_enter_starts_a_new_block_in_the_dialog_too", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
-  await writeText(editor, ["- one"]);
-  await expect(postedText(dialog)).toHaveValue("- one");
-  await editor.press("Shift+Enter");
+  await writeText(editor, ["one"]);
+  await editor.press("Enter");
   await editor.pressSequentially("two");
-  await expect(postedText(dialog)).toHaveValue("- onetwo");
+  await expect(postedText(dialog)).toHaveValue("one\\\ntwo");
+  await editor.press("Shift+Enter");
+  await editor.pressSequentially("three");
+  await expect(postedText(dialog)).toHaveValue("one\\\ntwo\n\nthree");
   await page.keyboard.press("Escape");
 });
 
-// Codex review of #1827: the page shows a quote as one paragraph and a line break as a space, so neither a second
-// paragraph in a quote nor a line break in a paragraph is added.
-test("a_quote_keeps_one_paragraph_and_no_line_break_is_added", async ({ page }) => {
+// A list item's line break would not show on the page (parse.ts), so there Enter starts the next item.
+test("enter_in_a_list_item_starts_the_next_item", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await writeText(editor, ["- one"]);
+  await expect(postedText(dialog)).toHaveValue("- one");
+  await editor.press("Enter");
+  await editor.pressSequentially("two");
+  await expect(postedText(dialog)).toHaveValue("- one\n- two");
+  await page.keyboard.press("Escape");
+});
+
+// Codex review of #1827 kept a quote to one paragraph and refused line breaks while the page could show neither; since
+// P1.21s the page draws a quote's paragraphs and a hard line break, so both are kept.
+test("a_quote_keeps_its_paragraphs_and_enter_breaks_the_line", async ({ page }) => {
   const { dialog, editor } = await openNewText(page);
   await paste(page, editor, "<p>a</p><blockquote><p>one</p><p>two</p></blockquote><p>b</p>");
   await editor.pressSequentially("typed");
-  await expect(postedText(dialog)).toHaveValue("typed");
-  await editor.press("Shift+Enter");
+  await expect(postedText(dialog)).toHaveValue("a\n\n> one\n>\n> two\n\nbtyped");
+  await editor.press("Enter");
   await editor.pressSequentially("more");
-  await expect(postedText(dialog)).toHaveValue("typedmore");
+  await expect(postedText(dialog)).toHaveValue("a\n\n> one\n>\n> two\n\nbtyped\\\nmore");
   await page.keyboard.press("Escape");
 });
 
@@ -446,7 +468,8 @@ test("the_in_place_toolbar_sticks_below_the_site_header", async ({ page }) => {
       .getByRole("link", { name: "Edit" })
       .getAttribute("href");
     await page.goto(new URL(href ?? "", page.url()).toString());
-    const editor = page.getByRole("textbox", { name: "Text" });
+    // Exact: the page's own in-place editor for the card is "Text of the Text card" (ADR 0074 item 4).
+    const editor = page.getByRole("textbox", { name: "Text", exact: true });
     await expect(editor).toHaveAttribute("contenteditable", "true");
     await editor.getByText("Paragraph 30 of a long text.").scrollIntoViewIfNeeded();
     const header = await page.locator("[data-site-header]").boundingBox();

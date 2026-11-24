@@ -1,0 +1,45 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.card",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "One card on an account's unset.sh profile page. It is shown only on a page (sh.unset.page) whose cards list names it, in that order, and a block with nothing to show (an empty list, for example) is hidden. Readers apply that page's visibility to it.",
+      "record": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "union",
+            "refs": [
+              "sh.unset.block.text",
+              "sh.unset.block.links",
+              "sh.unset.block.showcase",
+              "sh.unset.block.buttons",
+              "sh.unset.block.images"
+            ],
+            "description": "What the card holds: one of the sh.unset.block types. Other apps may add their own types; readers hide types they do not know."
+          },
+          "width": {
+            "type": "string",
+            "maxLength": 32,
+            "knownValues": ["full", "half"],
+            "description": "Width on wide screens. Absent or unknown means full."
+          },
+          "surface": {
+            "type": "string",
+            "maxLength": 32,
+            "knownValues": ["filled", "outlined", "plain"],
+            "description": "How the card's outer surface is drawn. Absent or unknown means filled."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the card was first created."
+          }
+        }
+      }
+    }
+  }
+}

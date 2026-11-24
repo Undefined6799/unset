@@ -22,7 +22,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "1550bc39c49e9e5d66bbaea0474c3409e1944783acb4481b13f9a8d587c4593f"
+        "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f"
       }
     ]
   },
@@ -91,7 +91,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "1550bc39c49e9e5d66bbaea0474c3409e1944783acb4481b13f9a8d587c4593f"
+        "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f"
       }
     ]
   },
@@ -104,7 +104,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "1550bc39c49e9e5d66bbaea0474c3409e1944783acb4481b13f9a8d587c4593f"
+        "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f"
       }
     ]
   },
@@ -159,7 +159,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "1550bc39c49e9e5d66bbaea0474c3409e1944783acb4481b13f9a8d587c4593f"
+        "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f"
       }
     ]
   },

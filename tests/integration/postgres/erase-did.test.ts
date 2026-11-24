@@ -50,9 +50,9 @@ function seedApp(did: string, fill: string): void {
      INSERT INTO app.image (id, did, kind, state, width, height, bytes, created_at)
        VALUES (repeat('${fill}', 16)::uuid, '${did}', 'image', 'published', 1, 1, 1, now());
      INSERT INTO app.image_use (image_id, record_uri)
-       VALUES (repeat('${fill}', 16)::uuid, 'at://${did}/sh.unset.section/3kaaaaaaaaaaa');
+       VALUES (repeat('${fill}', 16)::uuid, 'at://${did}/sh.unset.card/3kaaaaaaaaaaa');
      INSERT INTO app.image_record (record_uri, did, settled_rev)
-       VALUES ('at://${did}/sh.unset.section/3kaaaaaaaaaaa', '${did}', '3kcommit2aaaa');
+       VALUES ('at://${did}/sh.unset.card/3kaaaaaaaaaaa', '${did}', '3kcommit2aaaa');
      INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());
      INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');
      INSERT INTO app.sign_in (did) VALUES ('${did}');`,
@@ -61,13 +61,15 @@ function seedApp(did: string, fill: string): void {
 
 /** One row in every index and moderation table that names `did` (migration 0025). */
 function seedIndex(did: string): void {
-  const uri = `at://${did}/sh.unset.section/3kaaaaaaaaaaa`;
+  const uri = `at://${did}/sh.unset.card/3kaaaaaaaaaaa`;
   postgres.sql(
     "unset",
     `INSERT INTO idx.account (did, updated_at) VALUES ('${did}', now());
      INSERT INTO idx.account_job (did, kind, due_at, first_queued_at) VALUES ('${did}', 'backfill', now(), now());
      INSERT INTO idx.profile (did, uri, cid, rev, record, discoverable, indexed_at)
        VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'bafyprofile', '3kaaaaaaaaaaa', '{}', true, now());
+     INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at)
+       VALUES ('${did}', 'at://${did}/sh.unset.page/self', 'bafypage', '3kaaaaaaaaaaa', '{}', now());
      INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
        VALUES ('${uri}', '${did}', '3kaaaaaaaaaaa', 'bafysection', '3kaaaaaaaaaaa', '{}', now());
      INSERT INTO idx.record_blob (uri, cid, did, mime, size) VALUES ('${uri}', 'bafyblob', '${did}', 'image/png', 1);

@@ -47,7 +47,13 @@ type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
 
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
-const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
+const LIBRARY_IMAGES = new Set([
+  "docker.io/library/node",
+  "docker.io/library/caddy",
+  "docker.io/library/postgres",
+  // P6.02 (ADR 0092): the chat Synapse image's build-only base.
+  "docker.io/library/python",
+]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || VENDOR_BASES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
@@ -867,6 +873,26 @@ const ZLIB_UPGRADE = {
 const isZlibUpgrade = (text: string, kind: Kind | undefined): boolean =>
   text === ZLIB_UPGRADE.line && kind !== undefined && ZLIB_UPGRADE.kinds.has(kind);
 
+/**
+ * The second temporary upgrade, made the same way (Alex, 2026-11-23T02:10Z, "Upgrade the four packages", on the
+ * coordinator's decision card): the postgres base ships krb5 1.21.3-5+deb13u1, whose four client libraries carry 14
+ * HIGH CVEs (CVE-2026-71199, CVE-2026-71200, CVE-2026-107364, CVE-2026-112315 to -112323, CVE-2026-118380 and
+ * CVE-2026-119079; Trivy 0.76.1 on 2026-11-23) that Debian fixed in 1.21.3-5+deb13u2. No postgres:18-trixie index
+ * ships it yet (the newest, pushed 2026-11-20, still has deb13u1). Only this exact line, only in a postgres final
+ * stage before USER, and only until `expires`; it goes once the locked base ships deb13u2. The four are every krb5
+ * package the base installs, and each depends on the others at the same version, so they move together.
+ */
+const KRB5_UPGRADE = {
+  line:
+    "RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade " +
+    "libkrb5-3=1.21.3-5+deb13u2 libgssapi-krb5-2=1.21.3-5+deb13u2 libk5crypto3=1.21.3-5+deb13u2 " +
+    "libkrb5support0=1.21.3-5+deb13u2 && rm -rf /var/lib/apt/lists/*",
+  kinds: new Set<Kind>(["postgres"]),
+  expires: "2026-12-07T00:00:00Z",
+} as const;
+const isKrb5Upgrade = (text: string, kind: Kind | undefined): boolean =>
+  text === KRB5_UPGRADE.line && kind !== undefined && KRB5_UPGRADE.kinds.has(kind);
+
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
 function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
   try {
@@ -875,7 +901,9 @@ function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
     const finalFrom = all.findLast(({ text }) => FROM.test(text))?.line ?? 0;
     const user = all.find(({ line, text }) => line > finalFrom && /^USER\s/i.test(text))?.line ?? Infinity;
     const exact = (line: number, text: string) =>
-      line > finalFrom && line < user && (isListedRun(text, listed ?? listedRunsOf(kind)) || isZlibUpgrade(text, kind));
+      line > finalFrom &&
+      line < user &&
+      (isListedRun(text, listed ?? listedRunsOf(kind)) || isZlibUpgrade(text, kind) || isKrb5Upgrade(text, kind));
     return shippedInstructions(all)
       .filter(({ line, text }) => !exact(line, text))
       .flatMap(({ line, text }) =>
@@ -1092,7 +1120,19 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt", "seaweedfs"]);
+    expect(Object.keys(lock)).toEqual([
+      "node",
+      "caddy-builder",
+      "caddy",
+      "postgres",
+      "pds",
+      "newt",
+      "seaweedfs",
+      "seaweedfs-next",
+      "python",
+      "python3-debian13",
+      "mas",
+    ]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1153,14 +1193,42 @@ describe("base images", () => {
       stage: "runtime",
       buildStage: false,
     });
+    // P6.02 (ADR 0092): the Synapse image's build-only base, which upstream pairs with distroless python3-debian13.
+    // No Dockerfile on main builds on it yet, so buildStage stays false (lock_build_stage_matches_dockerfiles) until
+    // synapse.Dockerfile lands with its build stage.
+    expect(lock.python).toStrictEqual({
+      ref: "docker.io/library/python",
+      tag: expect.stringMatching(/^3\.13(?:\.\d+)?-slim-trixie$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "build",
+      buildStage: false,
+    });
+    // P6.02: Element's Matrix Authentication Service, the chat server's sign-in, run as shipped likewise.
+    expect(lock.mas).toStrictEqual({
+      ref: "ghcr.io/element-hq/matrix-authentication-service",
+      tag: expect.stringMatching(/^1\.\d+\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
   });
 
   test("vendor_bases_are_named_runtime_bases", () => {
     // P2.18s (ADR 0041): SeaweedFS is the one vendor image a Dockerfile may build on, by its exact name, as a runtime
     // base only. A run-only vendor image is never a base, and the two lists never share a name.
-    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs"]);
+    // P6.02 (ADR 0092): Google's distroless Python is the second, the Synapse image's runtime base.
+    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs", "gcr.io/distroless/python3-debian13"]);
     for (const ref of VENDOR_BASES) expect(VENDOR_IMAGES.has(ref), ref).toBe(false);
-    for (const ref of ["docker.io/chrislusf/other", "docker.io/chrislusf/seaweedfs-x", "ghcr.io/chrislusf/seaweedfs"]) {
+    for (const ref of [
+      "docker.io/chrislusf/other",
+      "docker.io/chrislusf/seaweedfs-x",
+      "ghcr.io/chrislusf/seaweedfs",
+      "gcr.io/distroless/python3",
+      "gcr.io/distroless/python3-debian12",
+      "docker.io/distroless/python3-debian13",
+    ]) {
       expect(allowed(ref), ref).toBe(false);
     }
     expect(lock.seaweedfs).toStrictEqual({
@@ -1171,6 +1239,36 @@ describe("base images", () => {
       stage: "runtime",
       buildStage: false,
     });
+    expect(lock["python3-debian13"]).toStrictEqual({
+      ref: "gcr.io/distroless/python3-debian13",
+      tag: "nonroot",
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+  });
+
+  test("seaweedfs_next_is_mirror_only", () => {
+    // P2.18s stage 1 (#1732's plan): the next SeaweedFS release is listed so mirror.yml copies and signs it on main
+    // before objects.Dockerfile can build FROM its GHCR mirror digest (stage 2, which then drops this entry). Until
+    // then no Dockerfile builds on it, it is the same vendor image under its own tag, and the mirror list holds it.
+    const next = lock["seaweedfs-next"] as Base;
+    const current = lock.seaweedfs as Base;
+    expect(next).toStrictEqual({ ...current, tag: expect.stringMatching(/^\d+\.\d+$/), digest: expect.any(String) });
+    expect(next.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect([next.tag, next.digest]).not.toContain(current.tag);
+    expect(next.digest).not.toBe(current.digest);
+    const source = `${next.ref}:${next.tag}@${next.digest}`;
+    expect(MIRRORS.filter((entry) => entry.source === source)).toEqual([
+      { source, mirror: "ghcr.io/undefined6799/mirror/seaweedfs", stage: "runtime" },
+    ]);
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    const built = Object.values(files).flatMap((text) =>
+      fromImages(text).flatMap((image) => lockEntriesOf(image, lock)),
+    );
+    expect(built.map(([name]) => name)).not.toContain("seaweedfs-next");
+    expect(KIND_BY_FINAL_ENTRY.has("seaweedfs-next")).toBe(false);
   });
 
   test("vendor_images_are_run_only", () => {
@@ -1407,6 +1505,32 @@ describe("base images", () => {
     // a new date. It fails closed, like a waiver.
     expect(Date.now(), `ZLIB_UPGRADE expired at ${ZLIB_UPGRADE.expires}`).toBeLessThan(
       Date.parse(ZLIB_UPGRADE.expires),
+    );
+  });
+
+  test("krb5_upgrade_is_exempt_only_as_written_in_a_postgres_final_stage", () => {
+    const floor = "a package manager is named outside a removal command";
+    const postgres = `FROM ${fromImages(read(POSTGRES_DOCKERFILE))[0]}\n`;
+    expect(osPackageProblems(`${postgres}${KRB5_UPGRADE.line}\nUSER 999:999`)).toEqual([]);
+    // In a node image, after USER, or with any other package, version or command, it is an install again.
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    expect(osPackageProblems(`${node}${KRB5_UPGRADE.line}`)).toContain(`line 3: ${floor}`);
+    expect(osPackageProblems(`${postgres}USER 999:999\n${KRB5_UPGRADE.line}`)).toContain(`line 3: ${floor}`);
+    for (const changed of [
+      KRB5_UPGRADE.line.replace("libkrb5-3=1.21.3-5+deb13u2", "libkrb5-3=1.21.3-5+deb13u3"),
+      KRB5_UPGRADE.line.replace("libkrb5-3=", "curl libkrb5-3="),
+      KRB5_UPGRADE.line.replace(" --only-upgrade", ""),
+      `${KRB5_UPGRADE.line} && apt-get install -y curl`,
+    ]) {
+      expect(osPackageProblems(`${postgres}${changed}`), changed).toContain(`line 2: ${floor}`);
+    }
+  });
+
+  test("krb5_upgrade_exception_has_not_expired", () => {
+    // On expiry: drop the line from postgres.Dockerfile and this exception if the locked base ships deb13u2, or bring
+    // Alex a new date. It fails closed, like a waiver.
+    expect(Date.now(), `KRB5_UPGRADE expired at ${KRB5_UPGRADE.expires}`).toBeLessThan(
+      Date.parse(KRB5_UPGRADE.expires),
     );
   });
 

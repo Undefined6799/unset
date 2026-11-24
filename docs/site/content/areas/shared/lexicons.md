@@ -25,9 +25,14 @@ Our schemas:
 | File | NSID |
 | --- | --- |
 | `schemas/sh.unset.profile.json` | `sh.unset.profile` |
-| `schemas/sh.unset.section.json` | `sh.unset.section` |
-| `schemas/sh.unset.follow.json` | `sh.unset.follow` |
-| `schemas/sh.unset.authApp.json` | `sh.unset.authApp` |
+| `schemas/sh.unset.card.json` | `sh.unset.card` |
+| `schemas/sh.unset.block.text.json` | `sh.unset.block.text` |
+| `schemas/sh.unset.block.links.json` | `sh.unset.block.links` |
+| `schemas/sh.unset.block.showcase.json` | `sh.unset.block.showcase` |
+| `schemas/sh.unset.block.buttons.json` | `sh.unset.block.buttons` |
+| `schemas/sh.unset.block.images.json` | `sh.unset.block.images` |
+| `schemas/sh.unset.block.defs.json` | `sh.unset.block.defs` |
+| `schemas/sh.unset.authFull.json` | `sh.unset.authFull` |
 
 Snapshots:
 
@@ -37,7 +42,7 @@ Snapshots:
 
 `published/sh.unset.profile.json` has the same contents as `schemas/sh.unset.profile.json`. Records of `sh.unset.profile` are already in members' repositories, so this NSID has a snapshot (`publishedProblems` in `breaking-check.ts`).
 
-`NSID` in `shared/lexicons/index.ts` repeats those four. `NSID.authApp` is the same string as `PERMISSION_SET_NSID` in [config](../config/). This package may not import `shared/config`. No file under `shared/config/` imports this package. `permanent.test.ts` pins `PERMISSION_SET_NSID` to the string and to the ADR 0025 row. It does not import `NSID`.
+`NSID` in `shared/lexicons/index.ts` repeats the three record and set ids (profile, card, authFull); a card's blocks are named by their own ids ([ADR 0086](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0086-cards-hold-reusable-blocks.md)). `NSID.authFull` is the same string as `PERMISSION_SET_NSID` in [config](../config/). This package may not import `shared/config`. No file under `shared/config/` imports this package. `permanent.test.ts` pins `PERMISSION_SET_NSID` to the string and to the ADR 0086 row that supersedes ADR 0025 Q4. It does not import `NSID`.
 
 Vendored files (`vendor/SOURCE.md`; sha256 of the JSON value):
 

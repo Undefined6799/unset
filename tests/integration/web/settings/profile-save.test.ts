@@ -374,7 +374,8 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     }
   });
 
-  // ADR 0078 (P1.22a): who sees the page leads the Privacy page's one form and is written to the profile record; while
+  // ADR 0078 (P1.22a): who sees the page leads the Privacy page's one form and is written to the main page record (ADR
+  // 0091), the profile left as it was; while
   // the page is not public the Search and AI choices are kept as stored, whatever the hidden fields send.
   test("who_sees_the_page_is_saved_in_the_record_and_search_and_ai_waits_until_public", async () => {
     await save(up, "displayName=Mara+Lind&headline=Night+trains.&location=&website=");
@@ -388,10 +389,15 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     const saved = await saveChoices(up, "visibility=signedIn&title=&description=");
     expect(saved.status).toBe(303);
     expect(saved.headers.get("location")).toBe("/settings/privacy?saved#privacy");
-    const [written] = up.writes().slice(before);
+    const [written, ...more] = up.writes().slice(before);
+    expect(more).toEqual([]);
     expect(written).toMatchObject({
-      record: { displayName: "Mara Lind", headline: "Night trains.", visibility: "signedIn" },
+      method: "putRecord",
+      collection: "sh.unset.page",
+      rkey: "self",
+      record: { $type: "sh.unset.page", visibility: "signed-in" },
     });
+    expect(written?.record).not.toHaveProperty("cards"); // a first choice starts a page with no cards
     const html = await (await privacyPage(up, "?saved")).text();
     expect(html).toContain("Privacy saved.");
     const document = parse(html);
@@ -410,18 +416,77 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     expect(textContent(document)).toContain("does not hide your profile");
     // Public again: the field leaves the record and the switches save again.
     await saveChoices(up, "visibility=public&title=&description=");
+    expect(up.writes().at(-1)).toMatchObject({ collection: "sh.unset.page", rkey: "self" });
     expect(up.writes().at(-1)?.record).not.toHaveProperty("visibility");
     const after = parse(await (await privacyPage(up)).text());
     expect(radios(after)[0]).toEqual(["public", true]);
     expect(attr(elements(after, "input", { name: "searchEngines" })[0], "checked")).toBeUndefined();
   });
 
+  // Staging break test 2026-11-21, second pass: a visitor could still load the page for about 2 s after "Privacy
+  // saved". The save now waits, a few seconds at most, until the index the public page reads has the choice.
+  test("the_privacy_save_says_saved_only_once_the_public_page_follows", async () => {
+    await save(up, "displayName=Mara+Lind&headline=&location=&website=");
+    const indexer = createPool({
+      connection: { ...pg, ...provided.roles.indexer, ssl: false },
+      service: "indexer-catch-up-test",
+      max: 1,
+      connectTimeoutMs: 5000,
+    });
+    const indexed = (visibility?: string) =>
+      withClient(indexer, null, (c) =>
+        c.query("UPDATE idx.page SET record = $2 WHERE did = $1", [
+          OWNER,
+          { $type: "sh.unset.page", createdAt: "x", ...(visibility ? { visibility } : {}) },
+        ]),
+      );
+    try {
+      await withClient(indexer, null, async (c) => {
+        await c.query("INSERT INTO idx.account (did, track_requested_at, updated_at) VALUES ($1, now(), now())", [
+          OWNER,
+        ]);
+        await c.query("UPDATE idx.account SET pds_active = true WHERE did = $1", [OWNER]);
+        await c.query(
+          `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
+           VALUES ($1, $2, 'cid-p', '3l', '{}', 'Mara Lind', false, now())`,
+          [OWNER, `at://${OWNER}/sh.unset.profile/self`],
+        );
+        await c.query(
+          `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at) VALUES ($1, $2, 'cid-g', '3l', '{}', now())`,
+          [OWNER, `at://${OWNER}/sh.unset.page/self`],
+        );
+      });
+      // The index still shows the page to everyone: the save waits, then says the page is catching up.
+      await indexed();
+      const started = performance.now();
+      const slow = await saveChoices(up, "visibility=ownerOnly&title=&description=");
+      expect(slow.headers.get("location")).toBe("/settings/privacy?saved=pending#privacy");
+      expect(performance.now() - started).toBeGreaterThanOrEqual(4_500);
+      expect(await (await privacyPage(up, "?saved=pending")).text()).toContain("still catching up");
+      // The index already has the choice: "Privacy saved." at once.
+      await indexed("signed-in");
+      const fast = await saveChoices(up, "visibility=signedIn&title=&description=");
+      expect(fast.headers.get("location")).toBe("/settings/privacy?saved#privacy");
+      expect(await (await privacyPage(up, "?saved")).text()).not.toContain("still catching up");
+    } finally {
+      await withClient(indexer, null, async (c) => {
+        await c.query("DELETE FROM idx.page WHERE did = $1", [OWNER]);
+        await c.query("DELETE FROM idx.profile WHERE did = $1", [OWNER]);
+        await c.query("DELETE FROM idx.account WHERE did = $1", [OWNER]);
+      });
+      await indexer.end();
+    }
+  }, 30_000);
+
   // A hidden Search and AI field the save would ignore never blocks restricting who sees the page (Codex on #1851).
   test("a_hidden_overlong_search_field_does_not_block_a_non_public_choice", async () => {
     const before = up.writes().length;
     const response = await saveChoices(up, `visibility=ownerOnly&title=${"x".repeat(71)}&description=`);
     expect(response.status).toBe(303);
-    expect(up.writes().slice(before)[0]?.record).toMatchObject({ visibility: "ownerOnly" });
+    expect(up.writes().slice(before)[0]).toMatchObject({
+      collection: "sh.unset.page",
+      record: { visibility: "owner-only" },
+    });
     await saveChoices(up, "visibility=public&title=&description=");
   });
 

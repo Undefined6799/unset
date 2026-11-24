@@ -19,6 +19,27 @@ module:
     min: "0.146.0"
   imports:
     - path: github.com/imfing/hextra
+  # Hugo drops a component's default mount once any mount names it, so the defaults are restated
+  # (gohugo.io/configuration/module/#mounts). The last two give the adr-index shortcode the ADR files and their
+  # frozen rows (ADR 0083); the ADRs are assets it reads, not pages.
+  mounts:
+    - { source: content, target: content }
+    - { source: data, target: data }
+    - { source: layouts, target: layouts }
+    - { source: i18n, target: i18n }
+    - { source: archetypes, target: archetypes }
+    - { source: assets, target: assets }
+    - { source: static, target: static }
+    - { source: ../human/decisions, target: assets/adrs, files: ["*.md"] }
+    - { source: ../human/decisions, target: data/adrs, files: ["legacy-index.yaml"] }
+
+# The site stays out of search engines until Alex says otherwise (ADR 0111 Decision 7). GitHub Pages sends no header
+# of ours, so each page says it itself: Hextra writes `noindex, nofollow` for a page whose `noindex` param is true
+# (layouts/_partials/head.html at v0.13.0). A cascade in the site configuration reaches every page
+# (gohugo.io/configuration/cascade).
+cascade:
+  - params:
+      noindex: true
 
 # No tag or category archives.
 disableKinds:

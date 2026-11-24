@@ -10,14 +10,17 @@ importance: high
 related: ["[[identity]]", "[[pds]]"]
 replaced_by: null
 tags: [area, lexicons]
-checked: 2026-11-20
+checked: 2026-11-21
 ---
 # lexicons
 
-**What it owns.** The public record contract (plan §3): `sh.unset.profile`, `sh.unset.section`,
-`sh.unset.follow`, the permission set `sh.unset.authApp`, and `sh.unset.defs` (shapes records share: `#image`, the
-picture every use embeds, ADR 0070). Once a schema is published (P1.35) other
-apps rely on it, so a change is close to permanent.
+**What it owns.** The public record contract (plan §3; ADR 0086, ADR 0091): `sh.unset.profile` (who the account
+is, nothing else), `sh.unset.page` (key `any`; `self` is the main page, whose `cards` list of at:// addresses says
+which cards show, in order; other keys are shown nowhere yet), `sh.unset.card` (one block plus optional
+width and surface), the blocks `sh.unset.block.{text,links,showcase,buttons,images}` with their shared
+`sh.unset.block.defs`, and the permission set `sh.unset.authFull`. `sh.unset.section`, `sh.unset.follow`,
+`sh.unset.authApp` and `sh.unset.defs` went with #1933 (P1.31t). Once a schema is published (P1.35) other apps rely
+on it, so a change is close to permanent.
 
 **Files.**
 - `schemas/`: our lexicon JSON. `vendor/`: the Bluesky lexicons we read, copied from tag
@@ -35,8 +38,9 @@ apps rely on it, so a change is close to permanent.
   `accept` value, a union opened or closed, or a closed union's new ref (P1.31k), or a changed `default` (an absent
   `listed` must stay not listed) on a published schema; additions to
   the permission set need Alex's approval and removals are refused. It also holds every `published/<nsid>.json`
-  snapshot with no lock entry yet: `sh.unset.profile` is snapshotted because its records are live before P1.35
-  publishes it (P1.31h).
+  snapshot with no lock entry yet. `published/sh.unset.profile.json` holds the ADR 0091 profile (identity only),
+  replaced in #1933 and again by ADR 0091 because nothing was published yet; `published/sh.unset.page.json` came
+  with ADR 0091.
 
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.
@@ -44,6 +48,6 @@ apps rely on it, so a change is close to permanent.
 - `generate()` builds in `mkdtemp(<os tmpdir>/unset-lexicons-)` and writes nothing in the repository
   (P1.38a): a folder that appeared and vanished in shared/ broke the docs test's walk. biome panics on
   paths outside its root, so each built file is formatted through `--stdin-file-path=` its generated/ path.
-- `NSID.authApp` repeats `PERMISSION_SET_NSID` in shared/config; step P1.31c adds the test that holds them equal.
+- `NSID.authFull` repeats `PERMISSION_SET_NSID` in shared/config (`sh.unset.authFull`); keep them equal.
 
 **Links.** [[identity]], [[pds]].

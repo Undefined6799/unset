@@ -4,10 +4,10 @@ A member's profile and cards are records in that member's own repository. The me
 
 ## Route
 
-- [`interfaces/web/src/routes/[did=did]/`](../../../interfaces/web/src/routes/[did=did]) is the member's own page, at `/<DID>`. It loads the profile and cards from the member's PDS. Its form actions create, edit, delete and reorder cards, and save the avatar shape. A path that is not a DID, or another member's DID, is a 404. A visitor is sent to sign in.
+- [`interfaces/web/src/routes/[did=did]/`](../../../interfaces/web/src/routes/[did=did]) is the member's own page, at `/<DID>`. It loads the profile and cards from the member's PDS. Its form actions create, edit, delete and reorder cards, and save the avatar shape. Only the cards the main page's `cards` list names show, in its order, so a new card and its entry in the list are written in one commit, and so are a deleted card and the list without it ([ADR 0086](../decisions/0086-cards-hold-reusable-blocks.md) point 3). The list lives on the `sh.unset.page` record under the key `self`, and the first card creates it ([ADR 0091](../decisions/0091-a-page-record-holds-the-card-list.md)). A path that is not a DID, or another member's DID, is a 404. A visitor is sent to sign in.
 - [`interfaces/web/src/routes/profile/`](../../../interfaces/web/src/routes/profile) is `POST /profile`, the one profile save. It has no page: a GET is a 404. The DID is the session's.
 - [`interfaces/web/src/routes/settings/profile/`](../../../interfaces/web/src/routes/settings/profile) is the settings page. The profile form posts to `/profile`, and the save returns to `/settings/profile?saved`, so the page says it saved even with no script. Search and AI is on Settings › Privacy ([public indexing](public-indexing.md)).
-- [`interfaces/web/src/routes/@[actor]/`](../../../interfaces/web/src/routes/@[actor]) is the public page. It reads the index, not the PDS. The own page's View as public link opens it at `/@<DID>`.
+- [`interfaces/web/src/routes/@[actor]/`](../../../interfaces/web/src/routes/@[actor]) is the public page. It reads the index, not the PDS. The own page's View as public link opens it at `/@<DID>`. It runs the client under the app's script policy ([ADR 0114](../decisions/0114-script-on-every-page-with-a-plain-fallback.md)); its 404, its refusals and its data address keep the public group's fixed policy and carry no script. The server draws the whole page, so it reads the same with script off. A member's text is drawn as text, in the page and in the start-up script alike, and the load returns only what that viewer's page shows, because the browser is sent all of it.
 
 Both pages draw the same profile header ([ADR 0077](../decisions/0077-one-profile-layout.md)): the avatar and display name above the cards. The avatar opens the About panel, a native popover with the headline, handle, place, website, DID and the first Contact button. Click, tap, Enter or Space opens it, with or without script; hover does not.
 
@@ -20,11 +20,12 @@ The own page reads through [`own-profile.server.ts`](../../../interfaces/web/src
 [`domains/profile/`](../../../domains/profile) checks the fields and builds the records.
 
 - [`profile.ts`](../../../domains/profile/profile.ts) reads and writes `sh.unset.profile` (display name, headline, location, website).
-- [`cards.ts`](../../../domains/profile/cards.ts) reads `sh.unset.section` cards. A card this version does not accept is hidden.
+- [`page.ts`](../../../domains/profile/page.ts) writes the main page `sh.unset.page/self`, which lists the cards in order.
+- [`cards.ts`](../../../domains/profile/cards.ts) reads `sh.unset.card` cards, each holding one `sh.unset.block.*` block. A card this version does not accept is hidden.
 - [`card-edit.ts`](../../../domains/profile/card-edit.ts) checks a card before it is written.
 - [`web-address.ts`](../../../domains/profile/web-address.ts) accepts a plain `http` or `https` address.
 
-The record shapes are [`shared/lexicons/schemas/sh.unset.profile.json`](../../../shared/lexicons/schemas/sh.unset.profile.json) and [`sh.unset.section.json`](../../../shared/lexicons/schemas/sh.unset.section.json) ([ADR 0051](../decisions/0051-profile-cards-lexicon.md)).
+The record shapes are [`shared/lexicons/schemas/sh.unset.profile.json`](../../../shared/lexicons/schemas/sh.unset.profile.json), [`sh.unset.page.json`](../../../shared/lexicons/schemas/sh.unset.page.json) and [`sh.unset.card.json`](../../../shared/lexicons/schemas/sh.unset.card.json) with the blocks beside it ([ADR 0051](../decisions/0051-profile-cards-lexicon.md), [ADR 0086](../decisions/0086-cards-hold-reusable-blocks.md), [ADR 0091](../decisions/0091-a-page-record-holds-the-card-list.md)).
 
 ## Adapter
 
@@ -38,9 +39,9 @@ The member's own page stores nothing in Postgres. The records live in the member
 
 Unit tests sit beside the server and domain files (`own-profile.server.test.ts`, `card-writes.server.test.ts`, `card-form.server.test.ts`, `save.server.test.ts`, and the tests in `domains/profile/`).
 
-Integration: [`tests/integration/web/app/own-page.test.ts`](../../../tests/integration/web/app/own-page.test.ts), [`member-page.test.ts`](../../../tests/integration/web/app/member-page.test.ts), [`tests/integration/web/settings/profile-save.test.ts`](../../../tests/integration/web/settings/profile-save.test.ts), [`settings.test.ts`](../../../tests/integration/web/settings/settings.test.ts).
+Integration: [`tests/integration/web/app/own-page.test.ts`](../../../tests/integration/web/app/own-page.test.ts), [`member-page.test.ts`](../../../tests/integration/web/app/member-page.test.ts), [`tests/integration/web/settings/profile-save.test.ts`](../../../tests/integration/web/settings/profile-save.test.ts), [`settings.test.ts`](../../../tests/integration/web/settings/settings.test.ts). The public page: [`tests/integration/web/public/public-profile.test.ts`](../../../tests/integration/web/public/public-profile.test.ts) pins its script policy by value and holds what each viewer's browser is sent to what their page shows.
 
-End to end: [`tests/e2e/cards.spec.ts`](../../../tests/e2e/cards.spec.ts), [`cards-nojs.spec.ts`](../../../tests/e2e/cards-nojs.spec.ts), [`profile-layout.spec.ts`](../../../tests/e2e/profile-layout.spec.ts), [`profile-header.spec.ts`](../../../tests/e2e/profile-header.spec.ts), [`profile-carousel.spec.ts`](../../../tests/e2e/profile-carousel.spec.ts), [`profile-refusals.spec.ts`](../../../tests/e2e/profile-refusals.spec.ts).
+End to end: [`tests/e2e/cards.spec.ts`](../../../tests/e2e/cards.spec.ts), [`cards-nojs.spec.ts`](../../../tests/e2e/cards-nojs.spec.ts), [`profile-layout.spec.ts`](../../../tests/e2e/profile-layout.spec.ts), [`profile-header.spec.ts`](../../../tests/e2e/profile-header.spec.ts), [`profile-carousel.spec.ts`](../../../tests/e2e/profile-carousel.spec.ts), [`profile-refusals.spec.ts`](../../../tests/e2e/profile-refusals.spec.ts), and [`public-profile-script.spec.ts`](../../../tests/e2e/public-profile-script.spec.ts), which opens a public page whose every field is hostile text with script on, with script off and with its script files refused.
 
 ## When it is off or replaced
 

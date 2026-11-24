@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
 import { tick } from "svelte";
+import { type CodeColourLimits, codeColourBudget } from "../../editor/code-colours.ts";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
 import { parseReadme } from "../../profile/parse.ts";
@@ -25,6 +26,7 @@ import type {
   Enhance,
   SubmitHandler,
 } from "../../profile/types.ts";
+import { colourBlocks } from "../../profile/view.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
@@ -33,7 +35,7 @@ import * as Dialog from "../ui/dialog/index.ts";
 import * as Tabs from "../ui/tabs/index.ts";
 import Choice from "./choice.svelte";
 import Field from "./field.svelte";
-import Readme from "./readme.svelte";
+import Readme from "./readme-copy.svelte";
 import TextEditor from "./text-editor.svelte";
 
 type Kind = CardContent["kind"];
@@ -43,6 +45,7 @@ let {
   width,
   surface = "filled",
   cardKey,
+  newKey,
   trigger,
   icon,
   triggerClass = "",
@@ -53,6 +56,7 @@ let {
   submit,
   max,
   textMax,
+  codeColours,
   enhance = () => undefined,
 }: {
   kind: Kind;
@@ -62,6 +66,8 @@ let {
   surface?: CardSurface;
   /** The card being saved; absent, the form adds a card. */
   cardKey?: string;
+  /** The key a card this form adds takes (the page's newCardKey), so the form sent twice adds it once. */
+  newKey?: string;
   /** The link that opens the editor: with script it opens the dialog, without it goes to `href`. */
   trigger: { readonly label: string; readonly href: string } | null;
   /** Draw the trigger as this icon alone, its label the hidden name (the card's own controls). */
@@ -80,6 +86,8 @@ let {
   max: number;
   /** The README's maxlength (CardEditLimits text). */
   textMax?: number;
+  /** The page's code colouring limits (CardEditLimits codeColours): the preview colours what the page will. */
+  codeColours?: CodeColourLimits;
   enhance?: Enhance;
 } = $props();
 
@@ -89,7 +97,15 @@ let pending = $state(false);
  * A refused save, shown inside the editor: beside the field it blames when the answer names one the form holds, in
  * words for that field, else as the catalog's words above the form.
  */
-type Refused = { readonly message: string; readonly field?: string; readonly fieldText?: string };
+type Refused = {
+  readonly message: string;
+  readonly field?: string;
+  readonly fieldText?: string;
+  /** The grant lacks a permission: the refusal links to /allow in a new tab, and the editor keeps what was typed. */
+  readonly allow?: boolean;
+};
+/** The refusal of a write the member's grant does not cover (routes/[did=did]/+page.server.ts write). */
+const SCOPE_MISSING = "card.scope_missing";
 let refused: Refused | undefined = $state(fromPanel());
 let summary: HTMLElement | undefined = $state();
 let triggerLink: HTMLAnchorElement | undefined = $state();
@@ -107,6 +123,7 @@ function fromPanel(): Refused | undefined {
   const failed = panel?.refusal;
   if (failed === undefined) return undefined;
   const { code, message, field } = failed;
+  if (code === SCOPE_MISSING) return { message, allow: true };
   return field === undefined ? { message } : { message, field, fieldText: fieldText(code, message) };
 }
 
@@ -148,7 +165,8 @@ async function showRefusal(data: Record<string, unknown> | undefined) {
   const form = document.getElementById(formId);
   const target = field === undefined || !(form instanceof HTMLFormElement) ? null : form.elements.namedItem(field);
   const text = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
-  refused = text === null ? { message } : { message, field, fieldText: fieldText(code, message) };
+  if (code === SCOPE_MISSING) refused = { message, allow: true };
+  else refused = text === null ? { message } : { message, field, fieldText: fieldText(code, message) };
   // A refusal that blames the README text shows it on the Write tab, where the field can take focus.
   if (text !== null) tab = "write";
   await tick();
@@ -197,6 +215,20 @@ function showTab(value: string) {
   tab = value;
 }
 const previewBlocks = $derived(tab === "preview" ? parseReadme(previewText) : []);
+// The preview's code in the page's colours once its language has loaded; plain until then.
+let colouredPreview = $state<Awaited<ReturnType<typeof colourBlocks>> | null>(null);
+$effect(() => {
+  const blocks = previewBlocks;
+  let current = true;
+  colouredPreview = null;
+  if (codeColours === undefined) return;
+  colourBlocks(blocks, codeColourBudget(codeColours)).then((coloured) => {
+    if (current) colouredPreview = coloured;
+  });
+  return () => {
+    current = false;
+  };
+});
 const formId = $props.id();
 /** The Text editor's dialog (P1.21u): wide on a desktop, the whole screen on a phone, by the stock Dialog's own classes. */
 const TEXT_DIALOG = "sm:max-w-3xl max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:rounded-none max-sm:border-0";
@@ -267,7 +299,14 @@ const buttonRows = $derived([
 {#snippet refusal()}
   {#if refused !== undefined && (refused.field === undefined || panel !== undefined)}
     <div bind:this={summary} tabindex="-1" class="outline-none">
-      <Alert.Root variant="destructive"><Alert.Description>{refused.message}</Alert.Description></Alert.Root>
+      <Alert.Root variant="destructive">
+        <Alert.Description>
+          <p>{refused.message}</p>
+          {#if refused.allow}
+            <a href="/allow" target="_blank" rel="noopener">{CARD_EDIT.allowAccess}<Icon name="external" size={16} label={CARD_EDIT.newTab} /></a>
+          {/if}
+        </Alert.Description>
+      </Alert.Root>
     </div>
   {/if}
 {/snippet}
@@ -280,7 +319,7 @@ const buttonRows = $derived([
 
 {#snippet fields()}
   <form id={formId} method="POST" {action} class="grid gap-4" use:enhance={saveCard} oninvalidcapture={() => showTab("write")}>
-    {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{/if}
+    {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{:else if newKey !== undefined}<input type="hidden" name="newKey" value={newKey} />{/if}
     <input type="hidden" name="kind" value={kind} />
     <Choice label={CARD_EDIT.width} name="width" value={typedOr("width", width)} options={WIDTHS} />
     <Choice label={CARD_EDIT.surface} name="surface" value={typedOr("surface", surface)} options={SURFACES} />
@@ -292,10 +331,10 @@ const buttonRows = $derived([
         </Tabs.List>
         <!-- An inactive tab's panel stays in the page, hidden (bits-ui 2.20.6 tabs-content.svelte), so the text still posts. -->
         <Tabs.Content value="write">
-          <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
+          <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} {codeColours} required />
         </Tabs.Content>
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
-          {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={previewBlocks} />{/if}
+          {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={colouredPreview ?? previewBlocks} />{/if}
         </Tabs.Content>
       </Tabs.Root>
     {:else if kind === "readme"}

@@ -179,7 +179,8 @@
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
           "email_checked_at": ["SELECT", "UPDATE"],
-          "issuer_origin": ["SELECT", "INSERT"]
+          "issuer_origin": ["SELECT", "INSERT"],
+          "notifications_seen_at": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -213,7 +214,8 @@
           "privacy_version": ["SELECT", "INSERT", "UPDATE"],
           "privacy_notice_seen_version": ["SELECT", "UPDATE"],
           "age_confirmed_at": ["SELECT", "INSERT", "UPDATE"],
-          "storage_quota_bytes": ["SELECT"]
+          "storage_quota_bytes": ["SELECT"],
+          "notifications_seen_at": ["SELECT", "UPDATE"]
         }
       }
     },
@@ -275,7 +277,8 @@
           "did": ["SELECT"],
           "reason": ["SELECT"],
           "topic": ["SELECT"],
-          "created_at": ["SELECT"]
+          "created_at": ["SELECT"],
+          "seen": ["SELECT"]
         }
       }
     },
@@ -298,7 +301,8 @@
           "topic": ["SELECT", "INSERT"],
           "dedupe_key": ["SELECT", "INSERT"],
           "older_sessions_only": ["SELECT", "INSERT"],
-          "created_at": ["SELECT"]
+          "created_at": ["SELECT"],
+          "seen_at": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -411,6 +415,19 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "idx.page": {
+      "indexer": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "uri": ["SELECT", "INSERT", "UPDATE"],
+          "cid": ["SELECT", "INSERT", "UPDATE"],
+          "rev": ["SELECT", "INSERT", "UPDATE"],
+          "record": ["SELECT", "INSERT", "UPDATE"],
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "idx.record_blob": {
       "indexer": {
         "columns": {
@@ -439,7 +456,8 @@
           "rev": ["SELECT", "INSERT", "UPDATE"],
           "record": ["SELECT", "INSERT", "UPDATE"],
           "position": ["SELECT", "INSERT", "UPDATE"],
-          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"],
+          "bytes": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -454,13 +472,23 @@
         }
       }
     },
+    "idx.public_page": {
+      "web": {
+        "columns": {
+          "did": ["SELECT"],
+          "record": ["SELECT"]
+        }
+      }
+    },
     "idx.public_section": {
       "web": {
         "columns": {
           "did": ["SELECT"],
           "rkey": ["SELECT"],
           "cid": ["SELECT"],
-          "record": ["SELECT"]
+          "record": ["SELECT"],
+          "position": ["SELECT"],
+          "bytes": ["SELECT"]
         }
       }
     },

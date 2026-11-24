@@ -30,6 +30,7 @@ let {
   shape,
   here,
   refusal,
+  newKey,
   enhance = () => undefined,
 }: {
   request: CardPanelRequest;
@@ -40,6 +41,8 @@ let {
   here: string;
   /** The page's action answer after a refused write, with what was typed when it was a card form. */
   refusal?: (Refusal & { readonly values?: Readonly<Record<string, string>> }) | null;
+  /** The page's newCardKey, for the card the add form adds. */
+  newKey?: string;
   enhance?: Enhance;
 } = $props();
 
@@ -77,6 +80,7 @@ const panelState = (stay: string): CardPanelState => ({
     submit={CARD_EDIT.save}
     max={maxRows(limits, card.content.kind)}
     textMax={limits.text}
+    codeColours={limits.codeColours}
     {enhance}
   />
 {:else if request.kind === "remove" && card !== undefined}
@@ -108,6 +112,8 @@ const panelState = (stay: string): CardPanelState => ({
     submit={CARD_EDIT.add}
     max={maxRows(limits, adding.kind)}
     textMax={limits.text}
+    codeColours={limits.codeColours}
+    {newKey}
     {enhance}
   />
 {:else if request.kind === "add"}

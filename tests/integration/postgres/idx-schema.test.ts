@@ -92,7 +92,7 @@ describe("idx schema", () => {
         WHERE c.relnamespace = 'idx'::regnamespace AND c.relkind = 'r' AND a.attname IN ('rev', 'last_rev')
         ORDER BY c.relname`,
     );
-    expect(revs).toEqual(["account false C", "profile true C", "section true C"]);
+    expect(revs).toEqual(["account false C", "page true C", "profile true C", "section true C"]);
   });
 
   test("rev_collation_bytewise", async () => {
@@ -105,7 +105,7 @@ describe("idx schema", () => {
     await withClient(indexer, null, (c) =>
       c.query(
         `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
-         SELECT 'at://' || $1 || '/sh.unset.section/' || r, $1, r, 'bafysection', r, '{}', now()
+         SELECT 'at://' || $1 || '/sh.unset.card/' || r, $1, r, 'bafysection', r, '{}', now()
            FROM unnest($2::text[]) WITH ORDINALITY AS u (t, n), LATERAL (SELECT t || n AS r) x`,
         [A, tids],
       ),

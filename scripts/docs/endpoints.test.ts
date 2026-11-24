@@ -81,6 +81,19 @@ test("policy_fields_and_methods_are_read_without_importing_handlers", async () =
   expect(text).toContain("| not recorded | not recorded | not recorded | not recorded | not recorded |");
 });
 
+// A route whose own page does not run SvelteKit's client (ADR 0116 point 4; policy.ts `client`) says so beside its group.
+test("a_page_that_runs_no_client_says_so_in_its_group", async () => {
+  const root = fixture();
+  const handler = 'export const GET = () => new Response("ok");';
+  addRoute(root, "/shown", handler, '{ group: "public", client: false, limit: "default" }');
+  expect(await page(root)).toContain("| GET | `/shown` | public, runs no client | not recorded | default |");
+  addRoute(root, "/odd", handler, '{ group: "public", client: "yes", limit: "default" }');
+  expect(await loadEndpointModel(root)).toEqual({
+    ok: false,
+    problems: [`${ROUTES}/odd/policy.ts client is not false`],
+  });
+});
+
 test("page_components_add_get_and_comments_do_not_add_methods", async () => {
   const root = fixture();
   addRoute(root, "/form", "// export const DELETE = () => {};\nconst post = () => {}; export { post as POST };");

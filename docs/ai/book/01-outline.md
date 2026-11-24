@@ -266,11 +266,26 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21j | Limits sized for thousands of members; web marks its PDS calls, ADR 0071 (added 2026-11-20) | trusted | P1.21h | `phase-1.md` |
 | P1.21u | Write the Text card in a Milkdown editor; CSP adds ProseMirrorClipboard, ADR 0073 (added 2026-11-20) | trusted | P1.21f | `phase-1.md` |
 | P1.21w | Serve the docs site at docs.unset.sh from the staging edge, ADR 0075 (added 2026-11-20) | [SEC], trusted | — | `phase-1.md` |
+| P1.21t | Retire the app docs mirror at the organisation cutover, ADR 0112 (added 2026-11-22) | trusted | P1.21w | `phase-1.md` |
 | P1.21x | Keep one profile layout, sticky site header, View as public, ADR 0077 (added 2026-11-20) | trusted | P1.21o | `phase-1.md` |
 | P1.21v | Edit Text cards in place, one Save for all through applyWrites, ADR 0074 (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
+| P1.21r | Fix the in-place editor's first press and the way back; owner's link from the public page (added 2026-11-21) | — | P1.21v | `phase-1.md` |
+| P1.21s | Make Markdown in a Text card behave as typed: paste, empty lines, quotes, line breaks, links, pasted HTML (added 2026-11-21) | — | P1.21r | `phase-1.md` |
 | P1.21y | Settings › Privacy with Search and AI and a search result preview (added 2026-11-20) | trusted | P1.21b | `phase-1.md` |
 | P1.21z | Make the Text editor's buttons toggle and show state; heading sizes in a menu (added 2026-11-20) | trusted | P1.21u | `phase-1.md` |
+| P1.21k | Parse Text cards with micromark, the parser the editor uses, so block boundaries agree (added 2026-11-22) | trusted | P1.21v | `phase-1.md` |
 | P1.22a | Who sees your page: Public, Signed-in members only, Only me; the limited page, ADR 0078 (added 2026-11-20) | trusted | P1.21y | `phase-1.md` |
+| P1.22c | Say "Privacy saved" once the public page follows | — | P1.22a | `phase-1.md` |
+| P1.22d | Record that our own script may run on every page, with a plain fallback, ADR 0114 (added 2026-11-23) | — | — | `phase-1.md` |
+| P1.22h | Test what a public page's data address answers, tests only (added 2026-11-23) | — | — | `phase-1.md` |
+| P1.22e | Run the client on the public profile under the app's script policy (added 2026-11-23) | [SEC], trusted | P1.22d, P1.22h | `phase-1.md` |
+| P1.22f | Check that visitors who share an address fit the edge's file allowance, tests only (added 2026-11-23) | — | P1.22e | `phase-1.md` |
+| P1.22g | Open the bell's panel on every page that runs the client (added 2026-11-23) | [SEC], trusted | P1.22k | `phase-1.md` |
+| P1.22i | Record that every page runs our script, the error page included, ADR 0116 (added 2026-11-23) | — | P1.22d | `phase-1.md` |
+| P1.22j | Name every page's script setting and pin every answer's header, no behaviour change (added 2026-11-23) | trusted | P1.22e | `phase-1.md` |
+| P1.22k | Turn the default round: the error page runs the client (added 2026-11-23) | [SEC], trusted | P1.22i, P1.22j | `phase-1.md` |
+| P1.22l | Run the client on the sign-in, join and welcome pages (added 2026-11-23) | [SEC], trusted | P1.22k | `phase-1.md` |
+| P1.22m | Move the navbar's controls to the stock components (added 2026-11-23) | — | P1.22g | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
@@ -584,7 +599,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.27a | Keep read notifications for 30 days (overtaken by P2.27b) | [SEC] | P2.27 | `phase-2.md` |
 | P2.27b | Notifications: stay until dismissed, the full-window page | [SEC] | P2.27 | `phase-2.md` |
 | P2.27c | Sign-in history: when each sign-in happened, kept 30 days | [SEC] | P2.27b | `phase-2.md` |
+| P2.27d | Show the member's initial on notification pages | — | P2.27c | `phase-2.md` |
 | P2.28 | Ask for a second check before sensitive actions (the list of actions that need it) | [SEC] [ALEX] | P2.27c | `phase-2.md` |
+| P2.27e | Clear the bell's count once the list is seen | [SEC] | P2.27c | `phase-2.md` |
+| P2.27f | Count a notification seen on one browser as seen on all | [SEC] | P2.27e | `phase-2.md` |
+| P2.27g | Clear a sign-in alert seen on any older browser | [SEC] | P2.27f | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13d | Keep next and handle after a sign-in theme change | [SEC] | P1.25f | `phase-2.md` |
@@ -1512,8 +1531,12 @@ Arachnid application, and the Phase 1 exit.
 | P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
 | P1.38e | Let C18 accept the dev file certificate | [SEC] [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
+| P1.38v | Name only files on the tree in the lint rules | — | — | `phase-1.md` |
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
+| P1.38w | Fix three local test failures at their cause: lexicon build temp folder, object store disk, leaked containers (added 2026-11-21) | — | — | `phase-1.md` |
+| P1.38x | Mark a multi-line ADR status superseded | [SEC] trusted | — | `phase-1.md` |
+| P1.38y | Generate the ADR index from each ADR | [SEC] trusted [ALEX] (typed line) | — | `phase-1.md` |
 | P1.39a | Save the reviewed `caddy adapt` output for each env | [SEC] trusted | — | `phase-1.md` |
 | P1.39b | Judge the adapted config with the edge rules | [SEC] trusted | P1.39a | `phase-1.md` |
 | P1.39c | Run `caddy adapt` in the edge image from C18 | [SEC] | P1.39b | `phase-1.md` |
@@ -1703,8 +1726,11 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.10 | `api` entrypoint: public XRPC | [SEC] | P3.05, P1.06 | `phase-3.md` |
 | P3.11 | Service-auth JWT verifier; signed-in `getTimeline` and `searchProfiles` | [SEC] | P3.10, P1.16 | `phase-3.md` |
 | P3.12 | Public `/@handle` and `/@handle/p/{rkey}` | [SEC] | P3.09, P2.20, P2.02 | `phase-3.md` |
+| P3.12t | Refuse profile text the public page cannot show | — | P3.12 | `phase-3.md` |
 | P3.13 | Handle hosts | — | P3.12 | `phase-3.md` |
+| P3.12u | Fix small rough edges from the staging test | — | P3.12 | `phase-3.md` |
 | P3.14 | Directory and search | — | P3.05 | `phase-3.md` |
+| P3.12v | Keep every card a member can save on the public page | [SEC] [ALEX] (typed line) | P3.12 | `phase-3.md` |
 | P3.14s | Web search through SearXNG behind the search bar (ADR 0035) | [SEC] [ALEX] (typed line) | P3.14, P1.18a | `phase-3.md` |
 | P3.15 | Report intake and the public notice form | [MOD] [SEC] | P3.12, P3.06, P1.15, P1.14, P1.14d | `phase-3.md` |
 | P3.16 | `pds-admin` v1: envelope pipeline, key model and migration from P2.09 | [SEC] | P3.00, P2.09, P1.15 | `phase-3.md` |

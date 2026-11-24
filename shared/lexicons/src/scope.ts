@@ -1,7 +1,7 @@
 // The OAuth scope strings (P1.31, plan §3 "Granular permissions + permission sets", narrowed by ADR 0039). Our own
 // collections come from the permission set; what a set may not hold (blob, account) is requested beside it.
 // Syntax: atproto.com/specs/permission and @atproto/oauth-scopes 0.5.13, dist/scopes/include-scope.js.
-import authApp from "../schemas/sh.unset.authApp.json" with { type: "json" };
+import authFull from "../schemas/sh.unset.authFull.json" with { type: "json" };
 
 /**
  * Scopes requested beside the permission set: an image upload for the avatar and banner, and the e-mail address. ADR
@@ -13,7 +13,7 @@ type Permission = { resource: string; collection?: string[]; action?: string[] }
 
 /** The full scope: our permission set by reference, then the scopes it cannot hold. */
 export function scopeString(): string {
-  return ["atproto", `include:${authApp.id}`, ...OUTSIDE_THE_SET].join(" ");
+  return ["atproto", `include:${authFull.id}`, ...OUTSIDE_THE_SET].join(" ");
 }
 
 /**
@@ -22,7 +22,7 @@ export function scopeString(): string {
  * with this (@atproto/oauth-provider, request/request-manager.ts:293-310).
  */
 export function scopeStringFallback(): string {
-  return ["atproto", ...authApp.defs.main.permissions.flatMap(granular), ...OUTSIDE_THE_SET].join(" ");
+  return ["atproto", ...authFull.defs.main.permissions.flatMap(granular), ...OUTSIDE_THE_SET].join(" ");
 }
 
 function granular(permission: Permission): string[] {

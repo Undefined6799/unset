@@ -2584,6 +2584,19 @@ the time or edit a row, the sweep), the route's denial and largest form, the cal
 erasure counts the rows, the e2e page and the no-script page.
 **Not in this step:** the second check before deleting (P2.28).
 
+### P2.27d — Show the member's initial on notification pages
+Tags: —            Depends on: P2.27c
+`interfaces/web/src/routes/{notifications,notifications/sign-ins,invite}/+page.server.ts` and the notifications'
+empty-list hint; staging break test 2026-11-21, bugs 3 and 4.
+
+**What:** those three pages passed their own shell `account` with a path and no name, which replaces the root
+layout's, so the header's account button drew the person icon as if signed out. They now leave the account to the
+layout, and `shell-account.test.ts` fails on any page shell that names an account without its name. A sign-in's entry
+is shown only in the browsers signed in before it (migration 0036 `older_sessions_only`), by design, so the browser
+that signed in never sees its own; the empty list's hint now says so.
+
+---
+
 ### P2.28 — Ask for a second check before sensitive actions
 Tags: [SEC] [ALEX]            Depends on: P2.27c
 Alex 2026-11-21 00:58Z: "make a note about like the things that we believe will require 2FA, and then when we build
@@ -2596,6 +2609,63 @@ own email 2FA) rather than a second-factor store of our own; the choice is Alex'
 
 **What:** one check the interface runs before each listed action, the same everywhere, so adding an action is one
 line. Until it exists, the listed actions run on the signed-in session alone (nothing is live, Alex 00:58Z).
+
+### P2.27e — Clear the bell's count once the list is seen
+Tags: [SEC]            Depends on: P2.27c
+Alex 2026-11-21 05:16Z: the number should disappear when he opens the bell and come back only for newer
+notifications, with no need to dismiss. ADR 0085, Proposed; migration 0039.
+
+**What:** a seen mark per browser session (`app.session.notifications_seen_at`), moved forward by opening the bell
+(a background POST with script) or loading `/notifications`, never past an entry this browser may see. The badge
+counts entries newer than the mark; seen ones stay listed until dismissed.
+**Tests:** the mark against real Postgres as `web` (this browser's own, never back, nothing for a later browser's or
+another member's id), the page clearing its own browser's count only, a newer entry counting again, the `seen` form
+refused cross-site and harmless from the alert's new browser.
+
+### P2.27f — Count a notification seen on one browser as seen on all
+Tags: [SEC]            Depends on: P2.27e
+Staging bug hunt 2026-11-21: the bell's count cleared per browser, so an entry seen on one device still counted on
+another. Alex 2026-11-21 19:36Z: seen once should count across the whole account. ADR 0090, Proposed; migration 0041.
+
+**What:** a seen mark on the account (`app.account.notifications_seen_at`), moved with the browser's own mark by the
+same look. `app.inbox.seen` takes either mark, except that a sign-in alert (sent `older_sessions_only`) is covered only
+by the mark of a browser that showed it, so the browser a sign-in is about cannot clear it anywhere.
+**Tests:** against real Postgres as `web` (a look counts on every browser, never back; the new browser's look never
+covers the alert; an alert seen on one browser still counts on another), the page clearing every browser's count, and
+the alert still counting on the member's other browsers.
+
+### P2.27g — Clear a sign-in alert seen on any older browser
+Tags: [SEC]            Depends on: P2.27f
+Staging test 2026-11-21 23:50Z: an alert seen on one browser still counted on the others, and the bell on home sent
+no mark. Alex 2026-11-21 23:56Z: an alert seen on any browser signed in before it counts as seen everywhere; the bell
+on a page with no script becomes a link. ADR 0108, Proposed; migration 0043.
+
+Threats (SE-1):
+- Data flow: browser → (trust boundary: CSRF gate, session) → web `seen` action or `/notifications` GET with Fetch
+  Metadata → `MARK_SEEN`, one statement as `web` → `app.session`, `app.account`, `app.notification` → `app.inbox` →
+  each browser's bell.
+- S (spoofing): a browser posing as an older one. The session id hash is the gate's, and `app.inbox` shows an
+  `older_sessions_only` row only to sessions that began before it. Test `an_intruder_cannot_clear_the_alert_about_its_first_sign_in`.
+- T (tampering): another member's id, or an alert this browser may not see. `VISIBLE_IDS` names this browser and DID.
+  Tests `a_later_browser_or_another_member_marks_nothing_seen`, `opening_the_bell_marks_seen_only_what_this_browser_may_see`.
+- R (repudiation): none new; marking seen deletes nothing, and the alert stays listed until dismissed.
+- I (disclosure): none; the mark is read through the same view, and no new field reaches a browser.
+- D (denial of service): one statement per look under the existing `notifications` limit; row locks order two
+  browsers (DA-4).
+- E (elevation): an older browser held by an intruder (a stolen laptop) can clear an alert everywhere. It can
+  already dismiss it, which deletes it for every browser (ADR 0081), so the mark adds no power. Alex accepted this
+  by choosing it (2026-11-21 23:56Z).
+- Forged visit: another site's link or a prefetch marks nothing (unchanged, `only_a_visit_from_our_pages_or_a_typed_address_marks_seen`).
+- LINDDUN, new data `app.notification.seen_at`: linkability and identifiability none beyond the member's own row;
+  it is not exported, and it goes with the row (dismissal, 30-day sweep, `core.erase_did`); ROPA Accounts row updated.
+- ASVS 5.0: V8.2.2 and V8.3.1 rows gain the tests above.
+
+**What:** a seen mark on each sign-in alert (`app.notification.seen_at`), set by the same look that moves the
+browser's and the account's marks, only on alerts that browser may see. On a page outside the CSP group `app` the
+bell, in the header and in More actions, is a link to `/notifications` and its panel is not drawn.
+**Tests:** as `web`, an alert shown on an older browser seen everywhere and an intruder's second browser never
+covering the first alert; on the routes, the staging case, the intruder signing in twice and the bell as a link on
+pages with no script; nojs.spec.ts for the link in a browser.
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
@@ -3295,7 +3365,7 @@ Asked: the P2.10r follow-up ruled 2026-11-20; plan agreed 2026-11-21 (no new ADR
   call and the one reason table).
 Where: `interfaces/web/src/routes/request-invite/+page.server.ts` (after a failed mail),
   `interfaces/web/src/lib/server/notification-sources.ts` `sendInviteMailFailed`, reason `invite_mail_failed` in
-  `domains/notifications` `REASONS` and `apps/web/lib/notifications/reasons.ts`, migration 0039 (the reason CHECK),
+  `domains/notifications` `REASONS` and `apps/web/lib/notifications/reasons.ts`, migration 0044 (the reason CHECK),
   config `INVITE_REQUEST_OWNER_DID` (required when `INVITE_REQUESTS=on`).
 Goal: a failed invite-request mail puts one entry a UTC day (its dedupe key) in the owner's inbox, linking to `/invite`;
   it names no visitor. The visitor still reads "your request is in".
