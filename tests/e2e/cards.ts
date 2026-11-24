@@ -40,6 +40,28 @@ export async function deleteCard(page: Page, name: string) {
 }
 
 /** The Text card's posted markdown: the plain field the rich editor writes into (P1.21u). */
+type Painted = {
+  getComputedStyle: (element: unknown) => { backgroundColor: string };
+};
+type Animated = { getAnimations: (options: { subtree: boolean }) => { finished: Promise<unknown> }[] };
+const background = (locator: Locator) =>
+  locator.evaluate((el) => (globalThis as unknown as Painted).getComputedStyle(el).backgroundColor);
+
+/**
+ * The open stock menu's highlighted row is painted differently from the menu, in light and dark: the theme's --accent
+ * equals --popover, so the stock highlight alone would not show. Read once the fade-in has finished.
+ */
+export async function expectHighlightedRowShows(page: Page, menu: Locator) {
+  const highlighted = menu.locator("[data-highlighted]");
+  await expect(highlighted).toHaveCount(1);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await menu.evaluate((el) => Promise.all((el as Animated).getAnimations({ subtree: true }).map((a) => a.finished)));
+    expect(await background(highlighted), colorScheme).not.toBe(await background(menu));
+  }
+  await page.emulateMedia({ colorScheme: null });
+}
+
 export const postedText = (dialog: Locator) => dialog.locator('textarea[name="text"]');
 
 /**

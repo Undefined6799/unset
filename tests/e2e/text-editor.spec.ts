@@ -3,7 +3,15 @@
 // policy under the app's real CSP with no violation; text the member opens and saves untouched is stored as it was;
 // on a phone the editor fills the screen with its formatting bar at the top. The cards added are deleted again.
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { addCard, deleteCard, OWN_PAGE, paceWrites, postedText, writeText } from "./cards.ts";
+import {
+  addCard,
+  deleteCard,
+  expectHighlightedRowShows,
+  OWN_PAGE,
+  paceWrites,
+  postedText,
+  writeText,
+} from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 import { phone } from "./phone.ts";
 
@@ -89,6 +97,11 @@ test("the_heading_menu_sets_each_size_and_back_to_normal_text", async ({ page })
     await expect(page.getByRole("menuitemcheckbox", { name: style })).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
   }
+  // A keyboard member sees which row they are on.
+  await dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" }).click();
+  await page.keyboard.press("ArrowDown");
+  await expectHighlightedRowShows(page, page.getByRole("menu"));
+  await page.keyboard.press("Escape");
   // Focus is back in the text, so typing goes on where it was.
   await editor.press("End");
   await page.keyboard.type("!");
