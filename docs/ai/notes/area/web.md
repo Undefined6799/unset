@@ -99,6 +99,9 @@ reaches the page. A formula KaTeX cannot read, longer than 2,000 characters, or 
 20,000 elements is its source. The math runs inside the same read (and deadline) as the Markdown; in the browser it
 is in the Preview's chunk only (about 119 KiB gzip with the reader), never on a first load. Between single dollars the page keeps
 Pandoc's rule, as Crepe 7.23.0 does (`remarkInlineMathGuardPlugin`), so "$5 and $10" stays words; the editor must too.
+micromark has already taken a refused span ("$5 **each** or $") as one node, so the page reads the Markdown between
+its dollars again, without math, rather than showing it as written (Codex on #2019); Crepe shows it as written. Each
+read again spends one of the card's 200 formulas, so thousands of refused spans cost what formulas may.
 The rule lives in `math-syntax.ts`, which imports nothing, so the editor shares it without KaTeX. The editor
 (`lib/editor/math.ts`) reads with remark-math 6.0.0: a formula in a line is a `math_inline` atom drawn by the same
 `drawMath` (KaTeX loads with the first formula), and a `$$` block is a code block with language `math`, edited in

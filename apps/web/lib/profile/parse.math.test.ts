@@ -44,6 +44,36 @@ describe("math in the text", () => {
     expect(parseInline("$$ x $$")).toEqual([{ kind: "math", tex: "x", tree: tree("x") }]);
   });
 
+  // Codex on #2019: micromark takes "$5 **each** or $" as one span before the rule refuses it, so the words between
+  // two prices were shown as written, their bold or link lost. A refused span is its dollars and the Markdown between
+  // them, read again: in a line, across lines, and in a quote, whose marks are no part of it.
+  test("bold, links and code between two prices stay what they are", () => {
+    expect(parseInline("$5 **each** or $10")).toEqual([
+      text("$5 "),
+      { kind: "strong", children: [text("each")] },
+      text(" or $10"),
+    ]);
+    expect(parseInline("from $5 [shop](https://example.com) `x` $ to")).toEqual([
+      text("from $5 "),
+      { kind: "link", href: "https://example.com/", children: [text("shop")] },
+      text(" "),
+      { kind: "code", text: "x" },
+      text(" $ to"),
+    ]);
+    expect(parseInline("a $ _b_ $ c")).toEqual([text("a $ "), { kind: "em", children: [text("b")] }, text(" $ c")]);
+    // As a quote reads without math: one paragraph, its soft line break kept.
+    expect(parseReadme("> $5 **each**\n> or $10")).toEqual(parseReadme("> \\$5 **each**\n> or \\$10"));
+    expect(parseReadme("> $5 **each**\n> or $10")).toEqual([
+      { kind: "quote", paragraphs: [[text("$5 "), { kind: "strong", children: [text("each")] }, text("\nor $10")]] },
+    ]);
+  });
+
+  test("a card reads again at most as many refused spans as it may draw formulas, the rest as written", () => {
+    const inline = parseInline("$5 **b** $ ".repeat(250));
+    expect(inline.filter((node) => node.kind === "strong")).toHaveLength(200);
+    expect(inline.at(-1)).toEqual(text(` $ ${"$5 **b** $ ".repeat(50).trimEnd()}`));
+  });
+
   test("an escaped dollar is a dollar", () => {
     expect(parseInline("\\$5 or \\$6")).toEqual([text("$5 or $6")]);
   });
