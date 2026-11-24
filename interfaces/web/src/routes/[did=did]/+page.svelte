@@ -394,6 +394,7 @@ function dropDrafts() {
             {#key `${generation}:${card.key}:${remounts.get(card.key) ?? 0}`}
               <CardText
                 blocks={card.shown.blocks}
+                lines={card.shown.tableLines}
                 name={cardName(card.content)}
                 value={textOf(card)}
                 onedit={(markdown) => change(card.key, { fields: { text: markdown } })}
