@@ -16,6 +16,12 @@ export type NotificationsView =
     }
   | { readonly state: "failed" };
 
+/**
+ * The bell's data in the shell. A page that runs the client is sent the entries, which its panel draws; a page that
+ * runs none draws the bell as a link with its count, so it is sent the count and no entry (book P1.22g, rule SE-3).
+ */
+export type BellView = NotificationsView | { readonly state: "count"; readonly count: number };
+
 const UTC = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
   timeStyle: "short",
