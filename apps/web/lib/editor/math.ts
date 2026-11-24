@@ -15,13 +15,13 @@
 // page shows as "$5".
 
 import { type Editor, remarkStringifyOptionsCtx } from "@milkdown/core";
-import { codeBlockSchema } from "@milkdown/preset-commonmark";
+import { codeBlockSchema, inlineCodeSchema } from "@milkdown/preset-commonmark";
 import { nodeRule } from "@milkdown/prose";
 import { textblockTypeInputRule } from "@milkdown/prose/inputrules";
 import type { Node as ProseNode } from "@milkdown/prose/model";
-import { type EditorState, NodeSelection, TextSelection } from "@milkdown/prose/state";
+import { type EditorState, NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
 import type { NodeView } from "@milkdown/prose/view";
-import { $command, $inputRule, $nodeSchema, $remark, $view } from "@milkdown/utils";
+import { $command, $inputRule, $nodeSchema, $prose, $remark, $view } from "@milkdown/utils";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { mathToMarkdown } from "mdast-util-math";
 import remarkMath from "remark-math";
@@ -385,6 +385,32 @@ export function writeMath(ctx: Ctx) {
   });
 }
 
+/**
+ * A formula under inline code becomes its TeX as code. Inline code from the bar or its key marks a selected formula
+ * too, and Milkdown 7.23.0's inline code writer writes the node's text and nothing else (preset-commonmark lib/index.js
+ * inlineCodeSchema toMarkdown), which a formula, its TeX an attribute, has none of, so the save lost it.
+ */
+const formulaAsCode = $prose(
+  (ctx) =>
+    new Plugin({
+      key: new PluginKey("formulaAsCode"),
+      appendTransaction(transactions, _before, state) {
+        if (!transactions.some((transaction) => transaction.docChanged)) return null;
+        const code = inlineCodeSchema.type(ctx);
+        const formula = mathInlineSchema.type(ctx);
+        const tr = state.tr;
+        state.doc.descendants((node, pos) => {
+          if (node.type !== formula || code.isInSet(node.marks) === undefined) return;
+          const from = tr.mapping.map(pos);
+          const value = String(node.attrs.value);
+          if (value === "") tr.delete(from, from + node.nodeSize);
+          else tr.replaceWith(from, from + node.nodeSize, state.schema.text(value, node.marks));
+        });
+        return tr.docChanged ? tr : null;
+      },
+    }),
+);
+
 /** Everything math adds to the editor, used after the presets, with writeMath in its config. */
 export const math = [
   mathSyntax,
@@ -392,6 +418,7 @@ export const math = [
   mathInlineSchema,
   mathInlineView,
   toggleMathCommand,
+  formulaAsCode,
   inlineMathRule,
   mathBlockRule,
 ].flat();
