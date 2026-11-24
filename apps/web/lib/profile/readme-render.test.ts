@@ -12,9 +12,9 @@ import { compile } from "svelte/compiler";
 import { render } from "svelte/server";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { parseReadme, plainText } from "./parse.ts";
-import type { Block } from "./types.ts";
+import type { Block, TableLines } from "./types.ts";
 
-type Readme = Component<{ blocks: readonly Block[] }>;
+type Readme = Component<{ blocks: readonly Block[]; lines?: TableLines }>;
 let Readme: Readme;
 // The compiled module imports svelte/internal/server, so it is written beside this file, where that resolves.
 const dir = mkdtempSync(join(import.meta.dirname, ".readme-render-"));
@@ -63,6 +63,34 @@ describe("Readme", () => {
       "<div><table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td><strong>2</strong></td></tr></tbody></table></div>",
     );
     expect(html("| a |\n| --- |")).toBe("<div><table><thead><tr><th>a</th></tr></thead></table></div>");
+  });
+
+  // ADR 0110 point 2: the card's four switches draw every table in it. Our look with none on: a line under the header
+  // and between rows, no column lines, no outline.
+  test("a table's lines follow the card's switches", () => {
+    const NONE = { hideHeaderLine: false, hideRowLines: false, showColumnLines: false, showOutline: false };
+    const tag = (src: string, lines: TableLines | undefined, name: string): string[] => {
+      const { body } = render(Readme, {
+        props: { blocks: parseReadme(src), ...(lines === undefined ? {} : { lines }) },
+      });
+      return [...body.matchAll(new RegExp(`<${name} class="([^"]*)"`, "g"))].map((match) => match[1] ?? "");
+    };
+    const lined = (classes: string[], line: string) => classes.map((names) => names.split(" ").includes(line));
+    const TABLE = "| a | b |\n| - | - |\n| 1 | 2 |";
+
+    expect(lined(tag(TABLE, undefined, "th"), "border-b")).toEqual([true, true]);
+    expect(lined(tag(TABLE, undefined, "td"), "border-b")).toEqual([true, true]);
+    expect(lined(tag(TABLE, undefined, "td"), "border-s")).toEqual([false, false]);
+    expect(lined(tag(TABLE, undefined, "table"), "border")).toEqual([false]);
+
+    const all = { hideHeaderLine: true, hideRowLines: true, showColumnLines: true, showOutline: true };
+    expect(lined(tag(TABLE, all, "th"), "border-b")).toEqual([false, false]);
+    expect(lined(tag(TABLE, all, "td"), "border-b")).toEqual([false, false]);
+    // A column line stands between columns: the first column has none on its start side.
+    expect(lined(tag(TABLE, all, "th"), "border-s")).toEqual([false, true]);
+    expect(lined(tag(TABLE, all, "td"), "border-s")).toEqual([false, true]);
+    expect(lined(tag(TABLE, all, "table"), "border")).toEqual([true]);
+    expect(lined(tag(TABLE, NONE, "td"), "border-b")).toEqual([true, true]);
   });
 
   test("an ordered list keeps its first number", () => {

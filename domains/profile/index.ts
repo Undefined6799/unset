@@ -7,6 +7,7 @@ export {
   parseCardInput,
   pictureLink,
   reorderCards,
+  TABLE_LINE_FIELDS,
   TEXT_EDIT_BYTES,
   toCardRecord,
 } from "./card-edit.ts";
@@ -40,6 +41,7 @@ export {
   type ShownCardContent,
   type StoredCardRecord,
   shownCards,
+  type TableLines,
 } from "./cards.ts";
 export {
   AI_SEARCH_CRAWLERS,

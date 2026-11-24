@@ -31,6 +31,7 @@ import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
+import { Label } from "../ui/label/index.ts";
 import * as Tabs from "../ui/tabs/index.ts";
 import Choice from "./choice.svelte";
 import Field from "./field.svelte";
@@ -264,6 +265,35 @@ const KINDS = [
 ];
 
 const readme = $derived(content?.kind === "readme" ? content : null);
+/** The Edit form's table line boxes, as domains/profile TABLE_LINE_FIELDS names them (an app imports no domain). */
+const TABLE_LINES = ["headerLine", "rowLines", "columnLines", "outline"] as const;
+/** Whether a line's box starts checked: as last posted when the page came back refused, else as the card stores it. */
+function lineDrawn(line: (typeof TABLE_LINES)[number]): boolean {
+  if (panel?.values?.tableLines !== undefined) return panel.values[line] === "on";
+  const stored = readme?.tableLines;
+  if (line === "headerLine") return stored?.hideHeaderLine !== true;
+  if (line === "rowLines") return stored?.hideRowLines !== true;
+  return line === "columnLines" ? stored?.showColumnLines === true : stored?.showOutline === true;
+}
+// The boxes as the member sets them, so the Preview tab draws the tables as they will be saved.
+const drawn = $state(
+  Object.fromEntries(TABLE_LINES.map((line) => [line, lineDrawn(line)])) as Record<
+    (typeof TABLE_LINES)[number],
+    boolean
+  >,
+);
+// Each opening starts from the card as stored: a choice closed without saving is gone (Codex on #2026). The editor
+// stays mounted between openings (card-controls.svelte); a refused save keeps it open, and what was checked stays.
+$effect(() => {
+  if (!open) return;
+  for (const line of TABLE_LINES) drawn[line] = lineDrawn(line);
+});
+const previewLines = $derived({
+  hideHeaderLine: !drawn.headerLine,
+  hideRowLines: !drawn.rowLines,
+  showColumnLines: drawn.columnLines,
+  showOutline: drawn.outline,
+});
 const links = $derived(content?.kind === "links" ? content : null);
 const collection = $derived(content?.kind === "collection" ? content : null);
 const buttons = $derived(content?.kind === "buttons" ? content : null);
@@ -346,11 +376,29 @@ const buttonRows = $derived([
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
           {#if preview === "failed"}<p role="alert" class="text-muted-foreground">{CARD_EDIT.previewFailed}</p
             >{:else if preview?.blocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p
-            >{:else if preview !== undefined}<Readme blocks={preview.blocks} />{/if}
+            >{:else if preview !== undefined}<Readme blocks={preview.blocks} lines={previewLines} />{/if}
         </Tabs.Content>
       </Tabs.Root>
     {:else if kind === "readme"}
       <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
+    {/if}
+    {#if kind === "readme"}
+      <!-- Native boxes, so they post with no script (as choice.svelte's radios); the empty marker tells an unchecked
+           box from a save that sends none (domains/profile card-edit.ts readTableLines). -->
+      <fieldset class="grid gap-2">
+        <legend class="text-sm font-medium">{CARD_EDIT.tableLines}</legend>
+        <input type="hidden" name="tableLines" value="" />
+        <div class="flex flex-wrap gap-x-4 gap-y-2">
+          {#each TABLE_LINES as line (line)}
+            <div class="flex items-center gap-2">
+              <input type="checkbox" name={line} id="{formId}-{line}" bind:checked={drawn[line]}
+                class="size-4 shrink-0 accent-primary focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              />
+              <Label for="{formId}-{line}">{CARD_EDIT[line]}</Label>
+            </div>
+          {/each}
+        </div>
+      </fieldset>
     {:else if kind === "links"}
       <Field label={LINKS_EDIT.title} name="title" error={errorFor("title")} value={typedOr("title", links?.title ?? "")} />
       <Choice label={LINKS_EDIT.layout} name="layout" value={typedOr("layout", links?.layout ?? "list")} options={LAYOUTS} />
