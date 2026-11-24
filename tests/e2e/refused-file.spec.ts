@@ -10,16 +10,9 @@ import { INDEXED, PROD_ORIGIN } from "./pages.ts";
 
 /** The pages a shared link most often brings a crowd to: a public profile, home, and an address no route matches. */
 const PAGES = [
-  { name: "profile", path: `/@${INDEXED.did}`, status: 200, words: "Public Member", runsClient: true },
-  { name: "home", path: "/", status: 200, words: null, runsClient: false },
-  {
-    name: "unmatched",
-    path: "/no-route-matches-this",
-    status: 404,
-    words: "That page does not exist.",
-    // The error page runs the client like every other page (book P1.22k, ADR 0116).
-    runsClient: true,
-  },
+  { name: "profile", path: `/@${INDEXED.did}`, status: 200, words: "Public Member" },
+  { name: "home", path: "/", status: 200, words: null },
+  { name: "unmatched", path: "/no-route-matches-this", status: 404, words: "That page does not exist." },
 ] as const;
 
 /** The two kinds of build file a refusal can take from a page: one of its scripts, or its one stylesheet. */
@@ -47,8 +40,9 @@ for (const target of PAGES) {
       const response = await page.goto(PROD_ORIGIN + target.path);
       expect(response?.status()).toBe(target.status);
       await page.waitForLoadState("networkidle");
-      // A page without the client asks for no script, so nothing is refused there; home is one until book P1.22g.
-      expect(refused).toHaveLength(kind === "script" && !target.runsClient ? 0 : 1);
+      // Each of the three runs the client (home since book P1.22g, the error page since P1.22k), so each asks for
+      // scripts and one is refused.
+      expect(refused).toHaveLength(1);
       if (target.words !== null) {
         await expect(page.getByText(target.words, { exact: true }).filter({ visible: true }).first()).toBeVisible();
       }

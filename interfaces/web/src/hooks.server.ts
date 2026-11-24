@@ -17,7 +17,7 @@ import { openApp } from "./lib/server/app-gate.ts";
 import { services, startServices } from "./lib/server/compose.ts";
 import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
 import type { PolicyName } from "./lib/server/limits.ts";
-import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
+import { type PageGroup, type RoutePolicy, runsClient } from "./lib/server/policy.ts";
 import { refusalPage, wantsPage } from "./lib/server/refusal-page.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote, stylesheet } from "./lib/server/runtime.ts";
@@ -243,13 +243,6 @@ export const handle: Handle = async (input) => {
   }
   return withGroupHeaders(response, route, event.isDataRequest, audience);
 };
-
-/**
- * Whether a route's own page runs SvelteKit's client: every page does unless its policy says `client: false` (ADR
- * 0116 points 1 and 4), and a route with no policy has no page. Read from the route's policy alone, never from the
- * request, so nothing a visitor sends turns it on.
- */
-const runsClient = (policy: RoutePolicy | undefined): boolean => policy !== undefined && policy.client !== false;
 
 /**
  * What the response headers follow: the route's group, whether its own page runs the client, and whether SvelteKit

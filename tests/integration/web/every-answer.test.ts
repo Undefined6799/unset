@@ -133,10 +133,10 @@ const MEMBERS_PAGE = { visitor: TO_SIGN_IN, member: "200 page: script" } as cons
 /** Every route id of the build (build/server/manifest.js). The test routes are served only with TEST_ROUTES on. */
 const ROUTES: Readonly<Record<string, Row>> = {
   // Pages anyone reads.
-  "/": { get: "200 page: plain", data: PUBLIC_DATA, client: false },
+  "/": { get: "200 page: script", data: PUBLIC_DATA, client: true },
   "/@[actor]": { at: `/@${SHOWN}`, get: "200 page: script", data: PUBLIC_DATA, client: true },
-  "/legal/[document=legal]": { at: "/legal/terms", get: "200 page: plain", data: PUBLIC_DATA, client: false },
-  "/request-invite": { get: "200 page: plain", data: PUBLIC_DATA, client: false },
+  "/legal/[document=legal]": { at: "/legal/terms", get: "200 page: script", data: PUBLIC_DATA, client: true },
+  "/request-invite": { get: "200 page: script", data: PUBLIC_DATA, client: true },
   "/join": { get: "200 page: plain", data: PUBLIC_DATA, client: false },
 
   // Signing in and out. A member has nothing to sign in to and is sent on.

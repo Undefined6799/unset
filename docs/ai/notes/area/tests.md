@@ -89,6 +89,11 @@ with the in-place editor, and they sit beside the card's group of controls, not 
 visitors get opens the same page for the same member with script off (`withoutScript` in `text-read.spec.ts`) and
 reads `[data-slot='card']`.
 
+**Members' state in browser specs (P1.22g).** One test server serves a whole project's run, so a spec must leave a
+seeded member as it found them. The "bell" member's entries stay unseen: a spec that opens the bell as that member
+sets the browser offline first, so the mark fails and the count comes back (`bell-panel.spec.ts`,
+`notifications.spec.ts`). The "inbox" member's count depends on which spec ran first; read its list, never its count.
+
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
   `postgres` entry pins, the base of our gosu-free image (P1.29d), run as upstream ships it (root, then gosu).

@@ -542,9 +542,6 @@ describe("policies and logs", () => {
   // says anything for the pages under it, fails. A step that switches a page on takes its line out of this list.
   test("every_page_runs_the_client_but_the_named_ones", async () => {
     const WITHOUT: Readonly<Record<string, string>> = {
-      "": "home, until book P1.22g switches it on",
-      "legal/[document=legal]": "the legal pages, until book P1.22g",
-      "request-invite": "a plain form, until book P1.22g",
       join: "a plain form, until book P1.22l",
       login: "a plain form, until book P1.22l",
       welcome: "only ever sends a member on, until book P1.22l",
