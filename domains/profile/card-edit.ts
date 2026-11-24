@@ -27,6 +27,8 @@ import {
   PRESETS,
   parseDraftImageId,
   SURFACES,
+  TABLE_SWITCHES,
+  type TableLines,
   WIDTHS,
 } from "./cards.ts";
 import { fitsIndex } from "./index-plan.ts";
@@ -149,12 +151,46 @@ function layoutOf(raw: unknown, kind: "links" | "collection"): Field<CardLayout>
   return oneOf(LAYOUTS, raw) ? { ok: true, value: raw } : fail("card.invalid");
 }
 
+/**
+ * The Edit form's box per table line (ADR 0110 point 2), each checked when that line is drawn: our look is the first
+ * two checked. The form sends the empty marker `tableLines` with them, so an unchecked box is told from a form that has
+ * none (the in-place editor's save, which keeps the stored lines).
+ */
+export const TABLE_LINE_FIELDS = ["headerLine", "rowLines", "columnLines", "outline"] as const;
+
+/** The Edit form's boxes as switches; undefined when it sent none. A box without the marker, or not "on", is refused. */
+function readTableLines(input: Obj): Field<TableLines | undefined> {
+  const sent = TABLE_LINE_FIELDS.map((name) => input[name]);
+  if (input.tableLines === undefined && sent.every((value) => value === undefined))
+    return { ok: true, value: undefined };
+  if (input.tableLines !== "" || !sent.every((value) => value === undefined || value === "on"))
+    return fail("card.invalid");
+  const drawn = (name: (typeof TABLE_LINE_FIELDS)[number]) => input[name] === "on";
+  return {
+    ok: true,
+    value: {
+      hideHeaderLine: !drawn("headerLine"),
+      hideRowLines: !drawn("rowLines"),
+      showColumnLines: drawn("columnLines"),
+      showOutline: drawn("outline"),
+    },
+  };
+}
+
 function readReadme(input: Obj): Field<CardContent> {
   const read = field(input.text, true);
   if (!read.ok) return under("text", read);
   if (read.value === "") return fail("card.required", "text");
   if (new TextEncoder().encode(read.value).length > TEXT_EDIT_BYTES) return fail("card.too_long", "text");
-  return { ok: true, value: { kind: "readme", text: read.value } };
+  const lines = readTableLines(input);
+  if (!lines.ok) return lines;
+  return {
+    ok: true,
+    value:
+      lines.value === undefined
+        ? { kind: "readme", text: read.value }
+        : { kind: "readme", text: read.value, tableLines: lines.value },
+  };
 }
 
 function readLinks(input: Obj): Field<CardContent> {
@@ -291,7 +327,7 @@ function toLexicon(content: CardContent): Record<string, unknown> {
       return { $type, images: [pictureEntry(content, image)], fit: FIT_VALUES[content.fit] };
     }
     case "readme":
-      return { $type, text: content.text };
+      return { $type, text: content.text, ...tableSwitches(content.tableLines) };
     case "links":
       return {
         $type,
@@ -406,6 +442,26 @@ export function pictureLink(record: unknown): string | null {
   return typeof link === "string" ? link : null;
 }
 
+/** The switches that are on, as tableStyle holds them; none when the card has none on or the edit sent none. */
+function tableSwitches(lines: TableLines | undefined): Obj {
+  const on = TABLE_SWITCHES.filter((name) => lines?.[name] === true);
+  return on.length === 0 ? {} : { tableStyle: Object.fromEntries(on.map((name) => [name, true])) };
+}
+
+/**
+ * A Text card's content to write: when the edit sent its switches, they replace the stored ones and the stored cell
+ * sides (`tables`, which this version does not write yet) are kept beside them; with no switch on and no cell sides,
+ * no tableStyle is left. An edit that sent none keeps the stored tableStyle as it is.
+ */
+function withTableStyle(content: CardContent, merged: Obj, stored: Obj): Obj {
+  if (content.kind !== "readme" || content.tableLines === undefined) return merged;
+  const { tableStyle: _s, ...rest } = merged;
+  const tables = isObject(stored.tableStyle) ? stored.tableStyle.tables : undefined;
+  const switches = tableSwitches(content.tableLines).tableStyle;
+  const style = { ...(isObject(switches) ? switches : {}), ...(tables === undefined ? {} : { tables }) };
+  return Object.keys(style).length === 0 ? rest : { ...rest, tableStyle: style };
+}
+
 export type CardRecord = { readonly $type: typeof NSID; readonly createdAt: string } & Obj;
 
 /**
@@ -445,7 +501,7 @@ export function toCardRecord(
     ...kept,
     ...(surface === undefined && storedSurface !== undefined ? { surface: storedSurface } : appearance),
     ...(width === "half" ? { width } : {}),
-    content: { ...old, ...keepElementFields(fresh, sameKind, content.kind) },
+    content: withTableStyle(content, { ...old, ...keepElementFields(fresh, sameKind, content.kind) }, sameKind),
     createdAt: typeof createdAt === "string" ? createdAt : now,
   };
   if (!validateRecord(NSID, record, "read").ok) return fail("card.invalid");

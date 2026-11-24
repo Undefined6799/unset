@@ -143,7 +143,7 @@ const HANDLE_ROOM = "pointer-fine:md:gap-x-20 pointer-fine:max-[75rem]:ps-20";
           <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
             {#if controls !== undefined}<div class="flex justify-end sm:order-last">{@render controls(index)}</div>{/if}
             <div class="min-w-0 flex-1">
-              {#if text === undefined}<Readme blocks={shown.shown.blocks} />{:else}{@render text(index)}{/if}
+              {#if text === undefined}<Readme blocks={shown.shown.blocks} lines={shown.shown.tableLines} />{:else}{@render text(index)}{/if}
             </div>
           </div>
         </Card.Root>

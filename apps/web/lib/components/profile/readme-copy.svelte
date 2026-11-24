@@ -7,11 +7,11 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { CARD_TEXT } from "../../profile/messages.ts";
-import type { Block } from "../../profile/types.ts";
+import type { Block, TableLines } from "../../profile/types.ts";
 import { Button } from "../ui/button/index.ts";
 import Readme from "./readme.svelte";
 
-let { blocks }: { blocks: readonly Block[] } = $props();
+let { blocks, lines }: { blocks: readonly Block[]; lines?: TableLines } = $props();
 let scripted = $state(false);
 onMount(() => {
   scripted = true;
@@ -27,4 +27,4 @@ const copy = (text: string) => void navigator.clipboard?.writeText(text);
     onclick={() => copy(code)}>{CARD_TEXT.copy}</Button
   >{/snippet}
 
-<Readme {blocks} codeTools={scripted ? copyButton : undefined} />
+<Readme {blocks} {lines} codeTools={scripted ? copyButton : undefined} />
