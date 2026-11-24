@@ -521,7 +521,10 @@ describe("audit scope override", () => {
     const hits = lines.flatMap((line, i) => (line.includes("@unset:registry=") ? [i] : []));
     expect(hits).toHaveLength(1);
     const at = hits[0] ?? -1;
-    expect(lines[at]).toMatch(/^ {6}- run: npm audit signatures --@unset:registry=https:\/\/registry\.npmjs\.org\/$/);
+    // P0.07p: the step runs the command through scripts/ci/npm-audit-signatures.ts, which hands npm these arguments.
+    expect(lines[at]).toBe(
+      "      - run: node scripts/ci/npm-audit-signatures.ts --@unset:registry=https://registry.npmjs.org/",
+    );
     expect(lines.slice(0, at).findLast((line) => /^ {2}[\w-]+:$/.test(line))).toBe("  audit:");
   });
 });
