@@ -142,12 +142,24 @@ describe("the page's top-level blocks", () => {
 
   // What the page draws comes from the same tree: one drawn block for each counted one, wherever each has something
   // to show (an empty quote and the old empty-line mark draw nothing; rows past the cell guard add a paragraph).
-  test.each(CORPUS)("the page draws one block for each: %s", (_name, lines, blocks) => {
-    const drawn: Record<string, string> = { blockquote: "quote", thematicBreak: "rule", html: "paragraph" };
-    const kinds = blocks
-      .filter(({ kind, from }) => kind !== "html" || lines[from - 1] !== "<br />")
-      .map(({ kind }) => drawn[kind] ?? kind);
-    expect(parseReadme(lines.join("\n")).map((shown) => shown.kind)).toEqual(kinds);
+  // Math is the exception: the page also reads it, so a `$$` block is drawn as one formula (below).
+  const MATH = (lines: readonly string[]) => lines.includes("$$");
+  test.each(CORPUS.filter(([, lines]) => !MATH(lines)))(
+    "the page draws one block for each: %s",
+    (_name, lines, blocks) => {
+      const drawn: Record<string, string> = { blockquote: "quote", thematicBreak: "rule", html: "paragraph" };
+      const kinds = blocks
+        .filter(({ kind, from }) => kind !== "html" || lines[from - 1] !== "<br />")
+        .map(({ kind }) => drawn[kind] ?? kind);
+      expect(parseReadme(lines.join("\n")).map((shown) => shown.kind)).toEqual(kinds);
+    },
+  );
+
+  test("the page draws a $$ block as one formula, where the count has paragraphs", () => {
+    const drawn = CORPUS.filter(([, lines]) => MATH(lines)).map(([, lines]) =>
+      parseReadme(lines.join("\n")).map((shown) => shown.kind),
+    );
+    expect(drawn).toEqual([["math"], ["paragraph", "math"]]);
   });
 
   // Strikethrough, task items and bare addresses are read inside a block's text, after the blocks are cut, so they
