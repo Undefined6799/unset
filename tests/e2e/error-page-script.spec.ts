@@ -249,7 +249,9 @@ test("the_error_page_reads_whole_when_the_client_fails_at_start", async ({ page 
   });
   expect((await page.goto(`${PROD_ORIGIN}/no/such/page`))?.status()).toBe(404);
   await expect(page.locator("h1")).toHaveText(NOT_FOUND);
-  await expect.poll(() => watched.pageErrors).toEqual(["the client failed while starting"]);
+  // One page error, the thrown one: Chromium and Firefox give its message, WebKit puts the error's name before it.
+  await expect.poll(() => watched.pageErrors).toHaveLength(1);
+  expect(watched.pageErrors[0]).toMatch(/^(Error: )?the client failed while starting$/);
   await expect(page.locator('header a[href="/login?next=%2Fno%2Fsuch%2Fpage"]').first()).toBeVisible();
   expect((await pageNoise(page, watched)).csp).toEqual([]);
   await page.locator("main").getByRole("link", { name: "Go to the home page" }).click();
