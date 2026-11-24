@@ -61,9 +61,9 @@ const POLICIES = {
   /** A document that runs SvelteKit's client: our build's files and the one start-up script, by its hash. */
   script: appPolicy(`${BUILD} ${START_UP}`),
   /**
-   * An app-group page that runs no client (/login, /welcome/blocked, an app route's error page): SvelteKit's policy
-   * with no hash, and no script in the body. The directive still names our build's files; nothing in the page asks for
-   * one. Today's state, pinned as it is; ADR 0116's steps settle what these pages carry.
+   * An app-group page that runs no client (/login, /login/continue, /welcome/blocked): SvelteKit's policy with no
+   * hash, and no script in the body. The directive still names our build's files; nothing in the page asks for one.
+   * Pinned as it is; book P1.22l settles what these pages carry.
    */
   "app, no hash": appPolicy(BUILD),
   /** The public group's fixed policy: styles, fonts and build images, and no script-src at all. */
@@ -169,15 +169,16 @@ const ROUTES: Readonly<Record<string, Row>> = {
   "/images": { get: { visitor: TO_SIGN_IN, member: "405 no content type: static" } },
 
   // Form targets with no screen. Two have a +page.svelte that holds a comment, because SvelteKit wants one beside
-  // actions, and answer a GET 405; two have none and answer it 404. Either way the GET is the error page.
-  "/prefs/theme": { get: "405 error page: app, no hash", data: APP_DATA, client: false },
+  // actions, and answer a GET 405; two have none and answer it 404. Either way the GET is the error page, which runs
+  // the client like every error page (ADR 0116 point 1), whatever the route's own page would.
+  "/prefs/theme": { get: "405 error page: script", data: APP_DATA, client: false },
   "/privacy-notice/seen": {
-    get: { visitor: TO_SIGN_IN, member: "405 error page: app, no hash" },
+    get: { visitor: TO_SIGN_IN, member: "405 error page: script" },
     data: APP_DATA,
     client: false,
   },
-  "/profile": { get: { visitor: TO_SIGN_IN, member: "404 error page: app, no hash" }, data: APP_DATA },
-  "/settings/search-and-ai": { get: { visitor: TO_SIGN_IN, member: "404 error page: app, no hash" }, data: APP_DATA },
+  "/profile": { get: { visitor: TO_SIGN_IN, member: "404 error page: script" }, data: APP_DATA },
+  "/settings/search-and-ai": { get: { visitor: TO_SIGN_IN, member: "404 error page: script" }, data: APP_DATA },
 
   // Files and documents for machines.
   "/[x+2e]well-known/security.txt": { at: "/.well-known/security.txt", get: "200 text/plain: static" },
@@ -556,7 +557,7 @@ const unchanged =
 
 const OTHERS: Readonly<Record<string, { readonly seen: Cell; readonly ask: Ask }>> = {
   // No route.
-  "a path no route matches": { seen: "404 error page: plain", ask: (send) => send("/no/such/page") },
+  "a path no route matches": { seen: "404 error page: script", ask: (send) => send("/no/such/page") },
   "a path no route matches, its data address": {
     seen: "404 application/json: plain",
     ask: (send) => send(`/no/such/page${DATA}`, { headers: NO_DOCUMENT }),
@@ -565,11 +566,11 @@ const OTHERS: Readonly<Record<string, { readonly seen: Cell; readonly ask: Ask }
     seen: "404 no content type: static",
     ask: (send) => send("/_app/immutable/chunks/Gone0000.js"),
   },
-  "a path that is not a path": { seen: "400 error page: plain", ask: (send) => send("/%") },
+  "a path that is not a path": { seen: "400 error page: script", ask: (send) => send("/%") },
   "a page's address with a slash after it": { seen: "308 redirect: static", ask: (send) => send("/legal/terms/") },
 
   // A load that fails: the profile of a handle nobody has, on the public page that runs the client.
-  "a failed load": { seen: "404 error page: plain", ask: (send) => send("/@nobody.example.com") },
+  "a failed load": { seen: "404 error page: script", ask: (send) => send("/@nobody.example.com") },
   "a failed load, its data address": {
     seen: PUBLIC_DATA,
     ask: (send) => send(`/@nobody.example.com${DATA}`, { headers: NO_DOCUMENT }),
@@ -635,12 +636,12 @@ const OTHERS: Readonly<Record<string, { readonly seen: Cell; readonly ask: Ask }
   // The error page under an app route with a parameter. No GET there fails today (a GET of another account's page is
   // sent on to its public one), so it is a member's write to a page that is not their own.
   "a form post to another account's page": {
-    seen: { visitor: TO_SIGN_IN, member: "404 error page: app, no hash" },
+    seen: { visitor: TO_SIGN_IN, member: "404 error page: script" },
     ask: (send) => send(`/${NOBODY}?/create`, form("x=1")),
   },
   "another account's page": { seen: SENT_ON, ask: (send) => send(`/${NOBODY}`) },
   "a form post refused with the error page": {
-    seen: "400 error page: app, no hash",
+    seen: "400 error page: script",
     ask: (send) => send("/prefs/theme", form("theme=mauve")),
   },
   "a form post that sends the browser on": { seen: SENT_ON, ask: (send) => send("/prefs/theme", form("theme=dark")) },
@@ -769,7 +770,8 @@ describe("every answer", () => {
   });
 
   // Book P1.22j, first half: a page says in its own +page.ts whether it runs SvelteKit's client, so the root layout's
-  // default decides the error page alone. The table's `client` is what each file says, and nothing else speaks.
+  // default decides the error page alone (true since book P1.22k, ADR 0116 point 1). The table's `client` is what each
+  // file says, and nothing else speaks.
   test("each_page_says_itself_whether_it_runs_the_client", async () => {
     const said: Record<string, boolean | "nothing" | "unclear"> = {};
     const drawNothing: string[] = [];
@@ -784,18 +786,26 @@ describe("every answer", () => {
     expect(drawNothing.sort()).toEqual(pages.flatMap(([id, row]) => (row.client === undefined ? [id] : [])).sort());
 
     // SvelteKit reads page options from +page, +layout and their .server files (kit docs, page options). The root
-    // layout says false; no other layout and no server file says anything.
+    // layout says true; no other layout and no server file says anything.
     const others = readdirSync(SOURCE, { recursive: true, encoding: "utf8" })
       .filter((file) => /(^|\/)\+(page|layout)(\.server)?\.(ts|js)$/.test(file) && !/(^|\/)\+page\.ts$/.test(file))
       .filter((file) => saysOfCsr(join(SOURCE, file)) !== "nothing");
     expect(others).toEqual(["+layout.ts"]);
-    expect(saysOfCsr(join(SOURCE, "+layout.ts"))).toBe(false);
+    expect(saysOfCsr(join(SOURCE, "+layout.ts"))).toBe(true);
 
-    // The table agrees with itself: a page that says true is seen running the client, and no other row ever is.
+    // The table agrees with itself: a page that says true is seen running the client, and no other route's own page
+    // ever is. Every error page runs it, on any route, and every row that is one says so.
     for (const [id, row] of Object.entries(ROUTES)) {
       const cells = JSON.stringify([row.get]);
       if (row.client === true) expect(cells, id).toContain("200 page: script");
-      else expect(cells, id).not.toContain(": script");
+      else expect(cells, id).not.toMatch(/\d+ page: script/);
+    }
+    const elsewhere = Object.entries(OTHERS).map(([name, { seen }]): [string, Cell] => [name, seen]);
+    const rows = Object.entries(ROUTES).map(([id, row]): [string, Cell] => [id, row.get]);
+    for (const [name, cell] of [...rows, ...elsewhere]) {
+      for (const seen of JSON.stringify(cell).match(/\d+ error page: [^"]+/g) ?? []) {
+        expect(seen, name).toMatch(/error page: script$/);
+      }
     }
   });
 });

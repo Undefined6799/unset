@@ -4,21 +4,21 @@
 import type { PolicyName } from "./limits.ts";
 
 /**
- * The CSP group of a response (csp.ts). `app` pages run SvelteKit's client under its script policy; a `public` page
- * runs no script (`csr = false`) unless its policy says `client`; `static` is never a page.
+ * The CSP group of a response (csp.ts): `app` and `public` are pages, `static` is never one. Whether a page runs
+ * SvelteKit's client is not the group's to say: every page does unless its policy says `client: false` (ADR 0116).
  */
 export type PageGroup = "app" | "public" | "static";
 
 export type RoutePolicy = Readonly<{
   group: PageGroup;
   /**
-   * A `public` page that runs SvelteKit's client (ADR 0114 points 2 and 3): its +page.ts says `csr = true`, and the
-   * hook sends the page the app group's script policy in place of the public group's fixed one. Nothing else about it
-   * changes: its cache rules, the system theme on a visitor's copy and the bell as a link stay the public group's,
-   * and its refusals and its data address keep the fixed header. A fact of the route, never read from the request;
-   * gate.test.ts names every route that has it and fails when `csr` and this disagree.
+   * `false` on a route whose own page does not run SvelteKit's client (ADR 0116 points 1 and 4): its +page.ts says
+   * `csr = false`, and the hook never sends that page the script policy, whatever it holds. Every other page runs the
+   * client, and so does the error page of every route, this one included (for it SvelteKit takes `csr` from the
+   * layouts alone). A fact of the route, never read from the request; gate.test.ts names every route that says it,
+   * with its reason, and fails when `csr` and this disagree.
    */
-  client?: true;
+  client?: false;
   /** The rate-limit policy (a key of limits.ts `policies`). */
   limit: PolicyName;
   /** The policy a POST counts against instead of `limit`, address and member buckets both (a page whose writes cost

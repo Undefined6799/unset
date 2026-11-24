@@ -47,8 +47,9 @@ export type RouteRecord = {
   readonly method: string;
   readonly path: string;
   readonly group: string | null;
-  /** A public page that runs SvelteKit's client (policy.ts `client`, ADR 0114); a policy says it only as `true`. */
-  readonly client: true | null;
+  /** A route whose own page does not run SvelteKit's client (policy.ts `client`, ADR 0116 point 4); a policy says it
+   * only as `false`. */
+  readonly client: false | null;
   readonly session: string | null;
   readonly rateLimit: string | null;
   readonly writeLimit: string | null;
@@ -112,7 +113,7 @@ function readField<T>(
 const oneLine = (value: unknown): string | undefined =>
   typeof value === "string" && value !== "" && !/[\n`|]/.test(value) ? value : undefined;
 const flag = (value: unknown): boolean | undefined => (typeof value === "boolean" ? value : undefined);
-const onlyTrue = (value: unknown): true | undefined => (value === true ? true : undefined);
+const onlyFalse = (value: unknown): false | undefined => (value === false ? false : undefined);
 const count = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 function readDraft(
@@ -133,7 +134,7 @@ function readDraft(
       method,
       path,
       group: readField(value, "group", file, problems, oneLine, "group is not a single-line string"),
-      client: readField(value, "client", file, problems, onlyTrue, "client is not true"),
+      client: readField(value, "client", file, problems, onlyFalse, "client is not false"),
       rateLimit: readField(value, "limit", file, problems, oneLine, "limit is not a single-line string"),
       writeLimit: readField(value, "writeLimit", file, problems, oneLine, "writeLimit is not a single-line string"),
       session: readField(value, "session", file, problems, oneLine, "session is not a single-line string"),
@@ -378,10 +379,10 @@ function deadlineCell(route: RouteRecord): string {
   return `${route.deadlineMs} after a ${route.bodyWindowMs} body window`;
 }
 
-/** The group, and beside it whether a public page runs SvelteKit's client. */
+/** The group, and beside it a route whose own page does not run SvelteKit's client. */
 function groupCell(route: RouteRecord): string {
   if (route.group === null) return NOT_RECORDED;
-  return route.client === true ? `${route.group}, runs the client` : route.group;
+  return route.client === false ? `${route.group}, runs no client` : route.group;
 }
 
 function row(route: RouteRecord, policies: ProcessModel["policies"]): string {
@@ -473,7 +474,7 @@ function indexPage(model: EndpointModel): string {
     "",
     `- **Path** is the route id relative to \`${ROUTES}\`, including SvelteKit parameters, encoded characters and layout groups. It is a route pattern, not a concrete request URL.`,
     "- **Method** lists exports of `+server.ts`/`+server.js`, GET for `+page` files, and POST for an exported `actions` in `+page.server.ts`/`+page.server.js`. SvelteKit 3.2.0 sources: `src/core/sync/create_manifest_data/index.js`, `src/runtime/server/endpoint.js` and `src/runtime/server/page/actions.js` in `interfaces/web/node_modules/@sveltejs/kit`. Implicit HEAD/OPTIONS are omitted; a handler may still refuse a method.",
-    "- **Group, session, rate limit, write limit, body limit, deadline, test only, probe** copy `group` (with `client` where a public page runs SvelteKit's client), `session`, `limit`, `writeLimit`, `maxBody`, `deadlineMs` (with `bodyWindowMs` where a route has one), `testOnly`, `probe` from that route's `policy.ts`. Missing fields are `not recorded`, not a claim that the runtime has no session, limit or deadline.",
+    "- **Group, session, rate limit, write limit, body limit, deadline, test only, probe** copy `group` (with `client` where the route's own page does not run SvelteKit's client), `session`, `limit`, `writeLimit`, `maxBody`, `deadlineMs` (with `bodyWindowMs` where a route has one), `testOnly`, `probe` from that route's `policy.ts`. Missing fields are `not recorded`, not a claim that the runtime has no session, limit or deadline.",
     `- **Buckets, write buckets** copy the named entries of \`${LIMITS}\`'s \`policies\` export. These are the app's configured buckets, not the edge limits in \`deployment/edge/\` (not read here). \`policiesFor\` in the same file removes IP entries in socket mode and adds the login global ceiling.`,
     `- **Why, input, output, errors, auth** come only from \`${DATA_DIR}/web.yaml\`. Absent or empty prose is \`not recorded\`.`,
     "",

@@ -17,7 +17,8 @@ const PAGES = [
     path: "/no-route-matches-this",
     status: 404,
     words: "That page does not exist.",
-    runsClient: false,
+    // The error page runs the client like every other page (book P1.22k, ADR 0116).
+    runsClient: true,
   },
 ] as const;
 
@@ -46,7 +47,7 @@ for (const target of PAGES) {
       const response = await page.goto(PROD_ORIGIN + target.path);
       expect(response?.status()).toBe(target.status);
       await page.waitForLoadState("networkidle");
-      // A page without the client asks for no script, so nothing is refused there; P1.22k turns these on.
+      // A page without the client asks for no script, so nothing is refused there; home is one until book P1.22g.
       expect(refused).toHaveLength(kind === "script" && !target.runsClient ? 0 : 1);
       if (target.words !== null) {
         await expect(page.getByText(target.words, { exact: true }).filter({ visible: true }).first()).toBeVisible();

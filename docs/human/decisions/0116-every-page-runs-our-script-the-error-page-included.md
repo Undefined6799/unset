@@ -1,6 +1,11 @@
 ---
-status: Proposed
+status: Accepted
 date: "2026-11-23"
+accepted:
+  at: "2026-11-23T23:35:11Z"
+  head: 45c522e11479f0742d04cd7d092d81b5b1d612ab
+  line: "Merge 2005 at 45c522e"
+  merged: 559faa3b6c88b7a3392edb99d1c52045bbf7bdc2
 step: P1.22i
 supersedes:
   - adr: "0114"
