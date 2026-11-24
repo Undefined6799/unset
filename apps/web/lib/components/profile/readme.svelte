@@ -5,9 +5,29 @@
   no title of its own (P1.21p), so its headings sit beside the other cards' titles: # is an h2, under the page's h1.
 -->
 <script lang="ts">
+import type { Snippet } from "svelte";
 import type { Block, Inline, ListBlock } from "../../profile/types.ts";
 
-let { blocks }: { blocks: readonly Block[] } = $props();
+let {
+  blocks,
+  codeTools,
+}: {
+  blocks: readonly Block[];
+  /** Drawn in each code block's corner with its code as stored, when given (readme-copy.svelte's Copy button). */
+  codeTools?: Snippet<[string]>;
+} = $props();
+/** The block's code as stored: a coloured block carries only its runs, which join back to it (code-colours.ts). */
+const codeText = (block: { readonly text: string } | { readonly runs: readonly { readonly text: string }[] }) =>
+  "runs" in block ? block.runs.map((run) => run.text).join("") : block.text;
+/** A task's words as plain text, its checkbox's accessible name (WCAG 2.2 SC 4.1.2). */
+const plainText = (nodes: readonly Inline[]): string =>
+  nodes
+    .map((node) => {
+      if (node.kind === "text" || node.kind === "code") return node.text;
+      if (node.kind === "break") return " ";
+      return plainText(node.children);
+    })
+    .join("");
 // Six levels under the page's h1: # is an h2, and HTML stops at h6, so ##### and ###### share it.
 const HEADINGS = ["h2", "h3", "h4", "h5", "h6", "h6"] as const;
 // The playground's six steps (Crepe 7.23.0 theme/common/reset.css: 2.625em down to 1.125em), on the theme's type
@@ -44,6 +64,7 @@ const HEADING_LOOK = [
         type="checkbox"
         class="me-1.5 size-3.5 align-middle accent-primary"
         checked={entry.task === "done"}
+        aria-label={plainText(entry.text).trim() || undefined}
         disabled
       />{/if}{@render inline(entry.text)}{#each entry.lists as sub, k (k)}{@render list(sub)}{/each}</li
   >
@@ -77,7 +98,10 @@ const HEADING_LOOK = [
     {:else if block.kind === "list"}
       {@render list(block)}
     {:else if block.kind === "code"}
-      <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5"><code>{block.text}</code></pre>
+      <div class="relative">
+        <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5" class:pe-20={codeTools !== undefined}><code>{#if "runs" in block}{#each block.runs as run, r (r)}{#if run.colour}<span class={run.colour}>{run.text}</span>{:else}{run.text}{/if}{/each}{:else}{block.text}{/if}</code></pre>
+        {@render codeTools?.(codeText(block))}
+      </div>
     {:else if block.kind === "table"}
       <!-- A wide table scrolls inside the card rather than widening it. -->
       <div class="overflow-x-auto">

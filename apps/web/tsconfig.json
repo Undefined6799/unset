@@ -15,5 +15,7 @@
       "path": "../../shared/ui"
     }
   ],
+  "include": ["**/*"],
+  "files": ["lib/editor/code-colours.ts", "lib/editor/code-colours.test.ts"],
   "exclude": ["dist", "lib/components", "lib/editor", "lib/utils.ts"]
 }

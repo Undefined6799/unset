@@ -21,6 +21,7 @@ let holder: (() => void) | undefined;
 <script lang="ts">
 import { flushSync, onDestroy, onMount, tick } from "svelte";
 import type { BlockItem, MenusState } from "../../editor/menus.ts";
+import type { CodeColourLimits } from "../../editor/code-colours.ts";
 import type { MarkdownEditor } from "../../editor/milkdown.ts";
 import { type Place, placeIn } from "../../editor/place.ts";
 import type { TableState } from "../../editor/tables.ts";
@@ -37,6 +38,7 @@ let {
   onedit,
   flushes,
   onfocus,
+  codeColours,
 }: {
   blocks: readonly Block[];
   name: string;
@@ -44,6 +46,8 @@ let {
   onedit: (markdown: string) => void;
   flushes: Set<() => void>;
   onfocus?: (focus: () => void) => void;
+  /** The page's code colouring limits: the editor colours code only where the page will. */
+  codeColours: CodeColourLimits;
 } = $props();
 
 const id = $props.id();
@@ -128,6 +132,7 @@ async function mount() {
     const mounted = await mountMarkdownEditor(host, {
       value,
       labelledBy: labelId,
+      codeColours,
       // Each change reaches the page once a frame, as markdown; the card's formatting is in its menus, not a bar.
       onEdit: () => undefined,
       onChange: onedit,

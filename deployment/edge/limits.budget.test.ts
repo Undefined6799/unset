@@ -59,6 +59,8 @@ const together = (...people: readonly number[][]): number[] => people.flat().sor
 const COLD_PAGE = [0, 0, 0];
 /** The build files of the heaviest cold page (27 scripts, the stylesheet and two icons; scripts/budgets/app-js.ts). */
 const COLD_PAGE_FILES = 30;
+/** The build files of a cold public profile as a signed-out visitor's browser asks for them (P1.22f, measured). */
+const COLD_PUBLIC_PAGE_FILES = 32;
 const FIRST_VISIT = 66;
 
 /** A flood one past the zone, all at once: everything up to the zone's size passes and the next is refused. */
@@ -88,6 +90,25 @@ describe("app_files", () => {
     expect(refusedIn("app_files", together(person(0), person(0)))).toBe(0);
   });
 
+  // Signed-out visitors behind one address (an office, a school, a phone carrier's shared address) opening a link to a
+  // public page that runs the client (book P1.22f; ADR 0114, ADR 0116). Measured in Chromium through edge.caddy at
+  // 60228f5: a cold /@handle asks for 32 build files (30 scripts, the stylesheet, the favicon) within half a second,
+  // and so would home (28) and the unmatched page (26) once they run the client; a warm one asks for none
+  // (docs/ai/notes/reference/visitors-behind-one-address.md). Three such visitors fit in any 10 s.
+  const visitors = (count: number, everyMs: number) =>
+    together(...Array.from({ length: count }, (_, n) => Array(COLD_PUBLIC_PAGE_FILES).fill(n * everyMs) as number[]));
+
+  test("three_visitors_behind_one_address_opening_a_cold_public_page_at_once_pass", () => {
+    expect(refusedIn("app_files", visitors(3, 0))).toBe(0);
+  });
+
+  // Reported for Alex's call, not changed here (book P1.22f; ADR 0059): a fourth visitor in the same 10 s loses some
+  // of the files. The server's page still reads whole (tests/e2e/refused-file.spec.ts), without the client and
+  // sometimes without its stylesheet. Measured: 4 at once, 2 of 4 got the client; 10 arriving one a second, 3 did.
+  test.fails("four_visitors_behind_one_address_opening_a_cold_public_page_within_ten_seconds_pass", () => {
+    expect(refusedIn("app_files", visitors(4, 2_000))).toBe(0);
+  });
+
   test("a_flood_one_past_the_zone_is_refused", () => expectFloodRefused("app_files"));
 });
 
@@ -100,6 +121,13 @@ describe("app_global", () => {
   test("five_people_behind_one_address_each_on_a_first_visit_and_browsing_pass", () => {
     const person = (offset: number) => [...paced(FIRST_VISIT, 300, offset), ...paced(150, 2000, offset + 10_000)];
     expect(refusedIn("app_global", together(...[0, 100, 200, 300, 400].map(person)))).toBe(0);
+  });
+
+  test("thirty_visitors_behind_one_address_each_opening_a_cold_public_page_in_five_minutes_pass", () => {
+    // P1.22f: a cold public page is its document, two fonts and 32 build files, all counted here; the 35th such
+    // visitor in five minutes meets app_global (1200) whatever app_files allows.
+    const visitor = (at: number) => Array(COLD_PUBLIC_PAGE_FILES + 3).fill(at) as number[];
+    expect(refusedIn("app_global", together(...paced(30, 10_000).map(visitor)))).toBe(0);
   });
 
   test("a_flood_one_past_the_zone_is_refused", () => expectFloodRefused("app_global"));
