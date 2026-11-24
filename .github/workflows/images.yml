@@ -50,7 +50,7 @@ jobs:
   # the job to continue"; expressions, status check functions). No `paths:` filter, as before.
   changes:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -78,7 +78,7 @@ jobs:
   images:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -190,7 +190,7 @@ jobs:
   edge:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -242,7 +242,7 @@ jobs:
   discover:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -275,7 +275,7 @@ jobs:
     # push to main, and without a status function here that would skip this matrix although discover ran. So the
     # condition names discover's own result (workflow-syntax, jobs.<job_id>.needs, as above).
     if: ${{ !cancelled() && needs.discover.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -411,7 +411,7 @@ jobs:
   pds-ui:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 40
     permissions:
       contents: read
@@ -435,7 +435,7 @@ jobs:
   scan:
     needs: [changes, discover, scan-image, pds-ui]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -469,7 +469,7 @@ jobs:
   # result (scripts/ci/pins-job.test.ts runs these steps). Pull requests only: on main, mirror.yml scans every pin.
   pins:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read
