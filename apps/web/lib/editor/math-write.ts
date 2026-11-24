@@ -9,8 +9,8 @@ export type InlineFormula = { readonly type: "inlineMath"; readonly value: strin
  * inlineMath), so two side by side came out as "$x$$y$", and micromark-extension-math 3.1.0 closes a formula only on a
  * run of dollars as long as the one that opened it (dev/lib/math-text.js), so the page read one formula "x$$y" and
  * showed its source. Dollars cannot divide two formulas with nothing between them, so a run of them is written as one
- * formula, their TeX joined by a space (which TeX ignores in math, and which keeps "\alpha" from running into a
- * letter), by the writer asked for at least two dollars, which the page always reads as math (math-syntax.ts
+ * formula, each formula's TeX in its own group, so "\alpha" does not run into a letter and "x^2" and "^3" do not
+ * become a double superscript (KaTeX 0.16.47 src/Parser.ts), by the writer asked for at least two dollars, which the page always reads as math (math-syntax.ts
  * isInlineMath). The first of the run writes it; the others write nothing.
  */
 export function writeFormulaRun(
@@ -24,12 +24,14 @@ export function writeFormulaRun(
   while (siblings[last + 1]?.type === "inlineMath") last += 1;
   if (last === at) return write(node, false);
   const run = siblings.slice(at, last + 1).map((formula) => ("value" in formula ? String(formula.value) : ""));
-  return write({ type: "inlineMath", value: run.join(" ") }, true);
+  return write({ type: "inlineMath", value: run.map((tex) => `{${tex}}`).join("") }, true);
 }
 
 /**
- * A formula's TeX with each bare pipe written as `\vert`, the same delimiter in TeX, with a space after it before a
- * letter, which TeX ignores in math and which keeps the letter from joining the command. A table cell ends at a bare
+ * A formula's TeX with each bare pipe written as `{\char"7C}`, which KaTeX 0.16.47 draws as the same pipe in math and
+ * in text (`\vert` is math only and `\textbar` text only, src/symbols.ts; the group ends the hex number). A pipe after
+ * `\left`, `\right`, `\middle` or `\big` and its kin is a delimiter, which `\char` cannot be, so it is written as
+ * `\vert`, with a space before a letter so the letter does not join the command. A table cell ends at a bare
  * pipe (GFM 0.29, "Tables (extension)"), and mdast-util-gfm-table 2.0.1 escapes pipes only in inline code (lib/index.js
  * inlineCodeWithTable), so in a cell this keeps the formula and the cells after it. `\|` (TeX's double bar) is no
  * cell's end and stays as it is, and so does `\\`, a line break: a backslash and the character after it are one.
@@ -44,17 +46,25 @@ export function pipesAsTex(tex: string): string {
     if (typeof delimiter === "string" && typeof body === "string") {
       return verbAsTex(starred === undefined ? "" : "*", delimiter, body, found);
     }
-    if (found !== "|") return found;
-    return /[A-Za-z]/.test(tex[Number(at) + 1] ?? "") ? "\\vert " : "\\vert";
+    return pipeAsTex(found, tex[Number(at) + found.length] ?? "");
   });
+}
+
+/** A bare pipe, a delimiter pipe or a backslash pair, given the character after it. */
+function pipeAsTex(found: string, after: string): string {
+  if (found === "|") return '{\\char"7C}';
+  if (found.length <= 2 || !found.endsWith("|")) return found;
+  return `${found.slice(0, -1)}\\vert${/[A-Za-z]/.test(after) ? " " : ""}`;
 }
 
 /**
  * `\verb*` and `\verb` as KaTeX 0.16.47 reads them (src/Lexer.ts tokenRegexString: any one character as the delimiter,
  * but no letter or star after the unstarred form, then the line up to the same character), tried before the other
- * backslash pairs as the Lexer does; then a backslash and the character after it; then a bare pipe.
+ * backslash pairs as the Lexer does; then a pipe as a delimiter; then a backslash and the character after it; then a
+ * bare pipe.
  */
-const VERB_OR_PIPE = /\\verb(?:\*(.)(.*?)\1|([^*a-zA-Z])(.*?)\3)|\\[\s\S]|\|/g;
+const VERB_OR_PIPE =
+  /\\verb(?:\*(.)(.*?)\1|([^*a-zA-Z])(.*?)\3)|\\(?:left|right|middle|[bB]igg?[lmr]?)\s*\||\\[\s\S]|\|/g;
 
 /**
  * One `\verb`'s Markdown in a table cell, showing what it held: its pipes become a typewriter `\textbar` between `\verb`s,
