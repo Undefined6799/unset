@@ -109,20 +109,6 @@ test("a_page_reached_in_place_has_the_theme_a_full_load_gives_it", async ({ page
   await expect(scheme).toHaveAttribute("content", "dark light");
 });
 
-// A path that is no member is the one 404, which runs no script whatever the path holds.
-test("a_hostile_path_is_the_404_with_no_script", async ({ page }) => {
-  const watched = watch(page);
-  const response = await page.goto(`${PROD_ORIGIN}/@%3Cscript%3EglobalThis.ran=1%3C%2Fscript%3E`);
-  expect(response?.status()).toBe(404);
-  expect(response?.headers()["content-security-policy"]).not.toContain("script-src");
-  await page.waitForLoadState("networkidle");
-  await expect(page.locator("h1")).toContainText("That page does not exist.");
-  expect(watched.scripts).toEqual([]);
-  await expect(page.locator("script")).toHaveCount(0);
-  expect(await page.evaluate(() => (globalThis as unknown as Probe).ran)).toBeUndefined();
-  expect((await pageNoise(page, watched)).csp).toEqual([]);
-});
-
 // With every script file refused the page is the server's page: the only error is the start-up script reporting the
 // import that failed, as on an app page (csp.spec.ts app_page_works_without_its_script).
 test("the_page_reads_whole_with_its_script_files_refused", async ({ page }) => {

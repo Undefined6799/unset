@@ -45,6 +45,11 @@ export const HOSTILE = {
   address: "javascript:globalThis.ran=1",
 } as const;
 /**
+ * A member the index holds and does not show (their PDS says the account is not active), seeded on both servers: its
+ * page is the one 404, the same as for an address that is nobody's (rule SE-2; error-page-script.spec.ts).
+ */
+export const HIDDEN = { did: `did:plc:${"r".repeat(24)}` } as const;
+/**
  * The test server writes each member's session cookie here once it listens; the specs read it. Outside test-results,
  * which Playwright empties when a run starts (outputDir).
  */

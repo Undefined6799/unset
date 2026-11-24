@@ -81,16 +81,16 @@ test("policy_fields_and_methods_are_read_without_importing_handlers", async () =
   expect(text).toContain("| not recorded | not recorded | not recorded | not recorded | not recorded |");
 });
 
-// A public page that runs SvelteKit's client (ADR 0114; policy.ts `client`) says so beside its group.
-test("a_public_page_that_runs_the_client_says_so_in_its_group", async () => {
+// A route whose own page does not run SvelteKit's client (ADR 0116 point 4; policy.ts `client`) says so beside its group.
+test("a_page_that_runs_no_client_says_so_in_its_group", async () => {
   const root = fixture();
   const handler = 'export const GET = () => new Response("ok");';
-  addRoute(root, "/shown", handler, '{ group: "public", client: true, limit: "default" }');
-  expect(await page(root)).toContain("| GET | `/shown` | public, runs the client | not recorded | default |");
+  addRoute(root, "/shown", handler, '{ group: "public", client: false, limit: "default" }');
+  expect(await page(root)).toContain("| GET | `/shown` | public, runs no client | not recorded | default |");
   addRoute(root, "/odd", handler, '{ group: "public", client: "yes", limit: "default" }');
   expect(await loadEndpointModel(root)).toEqual({
     ok: false,
-    problems: [`${ROUTES}/odd/policy.ts client is not true`],
+    problems: [`${ROUTES}/odd/policy.ts client is not false`],
   });
 });
 

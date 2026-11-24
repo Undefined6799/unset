@@ -27,6 +27,19 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // Book P1.22k (ADR 0116): the error page runs the client, and with script off it is still the server's whole page:
+  // what went wrong, its code, a Sign in link that comes back here and a way home, each a plain link. With script on,
+  // and with the script's files refused or failing, error-page-script.spec.ts reads the same page.
+  test("the_error_page_reads_whole_without_js", async ({ page }) => {
+    const response = await page.goto("/no/such/page?a=b");
+    expect(response?.status()).toBe(404);
+    await expect(page.locator("h1")).toHaveText("That page does not exist.");
+    await expect(page.locator("main")).toContainText("http.not_found");
+    await expect(page.locator('header a[href="/login?next=%2Fno%2Fsuch%2Fpage"]').first()).toBeVisible();
+    await page.locator("main").getByRole("link", { name: "Go to the home page" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test.describe("phone search", () => {
     test.use(phone({ width: 375, height: 800 }));
 
