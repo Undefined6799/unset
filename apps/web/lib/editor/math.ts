@@ -208,7 +208,13 @@ class MathInlineView implements NodeView {
 
 const mathInlineView = $view(mathInlineSchema.node, () => (node) => new MathInlineView(node));
 
-const writeInlineMath = mathToMarkdown().handlers.inlineMath;
+/** mdast-util-math's own writer of a formula in a line, which writeMath wraps. */
+function inlineMathWriter() {
+  const write = mathToMarkdown().handlers?.inlineMath;
+  if (write === undefined) throw new Error("mdast-util-math gives no inlineMath writer");
+  return write;
+}
+const writeInlineMath = inlineMathWriter();
 
 /**
  * How math is written back. A code block whose language is "math" is written as `$$`; every other one as Milkdown
