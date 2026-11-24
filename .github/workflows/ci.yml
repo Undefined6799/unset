@@ -92,9 +92,7 @@ jobs:
       # registry any edge uses, workspace edges included, but never verifies or downloads a workspace. .npmrc
       # stays fail-closed for every install, and the dependency guard (scripts/guards/dependencies.ts) keeps every
       # @unset/* lockfile entry a plain workspace link. No other job may pass it (audit_override_only_in_audit_job).
-      # The script runs `npm audit signatures` with these arguments, and runs it again, at most twice, only when
-      # the registry answered an attestation request with something that is not JSON (P0.07p).
-      - run: node scripts/ci/npm-audit-signatures.ts --@unset:registry=https://registry.npmjs.org/
+      - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/
 
   secrets:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
