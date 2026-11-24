@@ -73,6 +73,28 @@ export function within<T>(ms: number, task: () => T): { readonly value: T } | { 
   }
 }
 
+// A fresh process parses slowly: V8 has compiled none of the parser yet. Measured 2026-11-24 on Node 26.12, for the
+// largest card the lexicon allows written as one table (20,000 characters, every cell formatted): about 60 ms once
+// the parser is warm, 136 to 154 ms as the process's first parse, and through this reader 5 of 8 fresh processes cut
+// it at `textMs` 150 and kept it as plain text for `keptForMs`. So the process reads a text of its own before it
+// serves (compose.ts): one that holds what costs in a card, a table, lists, emphasis, links and code. Eight reads of
+// it took about 0.35 s there and brought that first parse to 70 to 104 ms, cut in none of twelve fresh processes;
+// twenty reads did little better (67 to 84). It is no bound: a slower or busier machine reads slower, warm or not.
+const WARM_TEXT = [
+  "# A heading\n\nSome *plain* words with **strong** ones, ~~struck~~ ones, `code` and [a link](https://a.example/x).\n",
+  "> A quote with a bare address, https://a.example/y, and a line\\\nbroken in two.\n",
+  "- [x] a task\n- **term** and *more* with [a link](https://a.example/x) and `code`\n  1. a list in a list\n",
+  "```ts\nconst a = 1;\n```\n",
+  `| a | b | c |\n| :-- | :-: | --: |\n${"| **one** | _two_ | `three` |\n".repeat(12)}`,
+]
+  .join("\n")
+  .repeat(12);
+
+/** Reads our own text `rounds` times, so that a member's card does not meet a parser V8 has yet to compile. */
+export function warmParser(read: (text: string) => unknown = parseReadme, rounds = 8): void {
+  for (let round = 0; round < rounds; round += 1) read(WARM_TEXT);
+}
+
 /** What reading one text gave, kept until `until`: its blocks, or null for a stop at a card's whole limit. */
 type Kept = { readonly blocks: readonly Block[] | null; readonly bytes: number; readonly until: number };
 
