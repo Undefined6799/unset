@@ -63,6 +63,20 @@ each CSP header by value: a new route, or a page with no `csr` line, fails it un
 A client navigation keeps the document, so the layout's `afterNavigate` applies the theme a full load of the new page
 would have (system where `prefs` is absent); without it a visitor's saved theme was lost from the profile to /login.
 
+The navbar's stock controls (P1.22m, 2026-11-24). Each is its own file under `apps/web/lib/components/shell/`, loaded
+by a dynamic import in the root layout after the client starts; the server's native popover is the control until
+then, with no script, and when the file does not arrive. Import one with the layout and every page's first load
+grows by the library's menu code (36.6 KiB gzip measured). The swap carries over an open native panel and focus on
+its button. Rows pass `data-highlighted:bg-muted focus:bg-muted`: the stock mark is the accent colour, which equals
+the popover surface in `shared/ui/theme.css`, so it does not show (the card menu still has that fault). While a
+stock menu is open the library takes the pointer off the page behind, so a test presses outside with `page.mouse`,
+not a locator; a row's box is smaller while the menu zooms in, so sizes are polled, and its text is part see-through
+while it fades in, so axe runs after `settled()` (WebKit read 3.48 contrast mid-fade). Tests find a control by its
+name (`tests/e2e/navbar.ts`), which the native and the stock version both carry. Typeahead holds Space as part of
+the search for a moment after a letter, so a test reaches a row by the arrows before pressing Space. With the script
+files held back WebKit never fires the load event (it waits for the preloaded files), so such a test opens the page
+with `waitUntil: "commit"`.
+
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
 `is_data_request`, `data/index.js`). So a load on a script-free page is still sent to anyone who asks, and a page
