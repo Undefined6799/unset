@@ -1151,6 +1151,41 @@
           }
         ]
       ]
+    },
+    "sigma-function": {
+      "iconoirName": "sigma-function",
+      "approval": "Alex 2026-11-22 00:31:10Z (\"yes all approved\", cmsg_01GKYqaAGu4Vob5JHVyDmG7AQcQmWvRiwekUTxrBro4e7r: the editor's Math block item and Inline math button; Iconoir icons only, decision 33)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/sigma-function.svg",
+      "sourceSha256": "1af4268e356bd1a55c69e33905deea9edcc5c52275595304e016cc5425bf101b",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M4 4L12 4L20 4V7",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M4 20H12H20V17",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M4 20L12 12L4 4",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
     }
   }
 }

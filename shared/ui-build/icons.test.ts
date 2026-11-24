@@ -65,7 +65,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(66);
+  expect(Object.keys(json.icons)).toHaveLength(67);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -298,6 +298,8 @@ const ADDITIONS: Record<string, string> = {
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M3 6H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 14H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M6 10L18 10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M6 18L18 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   "align-right":
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M7 10L21 10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 6H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M7 18L21 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 14H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "sigma-function":
+    '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M4 4L12 4L20 4V7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 20H12H20V17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 20L12 12L4 4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -334,7 +336,8 @@ const REGISTRATION = JSON.parse(APPROVED_TEXT) as {
     | "table"
     | "align-left"
     | "align-center"
-    | "align-right",
+    | "align-right"
+    | "sigma-function",
     { sourceSha256: string; drawings: [string, Record<string, string>][] }
   >;
 };
@@ -436,14 +439,14 @@ test("icon_absent_extension_preserves_every_output_byte", () => {
   expect(writes).toEqual([]);
 });
 
-test("icon_approved_extension_generates_only_the_66_registered_icons", () => {
+test("icon_approved_extension_generates_only_the_67_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
   const baseText = baseFiles().get("icons/icons.json") as string;
   expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
   const base = JSON.parse(baseText);
-  expect(Object.keys(json.icons)).toHaveLength(66);
+  expect(Object.keys(json.icons)).toHaveLength(67);
   expect(json.icons).toEqual({
     ...base.icons,
     devices: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
@@ -476,6 +479,7 @@ test("icon_approved_extension_generates_only_the_66_registered_icons", () => {
     "align-left": REGISTRATION.icons["align-left"].sourceSha256,
     "align-center": REGISTRATION.icons["align-center"].sourceSha256,
     "align-right": REGISTRATION.icons["align-right"].sourceSha256,
+    "sigma-function": REGISTRATION.icons["sigma-function"].sourceSha256,
   });
   expect(json.sheetVersion).toBe("1792621080-00d4");
   expect(json.iconoir).toEqual({
@@ -510,6 +514,7 @@ test("icon_approved_extension_generates_only_the_66_registered_icons", () => {
     "align-left": "align-left",
     "align-center": "align-center",
     "align-right": "align-right",
+    "sigma-function": "sigma-function",
   });
   expect(json.drawings.devices).toEqual(REGISTRATION.icons.devices.drawings.map(([, attributes]) => attributes));
   expect(json.drawings.apps).toEqual(REGISTRATION.icons.apps.drawings.map(([, attributes]) => attributes));

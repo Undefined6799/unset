@@ -67,7 +67,8 @@
     "table": "table",
     "align-left": "align-left",
     "align-center": "align-center",
-    "align-right": "align-right"
+    "align-right": "align-right",
+    "sigma-function": "sigma-function"
   },
   "icons": {
     "next": "cf13159505df944c66c9d36838508dcd58106fe0d776702aeaf08dd91553eb3f",
@@ -135,7 +136,8 @@
     "table": "860f4208f8d9e0bb68d20eb1cff84abdf3cc171df8b38d2be1e61447785afb41",
     "align-left": "fb5d4bfc94ee5a0428439014401e2d94c800f00109bf1382bc91209caccc2c41",
     "align-center": "01023a0bebd3d03d27a53636bb2556d0d62ae79c6831052043c5744425c7e2c4",
-    "align-right": "672d1c8e3adf6b1e288f2b282f8aed1a4009346906133113046a1ca00f9dc8d4"
+    "align-right": "672d1c8e3adf6b1e288f2b282f8aed1a4009346906133113046a1ca00f9dc8d4",
+    "sigma-function": "1af4268e356bd1a55c69e33905deea9edcc5c52275595304e016cc5425bf101b"
   },
   "drawings": {
     "next": [
@@ -1221,6 +1223,26 @@
         "strokeLinejoin": "round"
       }
     ],
+    "sigma-function": [
+      {
+        "d": "M4 4L12 4L20 4V7",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 20H12H20V17",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 20L12 12L4 4",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
     "grip": [
       {
         "d": "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
@@ -1442,7 +1464,7 @@
   },
   "extensionProvenance": {
     "path": "approved-extensions.json",
-    "sha256": "9b4e25a24a71fcc6cae4f345d22bf61352ace191c4d3e03435d4009979f4cd2f",
+    "sha256": "66f640ac546d5fe28238897c2ea843a0f70746a0702eb3b383aeb25e6b25f8ce",
     "designApproval": {
       "by": "Alex",
       "date": "2026-10-18",
