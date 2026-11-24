@@ -21,8 +21,23 @@ export type TableLines = {
   readonly showOutline: boolean;
 };
 
+/** One single cell side of a table (sh.unset.block.text#edge): shown, or hidden with `hide`. */
+export type TableEdge = {
+  readonly direction: "horizontal" | "vertical";
+  readonly line: number;
+  readonly cell: number;
+  readonly hide: boolean;
+};
+/** One table's single cell sides, named by a fingerprint of each of its lines (sh.unset.block.text#tableEdges). */
+export type TableSides = { readonly lines: readonly string[]; readonly edges: readonly TableEdge[] };
+
 export type CardContent =
-  | { readonly kind: "readme"; readonly text: string; readonly tableLines?: TableLines }
+  | {
+      readonly kind: "readme";
+      readonly text: string;
+      readonly tableLines?: TableLines;
+      readonly tableSides?: readonly TableSides[];
+    }
   | {
       readonly kind: "links";
       readonly title: string;
@@ -77,6 +92,8 @@ export type Block =
       readonly align: readonly ("left" | "center" | "right" | null)[];
       readonly head: readonly (readonly Inline[])[];
       readonly rows: readonly (readonly (readonly Inline[])[])[];
+      /** The card's single cell sides placed on this table (table-sides.ts), when a look names it. */
+      readonly edges?: readonly TableEdge[];
     };
 
 export type ListBlock = {

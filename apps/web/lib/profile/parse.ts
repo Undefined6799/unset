@@ -53,6 +53,12 @@ export type TableBlock = {
   readonly align: readonly ("left" | "center" | "right" | null)[];
   readonly head: readonly (readonly Inline[])[];
   readonly rows: readonly (readonly (readonly Inline[])[])[];
+  /**
+   * The lines a top-level table is written on, counted from 1 (ADR 0110 decision 5: a look is placed by them). Left
+   * out for a table inside another block and for one shown cut short, which no look is placed on.
+   */
+  readonly from?: number;
+  readonly to?: number;
 };
 
 /** CommonMark's six heading levels. */
@@ -391,6 +397,21 @@ export function topBlocks(src: string): { readonly kind: string; readonly from: 
     .map((node) => ({ kind: node.type, from: node.position?.start.line ?? 0, to: node.position?.end.line ?? 0 }));
 }
 
+/** The text's lines as topBlocks counts them: line n is entry n - 1. */
+export const sourceLines = (src: string): string[] => normalised(src).split("\n");
+
+/**
+ * A top-level table with the lines it is written on, when it is shown whole. The page reads with READ, which makes
+ * the same top-level blocks as CommonMark with GFM tables alone (topBlocks, parse.blocks.test.ts), so these are the
+ * lines ADR 0110 decision 5 places a look by, read in the same bounded parse as the page (text-reader.ts).
+ */
+function placed(node: Flow, shown: Block[]): Block[] {
+  const [only] = shown;
+  if (node.type !== "table" || shown.length !== 1 || only?.kind !== "table" || node.position === undefined)
+    return shown;
+  return [{ ...only, from: node.position.start.line, to: node.position.end.line }];
+}
+
 export function parseReadme(src: string): Block[] {
   const source = normalised(src);
   try {
@@ -399,7 +420,7 @@ export function parseReadme(src: string): Block[] {
     const blocks: Block[] = [];
     for (const node of root.children) {
       if (blocks.length >= MAX_BLOCKS) break;
-      blocks.push(...block(node, reading));
+      blocks.push(...placed(node, block(node, reading)));
     }
     return blocks;
   } catch {

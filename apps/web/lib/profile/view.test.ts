@@ -13,6 +13,24 @@ const cardViews = (cards: Parameters<typeof viewsWithin>[0], versions?: Readonly
   viewsWithin(cards, parseReadme, CODE_COLOURS, versions);
 
 describe("card views", async () => {
+  // ADR 0110 points 4-5, rule SE-3: a look's edges ride on the table it names, and the lines a table was written on
+  // stay on the server, as does a look that names no table.
+  test("a_look_is_drawn_on_the_table_it_names_and_no_table_carries_its_source_lines", async () => {
+    const text = "| a | b |\n| --- | --- |\n| 1 | 2 |\n\n| x |\n| - |";
+    const edge = { direction: "vertical", line: 1, cell: 0, hide: false } as const;
+    const tableSides = [
+      { lines: ["5860afe6", "a4f3b853"], edges: [edge] },
+      { lines: ["00000000"], edges: [edge] },
+    ];
+    const [card] = await cardViews([{ key: "k", width: "full", content: { kind: "readme", text, tableSides } }]);
+    const blocks = card?.shown.kind === "readme" ? card.shown.blocks : [];
+    expect(blocks.map((block) => (block.kind === "table" ? Object.keys(block).sort() : block.kind))).toEqual([
+      ["align", "edges", "head", "kind", "rows"],
+      ["align", "head", "kind", "rows"],
+    ]);
+    expect(blocks[0]).toMatchObject({ edges: [edge] });
+  });
+
   test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", async () => {
     const [card] = await cardViews([
       {

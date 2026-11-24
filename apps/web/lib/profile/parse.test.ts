@@ -382,6 +382,8 @@ describe("what the in-place editor writes (P1.21s)", () => {
           [[text("bar")], [text("baz")]],
           [[text("f|oo")], [{ kind: "code", text: "a|b" }]],
         ],
+        from: 1,
+        to: 4,
       },
       { kind: "paragraph", children: [text("after")] },
     ]);
@@ -400,6 +402,8 @@ describe("what the in-place editor writes (P1.21s)", () => {
           [[text("x\\")], [text("y\\")]],
           [[text("p\\|q")], [text("r")]],
         ],
+        from: 1,
+        to: 4,
       },
     ]);
   });
@@ -415,6 +419,8 @@ describe("what the in-place editor writes (P1.21s)", () => {
           [[text("one")], []],
           [[text("x")], [text("y")]],
         ],
+        from: 1,
+        to: 4,
       },
       { kind: "quote", paragraphs: [[text("quoted")]] },
     ]);
@@ -499,14 +505,21 @@ describe("where the page and the editor used to disagree", () => {
   test("a table straight after a paragraph line is a table", () => {
     expect(parseReadme("words\n| a | b |\n| - | - |\n| 1 | 2 |")).toEqual([
       { kind: "paragraph", children: [text("words")] },
-      { kind: "table", align: [null, null], head: [[text("a")], [text("b")]], rows: [[[text("1")], [text("2")]]] },
+      {
+        kind: "table",
+        align: [null, null],
+        head: [[text("a")], [text("b")]],
+        rows: [[[text("1")], [text("2")]]],
+        from: 2,
+        to: 4,
+      },
     ]);
   });
 
   test("a line over a row of hyphens is a heading, and a one-column table needs its delimiter row's pipes", () => {
     expect(parseReadme("| a |\n---")).toEqual([{ kind: "heading", level: 2, children: [text("| a |")] }]);
     expect(parseReadme("| a |\n| - |\n| 1 |")).toEqual([
-      { kind: "table", align: [null], head: [[text("a")]], rows: [[[text("1")]]] },
+      { kind: "table", align: [null], head: [[text("a")]], rows: [[[text("1")]]], from: 1, to: 3 },
     ]);
   });
 

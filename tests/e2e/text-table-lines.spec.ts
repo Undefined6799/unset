@@ -32,9 +32,13 @@ async function expectOurLook(table: Locator) {
 
 async function expectChanged(table: Locator) {
   await expectLines(table.locator("th").first(), { bottom: "1px" });
-  await expectLines(table.locator("td").first(), { bottom: "0px", left: "0px" });
+  await expectLines(table.locator("td").first(), { bottom: "0px", left: "1px" });
   await expectLines(table.locator("td").nth(1), { left: "1px" });
-  await expectLines(table, { top: "1px", bottom: "1px", left: "1px", right: "1px" });
+  // The outline is drawn on the outer cells (ADR 0110 point 5), so the table draws none of its own.
+  await expectLines(table.locator("th").first(), { top: "1px", left: "1px" });
+  await expectLines(table.locator("th").last(), { top: "1px", right: "1px" });
+  await expectLines(table.locator("td").last(), { bottom: "1px", right: "1px" });
+  await expectLines(table, { top: "0px", left: "0px" });
 }
 
 test("the_edit_form_sets_a_text_cards_table_lines_and_the_page_and_preview_draw_them", async ({ page }) => {
