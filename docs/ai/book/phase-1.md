@@ -5676,6 +5676,24 @@ menu has no title row or close button. `tests/e2e/navbar-account.spec.ts` walks 
 hand-over, the policy with the menu open, axe in both themes and the phone's sizes; `tests/e2e/navbar.ts` finds the
 control by name, which both versions carry. `nojs.spec.ts` and `cards-nojs.spec.ts` hold the native menu, unchanged.
 
+**Built 2026-11-24: part 2, the three-line menu and the Create menu.** Both are
+`apps/web/lib/components/shell/header-menu.svelte`: the rows whose feature is coming are disabled menu items, each
+named in one string ("Saved, coming soon"), and the rows that run today are links (Create's "Add a profile card").
+The layout now loads the stock controls as one file, `shell/index.ts`, on every page with the core header, for a
+visitor too, and one hand-over walks the menus that have a stock version. Two things the part found:
+
+- **The layout closed every open native panel when the client started.** The `afterNavigate` that closes panels
+  after a client navigation also runs when the layout mounts (kit 3.2.0 `src/runtime/client/client.js`,
+  `afterNavigate`, type `enter`), so a menu opened early was gone before it could be carried over. It now skips the
+  start. Part 1's account menu escaped this only because it had left that list; it is back on it, so a client
+  navigation before the swap closes the native account menu as it closes the others.
+- **The native Create panel stays until part 4.** On a phone Create is a row of More actions, still native, and that
+  row opens the native panel. So the stock Create menu has no fixed id, and the hand-over leaves the Create panel
+  alone while More actions is open. Part 4 removes the native panel.
+
+`tests/e2e/navbar-menus.spec.ts` holds both menus as part 1's spec holds the account menu, a visitor on the home
+page included.
+
 ---
 
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)
