@@ -173,6 +173,24 @@ test("words_selected_with_a_formula_among_them_keep_its_tex_as_one_formula", asy
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #2020 (9277e7e): Inline code over a formula marked the formula, and Milkdown 7.23.0's inline code writer
+// writes the node's text (preset-commonmark src/mark/inline-code.ts), which a formula has none of, so it was lost.
+// A formula under inline code becomes its TeX as code.
+test("inline_code_over_a_formula_keeps_its_tex_as_code", async ({ page }) => {
+  const watched = watch(page);
+  const word = `code${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} a $x$ b`);
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(1);
+  await editor.locator("[data-math-inline]").click();
+  const floating = page.getByRole("toolbar", { name: "Format the selected words" }).filter({ visible: true });
+  await floating.getByRole("button", { name: "Inline code" }).click();
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(0);
+  expect(await markdownOf(page, card)).toBe(`${word} a \`x\` b`);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 // Codex on #2020 (32b5336): the page reads a refused span's Markdown again with no math at all (parse.ts refusedMath),
 // so "$$x$$" inside "$ a $$x$$ b $" stays words there; the editor read it again with math on, so it opened as a
 // formula and an edit elsewhere saved it as one.
