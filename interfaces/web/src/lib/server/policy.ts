@@ -61,5 +61,12 @@ export type RoutePolicy = Readonly<{
   testOnly?: true;
 }>;
 
+/**
+ * Whether a route's own page runs SvelteKit's client: every page does unless its policy says `client: false` (ADR
+ * 0116 points 1 and 4), and a route with no policy has no page. Read from the route's policy alone, never from the
+ * request, so nothing a visitor sends turns it on.
+ */
+export const runsClient = (policy: RoutePolicy | undefined): boolean => policy !== undefined && policy.client !== false;
+
 /** Typed helper for a route's policy.ts: `export const policy = definePolicy({ ... })`. */
 export const definePolicy = (policy: RoutePolicy): RoutePolicy => policy;
