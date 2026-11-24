@@ -7,16 +7,27 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import type { MathNode } from "../../profile/math.ts";
-import type { Block, Inline, ListBlock } from "../../profile/types.ts";
+import type { Block, Inline, ListBlock, TableLines } from "../../profile/types.ts";
 
 let {
   blocks,
+  lines,
   codeTools,
 }: {
   blocks: readonly Block[];
+  /** The card's table switches (ADR 0110 point 2); left out, our look: header and row lines, no columns, no outline. */
+  lines?: TableLines;
   /** Drawn in each code block's corner with its code as stored, when given (readme-copy.svelte's Copy button). */
   codeTools?: Snippet<[string]>;
 } = $props();
+/** A cell's lines: under it unless switched off, and on its start side between columns when switched on. */
+const cellLines = (header: boolean, column: number): string =>
+  [
+    (header ? lines?.hideHeaderLine : lines?.hideRowLines) === true ? "" : "border-b",
+    lines?.showColumnLines === true && column > 0 ? "border-s" : "",
+  ]
+    .filter((name) => name !== "")
+    .join(" ");
 /** The block's code as stored: a coloured block carries only its runs, which join back to it (code-colours.ts). */
 const codeText = (block: { readonly text: string } | { readonly runs: readonly { readonly text: string }[] }) =>
   "runs" in block ? block.runs.map((run) => run.text).join("") : block.text;
@@ -118,10 +129,10 @@ const HEADING_LOOK = [
     {:else if block.kind === "table"}
       <!-- A wide table scrolls inside the card rather than widening it. -->
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-sm">
+        <table class="w-full border-collapse text-sm" class:border={lines?.showOutline === true} class:border-input={lines?.showOutline === true}>
           <thead>
             <tr>
-              {#each block.head as cell, c (c)}<th class="border-b border-input px-3 py-1.5 font-semibold {aligned(block.align[c])}"
+              {#each block.head as cell, c (c)}<th class="{cellLines(true, c)} border-input px-3 py-1.5 font-semibold {aligned(block.align[c])}"
                   >{@render inline(cell)}</th
                 >{/each}
             </tr>
@@ -129,7 +140,7 @@ const HEADING_LOOK = [
           {#if block.rows.length > 0}
             <tbody>
               {#each block.rows as row, r (r)}<tr>
-                  {#each row as cell, c (c)}<td class="border-b border-input px-3 py-1.5 {aligned(block.align[c])}"
+                  {#each row as cell, c (c)}<td class="{cellLines(false, c)} border-input px-3 py-1.5 {aligned(block.align[c])}"
                       >{@render inline(cell)}</td
                     >{/each}
                 </tr>{/each}

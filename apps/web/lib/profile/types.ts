@@ -14,8 +14,16 @@ export type PageVisibility = "public" | "signedIn" | "ownerOnly";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
 
+/** A Text card's four table switches (ADR 0110 point 2), as domains/profile reads them; left out when none is on. */
+export type TableLines = {
+  readonly hideHeaderLine: boolean;
+  readonly hideRowLines: boolean;
+  readonly showColumnLines: boolean;
+  readonly showOutline: boolean;
+};
+
 export type CardContent =
-  | { readonly kind: "readme"; readonly text: string }
+  | { readonly kind: "readme"; readonly text: string; readonly tableLines?: TableLines }
   | {
       readonly kind: "links";
       readonly title: string;
@@ -105,7 +113,7 @@ export type ShownEntry = {
 export type ShownButton = { readonly href: string; readonly label: string; readonly address?: string };
 
 export type CardShown =
-  | { readonly kind: "readme"; readonly blocks: readonly Block[] }
+  | { readonly kind: "readme"; readonly blocks: readonly Block[]; readonly tableLines?: TableLines }
   | {
       readonly kind: "links";
       readonly title: string;

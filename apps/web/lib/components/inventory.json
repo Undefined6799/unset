@@ -279,6 +279,38 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
+    "popover": {
+      "index.ts": {
+        "sha256": "826c6647040c7cc1e5773f8f8969298f2b5f073bd5fd5ec463e3f91c90566001",
+        "registrySha256": "d90d2cd7222e9192810824de111a30359b598cd994b452aa83ed205851d2bde1",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "popover-close.svelte": {
+        "sha256": "930b80dc0f64f4a661d2e23c7631d4402ffa5c1dd8586f41fc4383afe668314c",
+        "registrySha256": "bec13457158cb16ba4a0d45789ef2a6b6f3b2c84e14c819ebfa8eca76baced77",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "popover-content.svelte": {
+        "sha256": "24a34bc83d05dace89698ec7699e72c0168ade880d480944b505029d7f1b6f0f",
+        "registrySha256": "6495b5c4dd48c0faabf330b3e81e2f0e1e5948983b5114991d8da359141843bc",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "popover-portal.svelte": {
+        "sha256": "b4a4c5dc0f3a706efbe92063ef803cfd55753aba9959dbf8f11cc42bef97de61",
+        "registrySha256": "4db64c036aace1359a29d703a842998a6c74b17e84900eb6289cedc5f37ff43a",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "popover-trigger.svelte": {
+        "sha256": "808734be1a9d258ed6d4a92e465945df42c8f26bdd5e490f4f6baca6f9125138",
+        "registrySha256": "07902723c1a5a0946964751db6092667499d35adbcfda0a5c662a45f8021bfd2",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "popover.svelte": {
+        "sha256": "bb5ef5678856065acdfa5e75891bfcc2af99935b329773009457206821597363",
+        "registrySha256": "9697cf96a4ab4970b93e0aafd3962aaa21a97d88d2976886f2a7dd22db87b1ca",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
     "tabs": {
       "index.ts": {
         "sha256": "c507201eab4f8f3129cef00cb03b84633f3f11e04b9506796ef15a8add162483",
@@ -459,6 +491,18 @@
       }
     },
     "shell": {
+      "index.ts": {
+        "origin": "ours",
+        "purpose": "The navbar's stock controls in one piece (book P1.22m): the file the shell loads after the client starts, so the library's code is in no page's first load."
+      },
+      "header-menu.svelte": {
+        "origin": "ours",
+        "purpose": "A header menu with script (book P1.22m, ADR 0116 points 8 and 9), used for the three-line menu and the Create menu: the stock Dropdown Menu holding the rows whose feature is coming as disabled menu items, then the rows that run today as links. The shell draws each menu with no script itself and loads this file after the client starts."
+      },
+      "header-panel.svelte": {
+        "origin": "ours",
+        "purpose": "A header panel with script (book P1.22m, ADR 0116 points 8 and 9), used for Messages, the bell's panel and Search on a phone: the stock Popover as a dialog named by its title, with a title row and a Close button, holding what the shell passes. The shell draws the native control with no script itself and loads this file after the client starts."
+      },
       "account-menu.svelte": {
         "origin": "ours",
         "purpose": "The header's account menu with script (book P1.22m, ADR 0116 points 8 and 9): the stock Dropdown Menu holding the member's two links, the theme choices as radio rows, and Sign out as a submit button of the shell's sign-out form. The shell draws the menu with no script itself and loads this file after the client starts."

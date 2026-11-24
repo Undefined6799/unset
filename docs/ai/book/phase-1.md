@@ -5676,6 +5676,71 @@ menu has no title row or close button. `tests/e2e/navbar-account.spec.ts` walks 
 hand-over, the policy with the menu open, axe in both themes and the phone's sizes; `tests/e2e/navbar.ts` finds the
 control by name, which both versions carry. `nojs.spec.ts` and `cards-nojs.spec.ts` hold the native menu, unchanged.
 
+**Built 2026-11-24: part 2, the three-line menu and the Create menu.** Both are
+`apps/web/lib/components/shell/header-menu.svelte`: the rows whose feature is coming are disabled menu items, each
+named in one string ("Saved, coming soon"), and the rows that run today are links (Create's "Add a profile card").
+The layout now loads the stock controls as one file, `shell/index.ts`, on every page with the core header, for a
+visitor too, and one hand-over walks the menus that have a stock version. Two things the part found:
+
+- **The layout closed every open native panel when the client started.** The `afterNavigate` that closes panels
+  after a client navigation also runs when the layout mounts (kit 3.2.0 `src/runtime/client/client.js`,
+  `afterNavigate`, type `enter`), so a menu opened early was gone before it could be carried over. It now skips the
+  start. Part 1's account menu escaped this only because it had left that list; it is back on it, so a client
+  navigation before the swap closes the native account menu as it closes the others.
+- **The native Create panel stays until part 4.** On a phone Create is a row of More actions, still native, and that
+  row opens the native panel. So the stock Create menu has no fixed id, and the hand-over leaves the Create panel
+  alone while More actions is open. Part 4 removes the native panel.
+
+`tests/e2e/navbar-menus.spec.ts` holds both menus as part 1's spec holds the account menu, a visitor on the home
+page included.
+
+**Built 2026-11-24: part 3, Messages, the bell's panel and Search on a phone.** The stock Popover is copied in
+(`apps/web/lib/components/ui/popover`, six files from the 1.8.1 registry, listed in `inventory.json`; no new
+package). The three panels are `apps/web/lib/components/shell/header-panel.svelte`: the Popover as a dialog named by
+its title, with the native panel's title row and Close button, holding what the layout passes. The library sets no
+role on a popover's content, so the file sets `role="dialog"` and `aria-labelledby`. What the part settled:
+
+- **The bell has two states in the header, not three.** It is the server's link until the stock panel is ready, then
+  the panel's button. P1.22g's native popover button for it is gone from the header; if the stock file never
+  arrives the bell stays the link. Focus on the link is on the button after the swap, which P1.22g left for here.
+- **A control found open is opened after focus is on its new button.** Mounted already open, the Popover gave focus
+  back, on closing, to the native button, which was gone (bits-ui focus-scope remembers where focus was when the
+  panel opened). The hand-over now focuses the new button, then opens; the menus take the same path.
+- **The seen form is one**, outside the panels, so the stock panel and the native one post the same mark.
+- **Three native panels stay until part 4:** Create, Messages and Notifications, for More actions' rows on a phone.
+  Search is a header button on a phone and is fully the stock panel.
+
+`tests/e2e/navbar-panels.spec.ts` holds the panels; `bell-panel.spec.ts` and `notifications.spec.ts` find the bell's
+panel as the dialog.
+
+**Built 2026-11-24: part 4, More actions on a phone.** Under 640px More actions is the stock Dropdown Menu, drawn by
+`header-menu.svelte` with two additions: a heading that makes the first rows a named group, and action rows after
+them. What the part settled:
+
+- **Create's rows are in More actions itself**, as a group named Create, where the native menu has a Create row
+  that opens a second panel on top. A second menu level has no room on a phone, and one menu with the arrow keys
+  walking all of it is the plainer thing.
+- **A row for Messages and one for the bell open the same stock panels**, under More actions' button, since their
+  own buttons are not drawn at that width (`header-panel.svelte` `anchor`). The row closes the menu, which gives
+  focus back to its button; the panel opens once the menu has gone (`onOpenChangeComplete`), so closing the panel
+  gives focus back to that button. A press on the button while its panel is open opens the menu, and the layout
+  closes the panel then: the library leaves a panel open for a press on the element it is placed by.
+- **The panel is told it opened by an effect on `open`**, not by the library's `onOpenChange`, which runs only for
+  openings the library made itself. The bell's mark is posted for an opening from More actions too.
+- **No native panel is left in the document once the stock controls are in.** All of them are drawn only until
+  then. The bell's native panel is gone altogether: in the native More actions its row is the link to the page, as
+  the bell is in the header.
+- **The hand-over under 640px:** a native More actions found open is the stock one open; a native Create panel on
+  top of it is the stock More actions, which holds those rows; a native Messages panel on top of it is the stock
+  panel, with focus first on More actions' button.
+
+- **Crossing 640px closes every stock control** (one `matchMedia` listener in the layout). The header draws other
+  buttons on the other side of that line, so an open control loses the button it sits under; the library then hides
+  it but does not always close it, and a hidden open menu still keeps the pointer off the page.
+
+`tests/e2e/navbar-actions.spec.ts` holds More actions; the phone tests of `navigation`, `navbar-menus`,
+`navbar-panels` and `bell-panel` go through it.
+
 ---
 
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)

@@ -222,30 +222,82 @@ onMount(() => {
   clientReady = true;
 });
 const bellOpens = $derived(clientReady && notes?.state !== "count");
-// The account menu (book P1.22m, ADR 0116 points 8 and 9). The server draws it as a native popover: that is the menu
-// with no script, and until the stock one is ready. The stock one (apps/web lib/components/shell/account-menu.svelte)
-// is loaded once the client has started, for a member only, so no page's first load carries the library's menu code
-// (about 37 KiB gzip, measured with scripts/budgets/app-js.ts). A file that does not arrive (a tab older than the
-// deploy) leaves the native menu, which works. A press the native menu took is carried over, never lost: a menu found
-// open is open after the swap, and focus found on its button, or inside it, is on the stock button after.
-type AccountMenu = typeof import("@unset/apps-web/lib/components/shell/account-menu.svelte").default;
-let StockAccountMenu = $state<AccountMenu | undefined>(undefined);
-let accountOpen = $state(false);
-let accountButton = $state<HTMLElement | null>(null);
-let accountAsked = false;
+// The navbar's stock controls (book P1.22m, ADR 0116 points 8 and 9). The server draws each control as a native
+// popover: that is the control with no script, and until the stock one is ready. The stock ones (apps/web
+// lib/components/shell/) are loaded in one piece once the client has started, so no page's first load carries the
+// library's menu code (about 37 KiB gzip, measured with scripts/budgets/app-js.ts). A file that does not arrive (a tab
+// older than the deploy) leaves the native controls, which work. A press a native control took is carried over, never
+// lost: a menu found open is open after the swap, and focus found on its button, or inside it, is on the stock button
+// after.
+type Stock = typeof import("@unset/apps-web/lib/components/shell/index.ts");
+let stock = $state<Stock | undefined>(undefined);
+// The controls that have a stock version, by the id of the native popover: whether each is open, and its button.
+const STOCK_MENUS = [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH, ACCOUNT] as const;
+const stockOpen = $state<Record<string, boolean>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, false])));
+const stockButton = $state<Record<string, HTMLElement | null>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, null])));
+let stockAsked = false;
 $effect(() => {
-  if (account === undefined || accountAsked) return;
-  accountAsked = true;
-  import("@unset/apps-web/lib/components/shell/account-menu.svelte").then(takeAccountMenuOver, () => undefined);
+  // The core header shows the menus to a visitor too; no other shell has one.
+  if (shell.kind !== "core" || stockAsked) return;
+  stockAsked = true;
+  import("@unset/apps-web/lib/components/shell/index.ts").then(takeOver, () => undefined);
 });
-function takeAccountMenuOver(loaded: { default: AccountMenu }): void {
-  const native = document.getElementById(ACCOUNT);
+function takeOver(loaded: Stock): void {
   const focused = document.activeElement;
-  const hadFocus = focused?.getAttribute("popovertarget") === ACCOUNT || native?.contains(focused) === true;
-  accountOpen = native?.matches(":popover-open") === true;
-  StockAccountMenu = loaded.default;
-  // An open menu takes focus itself (bits-ui focus-scope); a closed one's button is new, so focus is put on it.
-  if (hadFocus && !accountOpen) void tick().then(() => accountButton?.focus());
+  const isOpen = (id: string) => document.getElementById(id)?.matches(":popover-open") === true;
+  let openOn: string | undefined;
+  let focusOn: string | undefined;
+  for (const id of STOCK_MENUS) {
+    // The server's bell is a link, not a popover's button (bellOpens above); focus on it counts as focus on the bell.
+    const onBell = id === NOTIFICATIONS && focused?.matches('header a[href="/notifications"]') === true;
+    const inside = document.getElementById(id)?.contains(focused) === true;
+    const hadFocus = onBell || focused?.getAttribute("popovertarget") === id || inside;
+    if (isOpen(id)) openOn = id;
+    else if (hadFocus) focusOn = id;
+  }
+  // Under 640px a native panel opens from More actions and sits on top of it. The stock More actions holds Create's
+  // rows itself, and a stock panel it opens sits under its button, so that button is the one to give focus to.
+  const fromActions = isOpen(ACTIONS);
+  if (fromActions && openOn === CREATE) openOn = ACTIONS;
+  stock = loaded;
+  const id = fromActions ? ACTIONS : (openOn ?? focusOn);
+  if (id === undefined) return;
+  // The stock control's button is new, so focus is put on it, and only then is a control found open opened: the
+  // library gives focus back, on closing, to where it was when the control opened (bits-ui focus-scope).
+  void tick().then(() => {
+    stockButton[id]?.focus();
+    if (openOn !== undefined) stockOpen[openOn] = true;
+  });
+}
+// A press on More actions while a panel it opened is still open opens the menu, and the panel is closed here: the
+// library does not count a press on the button a panel sits under as a press outside the panel
+// (node_modules/bits-ui dist/bits/popover/popover.svelte.js onInteractOutside, customAnchor).
+$effect(() => {
+  if (!stockOpen[ACTIONS]) return;
+  for (const button of PANEL_BUTTONS) stockOpen[button.id] = false;
+});
+// The header draws other buttons on the other side of 640px (Tailwind's sm), so a stock control left open across that
+// line loses the button it sits under: a phone turned on its side. The library then hides the control (bits-ui
+// floating-layer, the hide middleware) but does not always close it, and an open menu keeps the pointer off the page
+// (seen in tests/e2e/navbar-actions.spec.ts before this). So crossing the line closes them all.
+onMount(() => {
+  const wide = matchMedia("(min-width: 40rem)");
+  const close = () => {
+    for (const id of STOCK_MENUS) stockOpen[id] = false;
+  };
+  wide.addEventListener("change", close);
+  return () => wide.removeEventListener("change", close);
+});
+// Under 640px Messages and the bell are rows of More actions. A row closes the menu, which gives focus back to its
+// button, and the row's panel is opened once the menu has gone (the stock menu's onClosed): the panel then takes
+// focus from that button, and gives it back there when it closes.
+let chosen: string | undefined;
+function openChosen(): void {
+  const id = chosen;
+  chosen = undefined;
+  if (id === undefined) return;
+  stockButton[ACTIONS]?.focus();
+  stockOpen[id] = true;
 }
 // The stock menu's rows post the same two plain forms the native menu holds: Sign out is a submit button of the
 // sign-out form, and a theme row presses its button in the picker, so one save path serves both menus (saveInPlace).
@@ -261,8 +313,8 @@ let seenUpTo = $state<string | undefined>(undefined);
 const unseen = $derived(notes?.state === "ready" || notes?.state === "count" ? notes.count : 0);
 const waiting = $derived(newest !== undefined && newest === seenUpTo ? 0 : unseen);
 let seenForm = $state<HTMLFormElement | undefined>(undefined);
-function markSeen(event: ToggleEvent): void {
-  if (event.newState !== "open" || newest === undefined || waiting === 0) return;
+function markSeen(): void {
+  if (newest === undefined || waiting === 0) return;
   seenUpTo = newest;
   seenForm?.requestSubmit();
 }
@@ -279,17 +331,29 @@ const markInBackground: SubmitFunction =
 // drawn as a small badge.
 const badge =
   "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.6875rem] leading-4.5 font-semibold text-primary-foreground";
+// Create's one row that runs today: the member's own page with the Add card picker open; a visitor signs in first.
+const addCardHref = $derived(account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`);
 const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
+// More actions' rows for Messages and the bell. The bell's row carries the count, and is the link to the page where
+// the bell does not open a panel (bellOpens).
+const actionRows = $derived(
+  PANEL_BUTTONS.map((button) => {
+    const row = { label: button.label, icon: button.icon };
+    const choose = () => {
+      chosen = button.id;
+    };
+    if (button.id !== NOTIFICATIONS) return { ...row, onSelect: choose };
+    const count = waiting > 0 ? { badge: N.badge(waiting), name: N.bell(waiting) } : undefined;
+    return bellOpens ? { ...row, count, onSelect: choose } : { ...row, count, href: "/notifications" };
+  }),
+);
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(({ type }) => {
-  accountOpen = false;
-  const closing = [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH];
-  // The native account menu too, while it is the menu (the stock one's file is on its way, or never arrived). Not
-  // when the client starts over the server's page: one opened before that is kept, and carried over
-  // (takeAccountMenuOver).
-  if (type !== "enter") closing.push(ACCOUNT);
-  for (const id of closing) {
+  // Not when the client starts over the server's page: a menu opened before that is kept, and carried over (takeOver).
+  if (type === "enter") return;
+  for (const id of STOCK_MENUS) stockOpen[id] = false;
+  for (const id of [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH, ACCOUNT]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
@@ -373,6 +437,56 @@ const row =
   </form>
 {/snippet}
 
+{#snippet soonRow(item: { label: string; icon: IconName })}
+  <li>
+    <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
+      <!-- One string for assistive technology, since a gap between two flex items reads as a space. -->
+      <Icon name={item.icon} size={20} /><span aria-hidden="true">{item.label}</span>
+      <span class="ml-auto text-xs" aria-hidden="true">{T.comingSoon}</span><span class="sr-only"
+        >{item.label}, {T.comingSoon}</span
+      >
+    </button>
+  </li>
+{/snippet}
+{#snippet notificationsBody()}
+  <!-- P2.27, ADR 0081: the newest few, each a link to its detail on the page, Dismiss all, and the page. A visitor is told to sign in
+       (the header's Sign in button is the one link for it). A failed read says so; the empty text comes from a real,
+       empty list. -->
+  {#if notes === undefined}
+    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.visitor}</p>
+  {:else}
+    {#if notes.state === "failed"}
+      <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
+    {:else if notes.state === "ready" && notes.entries.length > 0}
+      <NotificationList entries={notes.entries} />
+      <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
+    {:else}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
+    {/if}
+    <ul class="flex flex-col gap-1 border-t pt-1">
+      <li>
+        <a href="/notifications" class={row} aria-current={page.url.pathname === "/notifications" ? "page" : undefined}
+          ><Icon name="next" size={20} /><span>{N.viewAll}</span></a
+        >
+      </li>
+    </ul>
+  {/if}
+{/snippet}
+{#snippet moreActions()}
+  <!-- What the More actions button shows: the bell's count is in its name and on its corner. -->
+  <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
+  {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+{/snippet}
+{#snippet panelBody(button: (typeof PANEL_BUTTONS)[number])}
+  <!-- What a header panel holds under its title, in the native popover and in the stock one alike. -->
+  {#if button.id === NOTIFICATIONS}
+    {@render notificationsBody()}
+  {:else}
+    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
+    <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
+  {/if}
+{/snippet}
+
 {#snippet content()}
   {#if data.privacyNotice !== null}
     <!-- The changed privacy notice (P2.12b): on whatever app page the member opens, until they dismiss it or accept
@@ -418,9 +532,25 @@ const row =
   <header data-site-header="core" class="sticky top-0 z-40 border-b bg-secondary">
     <div class="flex h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
       <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-1.5">
-        <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
-          <Icon name="menu" size={20} label={T.menu} />
-        </Button>
+        {#if stock !== undefined}
+          <stock.HeaderMenu
+            bind:open={stockOpen[MENU]}
+            bind:button={stockButton[MENU]}
+            id={MENU}
+            label={T.more}
+            align="start"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control}"
+            soon={SOON_MENU}
+            links={[]}
+            comingSoon={T.comingSoon}
+          >
+            {#snippet trigger()}<Icon name="menu" size={20} label={T.menu} />{/snippet}
+          </stock.HeaderMenu>
+        {:else}
+          <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
+            <Icon name="menu" size={20} label={T.menu} />
+          </Button>
+        {/if}
         <a href="/" class="font-mono text-xl font-semibold whitespace-nowrap max-sm:text-lg text-foreground no-underline" aria-label={T.homeLabel}
           >{T.brandName}<span class="font-normal text-muted-foreground">{T.brandSuffix}</span></a
         >
@@ -436,28 +566,74 @@ const row =
       <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
         <!-- On a phone a disabled icon says nothing to a finger, so it opens a panel that says search is coming
              (staging walkthrough 2026-11-19), as Messages and Notifications do. -->
-        <Button
-          variant="outline"
-          size="icon-sm"
-          popovertarget={SEARCH}
-          popovertargetaction="toggle"
-          class="{control} sm:hidden"
-        >
-          <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          popovertarget={CREATE}
-          popovertargetaction="toggle"
-          class="h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
-        >
-          <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
-        </Button>
+        {#if stock !== undefined}
+          <stock.HeaderPanel
+            bind:open={stockOpen[SEARCH]}
+            bind:button={stockButton[SEARCH]}
+            title={T.search}
+            closeLabel="{T.close} {T.search}"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} sm:hidden"
+            class="w-[calc(100vw-1rem)]"
+          >
+            {#snippet trigger()}<Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />{/snippet}
+            <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
+          </stock.HeaderPanel>
+        {:else}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={SEARCH}
+            popovertargetaction="toggle"
+            class="{control} sm:hidden"
+          >
+            <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
+          </Button>
+        {/if}
+        {#if stock !== undefined}
+          <stock.HeaderMenu
+            bind:open={stockOpen[CREATE]}
+            bind:button={stockButton[CREATE]}
+            id={CREATE}
+            label={T.create}
+            align="end"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'sm' })} h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
+            soon={SOON_CREATE}
+            links={[{ label: T.addCard, icon: "apps", href: addCardHref }]}
+            comingSoon={T.comingSoon}
+          >
+            {#snippet trigger()}<Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />{/snippet}
+          </stock.HeaderMenu>
+        {:else}
+          <Button
+            variant="outline"
+            size="sm"
+            popovertarget={CREATE}
+            popovertargetaction="toggle"
+            class="h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
+          >
+            <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
+          </Button>
+        {/if}
         {#each PANEL_BUTTONS as button (button.id)}
-          {#if button.id === NOTIFICATIONS && !bellOpens}
+          {#if stock !== undefined && (button.id !== NOTIFICATIONS || bellOpens)}
+            <stock.HeaderPanel
+              bind:open={stockOpen[button.id]}
+              bind:button={stockButton[button.id]}
+              title={button.label}
+              closeLabel="{T.close} {button.label}"
+              triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} relative max-sm:hidden"
+              anchor={stockButton[ACTIONS]}
+              onOpened={button.id === NOTIFICATIONS ? markSeen : undefined}
+            >
+              {#snippet trigger()}
+                <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
+                {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+              {/snippet}
+              {@render panelBody(button)}
+            </stock.HeaderPanel>
+          {:else if button.id === NOTIFICATIONS}
             <!-- ADR 0108 point 3, ADR 0116 point 9: what the server draws. The bell is the way to the page, whose visit
-                 marks it seen, until the client is ready to open the panel. -->
+                 marks it seen, until the stock panel is ready to open. -->
             <Button variant="outline" size="icon-sm" href="/notifications" class="{control} relative max-sm:hidden">
               <Icon name={button.icon} size={20} label={N.bell(waiting)} />
               {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
@@ -470,25 +646,43 @@ const row =
               popovertargetaction="toggle"
               class="{control} relative max-sm:hidden"
             >
-              <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
-              {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+              <Icon name={button.icon} size={20} label={button.label} />
             </Button>
           {/if}
         {/each}
-        <Button
-          variant="outline"
-          size="icon-sm"
-          popovertarget={ACTIONS}
-          popovertargetaction="toggle"
-          class="{control} relative sm:hidden"
-        >
-          <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
-          {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
-        </Button>
-        {#if account !== undefined && StockAccountMenu !== undefined}
-          <StockAccountMenu
-            bind:open={accountOpen}
-            bind:button={accountButton}
+        {#if stock !== undefined}
+          <!-- Under 640px: Create's rows as a group, then a row each for Messages and the bell (actionRows). -->
+          <stock.HeaderMenu
+            bind:open={stockOpen[ACTIONS]}
+            bind:button={stockButton[ACTIONS]}
+            id={ACTIONS}
+            label={T.moreActions}
+            align="end"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} relative sm:hidden"
+            heading={T.create}
+            soon={SOON_CREATE}
+            links={[{ label: T.addCard, icon: "apps", href: addCardHref }]}
+            comingSoon={T.comingSoon}
+            actions={actionRows}
+            onClosed={openChosen}
+          >
+            {#snippet trigger()}{@render moreActions()}{/snippet}
+          </stock.HeaderMenu>
+        {:else}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={ACTIONS}
+            popovertargetaction="toggle"
+            class="{control} relative sm:hidden"
+          >
+            {@render moreActions()}
+          </Button>
+        {/if}
+        {#if account !== undefined && stock !== undefined}
+          <stock.AccountMenu
+            bind:open={stockOpen[ACCOUNT]}
+            bind:button={stockButton[ACCOUNT]}
             id={ACCOUNT}
             triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} rounded-full bg-muted font-semibold"
             {account}
@@ -541,41 +735,6 @@ const row =
     </nav>
   </header>
   <div class="flex min-h-[calc(100svh-var(--site-header-height))] flex-col">
-  {#snippet soonRow(item: { label: string; icon: IconName })}
-    <li>
-      <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
-        <!-- One string for assistive technology, since a gap between two flex items reads as a space. -->
-        <Icon name={item.icon} size={20} /><span aria-hidden="true">{item.label}</span>
-        <span class="ml-auto text-xs" aria-hidden="true">{T.comingSoon}</span><span class="sr-only"
-          >{item.label}, {T.comingSoon}</span
-        >
-      </button>
-    </li>
-  {/snippet}
-  {#snippet notificationsBody()}
-    <!-- P2.27, ADR 0081: the newest few, each a link to its detail on the page, Dismiss all, and the page. A visitor is told to sign in
-         (the header's Sign in button is the one link for it). A failed read says so; the empty text comes from a real,
-         empty list. -->
-    {#if notes === undefined}
-      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.visitor}</p>
-    {:else}
-      {#if notes.state === "failed"}
-        <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
-      {:else if notes.state === "ready" && notes.entries.length > 0}
-        <NotificationList entries={notes.entries} />
-        <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
-      {:else}
-        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
-      {/if}
-      <ul class="flex flex-col gap-1 border-t pt-1">
-        <li>
-          <a href="/notifications" class={row} aria-current={page.url.pathname === "/notifications" ? "page" : undefined}
-            ><Icon name="next" size={20} /><span>{N.viewAll}</span></a
-          >
-        </li>
-      </ul>
-    {/if}
-  {/snippet}
   {#snippet panelTitle(id: string, title: string, focusClose: boolean)}
     <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
       <h2 id="{id}-title" class="font-semibold">{title}</h2>
@@ -591,86 +750,80 @@ const row =
       {/if}
     </div>
   {/snippet}
-  <section id={MENU} popover="auto" aria-labelledby="{MENU}-title" class="{panel} right-auto left-3 max-sm:right-2 max-sm:left-2">
-    {@render panelTitle(MENU, T.more, true)}
-    <ul class="flex flex-col gap-1">
-      {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
-    </ul>
-  </section>
-  <section id={CREATE} popover="auto" ontoggle={backToActions} aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
-    {@render panelTitle(CREATE, T.create, false)}
-    <ul class="flex flex-col gap-1">
-      {#each SOON_CREATE as item (item.label)}{@render soonRow(item)}{/each}
-    </ul>
-    <ul class="mt-1 flex flex-col gap-1 border-t pt-1">
-      <li>
-        <!-- svelte-ignore a11y_autofocus -- the one item that runs today takes focus when the menu opens -->
-        <a href={account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`} class={row} autofocus>
-          <Icon name="apps" size={20} /><span>{T.addCard}</span>
-        </a>
-      </li>
-    </ul>
-  </section>
-  {#each PANEL_BUTTONS.filter((b) => b.id !== NOTIFICATIONS || bellOpens) as button (button.id)}
-    <section
-      id={button.id}
-      popover="auto"
-      ontoggle={(event) => {
-        backToActions(event);
-        if (button.id === NOTIFICATIONS) markSeen(event);
-      }}
-      aria-labelledby="{button.id}-title"
-      class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2"
-    >
-      {@render panelTitle(button.id, button.label, true)}
-      {#if button.id === NOTIFICATIONS}
-        {@render notificationsBody()}
-        {#if newest !== undefined}
-          <form bind:this={seenForm} method="POST" action="/notifications?/seen" hidden use:enhance={markInBackground}>
-            <input type="hidden" name="upTo" value={newest} />
-          </form>
-        {/if}
-      {:else}
-        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
-        <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
-      {/if}
+  {#if bellOpens && newest !== undefined}
+    <!-- What opening the bell's panel posts (markSeen). -->
+    <form bind:this={seenForm} method="POST" action="/notifications?/seen" hidden use:enhance={markInBackground}>
+      <input type="hidden" name="upTo" value={newest} />
+    </form>
+  {/if}
+  {#if stock === undefined}
+    <!-- The header's controls as the server draws them: with no script, until the stock ones are ready, and when
+         their file never arrives. The bell has no native panel: it is the link to its page (bellOpens). -->
+    <section id={MENU} popover="auto" aria-labelledby="{MENU}-title" class="{panel} right-auto left-3 max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(MENU, T.more, true)}
+      <ul class="flex flex-col gap-1">
+        {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
+      </ul>
     </section>
-  {/each}
-  <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
-    {@render panelTitle(SEARCH, T.search, true)}
-    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
-  </section>
-  <section id={ACTIONS} popover="auto" aria-labelledby="{ACTIONS}-title" class="{panel} right-2 left-2 w-auto">
-    {@render panelTitle(ACTIONS, T.moreActions, false)}
-    <ul class="flex flex-col gap-1">
-      <li>
-        <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens -->
-        <button type="button" popovertarget={CREATE} popovertargetaction="show" class="{row} w-full" autofocus>
-          <Icon name="add" size={20} /><span>{T.create}</span>
-        </button>
-      </li>
-      {#each PANEL_BUTTONS as button (button.id)}
+    <section id={CREATE} popover="auto" ontoggle={backToActions} aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(CREATE, T.create, false)}
+      <ul class="flex flex-col gap-1">
+        {#each SOON_CREATE as item (item.label)}{@render soonRow(item)}{/each}
+      </ul>
+      <ul class="mt-1 flex flex-col gap-1 border-t pt-1">
         <li>
-          {#if button.id === NOTIFICATIONS && !bellOpens}
-            <a href="/notifications" class="{row} w-full">
-              <Icon name={button.icon} size={20} /><span>{button.label}</span>
-              {#if waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
-                  ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
-                >{/if}
-            </a>
-          {:else}
-            <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
-              <Icon name={button.icon} size={20} /><span>{button.label}</span>
-              {#if button.id === NOTIFICATIONS && waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
-                  ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
-                >{/if}
-            </button>
-          {/if}
+          <!-- svelte-ignore a11y_autofocus -- the one item that runs today takes focus when the menu opens -->
+          <a href={addCardHref} class={row} autofocus>
+            <Icon name="apps" size={20} /><span>{T.addCard}</span>
+          </a>
         </li>
-      {/each}
-    </ul>
-  </section>
-  {#if account !== undefined && StockAccountMenu !== undefined}
+      </ul>
+    </section>
+    {#each PANEL_BUTTONS.filter((b) => b.id !== NOTIFICATIONS) as button (button.id)}
+      <section
+        id={button.id}
+        popover="auto"
+        ontoggle={backToActions}
+        aria-labelledby="{button.id}-title"
+        class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2"
+      >
+        {@render panelTitle(button.id, button.label, true)}
+        {@render panelBody(button)}
+      </section>
+    {/each}
+    <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
+      {@render panelTitle(SEARCH, T.search, true)}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
+    </section>
+    <section id={ACTIONS} popover="auto" aria-labelledby="{ACTIONS}-title" class="{panel} right-2 left-2 w-auto">
+      {@render panelTitle(ACTIONS, T.moreActions, false)}
+      <ul class="flex flex-col gap-1">
+        <li>
+          <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens -->
+          <button type="button" popovertarget={CREATE} popovertargetaction="show" class="{row} w-full" autofocus>
+            <Icon name="add" size={20} /><span>{T.create}</span>
+          </button>
+        </li>
+        {#each PANEL_BUTTONS as button (button.id)}
+          <li>
+            {#if button.id === NOTIFICATIONS}
+              <a href="/notifications" class="{row} w-full">
+                <Icon name={button.icon} size={20} /><span>{button.label}</span>
+                {#if waiting > 0}<span class="ml-auto text-xs text-muted-foreground"
+                    ><span aria-hidden="true">{N.badge(waiting)}</span><span class="sr-only">{N.bell(waiting)}</span></span
+                  >{/if}
+              </a>
+            {:else}
+              <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
+                <Icon name={button.icon} size={20} /><span>{button.label}</span>
+              </button>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+  {#if account !== undefined && stock !== undefined}
     <!-- What the stock account menu's rows post (chooseTheme, SIGN_OUT): the same two forms, not shown. -->
     <form id={SIGN_OUT} method="post" action="/logout" hidden></form>
     {#if prefs !== undefined}<div hidden bind:this={themeButtons}>{@render themePicker()}</div>{/if}

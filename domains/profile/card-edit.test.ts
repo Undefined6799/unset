@@ -383,3 +383,93 @@ describe("card surfaces", () => {
     );
   }
 });
+
+// A Text card's table lines (ADR 0110 point 2; Alex 2026-11-22 00:37Z, "Per card, in Edit"): four switches for every
+// table in the card, stored as sh.unset.block.text#tableStyle beside the Markdown. The Edit form always sends
+// `tableLines` with a box per line, checked when the line is drawn (so our look is header and rows checked); a save
+// that does not send it (the in-place editor) keeps what is stored.
+describe("table lines", () => {
+  const parsed = (input: Record<string, unknown>) => {
+    const result = parseCardInput(input);
+    if (!result.ok) throw new Error(result.code);
+    return result;
+  };
+  const NONE = { hideHeaderLine: false, hideRowLines: false, showColumnLines: false, showOutline: false };
+
+  test("the Edit form's checked switches are read, and a form that sends none leaves them out", () => {
+    expect(parsed({ kind: "readme", text: "a", tableLines: "", headerLine: "on", outline: "on" }).content).toEqual({
+      kind: "readme",
+      text: "a",
+      tableLines: { ...NONE, showOutline: true, hideRowLines: true },
+    });
+    expect(parsed({ kind: "readme", text: "a", tableLines: "", headerLine: "on", rowLines: "on" }).content).toEqual({
+      kind: "readme",
+      text: "a",
+      tableLines: NONE,
+    });
+    expect(parsed({ kind: "readme", text: "a" }).content).toEqual({ kind: "readme", text: "a" });
+  });
+
+  test.each([
+    [{ kind: "readme", text: "a", tableLines: "", outline: "yes" }],
+    [{ kind: "readme", text: "a", tableLines: "x" }],
+    [{ kind: "readme", text: "a", outline: "on" }],
+  ])("a box that is not a checked one, or one sent without the form's marker, is refused: %j", (input) => {
+    expect(parseCardInput(input)).toEqual({ ok: false, code: "card.invalid" });
+  });
+
+  test("switches are written as tableStyle with only those that are on, and the cell sides stored are kept", () => {
+    const tables = [{ lines: ["0a1b2c3d"], edges: [{ direction: "horizontal", line: 0, cell: 0 }] }];
+    const existing = stored({ $type: ref("readme"), text: "old", tableStyle: { hideRowLines: true, tables } });
+    const { content, width } = parsed({
+      kind: "readme",
+      text: "new",
+      tableLines: "",
+      headerLine: "on",
+      rowLines: "on",
+      columnLines: "on",
+    });
+    const written = toCardRecord(content, width, existing, NOW);
+    expect(written).toMatchObject({
+      ok: true,
+      record: { content: { $type: ref("readme"), text: "new", tableStyle: { showColumnLines: true, tables } } },
+    });
+    expect(written.ok && validateRecord("sh.unset.card", written.record, "write").ok).toBe(true);
+  });
+
+  // Codex on #2026: a key of tableStyle this editor does not own (another client's, a newer release's) is kept, as
+  // ADR 0038 keeps every unowned field; only the four switches are replaced.
+  test("an Edit save replaces only the four switches and keeps any other key of the stored tableStyle", () => {
+    const existing = stored({
+      $type: ref("readme"),
+      text: "old",
+      tableStyle: { hideRowLines: true, showOutline: true, laterKey: { a: 1 } },
+    });
+    const lined = parsed({ kind: "readme", text: "new", tableLines: "", headerLine: "on", columnLines: "on" });
+    const written = toCardRecord(lined.content, lined.width, existing, NOW);
+    expect(written.ok && (written.record.content as { tableStyle?: unknown }).tableStyle).toEqual({
+      hideRowLines: true,
+      showColumnLines: true,
+      laterKey: { a: 1 },
+    });
+    const ours = parsed({ kind: "readme", text: "new", tableLines: "", headerLine: "on", rowLines: "on" });
+    const plain = toCardRecord(ours.content, ours.width, existing, NOW);
+    expect(plain.ok && (plain.record.content as { tableStyle?: unknown }).tableStyle).toEqual({ laterKey: { a: 1 } });
+  });
+
+  test("our look writes no tableStyle, and a save without the marker keeps the stored one", () => {
+    const existing = stored({ $type: ref("readme"), text: "old", tableStyle: { showOutline: true } });
+    const off = parsed({ kind: "readme", text: "new", tableLines: "", headerLine: "on", rowLines: "on" });
+    expect(toCardRecord(off.content, off.width, existing, NOW)).toMatchObject({
+      ok: true,
+      record: { content: { $type: ref("readme"), text: "new" } },
+    });
+    const offWritten = toCardRecord(off.content, off.width, existing, NOW);
+    expect(offWritten.ok && "tableStyle" in (offWritten.record.content as object)).toBe(false);
+    const inPlace = parsed({ kind: "readme", text: "new" });
+    expect(toCardRecord(inPlace.content, inPlace.width, existing, NOW)).toMatchObject({
+      ok: true,
+      record: { content: { $type: ref("readme"), text: "new", tableStyle: { showOutline: true } } },
+    });
+  });
+});

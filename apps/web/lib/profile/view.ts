@@ -79,8 +79,12 @@ export const colourBlocks = (blocks: readonly ParsedBlock[], budget: CodeColourB
 
 async function shownOf(content: CardContent, readText: TextReader, budget: CodeColourBudget): Promise<CardShown> {
   switch (content.kind) {
-    case "readme":
-      return { kind: "readme", blocks: await colourBlocks(readText(content.text), budget) };
+    case "readme": {
+      const blocks = await colourBlocks(readText(content.text), budget);
+      return content.tableLines === undefined
+        ? { kind: "readme", blocks }
+        : { kind: "readme", blocks, tableLines: content.tableLines };
+    }
     case "links":
       return {
         kind: "links",

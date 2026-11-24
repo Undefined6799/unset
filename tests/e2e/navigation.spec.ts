@@ -3,7 +3,20 @@
 // a 303 to the member's /<DID>) was matched to /[did] with did "me" and showed not found, and its error page offered
 // Sign in to a member signed in (2026-11-18).
 import { expect, test } from "@playwright/test";
-import { accountButton, accountMenu, openAccountMenu } from "./navbar.ts";
+import {
+  ACTIONS_MENU,
+  accountButton,
+  accountMenu,
+  actionsRow,
+  BELL_PANEL,
+  CREATE_MENU,
+  MESSAGES_PANEL,
+  menuButton,
+  openAccountMenu,
+  openMenu,
+  stockMenu,
+  stockPanel,
+} from "./navbar.ts";
 import { addPageCookies, openPage, watch } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -45,12 +58,11 @@ test("the_account_menu_profile_link_reaches_the_member_page_and_closes", async (
 test("the_create_menu_closes_after_a_client_navigation", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertarget="create-menu"]').click();
-  await page.locator("#create-menu").getByRole("link", { name: "Add a profile card" }).click();
+  await (await openMenu(page, CREATE_MENU)).getByRole("menuitem", { name: "Add a profile card" }).click();
   // Codex review of f14b5ab: the item lands on the Add card picker in place (`?add`), which exists with or without
   // script; the old `#add-card` fragment named no element.
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}?add#card-editor`);
-  await expect(page.locator("#create-menu")).toBeHidden();
+  await expect(stockMenu(page, CREATE_MENU)).toHaveCount(0);
   await expect(page.locator("#card-editor")).toBeInViewport();
 });
 
@@ -81,19 +93,20 @@ test.describe("phone", () => {
   });
 
   // Outside audit of staging, 2026-11-19: More actions, then one of its panels, then Escape left More actions open
-  // with focus on the page, so the next Tab went behind the menu. Focus goes back to the row that opened the panel
-  // once the client runs (an app page; the public pages run no script).
-  for (const name of ["Create", "Messages", "Notifications"]) {
-    test(`escape_from_${name.toLowerCase()}_returns_focus_to_more_actions`, async ({ page }) => {
+  // with focus on the page, so the next Tab went behind the menu. With the stock controls (book P1.22m) a row closes
+  // More actions and opens its panel, and Escape gives focus back to More actions' button. Create's rows are in More
+  // actions itself (navbar-actions.spec.ts).
+  for (const which of [MESSAGES_PANEL, BELL_PANEL]) {
+    test(`escape_from_${which.title.toLowerCase()}_returns_focus_to_more_actions`, async ({ page }) => {
       expect((await openPage(page, SETTINGS))?.status()).toBe(200);
       await page.waitForLoadState("networkidle");
-      await page.locator('header button[popovertarget="actions-menu"]').click();
-      const actions = page.locator("#actions-menu");
-      const row = actions.getByRole("button", { name, exact: true });
-      await row.click();
+      const actions = await openMenu(page, ACTIONS_MENU);
+      await actionsRow(actions, which.title).click();
+      await expect(stockPanel(page, which)).toBeVisible();
+      await expect(actions).toHaveCount(0);
       await page.keyboard.press("Escape");
-      await expect(actions).toBeVisible();
-      await expect(row).toBeFocused();
+      await expect(stockPanel(page, which)).toHaveCount(0);
+      await expect(menuButton(page, ACTIONS_MENU)).toBeFocused();
     });
   }
 });
