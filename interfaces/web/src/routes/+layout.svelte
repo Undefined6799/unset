@@ -222,30 +222,37 @@ onMount(() => {
   clientReady = true;
 });
 const bellOpens = $derived(clientReady && notes?.state !== "count");
-// The account menu (book P1.22m, ADR 0116 points 8 and 9). The server draws it as a native popover: that is the menu
-// with no script, and until the stock one is ready. The stock one (apps/web lib/components/shell/account-menu.svelte)
-// is loaded once the client has started, for a member only, so no page's first load carries the library's menu code
-// (about 37 KiB gzip, measured with scripts/budgets/app-js.ts). A file that does not arrive (a tab older than the
-// deploy) leaves the native menu, which works. A press the native menu took is carried over, never lost: a menu found
-// open is open after the swap, and focus found on its button, or inside it, is on the stock button after.
-type AccountMenu = typeof import("@unset/apps-web/lib/components/shell/account-menu.svelte").default;
-let StockAccountMenu = $state<AccountMenu | undefined>(undefined);
-let accountOpen = $state(false);
-let accountButton = $state<HTMLElement | null>(null);
-let accountAsked = false;
+// The navbar's stock controls (book P1.22m, ADR 0116 points 8 and 9). The server draws each control as a native
+// popover: that is the control with no script, and until the stock one is ready. The stock ones (apps/web
+// lib/components/shell/) are loaded in one piece once the client has started, so no page's first load carries the
+// library's menu code (about 37 KiB gzip, measured with scripts/budgets/app-js.ts). A file that does not arrive (a tab
+// older than the deploy) leaves the native controls, which work. A press a native control took is carried over, never
+// lost: a menu found open is open after the swap, and focus found on its button, or inside it, is on the stock button
+// after.
+type Stock = typeof import("@unset/apps-web/lib/components/shell/index.ts");
+let stock = $state<Stock | undefined>(undefined);
+// The menus that have a stock version, by the id of the native popover: whether each is open, and its button.
+const STOCK_MENUS = [ACCOUNT] as const;
+const stockOpen = $state<Record<string, boolean>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, false])));
+const stockButton = $state<Record<string, HTMLElement | null>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, null])));
+let stockAsked = false;
 $effect(() => {
-  if (account === undefined || accountAsked) return;
-  accountAsked = true;
-  import("@unset/apps-web/lib/components/shell/account-menu.svelte").then(takeAccountMenuOver, () => undefined);
+  if (account === undefined || stockAsked) return;
+  stockAsked = true;
+  import("@unset/apps-web/lib/components/shell/index.ts").then(takeOver, () => undefined);
 });
-function takeAccountMenuOver(loaded: { default: AccountMenu }): void {
-  const native = document.getElementById(ACCOUNT);
+function takeOver(loaded: Stock): void {
   const focused = document.activeElement;
-  const hadFocus = focused?.getAttribute("popovertarget") === ACCOUNT || native?.contains(focused) === true;
-  accountOpen = native?.matches(":popover-open") === true;
-  StockAccountMenu = loaded.default;
+  let focusOn: string | undefined;
+  for (const id of STOCK_MENUS) {
+    const native = document.getElementById(id);
+    stockOpen[id] = native?.matches(":popover-open") === true;
+    const hadFocus = focused?.getAttribute("popovertarget") === id || native?.contains(focused) === true;
+    if (hadFocus && !stockOpen[id]) focusOn = id;
+  }
+  stock = loaded;
   // An open menu takes focus itself (bits-ui focus-scope); a closed one's button is new, so focus is put on it.
-  if (hadFocus && !accountOpen) void tick().then(() => accountButton?.focus());
+  if (focusOn !== undefined) void tick().then(() => stockButton[focusOn]?.focus());
 }
 // The stock menu's rows post the same two plain forms the native menu holds: Sign out is a submit button of the
 // sign-out form, and a theme row presses its button in the picker, so one save path serves both menus (saveInPlace).
@@ -283,11 +290,10 @@ const letter = $derived(account?.name === undefined ? undefined : accountLetter(
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(({ type }) => {
-  accountOpen = false;
+  for (const id of STOCK_MENUS) stockOpen[id] = false;
   const closing = [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH];
   // The native account menu too, while it is the menu (the stock one's file is on its way, or never arrived). Not
-  // when the client starts over the server's page: one opened before that is kept, and carried over
-  // (takeAccountMenuOver).
+  // when the client starts over the server's page: one opened before that is kept, and carried over (takeOver).
   if (type !== "enter") closing.push(ACCOUNT);
   for (const id of closing) {
     const popover = document.getElementById(id);
@@ -485,10 +491,10 @@ const row =
           <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
           {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
         </Button>
-        {#if account !== undefined && StockAccountMenu !== undefined}
-          <StockAccountMenu
-            bind:open={accountOpen}
-            bind:button={accountButton}
+        {#if account !== undefined && stock !== undefined}
+          <stock.AccountMenu
+            bind:open={stockOpen[ACCOUNT]}
+            bind:button={stockButton[ACCOUNT]}
             id={ACCOUNT}
             triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} rounded-full bg-muted font-semibold"
             {account}
@@ -670,7 +676,7 @@ const row =
       {/each}
     </ul>
   </section>
-  {#if account !== undefined && StockAccountMenu !== undefined}
+  {#if account !== undefined && stock !== undefined}
     <!-- What the stock account menu's rows post (chooseTheme, SIGN_OUT): the same two forms, not shown. -->
     <form id={SIGN_OUT} method="post" action="/logout" hidden></form>
     {#if prefs !== undefined}<div hidden bind:this={themeButtons}>{@render themePicker()}</div>{/if}
