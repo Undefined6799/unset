@@ -16,6 +16,7 @@
 // formula starts from KaTeX's own macros and none can define one for another.
 import katex from "katex";
 import { type DefaultTreeAdapterTypes, parseFragment } from "parse5";
+import { MAX_TEX_CHARS } from "./math-syntax.ts";
 
 /** A MathML element as the page draws it; every string child is text. */
 export type MathNode = {
@@ -27,8 +28,6 @@ export type MathNode = {
 /** What is left for one card's math: formulas to draw and MathML elements to make. */
 export type MathBudget = { formulas: number; nodes: number };
 
-/** A formula's TeX past this many characters is shown as its source. */
-export const MAX_TEX_CHARS = 2_000;
 /** A card's formulas past this many are shown as their source. */
 const MAX_FORMULAS = 200;
 /** A card's MathML elements, all formulas together; a 5,000-character matrix alone makes about 15,000. */

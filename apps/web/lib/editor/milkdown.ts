@@ -37,6 +37,7 @@ import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, sta
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
+import { isMathSelected, math, writeMath } from "./math.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 import { type TableOptions, type TableTools, withTables } from "./tables.ts";
 
@@ -375,19 +376,30 @@ const pageShapes = $prose(
  * The markdown as the card stores it. remark-stringify ends the document with a line feed; the plain field never did,
  * so neither does the editor. And an empty line is a blank line: preset-commonmark 7.23.0 writes each empty paragraph
  * as a line of html "<br />" (node/paragraph.ts EMPTY_LINE_PLACEHOLDER), which the page would show as text, so such a
- * line goes (in a quote or a list too, never in a code block) with the blank line it leaves doubled. Removing the preset's
- * remarkPreserveEmptyLinePlugin instead makes its serializer drop the text around the empty paragraph.
+ * line goes (in a quote or a list too, never in a code or math block) with the blank line it leaves doubled. Removing
+ * the preset's remarkPreserveEmptyLinePlugin instead makes its serializer drop the text around the empty paragraph.
  */
 const EMPTY_LINE = /^[ >]*<br \/>[ ]*$/;
-const FENCE_LINE = /^[ >]*(```|~~~)/;
+// A fence's marks and what follows them. A fence ends only at a line of the same mark, at least as long, with nothing
+// after it (CommonMark 0.31.2 4.5; micromark-extension-math 3.1.0 holds `$$` to the same rule), so a "$$" line in a
+// code block, or a "```" line in a math block, is the block's own text.
+const FENCE_LINE = /^[ >]*(`{3,}|~{3,}|\${2,})(.*)$/;
+/** The fence open after `line`, given the one open before it (`null`: none). */
+function fenceAfter(line: string, open: string | null): string | null {
+  const [, marks = "", rest = ""] = FENCE_LINE.exec(line) ?? [];
+  const bare = rest.trim() === "";
+  if (open === null) return marks !== "" && (marks[0] !== "$" || bare) ? marks : null;
+  return marks[0] === open[0] && marks.length >= open.length && bare ? null : open;
+}
+
 function stored(markdown: string): string {
   const kept: string[] = [];
-  let fenced = false;
+  let fence: string | null = null;
   let dropped = false;
   for (const line of markdown.replace(/\n$/, "").split("\n")) {
-    if (FENCE_LINE.test(line)) fenced = !fenced;
+    fence = fenceAfter(line, fence);
     const blank = /^[ >]*$/.test(line);
-    if (!fenced && EMPTY_LINE.test(line)) {
+    if (fence === null && EMPTY_LINE.test(line)) {
       dropped = true;
       continue;
     }
@@ -522,7 +534,10 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
   const menus =
     options.menus === undefined
       ? undefined
-      : withMenus(made, { ...options.menus, isOn: (item, state) => isActive(item, state) });
+      : withMenus(made, {
+          ...options.menus,
+          isOn: (item, state) => (item === "math" ? isMathSelected(state) : isActive(item, state)),
+        });
   const tables = options.tables === undefined ? undefined : withTables(made, options.tables);
   const editor = await made
     .config((ctx) => {
@@ -550,6 +565,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           return { ...schema, toDOM: (node) => [cellTag(node), cellAttrs(node), 0] };
         });
       }
+      writeMath(ctx);
       ctx.update(emphasisSchema.key, (prev) => (schemaCtx) => {
         const schema = prev(schemaCtx);
         return {
@@ -617,6 +633,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     })
     .use(commonmark)
     .use(gfm)
+    .use(math)
     .use(wwwOverHttps)
     .use(taskBox)
     .use(clipboard)

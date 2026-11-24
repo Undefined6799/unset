@@ -30,6 +30,7 @@ import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { math } from "micromark-extension-math";
 import { drawMath, type MathBudget, type MathNode, mathBudget } from "./math.ts";
+import { between, isInlineMath } from "./math-syntax.ts";
 
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
@@ -246,30 +247,9 @@ function inlines(nodes: readonly Phrasing[], reading: Reading): Inline[] {
   return out;
 }
 
-/**
- * Whether math between single dollars keeps Pandoc's rule, as Milkdown's Crepe 7.23.0 holds the editor to it
- * (src/feature/latex/remark.ts, remarkInlineMathGuardPlugin): the opening dollar is followed by a non-space, the
- * closing one follows a non-space and is not followed by a digit, so "$5 and $10" stays words. Math between two or more
- * dollars is kept as written.
- */
-function pricesRule(node: Positioned, reading: Reading): boolean {
-  const raw = written(reading, node);
-  if (raw.startsWith("$$")) return true;
-  const after = reading.source[node.position?.end.offset ?? 0] ?? "";
-  return !/^\$\s/.test(raw) && !/\s\$$/.test(raw) && !/\d/.test(after);
-}
-
-/**
- * The text between a refused span's dollars as it was written: micromark-extension-math 3.1.0 drops one space or line
- * ending at each end when both ends have one and there is more (math-text.js resolveMathText), and keeps a line's
- * container marks (a quote's ">") out of the value, so the value with what was dropped put back is that text.
- */
-function between(raw: string, value: string): string {
-  const first = raw[1] ?? "";
-  const last = raw[raw.length - 2] ?? "";
-  const padded = /^[ \n]$/.test(first) && /^[ \n]$/.test(last) && /[^ \n]/.test(value);
-  return padded ? `${first}${value}${last}` : value;
-}
+/** Whether math between dollars is math where it stands (math-syntax.ts). */
+const pricesRule = (node: Positioned, reading: Reading): boolean =>
+  isInlineMath(written(reading, node), reading.source[node.position?.end.offset ?? 0] ?? "");
 
 /**
  * Single-dollar math the rule refuses, as the text it is (Codex on #2019): micromark has already taken "$5 **each** or

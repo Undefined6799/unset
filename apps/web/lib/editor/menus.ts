@@ -40,11 +40,11 @@ import { type Command, type EditorState, Plugin, PluginKey, Selection, TextSelec
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $prose } from "@milkdown/utils";
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
-
 import { acrossGroups, BLOCK_ITEMS, type BlockItem, CHANGE_ITEMS } from "./block-items.ts";
+import { isMathSelected, MATH_LANGUAGE, toggleMathCommand } from "./math.ts";
 
 export type { BlockItem };
-export const BAR_ITEMS = ["strong", "emphasis", "strike", "code", "link"] as const;
+export const BAR_ITEMS = ["strong", "emphasis", "strike", "code", "math", "link"] as const;
 export type BarItem = (typeof BAR_ITEMS)[number];
 
 export type MenusState = {
@@ -204,6 +204,8 @@ function blockCommand(ctx: Ctx, item: BlockItem): () => void {
         commands.call(wrapInBlockTypeCommand.key, { nodeType: listItemSchema.type(ctx), attrs: { checked: false } });
     case "codeBlock":
       return set(codeBlockSchema.type(ctx));
+    case "math":
+      return set(codeBlockSchema.type(ctx), { language: MATH_LANGUAGE });
     case "table":
       // Three rows of three, the caret put back in the first cell (Crepe's table item).
       return () => {
@@ -219,6 +221,7 @@ const BAR_COMMANDS = {
   emphasis: toggleEmphasisCommand,
   strike: toggleStrikethroughCommand,
   code: toggleInlineCodeCommand,
+  math: toggleMathCommand,
 };
 
 function hasLink(ctx: Ctx, state: EditorState): boolean {
@@ -770,9 +773,11 @@ function barView(
         focused &&
         !editingLink() &&
         shown.editable &&
-        selection instanceof TextSelection &&
-        !selection.empty &&
-        doc.textBetween(selection.from, selection.to).trim().length > 0
+        // Selected words, or a formula (Crepe's toolbar shows over a selected math_inline too).
+        ((selection instanceof TextSelection &&
+          !selection.empty &&
+          doc.textBetween(selection.from, selection.to).trim().length > 0) ||
+          isMathSelected(shown.state))
       );
     },
   });

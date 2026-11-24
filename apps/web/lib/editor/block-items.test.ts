@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { acrossGroups, BLOCK_ITEMS, type BlockItem } from "./block-items.ts";
 
-test("block_items_list_crepes_order_less_image_and_math", () => {
+test("block_items_list_crepes_order_less_image", () => {
   expect(BLOCK_ITEMS).toEqual([
     "text",
     "heading1",
@@ -17,6 +17,7 @@ test("block_items_list_crepes_order_less_image_and_math", () => {
     "tasks",
     "codeBlock",
     "table",
+    "math",
   ]);
 });
 

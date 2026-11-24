@@ -12,7 +12,8 @@
 // and the Trusted Types rule stay as they are.
 //
 // Nothing in a code block is ever read as HTML: CodeMirror draws its document as text nodes, the language name is an
-// input's value, and the copy button writes plain text to the clipboard.
+// input's value, and the copy button writes plain text to the clipboard. A math block (language "math", math.ts) shows
+// its TeX drawn below the code, as MathML elements built one by one (math.ts mathElement).
 
 import { defaultKeymap } from "@codemirror/commands";
 import { LanguageDescription, type LanguageSupport, syntaxHighlighting } from "@codemirror/language";
@@ -31,6 +32,7 @@ import { Icon } from "../components/icon/index.ts";
 import { buttonVariants } from "../components/ui/button/index.ts";
 import { CARD_TEXT } from "../profile/messages.ts";
 import { CODE_COLOURS, type CodeColourLimits, codeHighlighter, colourable } from "./code-colours.ts";
+import { drawInto, MATH_LANGUAGE, MathHold } from "./math.ts";
 
 /** CodeMirror's look, drawn from the theme's colours (custom properties reach into the shadow root). */
 const look = CodeMirror.theme({
@@ -51,11 +53,16 @@ class CodeBlockView implements NodeView {
   private readonly cm: CodeMirror;
   private readonly language = new Compartment();
   private readonly languageField: HTMLInputElement;
+  private readonly preview: HTMLElement;
+  /** The TeX the preview shows, or null when the block is no math block. */
+  private previewed: string | null = null;
   private loaded = "";
   /** The loaded language, kept while the code is past the limits so it comes back once the code fits again. */
   private found: { readonly name: string; readonly support: LanguageSupport } | null = null;
   private updating = false;
   private copyIcon: ReturnType<typeof mount> | undefined;
+  /** What the math preview took from the editor's math budget. */
+  private readonly mathHold: MathHold;
 
   constructor(
     private node: ProseNode,
@@ -63,6 +70,7 @@ class CodeBlockView implements NodeView {
     private readonly getPos: () => number | undefined,
     private readonly limits: CodeColourLimits | undefined,
   ) {
+    this.mathHold = new MathHold(view);
     this.dom = document.createElement("div");
     this.dom.className = "code-block flex flex-col gap-2 rounded-sm bg-muted px-4 py-3";
     this.languageField = this.languageInput();
@@ -88,8 +96,23 @@ class CodeBlockView implements NodeView {
         CodeMirror.domEventHandlers({ keydown: (event) => this.outerKey(event) }),
       ],
     });
-    this.dom.append(tools, host);
+    this.preview = document.createElement("div");
+    this.preview.dataset.mathPreview = "";
+    this.preview.className = "overflow-x-auto contain-paint";
+    this.dom.append(tools, host, this.preview);
     this.loadLanguage(String(node.attrs.language ?? ""));
+    this.drawPreview();
+  }
+
+  /** A math block's TeX drawn below it, redrawn when it changes; nothing below any other block. */
+  private drawPreview() {
+    const tex = this.node.attrs.language === MATH_LANGUAGE ? this.node.textContent : null;
+    if (tex === this.previewed) return;
+    this.previewed = tex;
+    this.preview.hidden = tex === null;
+    this.preview.replaceChildren();
+    this.mathHold.release();
+    if (tex !== null) void drawInto(this.preview, tex, true, () => this.previewed === tex, this.mathHold);
   }
 
   private languageInput(): HTMLInputElement {
@@ -275,6 +298,7 @@ class CodeBlockView implements NodeView {
       this.languageField.value = language;
     }
     this.loadLanguage(language);
+    this.drawPreview();
     if (this.updating) return true;
     const newText = node.textContent;
     const curText = this.cm.state.doc.toString();
@@ -307,6 +331,7 @@ class CodeBlockView implements NodeView {
 
   destroy() {
     this.cm.destroy();
+    this.mathHold.close();
     if (this.copyIcon !== undefined) void unmount(this.copyIcon);
   }
 }
