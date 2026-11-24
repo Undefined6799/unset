@@ -10,7 +10,7 @@ accepted:
   head: "5971e8b7595d2f320014a8428526df171ce8fab9"
   line: "just keep it and record the risk, and then we'll adapt to these risks later"
 ---
-# 0116 — Chat keeps the offline device as built and records what any signed-in session can do to it (amends 0113)
+# 0117 — Chat keeps the offline device as built and records what any signed-in session can do to it (amends 0113)
 
 Record: Accepted by Alex, 2026-11-23 03:58:25Z, in the review thread: "Yeah, just keep it and record the risk, and
 then we'll adapt to these risks later", against `claude/chat-staging-main` at head

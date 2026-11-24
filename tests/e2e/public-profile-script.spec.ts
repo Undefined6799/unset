@@ -6,24 +6,10 @@
 // page still reads whole (ADR 0114 point 5). tests/integration/web/public/public-profile.test.ts holds the same page's
 // header by value and the data its start-up script carries.
 import { expect, type Page, test } from "@playwright/test";
-import { pageNoise, watch } from "./observe.ts";
+import { expectOnlyText, pageNoise, watch } from "./observe.ts";
 import { HOSTILE, PROD_ORIGIN } from "./pages.ts";
 
 const PROFILE = `${PROD_ORIGIN}/@${HOSTILE.did}`;
-
-type Probe = { ran?: unknown };
-
-/** Nothing the member wrote ran or became markup: no global set, no element, handler or script address of theirs. */
-async function expectOnlyText(page: Page): Promise<void> {
-  expect(await page.evaluate(() => (globalThis as unknown as Probe).ran)).toBeUndefined();
-  await expect(page.locator('img[src="x"]')).toHaveCount(0);
-  await expect(page.locator("[onerror]")).toHaveCount(0);
-  await expect(page.locator('[href^="javascript:" i], [src^="javascript:" i], [action^="javascript:" i]')).toHaveCount(
-    0,
-  );
-  // The one script element is SvelteKit's start-up script; the member's `<script>` is text beside it.
-  await expect(page.locator("script")).toHaveCount(1);
-}
 
 /** The first place the page shows `text` whole (the About panel holds a hidden copy of the headline). */
 const shown = (page: Page, text: string) => page.getByText(text, { exact: true }).filter({ visible: true }).first();
@@ -107,20 +93,6 @@ test("a_page_reached_in_place_has_the_theme_a_full_load_gives_it", async ({ page
   await expect(page).toHaveURL(PROFILE);
   await expect(html).not.toHaveAttribute("data-theme", /./);
   await expect(scheme).toHaveAttribute("content", "dark light");
-});
-
-// A path that is no member is the one 404, which runs no script whatever the path holds.
-test("a_hostile_path_is_the_404_with_no_script", async ({ page }) => {
-  const watched = watch(page);
-  const response = await page.goto(`${PROD_ORIGIN}/@%3Cscript%3EglobalThis.ran=1%3C%2Fscript%3E`);
-  expect(response?.status()).toBe(404);
-  expect(response?.headers()["content-security-policy"]).not.toContain("script-src");
-  await page.waitForLoadState("networkidle");
-  await expect(page.locator("h1")).toContainText("That page does not exist.");
-  expect(watched.scripts).toEqual([]);
-  await expect(page.locator("script")).toHaveCount(0);
-  expect(await page.evaluate(() => (globalThis as unknown as Probe).ran)).toBeUndefined();
-  expect((await pageNoise(page, watched)).csp).toEqual([]);
 });
 
 // With every script file refused the page is the server's page: the only error is the start-up script reporting the

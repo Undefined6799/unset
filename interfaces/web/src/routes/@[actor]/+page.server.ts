@@ -26,6 +26,7 @@ import {
   type Viewer,
 } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
+import { CODE_COLOUR_LIMITS } from "../../lib/server/limits.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
 
@@ -79,7 +80,11 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
   // What each card shows and no more (rule SE-3): the record's own fields are for the owner's editors, and this load's
   // whole result is sent to the viewer, at the page's data address too (book P1.22h).
   const cards =
-    owner === null ? [] : shownCards(cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX)));
+    owner === null
+      ? []
+      : shownCards(
+          await cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX), CODE_COLOUR_LIMITS),
+        );
   return {
     shell: listed ? LISTED_SHELL : SHELL,
     // What search results and link previews show: only what the page itself shows, or the member's own overrides. A

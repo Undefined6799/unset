@@ -118,3 +118,50 @@ describe("app_files counts build files only, on the adapted config (P1.21g; TE-6
     }
   });
 });
+
+// P1.22f (ADR 0116): a visitor the edge refuses must not spend more of the allowance reading the refusal. The Too many
+// tries page each site answers a refused navigation with (snippets/too-many-tries.caddy) names no file to fetch, and
+// its policy lets it load nothing but its one hashed style, so a browser asks for no build file, no font, no image.
+describe("the refusal page asks for no build file (P1.22f)", () => {
+  /** Every static_response body in the adapted config that is the Too many tries page. */
+  function refusalPages(value: Json): string[] {
+    if (Array.isArray(value)) return value.flatMap(refusalPages);
+    if (typeof value !== "object" || value === null) return [];
+    const body = value.handler === "static_response" ? value.body : undefined;
+    const own = typeof body === "string" && body.includes("<title>Too many tries</title>") ? [body] : [];
+    return [...own, ...Object.values(value).flatMap(refusalPages)];
+  }
+  /** Every Content-Security-Policy the adapted config sets on an error route (only the refusal page sets one). */
+  function errorPolicies(value: Json, inErrors = false): string[] {
+    if (Array.isArray(value)) return value.flatMap((item) => errorPolicies(item, inErrors));
+    if (typeof value !== "object" || value === null) return [];
+    const set =
+      inErrors && typeof value.set === "object" && value.set !== null && !Array.isArray(value.set) ? value.set : {};
+    const policy = (set as Record<string, Json>)["Content-Security-Policy"];
+    const own = Array.isArray(policy) ? policy.filter((item): item is string => typeof item === "string") : [];
+    return [
+      ...own,
+      ...Object.entries(value).flatMap(([key, item]) => errorPolicies(item, inErrors || key === "errors")),
+    ];
+  }
+
+  test("every_site_s_refusal_page_names_nothing_to_fetch", () => {
+    const pages = refusalPages(DEV);
+    expect(pages.length).toBeGreaterThan(0);
+    for (const body of pages) {
+      expect(body).not.toMatch(/<script|<link|<img|<iframe|<object|<embed|\bsrc=|url\(|@import/i);
+      expect(body).not.toContain("/_app/");
+      // Its one link is a plain navigation home, which a person follows after waiting, not at load.
+      expect([...body.matchAll(/href="([^"]*)"/g)].map((match) => match[1])).toEqual(["/"]);
+    }
+  });
+
+  test("its_policy_lets_it_load_nothing_but_its_style", () => {
+    const policies = errorPolicies(DEV);
+    expect(policies.length).toBeGreaterThan(0);
+    for (const policy of policies) {
+      expect(policy).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]{43}='; /);
+      expect(policy).not.toMatch(/script-src|img-src|font-src|connect-src/);
+    }
+  });
+});

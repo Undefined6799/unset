@@ -45,6 +45,11 @@ export const HOSTILE = {
   address: "javascript:globalThis.ran=1",
 } as const;
 /**
+ * A member the index holds and does not show (their PDS says the account is not active), seeded on both servers: its
+ * page is the one 404, the same as for an address that is nobody's (rule SE-2; error-page-script.spec.ts).
+ */
+export const HIDDEN = { did: `did:plc:${"r".repeat(24)}` } as const;
+/**
  * The test server writes each member's session cookie here once it listens; the specs read it. Outside test-results,
  * which Playwright empties when a run starts (outputDir).
  */
@@ -64,7 +69,7 @@ export type PageFixture = {
   /** The route it matches, as pages.test.ts names route folders. */
   readonly route: string;
   readonly group: PageGroup;
-  /** The page runs SvelteKit's client (csr, +page.ts): most app pages, and a public page ADR 0114 switched on. */
+  /** The page runs SvelteKit's client (csr, +page.ts): every page but the ones book P1.22l still has to switch on. */
   readonly expectJs: boolean;
   /** Opened on the test server signed in as this member; without one, on the production server signed out. */
   readonly member?: MemberName;
@@ -86,13 +91,14 @@ const signedIn = (path: string, member: MemberName, route = path): PageFixture =
 
 /** Documents the production server renders to a visitor with no session. */
 export const PAGES: readonly PageFixture[] = [
-  signedOut("/", "public"),
-  signedOut("/legal/terms", "public", "/legal/:document"),
-  signedOut("/legal/privacy", "public", "/legal/:document"),
-  signedOut("/legal/domains", "public", "/legal/:document"),
-  // The public profile runs the client under the app group's script policy (ADR 0114, book P1.22e).
+  // The public pages run the client under the app group's script policy (ADR 0114, ADR 0116): the profile since book
+  // P1.22e; home, the legal pages and the invite request since book P1.22g.
+  signedOut("/", "public", "/", true),
+  signedOut("/legal/terms", "public", "/legal/:document", true),
+  signedOut("/legal/privacy", "public", "/legal/:document", true),
+  signedOut("/legal/domains", "public", "/legal/:document", true),
   signedOut(`/@${INDEXED.did}`, "public", "/@:actor", true),
-  // The sign-in page and the blocked page run no script, as on Hono: nothing on them needs it (lighthouserc.json's
+  // The sign-in page, the blocked page and the join page run no script until book P1.22l (lighthouserc.json's
   // zero-script row).
   signedOut("/login", "app", "/login", false),
   signedOut("/signed-out", "app"),
@@ -100,7 +106,7 @@ export const PAGES: readonly PageFixture[] = [
   // P2.10: the page an invite link opens, with a well-formed code (it never checks or spends it).
   signedOut(`/join?invite=${JOIN_CODE}`, "public", "/join"),
   // P2.10r: asking for an invite (closed on the test servers, which send no mail; ADR 0080).
-  signedOut("/request-invite", "public"),
+  signedOut("/request-invite", "public", "/request-invite", true),
 ];
 
 /** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */

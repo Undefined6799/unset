@@ -115,6 +115,7 @@ const backToAdd = () => document.getElementById(triggerId);
     submit={CARD_EDIT.add}
     max={maxRows(limits, option.kind)}
     textMax={limits.text}
+    codeColours={limits.codeColours}
     {newKey}
     {enhance}
   />

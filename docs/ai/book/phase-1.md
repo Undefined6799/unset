@@ -5453,16 +5453,40 @@ warm `/@handle` through the edge's own zones, as P1.20u did, and add the case to
 seconds, and that one refused file leaves the server's page readable. If the allowance should change, stop: a limit
 change is its own decision with Alex's line (ADR 0059). No limit changes in this step.
 
+Changed 2026-11-23 (ADR 0116, P1.22i): P1.22e merged as 60228f5 and is not on staging; this step still comes before
+it, and before P1.22k, P1.22g and P1.22l, reach staging. Every page will run the client, so measure three cold
+pages, not one: `/@handle`, home, and an address no route matches (the error page). Add to the edge tests that a
+refusal page asks for no build file, so a visitor who is refused does not spend more of the allowance by reading
+the refusal.
+
 ### P1.22g — Open the bell's panel on every page that runs the client (added step, 2026-11-23)
 
-**Tags:** trusted · **Depends on:** P1.22e · **Plan:** §5.4
+**Tags:** [SEC], trusted · **Depends on:** P1.22k · **Plan:** §5.4, §6.1
 
-Home and the legal pages switch on the same way as P1.22e, each with its pinned header test and its Lighthouse
-line moved. On a page that runs the client the bell opens its panel, marks what it showed as seen and shows times
+Changed 2026-11-23 (ADR 0116, P1.22i): the step now depends on P1.22k, takes in `/request-invite`, and switches
+pages on by removing a line. Home, the legal pages and `/request-invite` drop the `csr = false` P1.22j gave them, so
+they follow the root layout and run the client; each moves its row in the every-answer test (P1.22j), its header
+tests and its Lighthouse line (script size 0 to the app pages' 120 KiB warning), written first. On every page that
+runs the client, the error page included, the bell opens its panel, marks what it showed as seen and shows times
 in the device's zone (ADR 0085 point 3), as it does in the app today; in a browser without script it stays the link
 to `/notifications` (ADR 0108 point 3, now the fallback, ADR 0114). `notifications.test.ts` and `nojs.spec.ts` hold
-both. `/join`, `/request-invite`, `/login` and the refusal pages stay as they are until a step has a use for script
-there.
+both. `/login`, `/join` and the welcome pages follow in P1.22l; the gate's refusal pages stay without script (ADR
+0116 point 4). The plan's §5.4 and §6.1 rows for these pages change here.
+
+Built 2026-11-24, where the code differs from the words above. (1) The three pages say `csr = true` in their own
+`+page.ts` instead of dropping the line: P1.22j's test holds every page with something to draw to its own line.
+(2) The server never draws the bell's panel, on an app page either: it draws the link everywhere, and the client
+draws the panel once it has started (ADR 0116 point 9). So an app page with script off now has the link too; before,
+its native panel opened and could mark nothing. (3) The error page of a route that says `client: false` is sent the
+count alone, so its bell stays the link: the root load runs before the page's load fails and cannot know. After
+P1.22l that is three routes nobody reads. (4) `/request-invite` never gave a form's values back: a refused post
+answers with a catalog code in `?error=`, so `?sent`, read as a flag, is the one thing of the query its load returns.
+
+**Threats.** The boundary is text a visitor or a link supplies, written into the start-up script the server
+hashes. `/request-invite` reads `?sent` and, after a refused post, gives the form's own values back; home and the
+legal pages read the `?error=` code. Each is held to a parsed shape before a load or an action returns it (rule
+DM-1), and a browser test with hostile values in every one runs nothing, reports no violation and shows the words.
+What a load returns is what the page draws for that viewer (rule SE-3): the data test of P1.22e, on these pages.
 
 What the shell sends a signed-in member (rule SE-3; asked by the review of P1.22h). On a page whose bell is only a
 link, the root layout's data still carries the member's own latest bell entries (`id`, `reason`, `sentAt`) and a
@@ -5470,7 +5494,137 @@ link, the root layout's data still carries the member's own latest bell entries 
 nothing leaks; it is short of SE-3 all the same. P1.22h pins both by name in `public-profile.test.ts`
 (`BELL_ENTRY_FIELDS`, and `signInHref` as the one undrawn value). This step ends it: where the bell opens its panel
 the entries are drawn; where it stays a link the shell's view type holds the count and no entries; `signInHref`
-goes only to a visitor. The pins move with it, written first.
+goes only to a visitor. The pins move with it, written first. (`signInHref` leaves the server's data altogether in
+P1.22k, ADR 0116 point 6; what is left for this step is the bell's entries.)
+
+### P1.22i — Record that every page runs our script, the error page included (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** P1.22d · **Plan:** §5.4, §6.1
+
+Docs only. Alex decided on 2026-11-23 (20:52Z) that script runs wherever the navbar shows, the error page
+included, that a browser without script gets a decent fallback and only then the plain link, and that the navbar
+uses Bits UI. The error page takes `csr` from the root layout alone (kit 3.2.0
+`src/runtime/server/page/respond_with_error.js:44-46`, `page/index.js:272-291`), so this turns the app's default
+round: script unless a page says no. Proposed ADR 0116 records it and supersedes ADR 0114 point 3. It keeps the one
+script policy unchanged, names what stays without script (the gate's refusal page, SvelteKit's last-resort page
+and three routes nobody reads), keeps the one 404 (rule SE-2), keeps request text out of the error page's start-up
+script, and replaces the fail-closed default with a test over every answer. No code, header or test changes here.
+The record loosens a security default, so its PR merges on Alex's typed line. P1.22j may be built before that line
+(it changes no behaviour); P1.22k and the steps after it wait for it. That line is also his line for P1.22k, P1.22g
+and P1.22l (Alex, 21:23Z: "One line for all"; ADR 0116 point 10): each merges on the reviewer's SAFE at its exact
+head with the checks green. The line covers only the loosenings point 10 lists, (a) to (e). Anything else that
+loosens a security control, or could (another load result, a new value read from the request, a directive, a limit,
+a cookie rule, a refusal page, a dependency), goes to its own pull request or waits for its own line; in doubt it is
+outside. P1.22j, P1.22f and P1.22m are not covered.
+
+### P1.22j — Name every page's script setting and pin every answer's header (added step, 2026-11-23)
+
+**Tags:** trusted · **Depends on:** P1.22e · **Plan:** §5.4
+
+A refactor and tests; no page, header or byte a browser gets changes. Two commits.
+
+1. Every page that runs no client today says so itself: `export const csr = false;` in the `+page.ts` of home,
+   `/request-invite`, `/login`, `/login/continue`, `/join`, `/welcome`, `/welcome/blocked`, `/prefs/theme` and
+   `/privacy-notice/seen` (the legal page has it). The root layout still says false. After this, turning the root
+   round changes the error page and nothing else.
+2. The every-answer test, in `tests/integration/web/` against the built server, beside `gate.test.ts`. One table
+   names every route id in the route table (`lib/server/route-table.ts` `ROUTES`) with what its answers carry. The
+   test asks, as a visitor and as a member: each page, each page's `__data.json`, an address no route matches, a
+   failed load (`/@` a handle that does not exist), each of the gate's refusals (405, 413, 415, 429, the deadline's
+   503, a route with no policy), a redirect, each endpoint, a build file and a font. For each answer it holds:
+   - the `content-security-policy` is, by value, one of the pinned ones: the app policy (the start-up hash replaced
+     by a placeholder, as `gate.test.ts` does), the public group's fixed one, or the static one;
+   - the app policy is on HTML documents only, and a document has SvelteKit's start-up script exactly when its
+     header is the app policy with a hash, which is the hash of that script;
+   - `script-src` holds no `'unsafe-inline'`, no eval source, no `'self'` and no host but our origin's `/_app/`;
+     the body holds no `<script src>` and no `modulepreload` outside `/_app/`, and one inline script at most.
+   A route id missing from the table fails, a table row with no route fails, and a layout other than the root that
+   sets `csr` fails. `only_the_named_public_pages_run_the_client` stays as it is until P1.22k.
+
+The table is the list a reviewer reads to see which answers may run script. Written against today's answers, it
+passes on main; P1.22k, P1.22g and P1.22l each move rows in it, first.
+
+### P1.22k — Turn the default round: the error page runs the client (added step, 2026-11-23)
+
+**Tags:** [SEC], trusted · **Depends on:** P1.22i (ADR 0116 accepted), P1.22j · **Plan:** §5.4
+
+`interfaces/web/src/routes/+layout.ts`, `+layout.server.ts`, `hooks.server.ts`, `lib/server/policy.ts`. The root
+layout says `csr = true`. Because P1.22j made every other page say false itself, the only documents that change
+are error pages: an address no route matches, and a failed load on any route.
+
+The hook follows ADR 0116 point 3: SvelteKit's own header, narrowed, goes out on an HTML document SvelteKit drew
+with its client, and the fixed one on everything else. How the hook knows is this step's design, within two rules:
+it reads only what the server itself did (the route's policy for a page; for an error page, that SvelteKit drew
+one), never the request; and the every-answer test holds header and document to each other in both directions. That
+SvelteKit sent a header cannot be the signal: it sends its own on every page it draws, whatever `csr` says (kit
+3.2.0 `page/render.js:577-579`). The `client` field of `policy.ts` and `only_the_named_public_pages_run_the_client`
+turn round with the default: the test now names the pages that do not run the client, each with its reason, and
+`scripts/docs/endpoints.ts` follows the field.
+
+The error page's data (ADR 0116 point 6). The Sign in link's return path and the theme form's return path leave
+the root layout's server data and are worked out where they are drawn, from the page's own address (the universal
+load has `url`; what it returns is not written into the page). P1.22h's pin of `signInHref` as the one undrawn
+value goes with it.
+
+Tests, written first and shown failing:
+- the every-answer table: the error rows move from the fixed header to the app policy; nothing else moves;
+- the one 404 (rule SE-2), in `tests/integration/web/public/`: for a missing, a hidden, an erased and an
+  unknown profile, asked by a visitor and by a member, the status, every header (the policy with its hash
+  among them) and the body are equal once the handle typed is replaced by a placeholder; the same on the data
+  address (P1.22h's tests, re-run); and in a browser with script on, a click from a page that runs the client to
+  each of the four draws the same error page and makes the same requests;
+- request text (point 6): two different unmatched addresses of one depth give a visitor the same start-up script,
+  byte for byte, and so do a failed load on `/@` a hostile handle and on `/@` a missing one of the same depth (kit
+  writes the route's parameters into the script only with `router.resolution: "server"` or an embedded build,
+  `page/render.js:476-486`; we use neither, and this case fails if that changes); a member's differs from the
+  visitor's only by their own shell data;
+- hostile addresses, in a browser with script on: paths and queries holding `</script><script>`, `<!--`, a quote,
+  U+2028 and a `javascript:` return path run nothing, report no violation and show the error page;
+- the fallback: the error page read with script off, with its script files refused, and with the client failing
+  at start (`nojs.spec.ts` keeps it); an `internal.error` page still shows its request id;
+- the gate's refusal page and SvelteKit's `error.html` still carry no script, and neither do the own pages of the
+  three routes nobody reads; a load that fails on one of those three draws the shared error page, with script.
+
+Docs in the same PR: `features/core-shell.md` ("The three shells": the default), the `area/web` note, the ASVS
+V3.4.3 row, the plan's §5.4 words on the error page, and the Script line under UI in `CLAUDE.md` (it is at its 120
+line cap: change the line, add none).
+
+**Threats.** The boundary is a link: anyone can send anyone an address on unset.sh that does not exist, and the
+page behind it now runs our client. Request text inside the script the server hashes: the policy cannot catch a
+fault there, so none is written (the same-bytes test), and the hostile-address test holds the browser's side. A
+profile's state shown by its error page: the four cases are held equal on the page, on the data address and by a
+click. A member's session used by a script on the error page: only our own files run, the cookie stays `HttpOnly`,
+and the error page writes nothing. A page switched on by accident with the default: every page says its own
+setting (P1.22j) and the every-answer table names each route, so a page nobody named fails. The error page
+failing with its script: it is drawn whole by the server and the fallback tests read it three ways.
+
+### P1.22l — Run the client on the sign-in, join and welcome pages (added step, 2026-11-23)
+
+**Tags:** [SEC], trusted · **Depends on:** P1.22k · **Plan:** §5.4
+
+`/login`, `/join`, `/welcome` and `/welcome/blocked` drop their `csr = false`. After this the named list of pages
+without the client is the three routes nobody reads (`/login/continue`, `/prefs/theme`, `/privacy-notice/seen`),
+each with its reason, and ADR 0116 point 4 holds as written. Rows in the every-answer test, header tests and
+`nojs.spec.ts` cases move first, as in P1.22g.
+
+**Threats.** These pages start a sign-in or take an invite. `/login` reads `next` and `handle`; `/join` reads the
+invite code. A load returns a value only after it is parsed to its shape, returns nothing the page does not draw,
+and returns no value that authorises anything: the OAuth state, nonce and PKCE verifier stay on the server, and
+the test reads each page's start-up script and data address for them. Hostile text in each query value runs
+nothing. `/login/continue` keeps no script, so the hop to the sign-in server never waits for a file.
+
+### P1.22m — Move the navbar's controls to the stock components (added step, 2026-11-23)
+
+**Tags:** — · **Depends on:** P1.22g · **Plan:** §5.4
+
+ADR 0116 points 8 and 9. With script, the navbar's menu, Create panel, account menu and bell panel are the stock
+shadcn-svelte components over Bits UI (pinned 2.20.6), for their keyboard handling, focus return and ARIA roles,
+in place of our native popovers. The server still draws each control so that it works with a full page: a plain
+link or the native control. Once the client is ready it takes over; until then a press does the plain thing and is
+never lost. Before building, list for Alex what the library already offers for each control and what, if
+anything, would still be ours. `inventory.json` lists what is added; `a11y.spec.ts`, `csp.spec.ts` (no violation
+with each control open) and `nojs.spec.ts` hold both versions, and a keyboard test walks each control. Refined
+when it is next: split by control if the change passes about 400 lines.
 
 ---
 

@@ -1,6 +1,7 @@
 // The web process's rate-limit policies, as interfaces/http/limits.ts has them for the routes that exist today
 // (P1.06p; plan section 5.2; ADR 0042). Each entry is a token bucket: `capacity` at once, refilled at `refillPerSec`.
 // A page names one of these in its policy.ts; a page that needs a new policy adds it here.
+import type { CodeColourLimits } from "@unset/apps-web/lib/editor/code-colours.ts";
 import { definePolicies, type PolicyTable } from "@unset/shared-http";
 
 /**
@@ -81,3 +82,13 @@ export const IMAGE_UPLOADS_IN_FLIGHT = 4;
  * tests/integration/web/review-lanes.test.ts holds the two numbers together.
  */
 export const REVIEW_LANES = 2;
+
+/**
+ * Colouring a member's code on the server, inside the page load (P1.21v; review of #2004 at e36de8a; measured in
+ * apps/web/lib/editor/code-colours.ts): a block of at most 20,000 characters (the text block's ceiling) whose lines are
+ * at most 400 characters, so no parser step runs long; at most 50 ms of parsing for one block and 100 ms for the page,
+ * past which its code is plain. Normal use fits: a 20,000-character TypeScript block parsed in about 15 ms locally and
+ * 35 ms on a CI runner (2026-11-23), and the Text editor writes at most 10,000. The Text editor's preview uses the same
+ * numbers (cardEditLimits), so it colours what the page will.
+ */
+export const CODE_COLOUR_LIMITS: CodeColourLimits = { chars: 20_000, lineChars: 400, blockMs: 50, pageMs: 100 };

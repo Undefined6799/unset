@@ -3,7 +3,7 @@
 // blip costs the bell its list and never the page around it.
 import type { RequestEvent } from "@sveltejs/kit";
 import type { REASON_SCREENS } from "@unset/apps-web/lib/notifications/reasons.ts";
-import type { NotificationsView } from "@unset/apps-web/lib/notifications/view.ts";
+import type { BellView, NotificationsView } from "@unset/apps-web/lib/notifications/view.ts";
 import {
   BELL_LIMIT,
   type Entry,
@@ -73,15 +73,19 @@ export function viewMarksSeen(event: RequestEvent): boolean {
 
 /**
  * The bell, from the entries the session read brought (infrastructure/session/store.ts), so a page spends no
- * statement of its own on it; a session read without them reads the inbox instead.
+ * statement of its own on it; a session read without them reads the inbox instead. `opens` says whether the document
+ * runs the client, which draws the entries in the bell's panel; a document that runs none shows the count on a link,
+ * so it is sent the count and no entry (book P1.22g, rule SE-3).
  */
-export async function bellView(event: RequestEvent): Promise<NotificationsView | undefined> {
+export async function bellView(event: RequestEvent, opens: boolean): Promise<BellView | undefined> {
   const inbox = gateSession(event)?.inbox;
   const view =
     inbox === undefined || event.locals.did === undefined
       ? await notificationsView(event, BELL_LIMIT)
       : viewOf(listOf(inbox, BELL_LIMIT));
+  if (view?.state !== "ready") return view;
   // The notifications page marks its list seen as it loads (ADR 0085), after the session read this view comes from, so
   // the bell on that page reads nothing waiting whenever the page marks it.
-  return view?.state === "ready" && viewMarksSeen(event) ? { ...view, count: 0 } : view;
+  const count = viewMarksSeen(event) ? 0 : view.count;
+  return opens ? { ...view, count } : { state: "count", count };
 }

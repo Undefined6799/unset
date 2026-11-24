@@ -7,7 +7,7 @@ import { addPageCookies, openPage, watch } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
 
-const HOME_SIGNED_IN: PageFixture = { path: "/", route: "/", group: "public", expectJs: false, member: "account" };
+const HOME_SIGNED_IN: PageFixture = { path: "/", route: "/", group: "public", expectJs: true, member: "account" };
 const SETTINGS: PageFixture = {
   path: "/settings/profile",
   route: "/settings/profile",

@@ -255,7 +255,7 @@ describe("parseReadme, adversarial input", () => {
 
   test("a longer fence holds a shorter one as code", () => {
     expect(parseReadme("````\n```js\nx\n```\n````\nafter")).toEqual([
-      { kind: "code", text: "```js\nx\n```" },
+      { kind: "code", text: "```js\nx\n```", language: "" },
       { kind: "paragraph", children: [{ kind: "text", text: "after" }] },
     ]);
   });

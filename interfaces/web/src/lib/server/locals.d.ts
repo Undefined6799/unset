@@ -19,6 +19,11 @@ declare global {
        */
       privacyNotice: boolean;
       reqId: string;
+      /**
+       * True once SvelteKit reported an error for this request (hooks.server.ts handleError), which is when it draws
+       * the error page in place of the route's own. The gate reads it to choose the document's CSP (ADR 0116 point 3).
+       */
+      erred: boolean;
       /** The request's deadline; every load and action passes it to each call it makes (rule RE-1). */
       deadline: AbortSignal;
       /** When `deadline` fires, on the `performance.now()` clock: what a PDS call context needs (infrastructure/pds pds-call.ts, P2.07a). */

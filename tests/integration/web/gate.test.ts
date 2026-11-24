@@ -537,35 +537,46 @@ describe("policies and logs", () => {
     expect(missing.map((dir) => relative(ROUTES, dir))).toEqual([]);
   });
 
-  // ADR 0114 point 3 (book P1.22e): a public page runs SvelteKit's client only in the step that switches it on. The
-  // route's policy.ts says so (`client`), which is what the hook reads to send the script policy, and its +page.ts
-  // says `csr = true`; the two must agree, and the pages switched on are named here. A public page that sets `csr`
-  // without the policy, a policy that claims it for a page that does not, or a layout that turns the client on for
-  // every page under it, fails.
-  test("only_the_named_public_pages_run_the_client", async () => {
+  // ADR 0116 points 1 and 4 (book P1.22k): every page runs SvelteKit's client unless it is named here, with its
+  // reason. Such a route's policy.ts says `client: false`, which keeps the script policy off its page whatever the page
+  // holds (hooks.server.ts), and its +page.ts says `csr = false`; the two must agree on every route. A page that
+  // turns the client off without being named, a policy that says it for a page that runs the client, or a layout that
+  // says anything for the pages under it, fails. A step that switches a page on takes its line out of this list.
+  test("every_page_runs_the_client_but_the_named_ones", async () => {
+    const WITHOUT: Readonly<Record<string, string>> = {
+      join: "a plain form, until book P1.22l",
+      login: "a plain form, until book P1.22l",
+      welcome: "only ever sends a member on, until book P1.22l",
+      "welcome/blocked": "a notice and one link, until book P1.22l",
+      "login/continue": "nobody reads it: the hop to the sign-in server, which must not wait for a script file",
+      "logout/chat": "nobody reads it: the hop to the chat's sign-out page, which must not wait for a script file",
+      "logout/done": "nobody reads it: the hop back from the chat's sign-out page, which must not wait for script",
+      "prefs/theme": "nobody reads it: a form's target with no screen",
+      "privacy-notice/seen": "nobody reads it: a form's target with no screen",
+      "test-routes/plain-page": "the tests' own page without the client",
+    };
     const setsCsr = (file: string): boolean | undefined => {
       const said = /^export const csr = (true|false);$/m.exec(existsSync(file) ? readFileSync(file, "utf8") : "")?.[1];
       return said === undefined ? undefined : said === "true";
     };
-    const switchedOn: string[] = [];
+    const without: string[] = [];
     const disagree: string[] = [];
     for (const dir of routeFolders()) {
       const name = relative(ROUTES, dir);
-      const { policy } = (await import(join(dir, "policy.ts"))) as { policy: { group: string; client?: true } };
-      const csr = setsCsr(join(dir, "+page.ts")) === true;
-      if (policy.client === true) switchedOn.push(name);
-      if (policy.client === true && policy.group !== "public")
-        disagree.push(`${name}: client on a ${policy.group} route`);
-      if (policy.group !== "app" && csr !== (policy.client === true)) disagree.push(`${name}: csr ${csr}`);
+      const { policy } = (await import(join(dir, "policy.ts"))) as { policy: { client?: boolean } };
+      const csr = setsCsr(join(dir, "+page.ts"));
+      if (policy.client !== undefined && policy.client !== false) disagree.push(`${name}: client ${policy.client}`);
+      if (policy.client === false) without.push(name);
+      if ((csr === false) !== (policy.client === false)) disagree.push(`${name}: csr ${csr}, client ${policy.client}`);
     }
     expect(disagree).toEqual([]);
-    expect(switchedOn).toEqual(["@[actor]"]);
-    // The root layout turns the client off for every page that does not ask, and no other layout says anything.
+    expect(without.sort()).toEqual(Object.keys(WITHOUT).sort());
+    // The root layout turns the client on for the error page, and no other layout says anything.
     const layouts = readdirSync(ROUTES, { recursive: true, encoding: "utf8" }).filter((file) =>
       /(^|\/)\+layout\.(ts|js)$/.test(file),
     );
     expect(layouts).toEqual(["+layout.ts"]);
-    expect(setsCsr(join(ROUTES, "+layout.ts"))).toBe(false);
+    expect(setsCsr(join(ROUTES, "+layout.ts"))).toBe(true);
   });
 
   test("only_health_skips_the_rate_limit", async () => {

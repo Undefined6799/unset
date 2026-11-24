@@ -2,7 +2,9 @@
   The shell of every page (P1.20d), as the React AppShell drew it before P1.20k; src/lib/shell.ts says what a
   page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the site shell.
   Neither shell offers Sign in when the gate read a live session for the route (+layout.server.ts). Everything here works with no script: links, plain forms, and a native popover for the menu drawer
-  (https://html.spec.whatwg.org/multipage/popover.html). The `?error=` callout shows only the catalog's text.
+  (https://html.spec.whatwg.org/multipage/popover.html). The bell is the one control the client takes over: the server
+  draws it as a link to /notifications, and where the client runs it opens its panel (ADR 0116 points 8 and 9). The
+  `?error=` callout shows only the catalog's text.
 -->
 <script lang="ts">
 import "@unset/apps-web/app.css";
@@ -17,7 +19,7 @@ import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
 import { NOTIFICATIONS as N } from "@unset/apps-web/lib/notifications/messages.ts";
 import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
-import type { Snippet } from "svelte";
+import { onMount, type Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { page, updated } from "$app/state";
@@ -206,14 +208,26 @@ const panel =
   "fixed top-16 bottom-auto m-0 w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:w-auto";
 // The member the page passed (their own page and settings, with a name there) or the gate found (+layout.server.ts).
 const account = $derived(shell.account ?? data.account);
-// The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
+// The bell's count and, where the client runs, its list (P2.27), read by +layout.server.ts on every page a member
+// opens; undefined for a visitor.
 const notes = $derived(data.notifications);
+// The server draws the bell as a plain link to /notifications, whose visit marks the list seen (ADR 0108 point 3): that
+// is the bell in a browser with no script, and until the client is ready, so a press is never lost (ADR 0116 point 9).
+// Once the client has started it takes the bell over, on every page it runs on, the error page included (point 8):
+// the bell is the panel's button, and the panel and its seen form are drawn here in the browser, never by the server,
+// so the panel's times are always the device's own. A page that runs no client was sent the count and no entries
+// (+layout.server.ts); when the client reaches one by a link from a page it runs on, the bell is the link again.
+let clientReady = $state(false);
+onMount(() => {
+  clientReady = true;
+});
+const bellOpens = $derived(clientReady && notes?.state !== "count");
 // Opening the bell marks what it shows seen (ADR 0085, 0090 and 0108): the badge goes at once and comes back only with
-// a newer entry. The hidden form posts it in the background. A page that runs no script has no panel: its bell is a
-// link to /notifications, whose own load marks it (ADR 0108 point 3).
+// a newer entry. The hidden form posts it in the background.
 const newest = $derived(notes?.state === "ready" ? notes.entries[0]?.id : undefined);
 let seenUpTo = $state<string | undefined>(undefined);
-const waiting = $derived(notes?.state === "ready" && newest !== seenUpTo ? notes.count : 0);
+const unseen = $derived(notes?.state === "ready" || notes?.state === "count" ? notes.count : 0);
+const waiting = $derived(newest !== undefined && newest === seenUpTo ? 0 : unseen);
 let seenForm = $state<HTMLFormElement | undefined>(undefined);
 function markSeen(event: ToggleEvent): void {
   if (event.newState !== "open" || newest === undefined || waiting === 0) return;
@@ -599,8 +613,9 @@ const row =
           </Button>
         {/if}
         {#each panelButtons as button (button.id)}
-          {#if button.id === NOTIFICATIONS && !data.bellOpens}
-            <!-- ADR 0108 point 3: with no script on this page, the bell is the way to the page, whose visit marks it seen. -->
+          {#if button.id === NOTIFICATIONS && !bellOpens}
+            <!-- ADR 0108 point 3, ADR 0116 point 9: what the server draws. The bell is the way to the page, whose visit
+                 marks it seen, until the client is ready to open the panel. -->
             <Button variant="outline" size="icon-sm" href="/notifications" class="{control} relative max-sm:hidden">
               <Icon name={button.icon} size={20} label={N.bell(waiting)} />
               {#if waiting > 0}<Badge aria-hidden="true" class={badge}>{N.badge(waiting)}</Badge>{/if}
@@ -640,7 +655,7 @@ const row =
             <span class="sr-only">{T.accountMenu}</span>
           </Button>
         {:else}
-          <!-- A visitor signs in here and comes back to this page (signInHref, +layout.server.ts). -->
+          <!-- A visitor signs in here and comes back to this page (signInHref, lib/return-paths.ts). -->
           <Button variant="outline" size="icon-sm" href={data.signInHref} class={control}>
             <Icon name="profile" size={20} label={T.signIn} />
           </Button>
@@ -689,11 +704,11 @@ const row =
     {:else}
       {#if notes.state === "failed"}
         <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
-      {:else if notes.entries.length === 0}
-        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
-      {:else}
+      {:else if notes.state === "ready" && notes.entries.length > 0}
         <NotificationList entries={notes.entries} />
         <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
+      {:else}
+        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
       {/if}
       <ul class="flex flex-col gap-1 border-t pt-1">
         <li>
@@ -739,7 +754,7 @@ const row =
       </li>
     </ul>
   </section>
-  {#each panelButtons.filter((b) => b.id !== NOTIFICATIONS || data.bellOpens) as button (button.id)}
+  {#each panelButtons.filter((b) => b.id !== NOTIFICATIONS || bellOpens) as button (button.id)}
     <section
       id={button.id}
       popover="auto"
@@ -786,7 +801,7 @@ const row =
       {/if}
       {#each panelButtons as button (button.id)}
         <li>
-          {#if button.id === NOTIFICATIONS && !data.bellOpens}
+          {#if button.id === NOTIFICATIONS && !bellOpens}
             <a href="/notifications" class="{row} w-full">
               <Icon name={button.icon} size={20} /><span>{button.label}</span>
               {#if waiting > 0}<span class="ml-auto text-xs text-muted-foreground"

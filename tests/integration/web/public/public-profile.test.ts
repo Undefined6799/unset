@@ -493,34 +493,61 @@ describe("public profile", () => {
     expect(await (await get(`/@${UNVERIFIED}`)).text()).not.toContain("mallory.unset.org");
   });
 
+  // Rule SE-2, with the error page running the client (ADR 0116 point 5; book P1.22k): a profile that is missing,
+  // hidden, never made, unverified or misspelt is one 404, the same in its status, in every header, the script policy
+  // and its hash among them, and in its bytes, the start-up script among them. An erased member is the missing one
+  // here: erasure leaves no row to read (tests/integration/postgres/public-profile-store.test.ts
+  // erased_account_reads_as_missing), and no role a test file is given may erase.
   test("every_missing_or_hidden_actor_is_the_same_404", async () => {
     const missing = await get(`/@did:plc:${"z".repeat(24)}`);
     expect(missing.status).toBe(404);
     expect(missing.headers.get("x-robots-tag")).toBe("noindex");
     expect(missing.headers.get("cache-control")).toBe("no-cache");
-    // The shell's Sign in link returns to the page asked for, the one part that names the path (the same for every
-    // actor, shown or not), and the ETag hashes the body; both are set aside.
+    // Two parts of the page name the address asked for, the same way for every actor, shown or not: the shell's Sign
+    // in link, which returns to it, and so the ETag, which hashes the body. Both are set aside; nothing else is.
     const unpathed = (html: string) => html.replace(/\/login\?next=[^"]*"/g, '/login?next="');
     const headers = (response: Response) => kept(response).filter(([name]) => name !== "etag");
-    const body = unpathed(await missing.clone().text());
-    // The 404 runs no script (SvelteKit takes `csr` for a failed load's error page from the layouts alone, kit 3.2.0
-    // src/runtime/server/page/index.js:276-291) and keeps the fixed policy, whoever asks.
-    expectNoScript(missing, await missing.text());
-    const asMember = await get(`/@${HIDDEN}`, { cookie: await signedIn(OTHER) });
-    expect(asMember.status).toBe(404);
-    expectNoScript(asMember, await asMember.text(), "member");
+    const html = await missing.text();
+    const body = unpathed(html);
+    // The 404 runs the client like every error page, under the script policy, whose one hash is its start-up script's.
+    expectScriptPolicy(missing, html);
+    const script = inlineScripts(html)[0];
+    expect(startup(html)).toMatchObject({ form: null, error: { message: "http.not_found" } });
+    expect(startupData(html, 0)).toEqual(VISITOR_SHELL);
     for (const path of [
       `/@${HIDDEN}`,
       `/@${BARE}`,
       "/@mallory.unset.org",
       "/@nobody.unset.org",
       "/@%3Cscript%3E",
+      "/@%3C%2Fscript%3E%3Cscript%3Ealert(1)",
       `/@${SHOWN.toUpperCase()}`,
     ]) {
       const response = await get(path);
       expect(response.status, path).toBe(404);
-      expect(unpathed(await response.text()), path).toBe(body);
+      const page = await response.text();
+      expect(unpathed(page), path).toBe(body);
       expect(headers(response), path).toEqual(headers(missing));
+      // The start-up script holds nothing of the handle typed: byte for byte the missing profile's (point 6).
+      expect(inlineScripts(page), path).toEqual([script]);
+    }
+    // A member is told no more: their 404 is their own copy, the same for every one of these. A member's page has no
+    // Sign in link; the address asked for is in its forms' way back (the theme form, the bell), the same way for all.
+    const member = await signedIn(OTHER);
+    const asked = (page: string, path: string) => page.replaceAll(path, "/@asked");
+    const gone = await get("/@nobody.unset.org", { cookie: member });
+    expect(gone.status).toBe(404);
+    expect(gone.headers.get("cache-control")).toBe("private, no-store");
+    const gonePage = await gone.text();
+    expectScriptPolicy(gone, gonePage, "member");
+    for (const path of [`/@did:plc:${"z".repeat(24)}`, `/@${HIDDEN}`, `/@${BARE}`, "/@mallory.unset.org"]) {
+      const response = await get(path, { cookie: member });
+      expect(response.status, path).toBe(404);
+      const page = await response.text();
+      expect(headers(response), path).toEqual(headers(gone));
+      expect(asked(page, path), path).toBe(asked(gonePage, "/@nobody.unset.org"));
+      expect(inlineScripts(page), path).toEqual(inlineScripts(gonePage));
+      expect(JSON.stringify(startup(page)), path).not.toContain(path.slice(2));
     }
   });
 
@@ -746,40 +773,39 @@ const LIMITED_FIELDS = [
   "shell.wide",
 ];
 
-/** The root layout's data for a visitor: the shell's flags and the Sign in link, no one's account. */
-/** The root layout's data for a member: their own account link, their theme form, their bell and their chat icon. */
+/** The root layout's data for a member: their own account link, their theme, their bell and their chat icon. */
 const MEMBER_SHELL_FIELDS = [
   "account.path",
   "appOpen",
-  "bellOpens",
   "chat.href",
   "chat.unread",
   "notifications.count",
   "notifications.entries",
   "notifications.more",
   "notifications.state",
-  "prefs.returnTo",
-  "prefs.theme",
   "privacyNotice",
-  "signInHref",
   "signedIn",
   "siteNoindex",
+  "theme",
 ];
-/** Each entry of a member's own bell, in place of the empty list. */
+/** Each entry of a member's own bell, in place of the empty list: what the client's panel draws (book P1.22g). */
 const BELL_ENTRY_FIELDS = [
   "notifications.entries[].id",
   "notifications.entries[].reason",
   "notifications.entries[].sentAt",
 ];
 
+/**
+ * The root layout's data for a visitor: the shell's flags and no one's account. Nothing of the address asked for is in
+ * it (ADR 0116 point 6), so it is the same for every profile, shown or not.
+ */
 const VISITOR_SHELL = {
   signedIn: false,
   account: undefined,
   appOpen: false,
-  prefs: undefined,
+  theme: null,
   privacyNotice: null,
   notifications: undefined,
-  bellOpens: false,
   siteNoindex: true,
 };
 
@@ -787,7 +813,6 @@ const VISITOR_SHELL = {
 const MISSING = { type: "error", error: { status: 404, message: "http.not_found" } };
 
 /** The shell's Sign in link returns to the path asked for, shown or not; set aside to compare two answers. */
-const unpathed = (body: string) => body.replace(/\/login\?next=[^"]*"/g, '/login?next="');
 /** A data answer's headers but its length, which follows the path in the Sign in link. */
 const dataHeaders = (response: Response) => kept(response);
 
@@ -804,7 +829,7 @@ describe("the data address (book P1.22h)", () => {
     expect(undrawn(leaf, html, isSwitch)).toEqual([]);
     expect(fieldsOf(leaf)).toEqual(WHOLE_PAGE_FIELDS);
     expect(leaf).toMatchObject({ editHref: null, audience: null });
-    expect(layout).toEqual({ ...VISITOR_SHELL, signInHref: `/login?next=${encodeURIComponent("/@dana.unset.org")}` });
+    expect(layout).toEqual(VISITOR_SHELL);
     expect(undrawn(layout, html, isSwitch)).toEqual([]);
     // The answer is JSON under nosniff, and no `<` reaches it as typed (devalue 5.9.4 escapes it).
     expect(data.headers.get("x-content-type-options")).toBe("nosniff");
@@ -836,18 +861,21 @@ describe("the data address (book P1.22h)", () => {
     expect(owner.leaf).toMatchObject({ editHref: `/${WHOLE}` });
     // The shell's part is the viewer's own: their account link, their theme form, their bell. No one else's.
     expect(fieldsOf(owner.layout)).toEqual(MEMBER_SHELL_FIELDS);
-    expect(owner.layout).toMatchObject({ signedIn: true, account: { path: `/${WHOLE}` }, bellOpens: false });
-    expect(member.layout).toMatchObject({ signedIn: true, account: { path: `/${OTHER}` }, bellOpens: false });
-    // Two things reach a member that their page does not draw, both their own and in this never-stored copy alone.
-    // The Sign in link's address, which only a visitor's page uses: it holds this page's path and nothing else.
-    const signInHref = `signInHref: /login?next=${encodeURIComponent("/@dana.unset.org")}`;
-    expect(undrawn(owner.layout, owner.html, isSwitch)).toEqual([signInHref]);
-    // And the bell's entries (the id, reason and time of each of their own notifications): on a page whose bell is
-    // a link, only their count is drawn. They name no one else.
+    expect(owner.layout).toMatchObject({ signedIn: true, account: { path: `/${WHOLE}` } });
+    expect(member.layout).toMatchObject({ signedIn: true, account: { path: `/${OTHER}` } });
+    expect(owner.layout).not.toHaveProperty("bellOpens");
+    // The owner's shell data holds nothing their page does not draw (the Sign in link's address left the data with
+    // book P1.22k; it is worked out where it is drawn).
+    expect(undrawn(owner.layout, owner.html, isSwitch)).toEqual([]);
+    // The bell's entries (the id, reason and time of each of the member's own notifications) are what the panel
+    // draws, and the client opens the panel on this page (book P1.22g; tests/e2e/bell-panel.spec.ts holds each entry
+    // to a row of it). The server's markup draws the bell as a link with the count, so there they are the one part
+    // of the data it does not show; a page that runs no client is sent the count alone (notifications.test.ts).
+    // They name no one else, in a copy that is private and never stored.
     const withEntries = MEMBER_SHELL_FIELDS.filter((field) => field !== "notifications.entries");
     expect(fieldsOf(member.layout)).toEqual([...withEntries, ...BELL_ENTRY_FIELDS].sort());
     const beside = undrawn(member.layout, member.html, isSwitch).map((line) => line.split(": ")[0]);
-    expect(beside).toEqual([...BELL_ENTRY_FIELDS, "signInHref"]);
+    expect(beside).toEqual(BELL_ENTRY_FIELDS);
     expect(member.layout).toMatchObject({ notifications: { count: 1, entries: [{ reason: "privacy_notice" }] } });
     expect(JSON.stringify(member.layout)).not.toContain(WHOLE);
   });
@@ -860,7 +888,8 @@ describe("the data address (book P1.22h)", () => {
     expect(missing.headers.get("x-robots-tag")).toBe("noindex");
     expect(shared(missing)).toEqual(shared(await get(path)));
     expect(missing.headers.get("content-security-policy")).toBe(FIXED_POLICY);
-    const body = unpathed(await missing.clone().text());
+    // Byte for byte: the answer names nothing of the address asked for (ADR 0116 point 6).
+    const body = await missing.clone().text();
     expect((await dataAnswer(missing)).type === "data").toBe(true);
     for (const hidden of [
       `/@${HIDDEN}`,
@@ -873,7 +902,7 @@ describe("the data address (book P1.22h)", () => {
       const response = await get(`${hidden}${DATA}`);
       expect(response.status, hidden).toBe(200);
       expect(dataHeaders(response), hidden).toEqual(dataHeaders(missing));
-      expect(unpathed(await response.clone().text()), hidden).toBe(body);
+      expect(await response.clone().text(), hidden).toBe(body);
       const answer = await dataAnswer(response);
       expect(answer.type === "data" && answer.nodes[1], hidden).toEqual(MISSING);
     }
@@ -936,11 +965,8 @@ describe("the data address (book P1.22h)", () => {
       expect(response.headers.get("x-robots-tag"), path).toBe("noindex");
       const answer = await dataAnswer(response.clone());
       expect(answer.type === "data" && answer.nodes[1], path).toEqual({ type: "skip" });
-      expect(nodeData(answer, 0), path).toEqual({
-        ...VISITOR_SHELL,
-        signInHref: `/login?next=${encodeURIComponent(path)}`,
-      });
-      answers.push(unpathed(await response.text()));
+      expect(nodeData(answer, 0), path).toEqual(VISITOR_SHELL);
+      answers.push(await response.text());
     }
     expect(new Set(answers).size).toBe(1);
   });
@@ -1002,13 +1028,9 @@ describe("what the browser is sent (book P1.22e, rule SE-3)", () => {
       expect(fieldsOf(sent), who).toEqual(fields);
       expect(undrawn(sent, html, isSwitch), who).toEqual([]);
       // The shell's part: a visitor's names no one; a member's is their own account, theme and bell (P1.22g ends the
-      // two values their page does not draw, pinned in the data address tests above).
-      if (cookie === undefined)
-        expect(startupData(html, 0), who).toEqual({
-          ...VISITOR_SHELL,
-          signInHref: (layout as { signInHref: string }).signInHref,
-        });
-      else expect(startupData(html, 0), who).toMatchObject({ signedIn: true, bellOpens: false });
+      // bell entries their page does not draw, pinned in the data address tests above).
+      if (cookie === undefined) expect(layout, who).toEqual(VISITOR_SHELL);
+      else expect(startupData(html, 0), who).toMatchObject({ signedIn: true });
       for (const text of [html, await data.text()]) {
         for (const word of HIDDEN_WORDS) expect(text, `${who}: ${word}`).not.toContain(word);
       }

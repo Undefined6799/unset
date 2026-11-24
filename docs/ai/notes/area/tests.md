@@ -7,7 +7,7 @@ summary: "Hub for tests/: Postgres integration tests and the browser accessibili
 code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/support/local-stack.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/test/assert-tests-ran.ts, .github/workflows/e2e.yml]
 sources: []
 importance: normal
-related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]"]
+related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]", "[[visitors-behind-one-address]]"]
 replaced_by: null
 tags: [area, tests]
 checked: 2026-11-21
@@ -70,7 +70,8 @@ flag repeats chrome-launcher 1.2.2's default list; `lighthouserc.test.ts` pins i
 **Bundle experiment (P1.20u).** `tests/e2e/bundle-measure/` is a manual measuring tool, not a test: `run.ts` loads
 the member's pages through a local Caddy running staging's `app-ratelimit` (`edge.caddy`) in front of `serve.ts`, the
 built web in socket mode, and writes what reached the edge as JSON. It needs a caddy-ratelimit Caddy binary and
-Docker; nothing in CI runs it. Results: [[single-vs-split-bundle-at-the-edge]].
+Docker; nothing in CI runs it. Results: [[single-vs-split-bundle-at-the-edge]]. `visitors.ts` (P1.22f) opens public pages as
+signed-out visitors sharing one address through the same edge; results: [[visitors-behind-one-address]].
 
 **Redeploy (P1.21g).** `tests/e2e/redeploy.spec.ts` makes a tab see a deploy without a second build: `page.route`
 answers `/_app/version.json` with another version and 404s every `/_app/immutable/` file until the next document
@@ -82,6 +83,11 @@ handle, "/" menu, floating bar, link editor and empty-line hint. Playwright's We
 mouse press, so its `drag()` sends the browser's own drag events there. Select words with `selectText()`, not a
 double click at a paragraph's centre (it hits empty space, and Firefox selects differently). A card whose edits
 end where they began has no unsaved changes: delete it without Discard (`discardAndRemove(..., { changed: false })`).
+
+**Members' state in browser specs (P1.22g).** One test server serves a whole project's run, so a spec must leave a
+seeded member as it found them. The "bell" member's entries stay unseen: a spec that opens the bell as that member
+sets the browser offline first, so the mark fails and the count comes back (`bell-panel.spec.ts`,
+`notifications.spec.ts`). The "inbox" member's count depends on which spec ran first; read its list, never its count.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
