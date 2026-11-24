@@ -20,7 +20,7 @@ import {
   stockPanel,
 } from "./navbar.ts";
 import { AXE_TAGS, addPageCookies, openPage, pageNoise, undersizedTargets, watch } from "./observe.ts";
-import { type PageFixture, TEST_ORIGIN } from "./pages.ts";
+import { originOf, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
 
 // A visitor: with chat on, a member's Messages is the top bar's link to the chat page and their phone finds Search under
@@ -78,7 +78,7 @@ test("close_and_a_press_outside_close_the_messages_panel", async ({ page }) => {
   const box = await page.locator("main h1").first().boundingBox();
   await page.mouse.click((box?.x ?? 0) + 5, (box?.y ?? 0) + 5);
   await expect(panel).toHaveCount(0);
-  await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
+  await expect(page).toHaveURL(`${originOf(VISITOR_HOME)}${VISITOR_HOME.path}`);
 });
 
 // bell-panel.spec.ts holds what the bell's panel lists and that opening it posts the mark; here, that it is the dialog.
