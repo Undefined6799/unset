@@ -87,7 +87,6 @@ export const MATH_ATTRIBUTES: ReadonlySet<string> = new Set([
   "width",
   "height",
   "depth",
-  "voffset",
   "linethickness",
   "displaystyle",
   "scriptlevel",
@@ -99,8 +98,37 @@ export const MATH_ATTRIBUTES: ReadonlySet<string> = new Set([
   "rowspacing",
 ]);
 
-/** A word, a number or a length, or a list of them: nothing that could name a place, a colour or a rule. */
-const PLAIN_VALUE = /^[A-Za-z0-9.+\- ]{0,64}$/;
+/**
+ * The attributes that take a length, or a list of lengths (MathML Core, "Length values"). Each must be a size of
+ * zero or more in a fixed unit, so no formula pulls its text back over what is beside it or out of its own box:
+ * no minus sign, and no pseudo-unit such as "1width" that counts in another part's size (review of #2019 at d1f2a98,
+ * where nested \raisebox lifted text over the page's header; voffset, which only moves text, is not kept at all).
+ */
+const LENGTHS: ReadonlySet<string> = new Set([
+  "lspace",
+  "rspace",
+  "minsize",
+  "maxsize",
+  "mathsize",
+  "width",
+  "height",
+  "depth",
+  "linethickness",
+  "columnspacing",
+  "rowspacing",
+]);
+const LENGTH = /^\+?(?:\d{1,6}(?:\.\d{1,6})?|\.\d{1,6})(?:em|ex|pt|px|mu)?$/;
+/** A font as KaTeX names one (src/buildMathML.ts getVariant): words joined by hyphens. */
+const VARIANT = /^[a-z]{1,16}(?:-[a-z]{1,16}){0,3}$/;
+/** Any other attribute: words or whole numbers, nothing that could name a place, a colour or a rule. */
+const WORDS = /^[A-Za-z0-9 ]{0,64}$/;
+
+function plainValue(name: string, value: string): boolean {
+  if (name === "mathvariant") return VARIANT.test(value);
+  if (!LENGTHS.has(name)) return WORDS.test(value);
+  const parts = value.split(" ");
+  return parts.length <= 64 && parts.every((part) => LENGTH.test(part));
+}
 
 const SETTINGS = {
   output: "mathml",
@@ -143,7 +171,7 @@ function keep(node: Parsed, left: { nodes: number }): (MathNode | string)[] | nu
   if (left.nodes < 0) return null;
   const attrs: Record<string, string> = {};
   for (const { name, value } of node.attrs) {
-    if (MATH_ATTRIBUTES.has(name) && PLAIN_VALUE.test(value)) attrs[name] = value;
+    if (MATH_ATTRIBUTES.has(name) && plainValue(name, value)) attrs[name] = value;
   }
   return [{ name: node.tagName, attrs, children }];
 }

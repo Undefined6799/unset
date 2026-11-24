@@ -71,6 +71,37 @@ describe("drawMath", () => {
     }
   });
 
+  // Review of #2019 at d1f2a98: nested \raisebox added up voffset past the card, over the page's own header. Nothing
+  // that moves a formula's text off its own box is kept: no voffset, no negative length, no length counted in another
+  // part's size ("-1width").
+  test("nothing moves a formula's text off its own box", () => {
+    const raised = "\\raisebox{10em}{".repeat(3);
+    for (const tex of [
+      `${raised}X${"}".repeat(3)}`,
+      "\\kern-50em X",
+      "\\hspace{-20em} X",
+      "\\mathllap{X}",
+      "\\mathrlap{X}",
+      "\\smash{X}",
+      "\\lower{5em}{X}",
+      "\\mkern-90mu X",
+      "\\negthickspace\\negthickspace X",
+    ]) {
+      const drawn = draw(tex);
+      const seen = { names: new Set<string>(), attrs: new Map<string, string>() };
+      if (drawn !== null) walk(drawn, seen);
+      expect([tex, seen.attrs.has("voffset")]).toEqual([tex, false]);
+      const all: string[] = [];
+      const every = (node: MathNode) => {
+        // A font name such as "sans-serif" has a hyphen and moves nothing.
+        all.push(...Object.entries(node.attrs).flatMap(([name, value]) => (name === "mathvariant" ? [] : [value])));
+        for (const child of node.children) if (typeof child !== "string") every(child);
+      };
+      if (drawn !== null) every(drawn);
+      for (const value of all) expect([tex, value]).toEqual([tex, expect.not.stringMatching(/-|width|height|depth/)]);
+    }
+  });
+
   test("markup in a formula's text stays text", () => {
     expect(draw("\\text{<script>alert(1)</script>}")).toEqual({
       name: "math",
@@ -157,7 +188,7 @@ describe("drawMath", () => {
         for (const name of seen.names) expect(MATH_ELEMENTS.has(name)).toBe(true);
         for (const [name, value] of seen.attrs) {
           expect(MATH_ATTRIBUTES.has(name)).toBe(true);
-          expect(value).toMatch(/^[A-Za-z0-9.+\- ]{0,64}$/);
+          expect(value).toMatch(name === "mathvariant" ? /^[a-z]+(-[a-z]+)*$/ : /^[A-Za-z0-9.+ ]{0,64}$/);
         }
       }),
       { numRuns: 2_000, seed: 121 },

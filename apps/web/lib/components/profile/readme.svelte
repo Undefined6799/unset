@@ -20,6 +20,8 @@ let {
 /** The block's code as stored: a coloured block carries only its runs, which join back to it (code-colours.ts). */
 const codeText = (block: { readonly text: string } | { readonly runs: readonly { readonly text: string }[] }) =>
   "runs" in block ? block.runs.map((run) => run.text).join("") : block.text;
+// Each formula paints only inside its own box (contain: paint, CSS Containment 2), whatever its elements say: a
+// defence beside math.ts's allowlist, after the review of #2019 (nested \raisebox drew text over the page's header).
 // A formula's elements are MathML, so each is made in that namespace (svelte 5.57.3 svelte-element.js takes it from
 // the xmlns attribute); its names and attributes are math.ts's allowlists, and every string in it is a text node.
 const MATHML = "http://www.w3.org/1998/Math/MathML";
@@ -58,7 +60,7 @@ const HEADING_LOOK = [
 
 {#snippet inline(nodes: readonly Inline[])}
   {#each nodes as node, i (i)}
-    {#if node.kind === "text"}{node.text}{:else if node.kind === "break"}<br />{:else if node.kind === "math"}{@render mathml(node.tree)}{:else if node.kind === "code"}<code class="rounded-sm bg-muted px-1 font-mono text-sm">{node.text}</code
+    {#if node.kind === "text"}{node.text}{:else if node.kind === "break"}<br />{:else if node.kind === "math"}<span class="inline-block max-w-full contain-paint">{@render mathml(node.tree)}</span>{:else if node.kind === "code"}<code class="rounded-sm bg-muted px-1 font-mono text-sm">{node.text}</code
       >{:else if node.kind === "strong"}<strong>{@render inline(node.children)}</strong
       >{:else if node.kind === "em"}<em>{@render inline(node.children)}</em
       >{:else if node.kind === "del"}<del>{@render inline(node.children)}</del
@@ -136,8 +138,8 @@ const HEADING_LOOK = [
         </table>
       </div>
     {:else if block.kind === "math"}
-      <!-- A wide formula scrolls inside the card rather than widening it. -->
-      <div class="overflow-x-auto">{@render mathml(block.tree)}</div>
+      <!-- A wide formula scrolls inside the card rather than widening it, and paints nothing outside. -->
+      <div class="overflow-x-auto contain-paint">{@render mathml(block.tree)}</div>
     {:else if block.kind === "rule"}
       <hr />
     {/if}

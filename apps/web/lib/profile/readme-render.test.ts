@@ -170,7 +170,7 @@ describe("Readme", () => {
   test("a formula is MathML, in a line or as a block, with no colour, style or link", () => {
     const ns = 'xmlns="http://www.w3.org/1998/Math/MathML"';
     expect(html("so $x^2$")).toBe(
-      `<p>so <math ${ns}><mrow ${ns}><msup ${ns}><mi ${ns}>x</mi><mn ${ns}>2</mn></msup></mrow></math></p>`,
+      `<p>so <span><math ${ns}><mrow ${ns}><msup ${ns}><mi ${ns}>x</mi><mn ${ns}>2</mn></msup></mrow></math></span></p>`,
     );
     expect(html("$$\n\\text{<b>}\n$$")).toBe(
       `<div><math ${ns} display="block"><mrow ${ns}><mtext ${ns}>&lt;b></mtext></mrow></math></div>`,

@@ -165,6 +165,27 @@ test("math_is_drawn_as_mathml_by_the_server_and_in_the_preview", async ({ browse
   await deleteNewest(page);
 });
 
+// Review of #2019 at d1f2a98: three nested \raisebox lifted a formula's text about 480 px above its card, where it
+// could pass for the page's own header. A formula's text stays inside its card, in a line and as a block.
+test("a_formula_cannot_draw_outside_its_card", async ({ browser, page }) => {
+  const raised = (word: string) => `${"\\raisebox{10em}{".repeat(3)}\\text{${word}}${"}".repeat(3)}`;
+  const lowered = (word: string) => `\\kern-50em${"\\raisebox{-10em}{".repeat(3)}\\text{${word}}${"}".repeat(3)}`;
+  await addStored(page, `in a line $${raised("RAISED")}$ and $${lowered("LOWERED")}$\n\n$$\n${raised("BLOCK")}\n$$`);
+  const quiet = await withoutScript(browser, page);
+  const card = textCards(quiet).last();
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  for (const word of ["RAISED", "LOWERED", "BLOCK"]) {
+    const text = await card.locator("mtext", { hasText: word }).boundingBox();
+    expect(text, word).not.toBeNull();
+    if (box === null || text === null) continue;
+    expect([word, text.y >= box.y && text.y + text.height <= box.y + box.height]).toEqual([word, true]);
+    expect([word, text.x >= box.x && text.x + text.width <= box.x + box.width]).toEqual([word, true]);
+  }
+  await quiet.context().close();
+  await deleteNewest(page);
+});
+
 // The Preview's reader is its own file, asked for when Preview first opens, so the page's first load carries no
 // Markdown parser. When the file does not arrive the tab says so, and Write still holds the text.
 test("a_preview_whose_reader_does_not_arrive_says_so_and_write_keeps_the_text", async ({ page }) => {
