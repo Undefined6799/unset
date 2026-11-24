@@ -385,6 +385,10 @@
         "origin": "ours",
         "purpose": "The profile header (ADR 0072, ADR 0077): avatar and name, and a native popover under the avatar with the profile's About panel (handle and details); not a shadcn component, since the public page runs no script."
       },
+      "readme-copy.svelte": {
+        "origin": "ours",
+        "purpose": "The Text card's blocks (readme.svelte) with a stock Button in each code block's corner, once script runs, that copies its code as plain text (P1.21v)."
+      },
       "readme.svelte": {
         "origin": "ours",
         "purpose": "The Text card's parsed blocks (the #readme kind) as plain escaped elements, on the page's type scale."
