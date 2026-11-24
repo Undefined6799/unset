@@ -9,6 +9,7 @@
 -->
 <script lang="ts">
 import { onDestroy, onMount, tick } from "svelte";
+import type { CodeColourLimits } from "../../editor/code-colours.ts";
 import type { EditorCommand, MarkdownEditor, ToolbarState } from "../../editor/milkdown.ts";
 import { TEXT_EDITOR } from "../../profile/messages.ts";
 import { Icon, type IconName } from "../icon/index.ts";
@@ -26,6 +27,7 @@ let {
   required = false,
   error,
   maxlength,
+  codeColours,
 }: {
   label: string;
   name: string;
@@ -35,6 +37,8 @@ let {
   required?: boolean;
   error?: string;
   maxlength?: number;
+  /** The page's code colouring limits: the editor colours code only where the page will. */
+  codeColours?: CodeColourLimits;
 } = $props();
 
 const id = $props.id();
@@ -85,6 +89,7 @@ onMount(async () => {
     const mounted = await mountMarkdownEditor(host, {
       value: textarea.value,
       labelledBy: labelId,
+      codeColours,
       // Marked at once, so a save sent before the next frame still reads the editor (formdata below). An empty field
       // is filled at once too: the browser checks `required` before formdata runs, and the first edit of a new card is
       // only a few characters to write.
