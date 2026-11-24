@@ -2,9 +2,10 @@
   The shell of every page (P1.20d), as the React AppShell drew it before P1.20k; src/lib/shell.ts says what a
   page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the site shell.
   Neither shell offers Sign in when the gate read a live session for the route (+layout.server.ts). Everything here works with no script: links, plain forms, and a native popover for the menu drawer
-  (https://html.spec.whatwg.org/multipage/popover.html). The bell is the one control the client takes over: the server
-  draws it as a link to /notifications, and where the client runs it opens its panel (ADR 0116 points 8 and 9). The
-  `?error=` callout shows only the catalog's text.
+  (https://html.spec.whatwg.org/multipage/popover.html). The client takes two controls over once it has started (ADR
+  0116 points 8 and 9): the bell, which the server draws as a link to /notifications, opens its panel, and the account
+  menu, which the server draws as a native popover, becomes the stock Dropdown Menu (book P1.22m). The `?error=`
+  callout shows only the catalog's text.
 -->
 <script lang="ts">
 import "@unset/apps-web/app.css";
@@ -12,13 +13,13 @@ import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
 import DismissAll from "@unset/apps-web/lib/components/notifications/dismiss-all.svelte";
 import NotificationList from "@unset/apps-web/lib/components/notifications/notification-list.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
-import { Button } from "@unset/apps-web/lib/components/ui/button";
+import { Button, buttonVariants } from "@unset/apps-web/lib/components/ui/button";
 import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
 import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
 import { NOTIFICATIONS as N } from "@unset/apps-web/lib/notifications/messages.ts";
 import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
-import { onMount, type Snippet } from "svelte";
+import { onMount, type Snippet, tick } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { page, updated } from "$app/state";
@@ -221,6 +222,38 @@ onMount(() => {
   clientReady = true;
 });
 const bellOpens = $derived(clientReady && notes?.state !== "count");
+// The account menu (book P1.22m, ADR 0116 points 8 and 9). The server draws it as a native popover: that is the menu
+// with no script, and until the stock one is ready. The stock one (apps/web lib/components/shell/account-menu.svelte)
+// is loaded once the client has started, for a member only, so no page's first load carries the library's menu code
+// (about 37 KiB gzip, measured with scripts/budgets/app-js.ts). A file that does not arrive (a tab older than the
+// deploy) leaves the native menu, which works. A press the native menu took is carried over, never lost: a menu found
+// open is open after the swap, and focus found on its button, or inside it, is on the stock button after.
+type AccountMenu = typeof import("@unset/apps-web/lib/components/shell/account-menu.svelte").default;
+let StockAccountMenu = $state<AccountMenu | undefined>(undefined);
+let accountOpen = $state(false);
+let accountButton = $state<HTMLElement | null>(null);
+let accountAsked = false;
+$effect(() => {
+  if (account === undefined || accountAsked) return;
+  accountAsked = true;
+  import("@unset/apps-web/lib/components/shell/account-menu.svelte").then(takeAccountMenuOver, () => undefined);
+});
+function takeAccountMenuOver(loaded: { default: AccountMenu }): void {
+  const native = document.getElementById(ACCOUNT);
+  const focused = document.activeElement;
+  const hadFocus = focused?.getAttribute("popovertarget") === ACCOUNT || native?.contains(focused) === true;
+  accountOpen = native?.matches(":popover-open") === true;
+  StockAccountMenu = loaded.default;
+  // An open menu takes focus itself (bits-ui focus-scope); a closed one's button is new, so focus is put on it.
+  if (hadFocus && !accountOpen) void tick().then(() => accountButton?.focus());
+}
+// The stock menu's rows post the same two plain forms the native menu holds: Sign out is a submit button of the
+// sign-out form, and a theme row presses its button in the picker, so one save path serves both menus (saveInPlace).
+const SIGN_OUT = "sign-out";
+let themeButtons = $state<HTMLElement | undefined>(undefined);
+function chooseTheme(choice: ThemeChoice): void {
+  themeButtons?.querySelector<HTMLButtonElement>(`button[name="theme"][value="${choice}"]`)?.click();
+}
 // Opening the bell marks what it shows seen (ADR 0085, 0090 and 0108): the badge goes at once and comes back only with
 // a newer entry. The hidden form posts it in the background.
 const newest = $derived(notes?.state === "ready" ? notes.entries[0]?.id : undefined);
@@ -250,7 +283,8 @@ const letter = $derived(account?.name === undefined ? undefined : accountLetter(
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
-  for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH]) {
+  accountOpen = false;
+  for (const id of [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
@@ -446,7 +480,22 @@ const row =
           <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
           {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
         </Button>
-        {#if account !== undefined}
+        {#if account !== undefined && StockAccountMenu !== undefined}
+          <StockAccountMenu
+            bind:open={accountOpen}
+            bind:button={accountButton}
+            id={ACCOUNT}
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} rounded-full bg-muted font-semibold"
+            {account}
+            {letter}
+            active={shell.active === "account" || shell.active === "settings" ? shell.active : undefined}
+            theme={prefs === undefined
+              ? undefined
+              : { heading: T.appearance, saved: current, choices: PICKER, choose: chooseTheme }}
+            signOutForm={SIGN_OUT}
+            text={{ menu: T.accountMenu, profile: T.yourProfile, settings: T.settings, signOut: T.signOut }}
+          />
+        {:else if account !== undefined}
           <Button
             variant="outline"
             size="icon-sm"
@@ -616,7 +665,11 @@ const row =
       {/each}
     </ul>
   </section>
-  {#if account !== undefined}
+  {#if account !== undefined && StockAccountMenu !== undefined}
+    <!-- What the stock account menu's rows post (chooseTheme, SIGN_OUT): the same two forms, not shown. -->
+    <form id={SIGN_OUT} method="post" action="/logout" hidden></form>
+    {#if prefs !== undefined}<div hidden bind:this={themeButtons}>{@render themePicker()}</div>{/if}
+  {:else if account !== undefined}
     <section id={ACCOUNT} popover="auto" aria-labelledby="{ACCOUNT}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
       {@render panelTitle(ACCOUNT, T.account, false)}
       {#if account.name}<p class="truncate px-3 pb-2 font-medium" title={account.name}>{account.name}</p>{/if}
