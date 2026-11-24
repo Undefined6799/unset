@@ -144,6 +144,9 @@ test("the_block_menu_adds_a_math_block_and_the_bar_makes_words_a_formula", async
   await expect(inlineMath).toHaveAttribute("aria-pressed", "true");
   await inlineMath.click();
   await expect(editor.locator("[data-math-inline]")).toHaveCount(0);
+  // The press gave the editor its focus back; prosemirror-view 1.42.9 redraws the selection 20 ms after that
+  // (editHandlers.focus), and a key pressed sooner is undone by it, as cardWithCaret waits.
+  await page.waitForTimeout(50);
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Backspace");
   await page.keyboard.type("c");
