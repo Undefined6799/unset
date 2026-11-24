@@ -264,13 +264,20 @@ describe("the bell and the notifications page", () => {
       const bell = (startupData(page, 0) as { notifications?: unknown }).notifications;
       expect(bell, path).toMatchObject({ state: "ready", count: 1, entries: [{ reason: "sign_in" }] });
     }
-    // A page that runs no client cannot open the panel: its data holds the count the link shows and no entry (rule
-    // SE-3). /join is one until book P1.22l.
-    const plain = await get(`/join${DATA}`, cookie);
+    // A route whose own page runs no client cannot open the panel: its shell holds the count the link shows and no
+    // entry (rule SE-3). Since book P1.22l the only such route a member's session reaches is a form's target with no
+    // screen. Its GET is the error page, which does run the client; the shell was loaded for the route, so that one
+    // error page keeps the link.
+    const plain = await get(`/privacy-notice/seen${DATA}`, cookie);
     expect(plain.status).toBe(200);
     const shell = nodeData(await dataAnswer(plain), 0) as { notifications?: unknown };
     expect(shell.notifications).toEqual({ state: "count", count: 1 });
-    expect(await html("/join", cookie)).not.toContain("<script");
+    const refused = await html("/privacy-notice/seen", cookie);
+    expect((startupData(refused, 0) as { notifications?: unknown }).notifications).toEqual({
+      state: "count",
+      count: 1,
+    });
+    expect(refused).toMatch(/<a [^>]*href="\/notifications"[^>]*>(?:(?!<\/a>).)*Notifications, 1 waiting/s);
   });
 
   test("notifications.only_a_visit_from_our_pages_or_a_typed_address_marks_seen", async () => {

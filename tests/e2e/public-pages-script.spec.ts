@@ -1,9 +1,11 @@
-// Book P1.22g (ADR 0116): home, the legal pages and the invite request run SvelteKit's client under the app group's
-// script policy. Each reads something of the query: every page `?error=`, a catalog code a redirect carried, and the
-// invite request `?sent`, which says the form was taken. Anyone can send anyone a link with any query, so what the
-// query holds must stay text: with script on nothing of it runs, the policy reports no violation, and the page shows
-// its own words. tests/integration/web/public holds the bytes of each page's start-up script against the same values
-// (public-pages.test.ts, request-invite.test.ts), and nojs.spec.ts reads the pages with script off.
+// Book P1.22g and P1.22l (ADR 0116): home, the legal pages and the invite request, then the sign-in page, the join
+// page and the under-age notice, run SvelteKit's client under the app group's script policy. Each reads something of
+// the query: every page `?error=`, a catalog code a redirect carried; the invite request `?sent`, which says the
+// form was taken; the sign-in page `?next`, where to go after; the join page `?invite`, the code it shows. Anyone can
+// send anyone a link with any query, so what the query holds must stay text: with script on nothing of it runs, the
+// policy reports no violation, and the page shows its own words. tests/integration/web holds the bytes of each
+// page's start-up script against the same values (public/public-pages.test.ts, public/request-invite.test.ts,
+// sign-in.test.ts, app/invite.test.ts, welcome/onboarding.test.ts), and nojs.spec.ts reads the pages with script off.
 import { expect, test } from "@playwright/test";
 import { expectOnlyText, pageNoise, watch } from "./observe.ts";
 import { PROD_ORIGIN } from "./pages.ts";
@@ -23,12 +25,28 @@ const HOSTILE_VALUES = [
 
 const RECEIVED = "Thanks, your request is in. If an invite is possible, it comes to that address by email.";
 
-/** Each page switched on, the query value it reads, and the heading it shows whatever that value says. */
+const BLOCKED_TITLE = "We can't offer you an account right now";
+
+/**
+ * Each page switched on, the query value it reads, and the heading it shows whatever that value says. `lead` goes
+ * before each value: the sign-in page keeps `next` only when it is a path, so there the values are tried as one too.
+ */
 const PLACES = [
-  { name: "home", path: "/", reads: "error", heading: "Home" },
-  { name: "a_legal_page", path: "/legal/terms", reads: "error", heading: "Terms" },
-  { name: "the_invite_request", path: "/request-invite", reads: "error", heading: "Request an invite" },
-  { name: "the_invite_request_s_sent_flag", path: "/request-invite", reads: "sent", heading: "Request an invite" },
+  { name: "home", path: "/", reads: "error", lead: "", heading: "Home" },
+  { name: "a_legal_page", path: "/legal/terms", reads: "error", lead: "", heading: "Terms" },
+  { name: "the_invite_request", path: "/request-invite", reads: "error", lead: "", heading: "Request an invite" },
+  {
+    name: "the_invite_request_s_sent_flag",
+    path: "/request-invite",
+    reads: "sent",
+    lead: "",
+    heading: "Request an invite",
+  },
+  { name: "the_sign_in_page", path: "/login", reads: "error", lead: "", heading: "Sign in" },
+  { name: "the_sign_in_page_s_next", path: "/login", reads: "next", lead: "", heading: "Sign in" },
+  { name: "the_sign_in_page_s_next_as_a_path", path: "/login", reads: "next", lead: "/", heading: "Sign in" },
+  { name: "the_join_page_s_invite", path: "/join", reads: "invite", lead: "", heading: "You're invited to unset" },
+  { name: "the_under_age_notice", path: "/welcome/blocked", reads: "error", lead: "", heading: BLOCKED_TITLE },
 ] as const;
 
 for (const place of PLACES) {
@@ -40,7 +58,7 @@ for (const place of PLACES) {
     });
     for (const value of HOSTILE_VALUES) {
       const watched = watch(page);
-      const response = await page.goto(`${PROD_ORIGIN}${place.path}?${place.reads}=${value}`);
+      const response = await page.goto(`${PROD_ORIGIN}${place.path}?${place.reads}=${place.lead}${value}`);
       expect(response?.status(), value).toBe(200);
       const csp = response?.headers()["content-security-policy"] ?? "";
       expect(csp, value).toContain(`script-src ${PROD_ORIGIN}/_app/ 'sha256-`);
@@ -73,4 +91,41 @@ test("a_catalog_code_and_the_sent_flag_show_their_words_with_script_on", async (
   await expect(page.getByRole("status")).toHaveText(RECEIVED);
   expect(watched.scripts.length).toBeGreaterThan(0);
   expect(watched.pageErrors).toEqual([]);
+});
+
+// With script on the sign-in page is still one plain form: the button posts the page itself, a navigation and not a
+// fetch, with the checked path. The hop to the sign-in server (/login/continue, which keeps no script) therefore
+// never waits for the client. Nothing leaves the test server here.
+test("the_sign_in_button_posts_a_plain_form_with_script_on", async ({ page }) => {
+  const watched = watch(page);
+  await page.route(
+    (url) => url.origin !== PROD_ORIGIN,
+    (route) => route.abort(),
+  );
+  await page.goto(`${PROD_ORIGIN}/login?next=/legal/terms`);
+  await page.waitForLoadState("networkidle");
+  expect(watched.scripts.length).toBeGreaterThan(0);
+  const posted = page.waitForRequest((request) => request.method() === "POST");
+  await page.getByRole("button", { name: "Sign in with AtProto" }).click();
+  const request = await posted;
+  expect(new URL(request.url()).pathname).toBe("/login");
+  expect(request.isNavigationRequest()).toBe(true);
+  expect(Object.fromEntries(new URLSearchParams(request.postData() ?? ""))).toEqual({
+    next: "/legal/terms",
+    intent: "chooser",
+  });
+});
+
+// The twin of nojs.spec.ts's login_close_returns_to_the_page_before. With script the client follows Sign in in place
+// and asks the sign-in page's data address; the browser sends that request's Referer as the page the visitor is on,
+// so Close still leads back to it.
+test("close_returns_to_the_page_before_with_script_on", async ({ page }) => {
+  await page.goto(`${PROD_ORIGIN}/legal/terms`);
+  await page.waitForLoadState("networkidle");
+  await page.locator('header a[href="/login?next=%2Flegal%2Fterms"]').filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/login\?next=%2Flegal%2Fterms$/);
+  const close = page.getByRole("region", { name: "Sign in" }).getByRole("link", { name: "Close" });
+  await expect(close).toHaveAttribute("href", "/legal/terms");
+  await close.click();
+  await expect(page).toHaveURL(/\/legal\/terms$/);
 });

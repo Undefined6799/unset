@@ -11,6 +11,9 @@ export const load: ServerLoad = ({ url, locals, request }) => {
   const error = readErrorParam(url.searchParams);
   // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
   if (locals.did !== undefined && error === null) redirect(303, "/me");
+  // The page runs the client (book P1.22l), so SvelteKit writes this result into the start-up script it hashes. The
+  // two values a request can choose, `next` (the query) and `close` (the Referer), are each a `safeReturnPath` or
+  // nothing (rule DM-1): a path of ours as the URL parser writes it, percent-encoded, with no quote or angle bracket.
   const next = safeReturnPath(url.searchParams.get("next"));
   // The box alone, with no header or footer, as Hono rendered it (interfaces/http/routes/login.ts passed no shell).
   const shell: ShellData = { kind: "bare" };
