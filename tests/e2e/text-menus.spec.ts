@@ -140,7 +140,7 @@ test("a_slash_opens_the_block_menu_and_selected_words_show_the_floating_bar", as
   await expect(bold).toHaveAttribute("aria-pressed", "true");
   // The playground's bar, in its order: Strikethrough after Italic (Crepe 7.23.0 toolbar).
   const names = await floating.getByRole("button").evaluateAll((all) => all.map((b) => b.getAttribute("aria-label")));
-  expect(names).toEqual(["Bold", "Italic", "Strikethrough", "Inline code", "Link"]);
+  expect(names).toEqual(["Bold", "Italic", "Strikethrough", "Inline code", "Inline math", "Link"]);
   const strike = floating.getByRole("button", { name: "Strikethrough" });
   await strike.click();
   await expect(editor.locator("strong del, del strong")).toHaveText(`${word} start`);
@@ -159,7 +159,7 @@ test("the_block_menu_has_the_playgrounds_tabs_and_makes_task_lists_and_tables", 
   await page.keyboard.type("/");
   const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
   await expect(menu).toBeVisible();
-  // Crepe 7.23.0's items in its order, less Image and Math (block-edit/menu/config.ts), each with its icon.
+  // Crepe 7.23.0's items in its order, less Image (block-edit/menu/config.ts), each with its icon.
   await expect(menu.getByRole("option")).toHaveText([
     "Text",
     "Heading 1",
@@ -175,8 +175,9 @@ test("the_block_menu_has_the_playgrounds_tabs_and_makes_task_lists_and_tables", 
     "Task list",
     "Code",
     "Table",
+    "Math",
   ]);
-  await expect(menu.getByRole("option").locator("svg")).toHaveCount(14);
+  await expect(menu.getByRole("option").locator("svg")).toHaveCount(15);
   // The tabs above it name the groups; the one holding the active item is current (Crepe's tab-group).
   const tabs = page.getByRole("group", { name: "Block groups" }).filter({ visible: true });
   await expect(tabs.getByRole("button")).toHaveText(["Text", "List", "Advanced"]);
@@ -282,6 +283,7 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
     "Ordered list",
     "Task list",
     "Code",
+    "Math",
   ]);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
