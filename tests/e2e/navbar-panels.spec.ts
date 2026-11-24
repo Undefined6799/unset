@@ -112,6 +112,26 @@ test("the_bell_s_panel_is_a_dialog_and_a_row_is_followed_in_place", async ({ pag
   expect(documents).toBe(0);
 });
 
+// The native panel scrolled inside a window too short for it (the browser's own rule for a popover). The stock one
+// takes the height the library measured under its button (bits-ui 2.20.6
+// dist/internal/floating-svelte/floating-utils.svelte.js, --bits-popover-content-available-height) and scrolls.
+test("a_panel_taller_than_the_window_stays_inside_it_and_scrolls", async ({ page }) => {
+  const SHORT = 220;
+  await page.setViewportSize({ width: 1280, height: SHORT });
+  await ready(page, INBOX_HOME);
+  const panel = await openPanel(page, BELL_PANEL);
+  await settled(panel);
+  const box = await panel.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.y).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? SHORT)).toBeLessThanOrEqual(SHORT);
+  // Its last row is reached by scrolling the panel.
+  const viewAll = panel.getByRole("link", { name: "View all notifications" });
+  await viewAll.scrollIntoViewIfNeeded();
+  await expect(viewAll).toBeInViewport({ ratio: 1 });
+  expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
 test.describe("before the client is ready", () => {
   /** Holds every script file back until `release` is called, so the page is the server's until then. */
   async function holdScripts(page: Page): Promise<() => void> {
