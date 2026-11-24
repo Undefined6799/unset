@@ -17,7 +17,7 @@ import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import Carousel from "./carousel.svelte";
-import Readme from "./readme.svelte";
+import Readme from "./readme-copy.svelte";
 
 let {
   cards,

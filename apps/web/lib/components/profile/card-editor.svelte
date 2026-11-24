@@ -34,7 +34,7 @@ import * as Dialog from "../ui/dialog/index.ts";
 import * as Tabs from "../ui/tabs/index.ts";
 import Choice from "./choice.svelte";
 import Field from "./field.svelte";
-import Readme from "./readme.svelte";
+import Readme from "./readme-copy.svelte";
 import TextEditor from "./text-editor.svelte";
 
 type Kind = CardContent["kind"];
