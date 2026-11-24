@@ -120,13 +120,14 @@ export type TextReads = {
 /**
  * The reader a process keeps (compose.ts builds the one). `forPage` gives a page load its reader: each call reads a
  * card's text as blocks, from what is kept or by parsing within what is left of the limits and of the request
- * (`deadlineAt`, on `now`'s clock), or gives it as plain text. `read` is the parser and `now` the clock, in
- * milliseconds; tests pass their own.
+ * (`deadlineAt`, on `now`'s clock), or gives it as plain text. `read` is the parser, `now` the clock in milliseconds
+ * and `stop` what holds a parse to the time it is given; tests pass their own.
  */
 export function createTextReads(
   limits: TextReadLimits,
   read: (text: string) => Block[] = parseReadme,
   now: () => number = () => performance.now(),
+  stop: typeof within = within,
 ): TextReads {
   // In the order they were last read, oldest first (a Map keeps insertion order).
   const kept = new Map<string, Kept>();
@@ -181,7 +182,7 @@ export function createTextReads(
         if (known !== undefined) return known.blocks === null ? plainText(text) : once(key, known.blocks);
         const ms = Math.floor(Math.min(limits.textMs, left, deadlineAt - started));
         if (ms < 1) return plainText(text);
-        const outcome = within(ms, () => read(text));
+        const outcome = stop(ms, () => read(text));
         left -= now() - started;
         if ("value" in outcome) {
           const blocks = frozen(outcome.value);
