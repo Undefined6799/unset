@@ -3,11 +3,20 @@
 // draws each as a native popover: the menu with no script (nojs.spec.ts) and until the client is ready, and a press
 // in that time is carried over. A row whose feature does not exist yet is a disabled menu item that says so; the
 // library skips it (node_modules/bits-ui/dist/bits/menu/menu.svelte.js, the candidates leave out [data-disabled]).
-// On a phone Create is a row of More actions, which still opens the native panel until that menu's own part.
+// On a phone Create's rows are in More actions (navbar-actions.spec.ts).
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { AXE_ALLOWANCE, unallowedViolations } from "./allow.ts";
-import { CREATE_MENU, type HeaderMenu, MAIN_MENU, menuButton, openMenu, settled, stockMenu } from "./navbar.ts";
+import {
+  ACTIONS_MENU,
+  CREATE_MENU,
+  type HeaderMenu,
+  MAIN_MENU,
+  menuButton,
+  openMenu,
+  settled,
+  stockMenu,
+} from "./navbar.ts";
 import { AXE_TAGS, addPageCookies, openPage, pageNoise, undersizedTargets, watch } from "./observe.ts";
 import { ACCOUNT, PAGES, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -239,17 +248,12 @@ test.describe("phone", () => {
     expect(await page.evaluate(undersizedTargets)).toEqual([]);
   });
 
-  // Create is a row of More actions on a phone, and that menu is still the native one: its Create row opens the native
-  // Create panel after the client is ready too (navigation.spec.ts holds Escape and focus there).
-  test("create_from_more_actions_still_opens_the_native_panel", async ({ page }) => {
+  // On a phone Create's rows are in More actions (navbar-actions.spec.ts); no native Create panel is left once the
+  // client is ready.
+  test("create_s_rows_are_in_more_actions_on_a_phone", async ({ page }) => {
     await ready(page, SETTINGS);
-    await page
-      .locator("header")
-      .getByRole("button", { name: /^More actions/ })
-      .tap();
-    await page.locator("#actions-menu").getByRole("button", { name: "Create", exact: true }).tap();
-    const native = page.locator(`section#${CREATE_MENU.native}`);
-    await expect(native.getByRole("link", { name: "Add a profile card" })).toBeVisible();
-    await expect(page.getByRole("menu")).toHaveCount(0);
+    const actions = await openMenu(page, ACTIONS_MENU);
+    await expect(actions.getByRole("menuitem", { name: "Add a profile card" })).toBeVisible();
+    await expect(page.locator(`section#${CREATE_MENU.native}`)).toHaveCount(0);
   });
 });
