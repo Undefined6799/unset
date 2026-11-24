@@ -5,7 +5,7 @@
 // (nojs.spec.ts), a press follows the link, whose visit marks the list. tests/integration/web/app/notifications.test.ts
 // holds what the server draws and sends, and what the mark does.
 import { expect, type Page, test } from "@playwright/test";
-import { BELL_PANEL, stockPanel } from "./navbar.ts";
+import { ACTIONS_MENU, actionsRow, BELL_PANEL, openMenu, stockPanel } from "./navbar.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 import { BELL_SIZE, INDEXED, type PageFixture, PROD_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -102,17 +102,15 @@ test("until_the_client_is_ready_the_bell_is_the_link_to_the_page", async ({ page
 test.describe("on a phone", () => {
   test.use(phone({ width: 375, height: 800 }));
 
-  // On a phone the bell is a row of More actions. The "inbox" member's list is read and never counted here.
+  // On a phone the bell is a row of More actions, which opens the same panel. The "inbox" member's list is read and
+  // never counted here.
   test("more_actions_opens_the_bell_s_panel_on_home", async ({ page }) => {
     expect((await openPage(page, as("inbox", "/")))?.status()).toBe(200);
-    const row = page.locator('#actions-menu button[popovertarget="notifications-menu"]');
-    await expect(row).toHaveCount(1); // the client has taken the server's link over
-    await expect(page.locator('#actions-menu a[href="/notifications"]')).toHaveCount(0);
-    await page.locator('header button[popovertarget="actions-menu"]').tap();
-    await row.tap();
-    // More actions is still a native popover, and its row opens the native panel (book P1.22m part 4 moves both).
-    const native = page.locator("section#notifications-menu");
-    await expect(native).toBeVisible();
-    await expect(native.locator('a[href^="/notifications?n="]').first()).toBeVisible();
+    const actions = await openMenu(page, ACTIONS_MENU);
+    // The client has taken the server's link over: the row opens the panel, and no link to the page is left in it.
+    await expect(actions.locator('a[href="/notifications"]')).toHaveCount(0);
+    await actionsRow(actions, "Notifications").tap();
+    await expect(panel(page)).toBeVisible();
+    await expect(rows(page).first()).toBeVisible();
   });
 });

@@ -5713,6 +5713,34 @@ role on a popover's content, so the file sets `role="dialog"` and `aria-labelled
 `tests/e2e/navbar-panels.spec.ts` holds the panels; `bell-panel.spec.ts` and `notifications.spec.ts` find the bell's
 panel as the dialog.
 
+**Built 2026-11-24: part 4, More actions on a phone.** Under 640px More actions is the stock Dropdown Menu, drawn by
+`header-menu.svelte` with two additions: a heading that makes the first rows a named group, and action rows after
+them. What the part settled:
+
+- **Create's rows are in More actions itself**, as a group named Create, where the native menu has a Create row
+  that opens a second panel on top. A second menu level has no room on a phone, and one menu with the arrow keys
+  walking all of it is the plainer thing.
+- **A row for Messages and one for the bell open the same stock panels**, under More actions' button, since their
+  own buttons are not drawn at that width (`header-panel.svelte` `anchor`). The row closes the menu, which gives
+  focus back to its button; the panel opens once the menu has gone (`onOpenChangeComplete`), so closing the panel
+  gives focus back to that button. A press on the button while its panel is open opens the menu, and the layout
+  closes the panel then: the library leaves a panel open for a press on the element it is placed by.
+- **The panel is told it opened by an effect on `open`**, not by the library's `onOpenChange`, which runs only for
+  openings the library made itself. The bell's mark is posted for an opening from More actions too.
+- **No native panel is left in the document once the stock controls are in.** All of them are drawn only until
+  then. The bell's native panel is gone altogether: in the native More actions its row is the link to the page, as
+  the bell is in the header.
+- **The hand-over under 640px:** a native More actions found open is the stock one open; a native Create panel on
+  top of it is the stock More actions, which holds those rows; a native Messages panel on top of it is the stock
+  panel, with focus first on More actions' button.
+
+- **Crossing 640px closes every stock control** (one `matchMedia` listener in the layout). The header draws other
+  buttons on the other side of that line, so an open control loses the button it sits under; the library then hides
+  it but does not always close it, and a hidden open menu still keeps the pointer off the page.
+
+`tests/e2e/navbar-actions.spec.ts` holds More actions; the phone tests of `navigation`, `navbar-menus`,
+`navbar-panels` and `bell-panel` go through it.
+
 ---
 
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)
