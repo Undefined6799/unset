@@ -12,7 +12,7 @@
 // and the Trusted Types rule stay as they are.
 //
 // Nothing in a code block is ever read as HTML: CodeMirror draws its document as text nodes, the language name is an
-// input's value, and the Copy button writes plain text to the clipboard.
+// input's value, and the copy button writes plain text to the clipboard.
 
 import { defaultKeymap } from "@codemirror/commands";
 import { LanguageDescription, type LanguageSupport, syntaxHighlighting } from "@codemirror/language";
@@ -26,6 +26,10 @@ import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Selection, TextSelection } from "@milkdown/prose/state";
 import type { EditorView, NodeView } from "@milkdown/prose/view";
 import { $view } from "@milkdown/utils";
+import { mount, unmount } from "svelte";
+import { Icon } from "../components/icon/index.ts";
+import { buttonVariants } from "../components/ui/button/index.ts";
+import { CARD_TEXT } from "../profile/messages.ts";
 import { CODE_COLOURS, type CodeColourLimits, codeHighlighter, colourable } from "./code-colours.ts";
 
 /** CodeMirror's look, drawn from the theme's colours (custom properties reach into the shadow root). */
@@ -51,6 +55,7 @@ class CodeBlockView implements NodeView {
   /** The loaded language, kept while the code is past the limits so it comes back once the code fits again. */
   private found: { readonly name: string; readonly support: LanguageSupport } | null = null;
   private updating = false;
+  private copyIcon: ReturnType<typeof mount> | undefined;
 
   constructor(
     private node: ProseNode,
@@ -105,11 +110,13 @@ class CodeBlockView implements NodeView {
     return input;
   }
 
+  /** The stock outline button showing our Icon's copy drawing, as the page's code block has it (readme-copy.svelte). */
   private copyButton(): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "h-7 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent";
-    button.textContent = "Copy";
+    button.className = buttonVariants({ variant: "outline", size: "icon-sm" });
+    button.setAttribute("aria-label", CARD_TEXT.copyCode);
+    this.copyIcon = mount(Icon, { target: button, props: { name: "copy", size: 16 } });
     button.addEventListener("click", () => {
       void navigator.clipboard?.writeText(this.cm.state.doc.toString());
     });
@@ -300,6 +307,7 @@ class CodeBlockView implements NodeView {
 
   destroy() {
     this.cm.destroy();
+    if (this.copyIcon !== undefined) void unmount(this.copyIcon);
   }
 }
 
