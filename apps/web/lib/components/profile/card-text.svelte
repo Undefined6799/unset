@@ -26,13 +26,14 @@ import type { MarkdownEditor } from "../../editor/milkdown.ts";
 import { type Place, placeIn } from "../../editor/place.ts";
 import type { TableState } from "../../editor/tables.ts";
 import { TEXT_IN_PLACE, TEXT_MENUS } from "../../profile/messages.ts";
-import type { Block } from "../../profile/types.ts";
+import type { Block, TableLines } from "../../profile/types.ts";
 import Readme from "./readme.svelte";
 import TableHandles from "./table-tools.svelte";
 import TextMenus from "./text-menus.svelte";
 
 let {
   blocks,
+  lines,
   name,
   value,
   onedit,
@@ -41,6 +42,8 @@ let {
   codeColours,
 }: {
   blocks: readonly Block[];
+  /** The card's table switches, for its tables as drawn before the editor takes their place. */
+  lines?: TableLines;
   name: string;
   value: string;
   onedit: (markdown: string) => void;
@@ -51,6 +54,18 @@ let {
 } = $props();
 
 const id = $props.id();
+/**
+ * The card's table lines on the editor's own tables, as readme.svelte draws them on the page: each class wins over the
+ * host's own `[&_:is(th,td)]:border-b` by its one more element in the selector.
+ */
+const tableLines = $derived(
+  [
+    lines?.hideHeaderLine === true ? "[&_tr>th]:border-b-0" : "",
+    lines?.hideRowLines === true ? "[&_tr>td]:border-b-0" : "",
+    lines?.showColumnLines === true ? "[&_:is(th,td)+:is(th,td)]:border-s" : "",
+    lines?.showOutline === true ? "[&_table]:border" : "",
+  ].join(" "),
+);
 const labelId = `${id}-label`;
 let host: HTMLDivElement | undefined = $state();
 let editor: MarkdownEditor | undefined = $state();
@@ -279,7 +294,7 @@ onDestroy(() => {
 </script>
 
 <span id={labelId} class="sr-only">{TEXT_IN_PLACE.label(name)}</span>
-{#if editor === undefined}<div bind:this={drawn} class="contents"><Readme {blocks} /></div>{/if}
+{#if editor === undefined}<div bind:this={drawn} class="contents"><Readme {blocks} {lines} /></div>{/if}
 {#if failed}<p role="alert" class="text-sm text-muted-foreground">{TEXT_IN_PLACE.failed}</p>{/if}
 <div class="relative">
 <TextMenus
@@ -317,6 +332,6 @@ onDestroy(() => {
   data-text-in-place
   data-listening={listening ? "" : undefined}
   onfocusin={() => editor !== undefined && onfocus?.(editor.focus)}
-  class="{editor === undefined ? 'hidden' : ''} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:outline-solid [&_.markdown-editor:focus-visible]:outline-2 [&_.markdown-editor:focus-visible]:outline-offset-8 [&_.markdown-editor:focus-visible]:outline-ring/40 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_.markdown-editor>p]:my-3 [&_.markdown-editor_:is(ul,ol,dl)]:my-0 [&_.markdown-editor>:first-child]:mt-0 [&_.markdown-editor>:last-child]:mb-0 [&_li>p]:my-0 [&_li+li]:mt-0.5 [&_blockquote]:flex [&_blockquote]:flex-col [&_blockquote]:gap-3 [&_blockquote>p]:my-0 [&_h2]:mt-2 [&_h2]:text-4xl [&_h2]:leading-tight [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-3xl [&_h3]:leading-tight [&_h3]:font-bold [&_h3]:tracking-tight [&_h4]:mt-1 [&_h4]:text-2xl [&_h4]:leading-snug [&_h4]:font-semibold [&_h5]:mt-1 [&_h5]:text-xl [&_h5]:font-semibold [&_h6[data-level=5]]:text-lg [&_h6[data-level=5]]:font-semibold [&_h6[data-level=6]]:font-bold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_:is(th,td)]:border-b [&_:is(th,td)]:border-input [&_:is(th,td)]:px-3 [&_:is(th,td)]:py-1.5 [&_th]:font-semibold [&_:is(th,td)>p]:my-0 [&_li[data-item-type=task]]:-ms-5 [&_li[data-item-type=task]]:list-none [&_li[data-item-type=task]]:before:me-1.5 [&_li[data-item-type=task]]:before:inline-block [&_li[data-item-type=task]]:before:size-3.5 [&_li[data-item-type=task]]:before:cursor-pointer [&_li[data-item-type=task]]:before:rounded-sm [&_li[data-item-type=task]]:before:border [&_li[data-item-type=task]]:before:border-input [&_li[data-item-type=task]]:before:align-middle [&_li[data-item-type=task]]:before:content-[''] [&_li[data-item-type=task]>p:first-of-type]:inline [&_li[data-checked=true]]:before:border-primary [&_li[data-checked=true]]:before:bg-primary [&_del]:line-through [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
+  class="{editor === undefined ? 'hidden' : ''} {tableLines} [&_.markdown-editor]:outline-none [&_.markdown-editor]:rounded-sm [&_.markdown-editor:focus-visible]:outline-solid [&_.markdown-editor:focus-visible]:outline-2 [&_.markdown-editor:focus-visible]:outline-offset-8 [&_.markdown-editor:focus-visible]:outline-ring/40 [&_.markdown-editor]:flex [&_.markdown-editor]:flex-col [&_.markdown-editor]:gap-3 [&_.markdown-editor>p]:my-3 [&_.markdown-editor_:is(ul,ol,dl)]:my-0 [&_.markdown-editor>:first-child]:mt-0 [&_.markdown-editor>:last-child]:mb-0 [&_li>p]:my-0 [&_li+li]:mt-0.5 [&_blockquote]:flex [&_blockquote]:flex-col [&_blockquote]:gap-3 [&_blockquote>p]:my-0 [&_h2]:mt-2 [&_h2]:text-4xl [&_h2]:leading-tight [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-2 [&_h3]:text-3xl [&_h3]:leading-tight [&_h3]:font-bold [&_h3]:tracking-tight [&_h4]:mt-1 [&_h4]:text-2xl [&_h4]:leading-snug [&_h4]:font-semibold [&_h5]:mt-1 [&_h5]:text-xl [&_h5]:font-semibold [&_h6[data-level=5]]:text-lg [&_h6[data-level=5]]:font-semibold [&_h6[data-level=6]]:font-bold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_blockquote]:border-s-3 [&_blockquote]:border-input [&_blockquote]:ps-3.5 [&_blockquote]:text-muted-foreground [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_:is(th,td)]:border-b [&_:is(th,td)]:border-input [&_:is(th,td)]:px-3 [&_:is(th,td)]:py-1.5 [&_th]:font-semibold [&_:is(th,td)>p]:my-0 [&_li[data-item-type=task]]:-ms-5 [&_li[data-item-type=task]]:list-none [&_li[data-item-type=task]]:before:me-1.5 [&_li[data-item-type=task]]:before:inline-block [&_li[data-item-type=task]]:before:size-3.5 [&_li[data-item-type=task]]:before:cursor-pointer [&_li[data-item-type=task]]:before:rounded-sm [&_li[data-item-type=task]]:before:border [&_li[data-item-type=task]]:before:border-input [&_li[data-item-type=task]]:before:align-middle [&_li[data-item-type=task]]:before:content-[''] [&_li[data-item-type=task]>p:first-of-type]:inline [&_li[data-checked=true]]:before:border-primary [&_li[data-checked=true]]:before:bg-primary [&_del]:line-through [&_pre]:rounded-sm [&_pre]:bg-muted [&_pre]:px-4 [&_pre]:py-3.5 [&_pre]:font-mono [&_code]:font-mono [&_a]:underline [&_[data-image]]:text-muted-foreground [&_[data-placeholder]]:before:pointer-events-none [&_[data-placeholder]]:before:absolute [&_[data-placeholder]]:before:h-0 [&_[data-placeholder]]:before:text-muted-foreground [&_[data-placeholder]]:before:content-[attr(data-placeholder)]"
 ></div>
 </div>
