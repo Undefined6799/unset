@@ -3,9 +3,12 @@
   2.20.6, for its place under the button, the focus it holds while open and gives back, Escape and the press outside
   (node_modules/bits-ui dist/bits/popover/components/popover-content.svelte). Messages, the bell's panel and Search on
   a phone are this: a title row with a Close button, as the native panel has, then what the shell passes. The library
-  gives the panel no role, so it is named here: a dialog, labelled by its title. The shell draws Messages and Search
-  with no script itself, as native popovers, and the bell as a link to its page, and loads this file once the client
-  has started.
+  gives the panel no role, so it is named here: a dialog, labelled by its title. A panel taller than the room under
+  its button scrolls, as the native one does and as the stock menu's content does: its height is capped at what the
+  library measured (--bits-popover-content-available-height, bits-ui dist/internal/floating-svelte/
+  floating-utils.svelte.js), which leaves the 8px it keeps from the window's edges; the stock Popover file sets no
+  cap. The shell draws Messages and Search with no script itself, as native popovers, and the bell as a link to its
+  page, and loads this file once the client has started.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
@@ -49,7 +52,8 @@ const id = $props.id();
     role="dialog"
     aria-labelledby="{id}-title"
     align="end"
-    class="flex w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-lg p-2 {className}"
+    collisionPadding={8}
+    class="flex max-h-(--bits-popover-content-available-height) w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-x-hidden overflow-y-auto rounded-lg p-2 {className}"
   >
     <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
       <h2 id="{id}-title" class="font-semibold">{title}</h2>

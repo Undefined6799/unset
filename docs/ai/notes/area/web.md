@@ -81,7 +81,9 @@ version. `afterNavigate` also runs when the layout mounts (type `enter`): closin
 before the client started, so the close skips `enter`. Until More actions is moved (part 4) the native Create panel
 stays in the document for its row, and the stock Create menu has no fixed id. Part 3: the header's panels are the
 stock Popover (`shell/header-panel.svelte`, `ui/popover` copied from the registry). bits-ui's Popover content has no
-role, so ours sets `role="dialog"` and `aria-labelledby`; it traps focus by default and does not lock scroll. A
+role, so ours sets `role="dialog"` and `aria-labelledby`; it traps focus by default and does not lock scroll. The
+stock Popover content also has no height cap (the stock menu's has): ours adds
+`max-h-(--bits-popover-content-available-height)` and `overflow-y-auto`, or a panel runs off a short window. A
 Popover mounted already open gives focus back to whatever had focus at mount, so the hand-over focuses the new
 button first and opens after. The header bell is the server's link until the stock panel is in (no native popover
 button in between). The native Messages and Notifications panels also stay for More actions until part 4. A test
