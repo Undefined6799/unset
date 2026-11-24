@@ -27,6 +27,7 @@ import { mathToMarkdown } from "mdast-util-math";
 import remarkMath from "remark-math";
 import type { MathBudget, MathNode } from "../profile/math.ts";
 import { between, isInlineMath } from "../profile/math-syntax.ts";
+import { writeFormulaRun } from "./math-write.ts";
 
 export const MATH_LANGUAGE = "math";
 /** Milkdown's context, as Editor.config hands it over (menus.ts names it the same way). */
@@ -336,7 +337,8 @@ const writeInlineMath = inlineMathWriter();
  * the escapes mdast-util-math asks for, so "costs \$5 " before bold was saved as "costs $5 ", and "\$x\$ " as math.
  * And a formula is written between dollars the page's rule reads as math: mdast-util-math 3.0.0 writes single dollars
  * whatever follows (lib/index.js inlineMath), so "$$x$$5" was saved as "$x$5", which the rule reads as words; a
- * formula the rule would refuse gets one more dollar each side, which it always reads as math.
+ * formula the rule would refuse gets one more dollar each side, which it always reads as math. Formulas side by side
+ * are written as one (math-write.ts).
  */
 export function writeMath(ctx: Ctx) {
   ctx.update(remarkStringifyOptionsCtx, (prev) => {
@@ -348,10 +350,11 @@ export function writeMath(ctx: Ctx) {
         ...prev.handlers,
         text: (node, parent, state, info) =>
           node.value.includes("$") ? state.safe(node.value, { ...info, encode: [] }) : text(node, parent, state, info),
-        inlineMath: (node, parent, state, info) => {
-          const written = writeInlineMath(node, parent, state, info);
-          return isInlineMath(written, info.after) ? written : `$${written}$`;
-        },
+        inlineMath: (node, parent, state, info) =>
+          writeFormulaRun(node, parent?.children ?? [node], (formula) => {
+            const written = writeInlineMath(formula, parent, state, info);
+            return isInlineMath(written, info.after) ? written : `$${written}$`;
+          }),
       },
     };
   });
