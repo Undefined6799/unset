@@ -151,6 +151,8 @@ const EDIT_TITLE = {
 };
 /** 32px with a mouse, a 44px target on touch, as the shell's header icons. */
 const tap = "text-muted-foreground hover:text-foreground pointer-coarse:size-11";
+/** The theme's --accent equals --popover, so the stock rows' highlight would not show; muted marks the row instead. */
+const row = "data-highlighted:bg-muted focus:bg-muted";
 const maxOf = (kind: CardContent["kind"]) => (kind === "readme" ? 0 : limits[kind]);
 
 let group: HTMLFieldSetElement | undefined = $state();
@@ -380,10 +382,10 @@ $effect(() => {
         <!-- No scroll lock: the menu's lock and the delete dialog's overlap and the page jumps to the top (bits-ui 2.20.6 popper-layer-inner.svelte locks by default). -->
         <DropdownMenu.Content align="end" preventScroll={false}>
           {#if index > 0}
-            <DropdownMenu.Item onSelect={() => moveFromMenu("up")}><Icon name="up" size={16} />{CARD_EDIT.up}</DropdownMenu.Item>
+            <DropdownMenu.Item class={row} onSelect={() => moveFromMenu("up")}><Icon name="up" size={16} />{CARD_EDIT.up}</DropdownMenu.Item>
           {/if}
           {#if index < cards.length - 1}
-            <DropdownMenu.Item onSelect={() => moveFromMenu("down")}
+            <DropdownMenu.Item class={row} onSelect={() => moveFromMenu("down")}
               ><Icon name="down" size={16} />{CARD_EDIT.down}</DropdownMenu.Item
             >
           {/if}
@@ -394,7 +396,7 @@ $effect(() => {
               bind:value={() => chosen?.width ?? card.width, (width) => onchoose({ width: width as CardWidth })}
             >
               {#each WIDTHS as width (width)}
-                <DropdownMenu.RadioItem value={width} closeOnSelect={false}>{CARD_EDIT[width]}</DropdownMenu.RadioItem>
+                <DropdownMenu.RadioItem class={row} value={width} closeOnSelect={false}>{CARD_EDIT[width]}</DropdownMenu.RadioItem>
               {/each}
             </DropdownMenu.RadioGroup>
             <DropdownMenu.Label>{CARD_EDIT.style}</DropdownMenu.Label>
@@ -402,18 +404,18 @@ $effect(() => {
               bind:value={() => chosen?.surface ?? card.surface, (surface) => onchoose({ surface: surface as CardSurface })}
             >
               {#each SURFACES as surface (surface)}
-                <DropdownMenu.RadioItem value={surface} closeOnSelect={false}>{CARD_EDIT[surface]}</DropdownMenu.RadioItem>
+                <DropdownMenu.RadioItem class={row} value={surface} closeOnSelect={false}>{CARD_EDIT[surface]}</DropdownMenu.RadioItem>
               {/each}
             </DropdownMenu.RadioGroup>
             {#if markdown !== undefined}
               <DropdownMenu.Separator />
-              <DropdownMenu.CheckboxItem bind:checked={() => markdown.shown, () => markdown.toggle()}
+              <DropdownMenu.CheckboxItem class={row} bind:checked={() => markdown.shown, () => markdown.toggle()}
                 >{CARD_EDIT.showMarkdown}</DropdownMenu.CheckboxItem
               >
             {/if}
           {/if}
           {#if cards.length > 1 || choosesHere}<DropdownMenu.Separator />{/if}
-          <DropdownMenu.Item variant="destructive" onSelect={removeFromMenu}
+          <DropdownMenu.Item class={row} variant="destructive" onSelect={removeFromMenu}
             ><Icon name="delete" size={16} />{CARD_EDIT.remove}</DropdownMenu.Item
           >
         </DropdownMenu.Content>

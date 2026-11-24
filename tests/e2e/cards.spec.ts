@@ -10,6 +10,7 @@ import {
   addCard,
   chooseFromMenu,
   deleteCard,
+  expectHighlightedRowShows,
   menuButton,
   OWN_PAGE,
   paceWrites,
@@ -513,8 +514,10 @@ test("the_card_menu_works_by_keyboard", async ({ page }) => {
     await expect(menu.getByRole("menuitem")).toHaveText(["Move down", "Delete"]);
     // Enter opens the menu on its first item; the arrow keys walk the items.
     await expect(menu.getByRole("menuitem", { name: "Move down" })).toBeFocused();
+    await expectHighlightedRowShows(page, menu);
     await page.keyboard.press("ArrowDown");
     await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
+    await expectHighlightedRowShows(page, menu);
     await page.keyboard.press("ArrowUp");
     await expect(menu.getByRole("menuitem", { name: "Move down" })).toBeFocused();
     await page.keyboard.press("Enter");
