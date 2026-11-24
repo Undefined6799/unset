@@ -58,13 +58,11 @@ describe("e2e gate (P0.07b)", () => {
     }
   });
 
-  test("e2e_gate_checks_one_report_per_project", () => {
+  test("e2e_gate_checks_one_merged_report_per_project", () => {
     expect(wf.jobs.browser?.strategy?.["fail-fast"]).toBe(false);
     expect(wf.jobs.browser?.strategy?.matrix?.project).toEqual([...E2E_PROJECTS]);
     const run = (gate?.steps ?? []).map((step) => step.run ?? "").join("\n");
-    for (const project of E2E_PROJECTS) {
-      expect(run).toContain(`"${project}=$REPORTS/e2e-${project}/tests/e2e/report.json"`);
-    }
+    for (const project of E2E_PROJECTS) expect(run).toContain(`"${project}=$REPORTS/${project}.json"`);
   });
 });
 

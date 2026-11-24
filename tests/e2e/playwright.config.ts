@@ -28,10 +28,16 @@ export default defineConfig({
   // (interfaces/web/src/lib/server/limits.ts) sees each test as its own visitor.
   workers: 1,
   timeout: 60_000,
+  // P0.07q: on CI each browser runs as shards (e2e.yml). The run ends here, before the browser job's 30 minutes, so
+  // a failing or stuck shard still prints its failures and writes its reports; a job cut at its own limit prints
+  // nothing. A shard takes about 9 to 17 minutes. The blob report is what the gate merges into one report per browser
+  // (playwright.dev/docs/test-sharding; globalTimeout: playwright.dev/docs/api/class-testconfig, 1.64.1).
+  globalTimeout: process.env.CI ? 22 * 60_000 : 0,
   reporter: [
     ["list"],
     ["json", { outputFile: join(root, "tests/e2e/report.json") }],
     ["html", { open: "never", outputFolder: join(root, "playwright-report") }],
+    ...(process.env.CI ? [["blob", { outputDir: join(root, "blob-report") }] as const] : []),
   ],
   use: {
     baseURL: PROD_ORIGIN,
