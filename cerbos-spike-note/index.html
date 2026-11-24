@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cerbos PDP beside Bun</title>
+<style>
+  body { margin: 0; background: #f6f5f2; color: #1c1b19; font: 16px/1.5 Georgia, serif; }
+  main { max-width: 52rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 1.5rem; line-height: 1.3; }
+  pre { white-space: pre-wrap; word-wrap: break-word; font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<main>
+<h1>Cerbos PDP beside Bun</h1>
+<p>Spike note from agent-kit branch cursor/cerbos-spike, commit 509a79f.</p>
+<pre># Cerbos PDP beside Bun: spike
+
+Status: measured. No product repository was changed. `Undefined6799/unset` was not edited. No pull request was opened. No Cerbos Hub account, token, or upload was used.
+
+The policy is the `profile` resource policy in proposed org-0018, read from agent-kit pull request 46 at `8212bc510a628ab486a7e95b7ed052d4e3358c36` (`skills/org-decisions/records/org-0018-authorization-decisions-through-cerbos.md`). That record is not on `main`. The test file adds the allow case that policy states, one deny case, and one visibility case. The proposed policy has no visibility rule, so the visibility case expects `EFFECT_DENY` for a non-owner `read` of `visibility: public`.
+
+Scratch tree, on this machine only, not committed: `/tmp/cerbos-spike`.
+
+## Runtime
+
+| Piece | Version |
+| --- | --- |
+| Bun | 1.4.4, revision `1.4.4+38afee6c8` |
+| Docker | 29.1.3, storage driver `fuse-overlayfs`, iptables 1.8.10 legacy |
+| Image | `ghcr.io/cerbos/cerbos:0.57.0` |
+| Image digest | `sha256:e5e3b150b3cb0090975605254f255164567d67e233634199fb20972e3eaff300` |
+| Image created | 2026-10-23 03:21 America/Toronto (`2026-10-23T07:21:11Z`) |
+| Binary inside the image and the npm package | 0.57.0, commit `43125124efe4b50b83d894635fb2f691e980dc62`, Go 1.27.3, build timestamp 2026-10-23 03:10 America/Toronto |
+| `cerbos` npm package | 0.57.0, published 2026-10-23 03:24 America/Toronto |
+| `@cerbos/http` | 0.30.3, published 2026-11-13 13:00 America/Toronto, git `cf8dfd3a9f85ff68cadf7e65694c93ed3f783c11` |
+| `@cerbos/grpc` | 0.29.4, published 2026-11-13 13:00 America/Toronto, same git commit |
+| `@cerbos/core` | 0.33.3, the version `^0.33.3` resolved to, published 2026-11-13 12:59 America/Toronto |
+| `@cerbos/api` | 0.11.3, published 2026-11-13 13:01 America/Toronto |
+| `@grpc/grpc-js` | 1.14.7, published 2026-10-29 11:19 America/Toronto |
+| `@bufbuild/protobuf` | 2.17.0, published 2026-11-05 03:39 America/Toronto |
+| `protobufjs` | 7.6.6, published 2026-08-27 06:15 America/Toronto |
+| `uuid` | 14.0.3, published 2026-10-09 20:30 America/Toronto |
+| `@cerbos/embedded-client` | 0.8.4, published 2026-11-13 12:59 America/Toronto. Not installed |
+| `@cerbos/embedded-server` | 0.7.4, published 2026-11-23 11:26 America/Toronto. Not installed. Inside the 7-day wait until 2026-11-30 |
+
+Ages were checked against the run, 2026-11-23 23:24–23:29 America/Toronto (machine clock 2026-11-24 04:24–04:29 UTC). Every package that was installed is older than 7 days. Node 22.23.4 is on the machine. It ran only where `bin.js` has `#!/usr/bin/env node`. The decision, latency, and fail-closed scripts were `bun scripts/measure.ts`.
+
+Docs and source read, not from memory:
+
+- `cerbos/cerbos` tag `v0.57.0`: `docs/modules/configuration/pages/server.adoc` (listen addresses, Unix sockets, admin API disabled by default), `storage.adoc` (disk driver), `telemetry.adoc`, `docs/modules/cli/pages/cerbos.adoc` (compile exit codes: 0 none, 3 compile failed, 4 tests failed), `docs/modules/policies/pages/compile.adoc` (a test file name ends in `_test.yaml`).
+- `internal/telemetry/telemetry.go` at `v0.57.0`: telemetry stays off when `telemetry.disabled` is set, or when `CERBOS_NO_TELEMETRY` or `DO_NOT_TRACK` is set. An empty compiled-in write key or data-plane URL also leaves it off.
+- npm wrapper at `v0.57.0` `npm/packages/cerbos/index.js`: `run` calls `execFileSync`. At `v0.58.0` the same file uses `spawnSync` and `process.exit(status)`. Commit `eed06818d602103efa34081897bb6a809f4461e7` (2026-10-29, shipped in 0.58.0) says `npm exec` used to exit 1 for any non-zero binary status. 0.58.0 was not run.
+- `@cerbos/http` `packages/http/src/client.ts` and `transport.ts` at `cf8dfd3`: the constructor takes a base URL and `@cerbos/core` options. `transport.ts` calls global `fetch`. There is no `fetch` option and no Unix-socket option.
+- `@cerbos/grpc` `packages/grpc/src/client.ts` at the same commit: the target may be `unix:/path`, with `tls: false` for plaintext. The file&#x27;s example is that string.
+- `@cerbos/core` `packages/core/src/client.ts` at the same commit: `isAllowed` and `checkResource` take `RequestOptions.signal`.
+- `@cerbos/embedded-client` `packages/embedded-client/src/options.ts` and `loader.ts` at the same commit, and the package README: a bundle is downloaded from Cerbos Hub (`@cerbos/hub`, `cerbos.cloud.epdp.v2`) or passed as bytes already downloaded. The published package depends on `@cerbos/hub` `^0.6.5`.
+- Bun tag `bun-v1.4.4`, `docs/guides/http/fetch-unix.mdx`: `fetch(url, { unix: &quot;/path&quot; })` sends that request over the socket.
+
+## Results
+
+| Item | Result |
+| --- | --- |
+| 1. CI binary, frozen install, scripts off | The platform binary installed. `cerbos compile` exited 0. A broken test made the binary exit 4 and the npm wrapper exit 1 |
+| 2. `@cerbos/http` over TCP | Allow and deny matched. A `unix:` URL failed. A global `fetch` that sets Bun&#x27;s `unix` option allowed and denied correctly |
+| 3. `@cerbos/grpc` over TCP and a Unix socket | Allow and deny matched. `@grpc/grpc-js` 1.14.7 made these calls on Bun 1.4.4 |
+| 4. Latency, warm PDP | Recorded below for all four working transports. Milliseconds |
+| 5. Fail closed, 200 ms | Stopped, paused, and garbage all returned errors. None returned an allow |
+| 6. Embedded bundle | Not built. Open-source `cerbos` 0.57.0 has no bundle command. Stopped before WebAssembly |
+
+### 1. CI binary
+
+`bunfig.toml` set `exact = true`, `ignoreScripts = true`, and `minimumReleaseAge = 604800`. `cerbos` `package.json` at 0.57.0 has `&quot;scripts&quot;: {}` and optional dependencies for the four platform packages. The installed file is `node_modules/@cerbos/cerbos-linux-x64/cerbos-linux-x64`, 105574560 bytes, ELF x86-64, mode `0755`. The other three platform packages were not installed. `node_modules/.bin/cerbos` points at `cerbos/bin.js`.
+
+With no `bun.lock`:
+
+```sh
+bun install --frozen-lockfile
+```
+
+Exit 0. Bun 1.4.4 printed `41 packages installed` and `Blocked 1 postinstall`. It did not write `bun.lock`.
+
+Then `bun install` wrote `bun.lock` (exit 0). After deleting `node_modules`:
+
+```sh
+bun install --frozen-lockfile --ignore-scripts
+```
+
+Exit 0. The same ELF was present. `bun pm untrusted` names the blocked script: `protobufjs@7.6.6` `node scripts/postinstall`. That script was not run. The gRPC calls below still completed.
+
+Good tree, `policies/`:
+
+```sh
+bun run compile
+```
+
+Exit 0. Output: `6 tests executed [6 OK]`.
+
+The same tree through the binary itself:
+
+```sh
+node_modules/@cerbos/cerbos-linux-x64/cerbos-linux-x64 compile policies
+```
+
+Exit 0. `cerbos-linux-x64 --version` printed `0.57.0`.
+
+One expected `EFFECT_ALLOW` was changed to `EFFECT_DENY` in a copy of the test. The binary:
+
+```sh
+node_modules/@cerbos/cerbos-linux-x64/cerbos-linux-x64 compile /tmp/policies-bad
+```
+
+Exit 4. Last lines: `OUTCOME: expected: EFFECT_DENY, actual: EFFECT_ALLOW` and `cerbos: error: tests failed`. That is the code `cerbos.adoc` gives for a failed test.
+
+The wrapper, which is what `bun run` and `bunx` execute:
+
+```sh
+bun ./node_modules/cerbos/bin.js compile /tmp/policies-bad
+bun run cerbos compile /tmp/policies-bad
+bunx cerbos compile /tmp/policies-bad
+```
+
+Each process exited 1. The thrown `execFileSync` error carried `status: 4`. `bun ./node_modules/cerbos/bin.js` printed `Bun v1.4.4 (Linux x64)`. `bun run cerbos` and `bunx cerbos` printed `Node.js v22.23.4`, because `bin.js` starts with `#!/usr/bin/env node`. The exit status of the binary was not the exit status of the process. 0.58.0 was not installed, so that release&#x27;s `process.exit(status)` change was not run.
+
+### 2 and 3. Clients
+
+PDP command, image pinned by the digest above:
+
+```sh
+docker run -d --name cerbos-tcp \
+  -e CERBOS_NO_TELEMETRY=1 \
+  -p 127.0.0.1:3592:3592 -p 127.0.0.1:3593:3593 \
+  -v &quot;$PWD/policies:/policies:ro&quot; \
+  -v &quot;$PWD/config/tcp.yaml:/config/.cerbos.yaml:ro&quot; \
+  &quot;$IMAGE&quot; server --config=/config/.cerbos.yaml --set=telemetry.disabled=true
+```
+
+`config/tcp.yaml` sets `httpListenAddr: &quot;:3592&quot;`, `grpcListenAddr: &quot;:3593&quot;`, `adminAPI.enabled: false`, `storage.driver: disk`, `storage.disk.directory: /policies`, `telemetry.disabled: true`. The Unix container used `httpListenAddr: &quot;unix:/socks/cerbos.http&quot;`, `grpcListenAddr: &quot;unix:/socks/cerbos.grpc&quot;`, and `udsFileMode: 0o666`, with the socket directory mounted at `/socks`. Both sockets were `srw-rw-rw-` root:root. `0o666` is what let the host user connect. The image config has no user, so the process ran as root.
+
+`GET http://127.0.0.1:3592/_cerbos/health` returned 200 `{&quot;status&quot;:&quot;SERVING&quot;}`. `GET /admin/policies` returned 404 `{&quot;code&quot;:12,&quot;message&quot;:&quot;Admin service is disabled by the configuration&quot;}`.
+
+Both logs contain `cerbos.telemetry` `Telemetry disabled` and `cerbos.otel` `Disabling OTLP traces because neither OTEL_EXPORTER_OTLP_ENDPOINT nor OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is defined`. Both also log a sentence pointing at `https://go.cerbos.io/hub`. That line is a log message.
+
+`tcpdump -i any` for 25 seconds covered the TCP container&#x27;s start and the TCP decision calls. IP from the container (`172.17.0.2`) went only to `172.17.0.1`, the docker bridge, on the published ports. A second 12 second capture covered the Unix container&#x27;s start and one gRPC-over-socket decision (the TCP container was also up and idle). In that window the container addresses `172.17.0.2` and `172.17.0.3` appeared only in ARP &quot;who-has&quot; for themselves. No DNS query from either container was in either capture.
+
+Decisions, `bun scripts/measure.ts decisions &lt;http|grpc&gt; &lt;tcp|unix&gt;`. `checkResource` for `read` and `update`, then `isAllowed` for the named action. Principal ids are the synthetic strings `did:plc:owner` and `did:plc:other`.
+
+| Transport | Owner `update` | Other member, private `read` | Other member, public `read` |
+| --- | --- | --- | --- |
+| HTTP TCP `new HTTP(&quot;http://127.0.0.1:3592&quot;)` | allow (`check` read true, update true) | deny | deny |
+| HTTP `new HTTP(&quot;unix:/tmp/cerbos-spike/socks/cerbos.http&quot;)` | error, not an allow | not run | not run |
+| HTTP Unix, global `fetch` sets `unix` | allow | deny | deny |
+| gRPC TCP `new GRPC(&quot;127.0.0.1:3593&quot;, { tls: false })` | allow | deny | deny |
+| gRPC Unix `new GRPC(&quot;unix:/tmp/cerbos-spike/socks/cerbos.grpc&quot;, { tls: false })` | allow | deny | deny |
+
+The Unix URL without a custom `fetch` failed in 42 ms: `NotOK`, `gRPC error 13 (INTERNAL): Request failed: getaddrinfo ENOTFOUND unix`. The HTTP client reports failures with gRPC status names. It was not given a socket, and it did not return an allow.
+
+The working Unix HTTP path replaces `globalThis.fetch`. When the URL starts with `http://cerbos.unix`, the replacement calls the original `fetch` with `http://localhost` and `{ unix: socketPath }`, which is the option in Bun&#x27;s `fetch-unix.mdx`. The client has no place to pass that function. The constructor was still `new HTTP(&quot;http://cerbos.unix&quot;)`.
+
+### 4. Latency
+
+200 untimed `isAllowed` calls first, all allows, then 10,000 sequential and 1,000 started together. Each sample is one call&#x27;s `performance.now()` duration, in milliseconds. The percentile is the nearest rank: sort ascending, index `ceil(p/100*n) - 1`. The concurrent figures are how long a call waited while 999 others were in flight, not how long the batch took to start. Every sample was an allow; the script throws otherwise.
+
+| Transport | Run | n | min | p50 | p95 | p99 | max | mean |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| HTTP TCP | sequential | 10000 | 0.401 | 0.610 | 0.822 | 1.408 | 12.424 | 0.646 |
+| HTTP TCP | concurrent | 1000 | 16.252 | 195.104 | 239.031 | 239.470 | 242.583 | 179.899 |
+| gRPC TCP | sequential | 10000 | 0.270 | 0.504 | 0.708 | 1.174 | 6.702 | 0.528 |
+| gRPC TCP | concurrent | 1000 | 52.136 | 135.544 | 148.560 | 149.573 | 150.705 | 122.452 |
+| HTTP Unix | sequential | 10000 | 0.335 | 0.544 | 0.779 | 1.309 | 10.071 | 0.578 |
+| HTTP Unix | concurrent | 1000 | 15.197 | 90.504 | 132.732 | 133.054 | 133.657 | 85.564 |
+| gRPC Unix | sequential | 10000 | 0.198 | 0.425 | 0.663 | 1.015 | 16.699 | 0.450 |
+| gRPC Unix | concurrent | 1000 | 52.136 | 126.136 | 140.106 | 141.540 | 142.395 | 116.306 |
+
+The four command pairs finished between 23:26 and 23:27 America/Toronto. Exit 0 for each.
+
+### 5. Fail closed
+
+`isAllowed` for the owner `update`, which is an allow when the PDP is up, with `{ signal: AbortSignal.timeout(200) }`. A 5 second process watchdog was armed and did not fire. &quot;Hung&quot; is `docker pause`. &quot;Garbage&quot; is a Bun HTTP server on `127.0.0.1:3598` returning the body `garbage` with status 200, and a Bun TCP server on `127.0.0.1:3599` that writes the bytes `garbage\n`.
+
+| State | Transport | Milliseconds | What came back |
+| --- | --- | ---: | --- |
+| Paused | HTTP TCP | 200.816 | `NotOK` CANCELLED, `The operation timed out` |
+| Paused | gRPC TCP | 201.543 | same |
+| Paused | HTTP Unix | 200.489 | same |
+| Paused | gRPC Unix | 201.533 | same |
+| Stopped | HTTP TCP | 2.123 | `NotOK` INTERNAL, `ECONNREFUSED` |
+| Stopped | gRPC TCP | 14.098 | `NotOK` UNAVAILABLE, `ECONNREFUSED 127.0.0.1:3593` |
+| Stopped | HTTP Unix | 3.772 | `NotOK` INTERNAL, `ENOENT` |
+| Stopped | gRPC Unix | 12.908 | `NotOK` UNAVAILABLE, `ENOENT` on the socket path |
+| Garbage | HTTP | 2.680 | `NotOK` INTERNAL, `JSON Parse error: Unexpected identifier &quot;garbage&quot;` |
+| Garbage | gRPC | 17.918 | `NotOK` UNAVAILABLE, `Protocol error` |
+
+No result was an allow. No result was a deny either: each call threw.
+
+### 6. Embedded
+
+`cerbos --help` on the 0.57.0 binary lists `compile`, `compile-store`, `server`, `healthcheck`, `run`, and `repl`. Nothing there builds an embedded bundle. `compile --help` output formats are `tree`, `list`, and `json`.
+
+`@cerbos/embedded-client` 0.8.4&#x27;s `PolicyLoader` calls Cerbos Hub&#x27;s bundle service (`loader.ts`, `getBundle` on `cerbos.cloud.epdp.v2`). `PolicySource` also accepts bytes of a bundle that was already downloaded. This machine had no such bytes, and no open-source command here produced them. The package was not installed. `@cerbos/embedded-server` 0.7.4 was not installed. Its registry entry reports an unpacked size of 23623471 bytes. WebAssembly was not loaded. Memory and start-up time were not run.
+
+## Not run
+
+- Cerbos 0.58.0, including its npm wrapper.
+- Any call that needs a Cerbos Hub account, a token, or sending these policies off the machine.
+- `@cerbos/embedded-server` under Bun: load, decisions, memory, start-up.
+- A packet capture of a long run. The captures are the two windows above.
+- Safari, a browser, and a second machine. The clients ran in this VM.
+</pre>
+</main>
+</body>
+</html>
