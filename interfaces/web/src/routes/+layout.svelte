@@ -231,8 +231,8 @@ const bellOpens = $derived(clientReady && notes?.state !== "count");
 // after.
 type Stock = typeof import("@unset/apps-web/lib/components/shell/index.ts");
 let stock = $state<Stock | undefined>(undefined);
-// The menus that have a stock version, by the id of the native popover: whether each is open, and its button.
-const STOCK_MENUS = [MENU, CREATE, ACCOUNT] as const;
+// The controls that have a stock version, by the id of the native popover: whether each is open, and its button.
+const STOCK_MENUS = [MENU, CREATE, MESSAGES, NOTIFICATIONS, SEARCH, ACCOUNT] as const;
 const stockOpen = $state<Record<string, boolean>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, false])));
 const stockButton = $state<Record<string, HTMLElement | null>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, null])));
 let stockAsked = false;
@@ -242,27 +242,38 @@ $effect(() => {
   stockAsked = true;
   import("@unset/apps-web/lib/components/shell/index.ts").then(takeOver, () => undefined);
 });
-// On a phone Create is a row of More actions, which is still a native popover until its own part of P1.22m, and that
-// row opens the native Create panel, with script too. So the native Create panel stays in the document, and while
-// More actions is open it and its row are left as they are.
+// On a phone Create, Messages and Notifications are rows of More actions, which is still a native popover until its
+// own part of P1.22m, and each row opens the native panel, with script too. So those three native panels stay in the
+// document, and while More actions is open they and their rows are left as they are.
+const ACTIONS_ROWS: readonly string[] = [CREATE, MESSAGES, NOTIFICATIONS];
 function heldByActions(id: string): boolean {
-  return id === CREATE && document.getElementById(ACTIONS)?.matches(":popover-open") === true;
+  return ACTIONS_ROWS.includes(id) && document.getElementById(ACTIONS)?.matches(":popover-open") === true;
 }
 function takeOver(loaded: Stock): void {
   const focused = document.activeElement;
+  let openOn: string | undefined;
   let focusOn: string | undefined;
   for (const id of STOCK_MENUS) {
     if (heldByActions(id)) continue;
     const native = document.getElementById(id);
-    stockOpen[id] = native?.matches(":popover-open") === true;
-    // The other native menus leave the document with the swap; the Create panel does not, so it is closed here.
-    if (id === CREATE && stockOpen[id]) native?.hidePopover();
-    const hadFocus = focused?.getAttribute("popovertarget") === id || native?.contains(focused) === true;
-    if (hadFocus && !stockOpen[id]) focusOn = id;
+    const wasOpen = native?.matches(":popover-open") === true;
+    // The other native controls leave the document with the swap; More actions' panels do not, so one is closed here.
+    if (ACTIONS_ROWS.includes(id) && wasOpen) native?.hidePopover();
+    // The server's bell is a link, not a popover's button (bellOpens above); focus on it counts as focus on the bell.
+    const onBell = id === NOTIFICATIONS && focused?.matches('header a[href="/notifications"]') === true;
+    const hadFocus = onBell || focused?.getAttribute("popovertarget") === id || native?.contains(focused) === true;
+    if (wasOpen) openOn = id;
+    else if (hadFocus) focusOn = id;
   }
   stock = loaded;
-  // An open menu takes focus itself (bits-ui focus-scope); a closed one's button is new, so focus is put on it.
-  if (focusOn !== undefined) void tick().then(() => stockButton[focusOn]?.focus());
+  const id = openOn ?? focusOn;
+  if (id === undefined) return;
+  // The stock control's button is new, so focus is put on it, and only then is a control found open opened: the
+  // library gives focus back, on closing, to where it was when the control opened (bits-ui focus-scope).
+  void tick().then(() => {
+    stockButton[id]?.focus();
+    if (openOn !== undefined) stockOpen[openOn] = true;
+  });
 }
 // The stock menu's rows post the same two plain forms the native menu holds: Sign out is a submit button of the
 // sign-out form, and a theme row presses its button in the picker, so one save path serves both menus (saveInPlace).
@@ -278,8 +289,8 @@ let seenUpTo = $state<string | undefined>(undefined);
 const unseen = $derived(notes?.state === "ready" || notes?.state === "count" ? notes.count : 0);
 const waiting = $derived(newest !== undefined && newest === seenUpTo ? 0 : unseen);
 let seenForm = $state<HTMLFormElement | undefined>(undefined);
-function markSeen(event: ToggleEvent): void {
-  if (event.newState !== "open" || newest === undefined || waiting === 0) return;
+function markSeen(): void {
+  if (newest === undefined || waiting === 0) return;
   seenUpTo = newest;
   seenForm?.requestSubmit();
 }
@@ -389,6 +400,51 @@ const row =
   </form>
 {/snippet}
 
+{#snippet soonRow(item: { label: string; icon: IconName })}
+  <li>
+    <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
+      <!-- One string for assistive technology, since a gap between two flex items reads as a space. -->
+      <Icon name={item.icon} size={20} /><span aria-hidden="true">{item.label}</span>
+      <span class="ml-auto text-xs" aria-hidden="true">{T.comingSoon}</span><span class="sr-only"
+        >{item.label}, {T.comingSoon}</span
+      >
+    </button>
+  </li>
+{/snippet}
+{#snippet notificationsBody()}
+  <!-- P2.27, ADR 0081: the newest few, each a link to its detail on the page, Dismiss all, and the page. A visitor is told to sign in
+       (the header's Sign in button is the one link for it). A failed read says so; the empty text comes from a real,
+       empty list. -->
+  {#if notes === undefined}
+    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.visitor}</p>
+  {:else}
+    {#if notes.state === "failed"}
+      <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
+    {:else if notes.state === "ready" && notes.entries.length > 0}
+      <NotificationList entries={notes.entries} />
+      <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
+    {:else}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
+    {/if}
+    <ul class="flex flex-col gap-1 border-t pt-1">
+      <li>
+        <a href="/notifications" class={row} aria-current={page.url.pathname === "/notifications" ? "page" : undefined}
+          ><Icon name="next" size={20} /><span>{N.viewAll}</span></a
+        >
+      </li>
+    </ul>
+  {/if}
+{/snippet}
+{#snippet panelBody(button: (typeof PANEL_BUTTONS)[number])}
+  <!-- What a header panel holds under its title, in the native popover and in the stock one alike. -->
+  {#if button.id === NOTIFICATIONS}
+    {@render notificationsBody()}
+  {:else}
+    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
+    <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
+  {/if}
+{/snippet}
+
 {#snippet content()}
   {#if data.privacyNotice !== null}
     <!-- The changed privacy notice (P2.12b): on whatever app page the member opens, until they dismiss it or accept
@@ -468,15 +524,29 @@ const row =
       <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
         <!-- On a phone a disabled icon says nothing to a finger, so it opens a panel that says search is coming
              (staging walkthrough 2026-11-19), as Messages and Notifications do. -->
-        <Button
-          variant="outline"
-          size="icon-sm"
-          popovertarget={SEARCH}
-          popovertargetaction="toggle"
-          class="{control} sm:hidden"
-        >
-          <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
-        </Button>
+        {#if stock !== undefined}
+          <stock.HeaderPanel
+            bind:open={stockOpen[SEARCH]}
+            bind:button={stockButton[SEARCH]}
+            title={T.search}
+            closeLabel="{T.close} {T.search}"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} sm:hidden"
+            class="w-[calc(100vw-1rem)]"
+          >
+            {#snippet trigger()}<Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />{/snippet}
+            <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
+          </stock.HeaderPanel>
+        {:else}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={SEARCH}
+            popovertargetaction="toggle"
+            class="{control} sm:hidden"
+          >
+            <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
+          </Button>
+        {/if}
         {#if stock !== undefined}
           <!-- No id: the native Create panel stays in the document, for More actions on a phone. -->
           <stock.HeaderMenu
@@ -503,9 +573,24 @@ const row =
           </Button>
         {/if}
         {#each PANEL_BUTTONS as button (button.id)}
-          {#if button.id === NOTIFICATIONS && !bellOpens}
+          {#if stock !== undefined && (button.id !== NOTIFICATIONS || bellOpens)}
+            <stock.HeaderPanel
+              bind:open={stockOpen[button.id]}
+              bind:button={stockButton[button.id]}
+              title={button.label}
+              closeLabel="{T.close} {button.label}"
+              triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} relative max-sm:hidden"
+              onOpened={button.id === NOTIFICATIONS ? markSeen : undefined}
+            >
+              {#snippet trigger()}
+                <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
+                {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+              {/snippet}
+              {@render panelBody(button)}
+            </stock.HeaderPanel>
+          {:else if button.id === NOTIFICATIONS}
             <!-- ADR 0108 point 3, ADR 0116 point 9: what the server draws. The bell is the way to the page, whose visit
-                 marks it seen, until the client is ready to open the panel. -->
+                 marks it seen, until the stock panel is ready to open. -->
             <Button variant="outline" size="icon-sm" href="/notifications" class="{control} relative max-sm:hidden">
               <Icon name={button.icon} size={20} label={N.bell(waiting)} />
               {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
@@ -518,8 +603,7 @@ const row =
               popovertargetaction="toggle"
               class="{control} relative max-sm:hidden"
             >
-              <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
-              {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+              <Icon name={button.icon} size={20} label={button.label} />
             </Button>
           {/if}
         {/each}
@@ -589,41 +673,6 @@ const row =
     </nav>
   </header>
   <div class="flex min-h-[calc(100svh-var(--site-header-height))] flex-col">
-  {#snippet soonRow(item: { label: string; icon: IconName })}
-    <li>
-      <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
-        <!-- One string for assistive technology, since a gap between two flex items reads as a space. -->
-        <Icon name={item.icon} size={20} /><span aria-hidden="true">{item.label}</span>
-        <span class="ml-auto text-xs" aria-hidden="true">{T.comingSoon}</span><span class="sr-only"
-          >{item.label}, {T.comingSoon}</span
-        >
-      </button>
-    </li>
-  {/snippet}
-  {#snippet notificationsBody()}
-    <!-- P2.27, ADR 0081: the newest few, each a link to its detail on the page, Dismiss all, and the page. A visitor is told to sign in
-         (the header's Sign in button is the one link for it). A failed read says so; the empty text comes from a real,
-         empty list. -->
-    {#if notes === undefined}
-      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.visitor}</p>
-    {:else}
-      {#if notes.state === "failed"}
-        <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
-      {:else if notes.state === "ready" && notes.entries.length > 0}
-        <NotificationList entries={notes.entries} />
-        <div class="flex justify-end px-1"><DismissAll entries={notes.entries} returnTo={page.url.pathname} /></div>
-      {:else}
-        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
-      {/if}
-      <ul class="flex flex-col gap-1 border-t pt-1">
-        <li>
-          <a href="/notifications" class={row} aria-current={page.url.pathname === "/notifications" ? "page" : undefined}
-            ><Icon name="next" size={20} /><span>{N.viewAll}</span></a
-          >
-        </li>
-      </ul>
-    {/if}
-  {/snippet}
   {#snippet panelTitle(id: string, title: string, focusClose: boolean)}
     <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
       <h2 id="{id}-title" class="font-semibold">{title}</h2>
@@ -667,29 +716,27 @@ const row =
       popover="auto"
       ontoggle={(event) => {
         backToActions(event);
-        if (button.id === NOTIFICATIONS) markSeen(event);
+        if (button.id === NOTIFICATIONS && event.newState === "open") markSeen();
       }}
       aria-labelledby="{button.id}-title"
       class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2"
     >
       {@render panelTitle(button.id, button.label, true)}
-      {#if button.id === NOTIFICATIONS}
-        {@render notificationsBody()}
-        {#if newest !== undefined}
-          <form bind:this={seenForm} method="POST" action="/notifications?/seen" hidden use:enhance={markInBackground}>
-            <input type="hidden" name="upTo" value={newest} />
-          </form>
-        {/if}
-      {:else}
-        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
-        <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
-      {/if}
+      {@render panelBody(button)}
     </section>
   {/each}
-  <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
-    {@render panelTitle(SEARCH, T.search, true)}
-    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
-  </section>
+  {#if bellOpens && newest !== undefined}
+    <!-- What opening the bell's panel posts (markSeen), from the stock panel and the native one alike. -->
+    <form bind:this={seenForm} method="POST" action="/notifications?/seen" hidden use:enhance={markInBackground}>
+      <input type="hidden" name="upTo" value={newest} />
+    </form>
+  {/if}
+  {#if stock === undefined}
+    <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
+      {@render panelTitle(SEARCH, T.search, true)}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
+    </section>
+  {/if}
   <section id={ACTIONS} popover="auto" aria-labelledby="{ACTIONS}-title" class="{panel} right-2 left-2 w-auto">
     {@render panelTitle(ACTIONS, T.moreActions, false)}
     <ul class="flex flex-col gap-1">
