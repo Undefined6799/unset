@@ -37,7 +37,7 @@ import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, sta
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
-import { isMathSelected, math, writeMathBlocksAsDollars } from "./math.ts";
+import { isMathSelected, math, writeMath } from "./math.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 import { type TableOptions, type TableTools, withTables } from "./tables.ts";
 
@@ -554,7 +554,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           return { ...schema, toDOM: (node) => [cellTag(node), cellAttrs(node), 0] };
         });
       }
-      writeMathBlocksAsDollars(ctx);
+      writeMath(ctx);
       ctx.update(emphasisSchema.key, (prev) => (schemaCtx) => {
         const schema = prev(schemaCtx);
         return {

@@ -7,14 +7,14 @@
 //
 // remark-math 6.0.0 reads and writes the dollars (micromark-extension-math 3.1.0, mdast-util-math 3.0.0), as the page
 // reads them (parse.ts). Two steps after it, as Crepe's: math between single dollars that the page's rule keeps as words
-// (math-syntax.ts, "$5 and $10") goes back to the words it was written as, and a `$$` block becomes a code block whose
+// (math-syntax.ts, "$5 and $10") goes back to words, its Markdown read again, and a `$$` block becomes a code block whose
 // language is "math", edited in CodeMirror (code-block.ts), which shows the drawn formula below the TeX. Such a block
 // is written back as `$$`. A ```math fence means the same to the page (parse.ts isMathFence), so it is written as `$$`
 // too. Crepe uses the language "LaTeX", which would turn a ```latex code sample into math; "math" is GitHub's.
 // mdast-util-math writes every dollar that is a word with a backslash before it, so "$5" is saved as "\$5", which the
 // page shows as "$5".
 
-import type { Editor } from "@milkdown/core";
+import { type Editor, remarkStringifyOptionsCtx } from "@milkdown/core";
 import { codeBlockSchema } from "@milkdown/preset-commonmark";
 import { nodeRule } from "@milkdown/prose";
 import { textblockTypeInputRule } from "@milkdown/prose/inputrules";
@@ -24,7 +24,7 @@ import type { NodeView } from "@milkdown/prose/view";
 import { $command, $inputRule, $nodeSchema, $remark, $view } from "@milkdown/utils";
 import remarkMath from "remark-math";
 import type { MathNode } from "../profile/math.ts";
-import { isInlineMath } from "../profile/math-syntax.ts";
+import { between, isInlineMath } from "../profile/math-syntax.ts";
 
 export const MATH_LANGUAGE = "math";
 /** Milkdown's context, as Editor.config hands it over (menus.ts names it the same way). */
@@ -41,24 +41,51 @@ type MdNode = {
   position?: { start: { offset?: number }; end: { offset?: number } };
 };
 
-/** Single-dollar math the page reads as words goes back to its words; a `$$` block becomes a math code block. */
-function readAsPage(node: MdNode, source: string) {
-  for (const [index, child] of (node.children ?? []).entries()) {
+/** Reads Markdown into a tree with the editor's own extensions (the remark processor's parse). */
+type Parse = (markdown: string) => MdNode;
+
+/**
+ * Single-dollar math the page reads as words goes back to words, as the page reads it (parse.ts refusedMath): its
+ * dollars stay words and the Markdown between them is read again, so "$5 **each** or $10" keeps its bold (reviewer on
+ * #2020; Crepe keeps the span as one piece of text, whose bold the first save escapes). The dollars are read again
+ * escaped, so the span cannot be math a second time.
+ */
+function refused(raw: string, value: string, parse: Parse): MdNode[] {
+  const again = `\\$${between(raw, value)}\\$`;
+  const tree = parse(again);
+  const [only, more] = tree.children ?? [];
+  if (only?.type !== "paragraph" || more !== undefined) return [{ type: "text", value: raw }];
+  readAsPage(only, again, parse);
+  return only.children ?? [];
+}
+
+/** Each refused span in `node` read as the page reads it; a `$$` block becomes a math code block. */
+function readAsPage(node: MdNode, source: string, parse: Parse) {
+  if (node.children === undefined) return;
+  node.children = node.children.flatMap((child): MdNode[] => {
     const start = child.position?.start.offset;
     const end = child.position?.end.offset;
     if (child.type === "inlineMath" && start !== undefined && end !== undefined) {
       const raw = source.slice(start, end);
-      if (!isInlineMath(raw, source[end] ?? "")) node.children?.splice(index, 1, { type: "text", value: raw });
-    } else if (child.type === "math") {
-      node.children?.splice(index, 1, { type: "code", lang: MATH_LANGUAGE, meta: null, value: child.value ?? "" });
-    } else readAsPage(child, source);
-  }
+      return isInlineMath(raw, source[end] ?? "") ? [child] : refused(raw, child.value ?? "", parse);
+    }
+    if (child.type === "math") return [{ type: "code", lang: MATH_LANGUAGE, meta: null, value: child.value ?? "" }];
+    readAsPage(child, source, parse);
+    return [child];
+  });
 }
 
 const mathSyntax = $remark("remarkMath", () => remarkMath);
-const mathAsPage = $remark("mathAsPage", () => () => (tree: MdNode, file: { value: unknown }) => {
-  readAsPage(tree, String(file.value));
-});
+const mathAsPage = $remark(
+  "mathAsPage",
+  () =>
+    function (this: { parse: (markdown: string) => unknown }) {
+      const parse: Parse = (markdown) => this.parse(markdown) as MdNode;
+      return (tree: MdNode, file: { value: unknown }) => {
+        readAsPage(tree, String(file.value), parse);
+      };
+    },
+);
 
 /** A formula in a line: an atom holding its TeX (Crepe's math_inline), written back between dollars. */
 export const mathInlineSchema = $nodeSchema("math_inline", () => ({
@@ -176,8 +203,25 @@ class MathInlineView implements NodeView {
 
 const mathInlineView = $view(mathInlineSchema.node, () => (node) => new MathInlineView(node));
 
-/** A code block whose language is "math" is written as `$$`; every other one as Milkdown writes it. */
-export function writeMathBlocksAsDollars(ctx: Ctx) {
+/**
+ * How math is written back. A code block whose language is "math" is written as `$$`; every other one as Milkdown
+ * writes it. And a dollar that is a word is always escaped: Milkdown 7.23.0's text handler writes text that holds no
+ * `*`, `_` or backslash and ends in white space as it is (@milkdown/core src/__internal__/remark-handlers.ts), skipping
+ * the escapes mdast-util-math asks for, so "costs \$5 " before bold was saved as "costs $5 ", and "\$x\$ " as math.
+ */
+export function writeMath(ctx: Ctx) {
+  ctx.update(remarkStringifyOptionsCtx, (prev) => {
+    const text = prev.handlers?.text;
+    if (text === undefined) return prev;
+    return {
+      ...prev,
+      handlers: {
+        ...prev.handlers,
+        text: (node, parent, state, info) =>
+          node.value.includes("$") ? state.safe(node.value, { ...info, encode: [] }) : text(node, parent, state, info),
+      },
+    };
+  });
   ctx.update(codeBlockSchema.key, (prev) => (schemaCtx) => {
     const schema = prev(schemaCtx);
     return {
@@ -194,7 +238,7 @@ export function writeMathBlocksAsDollars(ctx: Ctx) {
   });
 }
 
-/** Everything math adds to the editor, used after the presets, with writeMathBlocksAsDollars in its config. */
+/** Everything math adds to the editor, used after the presets, with writeMath in its config. */
 export const math = [
   mathSyntax,
   mathAsPage,
