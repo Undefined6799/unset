@@ -28,8 +28,10 @@ export function writeFormulaRun(
   let last = at;
   while (siblings[last + 1]?.type === "inlineMath") last += 1;
   const run = siblings.slice(at, last + 1).map((formula) => tex("value" in formula ? String(formula.value) : ""));
+  if (run.length === 1) return write(formulaOf(run[0] ?? ""), false);
+  // Each part is written wide: the writer is told what follows the whole run, not what follows a part.
   return withinLimit(run)
-    .map((part) => (part.length === 1 ? write(formulaOf(part[0] ?? ""), false) : write(formulaOf(joined(part)), true)))
+    .map((part) => write(formulaOf(part.length === 1 ? (part[0] ?? "") : joined(part)), true))
     .join(" ");
 }
 
