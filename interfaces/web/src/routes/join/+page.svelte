@@ -1,6 +1,6 @@
 <!--
   The join page (book P2.10): the invite code, what happens next, and Create account, which starts a sign-up at our
-  PDS. No script; the code field is read-only so it can be selected and copied.
+  PDS. A plain form, with script or without; the code field is read-only so it can be selected and copied.
 -->
 <script lang="ts">
 import { Button } from "@unset/apps-web/lib/components/ui/button";
