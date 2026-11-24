@@ -32,7 +32,7 @@ import { Icon } from "../components/icon/index.ts";
 import { buttonVariants } from "../components/ui/button/index.ts";
 import { CARD_TEXT } from "../profile/messages.ts";
 import { CODE_COLOURS, type CodeColourLimits, codeHighlighter, colourable } from "./code-colours.ts";
-import { drawInto, MATH_LANGUAGE } from "./math.ts";
+import { drawInto, MATH_LANGUAGE, MathHold } from "./math.ts";
 
 /** CodeMirror's look, drawn from the theme's colours (custom properties reach into the shadow root). */
 const look = CodeMirror.theme({
@@ -61,6 +61,8 @@ class CodeBlockView implements NodeView {
   private found: { readonly name: string; readonly support: LanguageSupport } | null = null;
   private updating = false;
   private copyIcon: ReturnType<typeof mount> | undefined;
+  /** What the math preview took from the editor's math budget. */
+  private readonly mathHold: MathHold;
 
   constructor(
     private node: ProseNode,
@@ -68,6 +70,7 @@ class CodeBlockView implements NodeView {
     private readonly getPos: () => number | undefined,
     private readonly limits: CodeColourLimits | undefined,
   ) {
+    this.mathHold = new MathHold(view);
     this.dom = document.createElement("div");
     this.dom.className = "code-block flex flex-col gap-2 rounded-sm bg-muted px-4 py-3";
     this.languageField = this.languageInput();
@@ -108,7 +111,8 @@ class CodeBlockView implements NodeView {
     this.previewed = tex;
     this.preview.hidden = tex === null;
     this.preview.replaceChildren();
-    if (tex !== null) void drawInto(this.preview, tex, true, () => this.previewed === tex);
+    this.mathHold.release();
+    if (tex !== null) void drawInto(this.preview, tex, true, () => this.previewed === tex, this.mathHold);
   }
 
   private languageInput(): HTMLInputElement {
@@ -327,6 +331,7 @@ class CodeBlockView implements NodeView {
 
   destroy() {
     this.cm.destroy();
+    this.mathHold.close();
     if (this.copyIcon !== undefined) void unmount(this.copyIcon);
   }
 }

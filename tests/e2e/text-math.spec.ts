@@ -157,6 +157,43 @@ test("words_selected_with_a_formula_among_them_keep_its_tex_as_one_formula", asy
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #2020 (32b5336): the page reads a refused span's Markdown again with no math at all (parse.ts refusedMath),
+// so "$$x$$" inside "$ a $$x$$ b $" stays words there; the editor read it again with math on, so it opened as a
+// formula and an edit elsewhere saved it as one.
+test("double_dollars_inside_a_refused_span_stay_words_through_a_save", async ({ page }) => {
+  const watched = watch(page);
+  const word = `nested${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} before $ a $$x$$ b $ after`);
+  await expect(editor).toContainText("$$x$$");
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(0);
+  await page.keyboard.type(" now");
+  expect(await markdownOf(page, card)).toBe(`${word} before \\$ a \\$\\$x\\$\\$ b \\$ after now`);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Codex on #2020 (32b5336): the page draws at most 200 formulas of a card (lib/profile/math.ts mathBudget) and shows
+// the rest as their TeX; the editor gave every formula a budget of its own, so it drew all of them. It now shares one
+// budget per editor, and a formula drawn again gives back what it took first.
+test("the_editor_draws_no_more_formulas_than_the_page_does", async ({ page }) => {
+  const watched = watch(page);
+  const word = `budget${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} ${"$x$ ".repeat(250).trim()}`);
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(250);
+  await expect(editor.locator("[data-math-inline] math")).toHaveCount(200);
+  // The rest show their TeX, as the page shows a formula past its budget.
+  const undrawn = editor.locator("[data-math-inline]:not(:has(math))");
+  await expect(undrawn).toHaveCount(50);
+  await expect(undrawn.first()).toHaveText("$x$");
+  // An edit in their paragraph, which draws them again, keeps the same 200.
+  await page.keyboard.type(" more");
+  await expect(editor.locator("[data-math-inline] math")).toHaveCount(200);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 test("the_block_menu_adds_a_math_block_and_the_bar_makes_words_a_formula", async ({ page }) => {
   const watched = watch(page);
   const word = `menu${Date.now()}`;

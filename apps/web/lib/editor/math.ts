@@ -22,9 +22,10 @@ import type { Node as ProseNode } from "@milkdown/prose/model";
 import { type EditorState, NodeSelection, TextSelection } from "@milkdown/prose/state";
 import type { NodeView } from "@milkdown/prose/view";
 import { $command, $inputRule, $nodeSchema, $remark, $view } from "@milkdown/utils";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { mathToMarkdown } from "mdast-util-math";
 import remarkMath from "remark-math";
-import type { MathNode } from "../profile/math.ts";
+import type { MathBudget, MathNode } from "../profile/math.ts";
 import { between, isInlineMath } from "../profile/math-syntax.ts";
 
 export const MATH_LANGUAGE = "math";
@@ -42,21 +43,18 @@ type MdNode = {
   position?: { start: { offset?: number }; end: { offset?: number } };
 };
 
-/** Reads Markdown into a tree with the editor's own extensions (the remark processor's parse). */
+/** Reads Markdown into a tree with the editor's own extensions but no math. */
 type Parse = (markdown: string) => MdNode;
 
 /**
  * Single-dollar math the page reads as words goes back to words, as the page reads it (parse.ts refusedMath): its
- * dollars stay words and the Markdown between them is read again, so "$5 **each** or $10" keeps its bold (reviewer on
- * #2020; Crepe keeps the span as one piece of text, whose bold the first save escapes). The dollars are read again
- * escaped, so the span cannot be math a second time.
+ * dollars stay words and the Markdown between them is read again with no math at all, so "$5 **each** or $10" keeps
+ * its bold (reviewer on #2020; Crepe keeps the span as one piece of text, whose bold the first save escapes) and the
+ * "$$x$$" in "$ a $$x$$ b $" stays words (Codex on #2020).
  */
 function refused(raw: string, value: string, parse: Parse): MdNode[] {
-  const again = `\\$${between(raw, value)}\\$`;
-  const tree = parse(again);
-  const [only, more] = tree.children ?? [];
+  const [only, more] = parse(`$${between(raw, value)}$`).children ?? [];
   if (only?.type !== "paragraph" || more !== undefined) return [{ type: "text", value: raw }];
-  readAsPage(only, again, parse);
   return only.children ?? [];
 }
 
@@ -76,12 +74,38 @@ function readAsPage(node: MdNode, source: string, parse: Parse) {
   });
 }
 
-const mathSyntax = $remark("remarkMath", () => remarkMath);
+/** What a remark processor's data holds for its parser (remark-parse 11.0.0 lib/index.js, remark-math 6.0.0). */
+type ParserData = { micromarkExtensions?: unknown[]; fromMarkdownExtensions?: unknown[] };
+type Processor = { data: () => ParserData };
+/** The extensions remark-math added to each editor's parser, so a span can be read again without them. */
+const mathAdded = new WeakMap<Processor, Set<unknown>>();
+
+/** remark-math as shipped, noting which extensions it adds. */
+const mathSyntax = $remark(
+  "remarkMath",
+  () =>
+    function (this: Processor) {
+      const data = this.data();
+      const before = new Set([...(data.micromarkExtensions ?? []), ...(data.fromMarkdownExtensions ?? [])]);
+      remarkMath.call(this as never);
+      const after = [...(data.micromarkExtensions ?? []), ...(data.fromMarkdownExtensions ?? [])];
+      mathAdded.set(this, new Set(after.filter((extension) => !before.has(extension))));
+    },
+);
 const mathAsPage = $remark(
   "mathAsPage",
   () =>
-    function (this: { parse: (markdown: string) => unknown }) {
-      const parse: Parse = (markdown) => this.parse(markdown) as MdNode;
+    function (this: Processor) {
+      // Read at parse time, as remark-parse reads them, so extensions added after this plugin count too.
+      const parse: Parse = (markdown) => {
+        const data = this.data();
+        const added = mathAdded.get(this) ?? new Set();
+        const kept = (list: unknown[] | undefined) => (list ?? []).filter((extension) => !added.has(extension));
+        return fromMarkdown(markdown, {
+          extensions: kept(data.micromarkExtensions) as never,
+          mdastExtensions: kept(data.fromMarkdownExtensions) as never,
+        }) as MdNode;
+      };
       return (tree: MdNode, file: { value: unknown }) => {
         readAsPage(tree, String(file.value), parse);
       };
@@ -167,11 +191,93 @@ export function mathElement(tree: MathNode): Element {
   return element;
 }
 
+/** The math budget of each editor, as the page has one per card (lib/profile/math.ts mathBudget). */
+const budgets = new WeakMap<object, MathBudget>();
+/** Each editor's formulas shown as TeX because its budget had no formula left, drawn again when one comes back. */
+const waiting = new WeakMap<object, Set<() => void>>();
+
+/**
+ * What one drawn formula took from its editor's budget (Codex on #2020: each had a budget of its own, so the editor drew
+ * every formula of a card the page draws only 200 of). It is given back when the formula is drawn again or goes, and
+ * a formula waiting for room is then drawn: ProseMirror may draw a formula's new view before it destroys the old one,
+ * which still holds its share (Firefox, text-math.spec.ts).
+ */
+export class MathHold {
+  private taken: { budget: MathBudget; formulas: number; nodes: number } | null = null;
+  private retry: (() => void) | null = null;
+  /** True once its formula is gone: a drawing still loading then takes nothing. */
+  closed = false;
+
+  /** `editor` is the editor the formula is in (its EditorView): one budget each. */
+  constructor(private readonly editor: object) {}
+
+  /** The editor's budget, after giving back what this formula held. */
+  take(fresh: () => MathBudget): MathBudget {
+    this.release();
+    this.stopWaiting();
+    const budget = budgets.get(this.editor) ?? fresh();
+    budgets.set(this.editor, budget);
+    return budget;
+  }
+
+  /** Notes what drawing took, from the budget as it was before. */
+  took(budget: MathBudget, before: MathBudget) {
+    this.taken = { budget, formulas: before.formulas - budget.formulas, nodes: before.nodes - budget.nodes };
+  }
+
+  /** Draws again with `retry` once a formula of the editor's budget is given back. */
+  wait(retry: () => void) {
+    this.retry = retry;
+    const queue = waiting.get(this.editor) ?? new Set();
+    waiting.set(this.editor, queue.add(retry));
+  }
+
+  /** Gives back what the formula holds, for good: it is gone from the editor. */
+  close() {
+    this.release();
+    this.stopWaiting();
+    this.closed = true;
+  }
+
+  release() {
+    if (this.taken === null) return;
+    this.taken.budget.formulas += this.taken.formulas;
+    this.taken.budget.nodes += this.taken.nodes;
+    const freed = this.taken.formulas > 0;
+    this.taken = null;
+    if (freed) wake(this.editor);
+  }
+
+  private stopWaiting() {
+    if (this.retry !== null) waiting.get(this.editor)?.delete(this.retry);
+    this.retry = null;
+  }
+}
+
+/** Every formula of `editor` waiting for room tries again; those that find none wait again. */
+function wake(editor: object) {
+  const queue = waiting.get(editor);
+  if (queue === undefined || queue.size === 0) return;
+  const retries = [...queue];
+  queue.clear();
+  for (const retry of retries) queueMicrotask(retry);
+}
+
 /** Draws `tex` into `into` once KaTeX has loaded, or its TeX between dollars when it cannot be drawn. */
-export async function drawInto(into: HTMLElement, tex: string, display: boolean, isCurrent: () => boolean) {
+export async function drawInto(
+  into: HTMLElement,
+  tex: string,
+  display: boolean,
+  isCurrent: () => boolean,
+  hold: MathHold,
+) {
   const { drawMath, mathBudget } = await import("../profile/math.ts");
-  if (!isCurrent()) return;
-  const tree = drawMath(tex, display, mathBudget());
+  if (!isCurrent() || hold.closed) return;
+  const budget = hold.take(mathBudget);
+  const before = { ...budget };
+  const tree = drawMath(tex, display, budget);
+  hold.took(budget, before);
+  if (tree === null && before.formulas <= 0) hold.wait(() => void drawInto(into, tex, display, isCurrent, hold));
   into.replaceChildren(tree === null ? document.createTextNode(display ? tex : `$${tex}$`) : mathElement(tree));
 }
 
@@ -179,8 +285,10 @@ export async function drawInto(into: HTMLElement, tex: string, display: boolean,
 class MathInlineView implements NodeView {
   readonly dom: HTMLElement;
   private drawn = "";
+  private readonly hold: MathHold;
 
-  constructor(node: ProseNode) {
+  constructor(node: ProseNode, editor: object) {
+    this.hold = new MathHold(editor);
     this.dom = document.createElement("span");
     this.dom.dataset.mathInline = "";
     this.dom.className = "inline-block max-w-full contain-paint";
@@ -192,7 +300,8 @@ class MathInlineView implements NodeView {
     if (tex === this.drawn) return;
     this.drawn = tex;
     this.dom.textContent = `$${tex}$`;
-    void drawInto(this.dom, tex, false, () => this.drawn === tex);
+    this.hold.release();
+    void drawInto(this.dom, tex, false, () => this.drawn === tex, this.hold);
   }
 
   update(node: ProseNode): boolean {
@@ -204,9 +313,13 @@ class MathInlineView implements NodeView {
   ignoreMutation(): boolean {
     return true;
   }
+
+  destroy() {
+    this.hold.close();
+  }
 }
 
-const mathInlineView = $view(mathInlineSchema.node, () => (node) => new MathInlineView(node));
+const mathInlineView = $view(mathInlineSchema.node, () => (node, view) => new MathInlineView(node, view));
 
 /** mdast-util-math's own writer of a formula in a line, which writeMath wraps. */
 function inlineMathWriter() {
