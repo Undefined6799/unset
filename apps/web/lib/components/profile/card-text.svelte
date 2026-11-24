@@ -63,7 +63,10 @@ const tableLines = $derived(
     lines?.hideHeaderLine === true ? "[&_tr>th]:border-b-0" : "",
     lines?.hideRowLines === true ? "[&_tr>td]:border-b-0" : "",
     lines?.showColumnLines === true ? "[&_:is(th,td)+:is(th,td)]:border-s" : "",
-    lines?.showOutline === true ? "[&_table]:border" : "",
+    // The outline on the outer cells, as readme.svelte draws it (table-sides.ts), so a single side can be hidden.
+    lines?.showOutline === true
+      ? "[&_tr:first-child>th]:border-t [&_tr>:is(th,td):first-child]:border-s [&_tr>:is(th,td):last-child]:border-e [&_tr:last-child>:is(th,td)]:border-b"
+      : "",
   ].join(" "),
 );
 const labelId = `${id}-label`;

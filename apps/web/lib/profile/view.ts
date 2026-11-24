@@ -6,6 +6,7 @@ import { safeHref } from "@unset/shared-safe-href";
 import { type CodeColourBudget, type CodeColourLimits, codeColourBudget, colourCode } from "../editor/code-colours.ts";
 import { CARD_TEXT } from "./messages.ts";
 import type { Block as ParsedBlock } from "./parse.ts";
+import { placeSides } from "./place-sides.ts";
 import type {
   Block,
   CardContent,
@@ -15,11 +16,13 @@ import type {
   CardWidth,
   ShownButton,
   ShownCard,
+  TableEdge,
 } from "./types.ts";
 
 /**
  * Reads a Text card's Markdown into blocks. The page's server passes one that stops a slow parse and keeps what it
- * read (interfaces/web text-reader.ts); parse.ts parseReadme is the parse itself. What it gives may be shared and
+ * read (interfaces/web text-reader.ts), its tables named for placing looks (place-sides.ts nameTables); parse.ts
+ * parseReadme is the parse itself, and a reader that names no table draws no look. What it gives may be shared and
  * frozen, so nothing here changes a block: colouring builds new ones.
  */
 export type TextReader = (text: string) => readonly ParsedBlock[];
@@ -66,11 +69,24 @@ function shownButtons(buttons: Buttons): ShownButton[] {
 
 /**
  * README blocks as a card shows them: code in colours where its language is known and the page's colouring budget
- * allows, else plain; the language itself is dropped. Every code block is a new object and no block is changed.
+ * allows, else plain; the language itself is dropped. A table carries the edges placed on it (`edges`, from
+ * place-sides.ts) and never the lines it was written on or their names, which only place looks. Every code block and
+ * table is a new object and no block is changed.
  */
-export const colourBlocks = (blocks: readonly ParsedBlock[], budget: CodeColourBudget): Promise<Block[]> =>
+export const colourBlocks = (
+  blocks: readonly ParsedBlock[],
+  budget: CodeColourBudget,
+  edges: ReadonlyMap<ParsedBlock, readonly TableEdge[]> = new Map(),
+): Promise<Block[]> =>
   Promise.all(
     blocks.map(async (block): Promise<Block> => {
+      if (block.kind === "table") {
+        const { align, head, rows } = block;
+        const placed = edges.get(block);
+        return placed === undefined
+          ? { kind: "table", align, head, rows }
+          : { kind: "table", align, head, rows, edges: placed };
+      }
       if (block.kind !== "code") return block;
       const coloured = await colourCode(block.text, block.language, budget);
       return "runs" in coloured ? { kind: "code", runs: coloured.runs } : { kind: "code", text: block.text };
@@ -80,7 +96,8 @@ export const colourBlocks = (blocks: readonly ParsedBlock[], budget: CodeColourB
 async function shownOf(content: CardContent, readText: TextReader, budget: CodeColourBudget): Promise<CardShown> {
   switch (content.kind) {
     case "readme": {
-      const blocks = await colourBlocks(readText(content.text), budget);
+      const parsed = readText(content.text);
+      const blocks = await colourBlocks(parsed, budget, placeSides(parsed, content.tableSides));
       return content.tableLines === undefined
         ? { kind: "readme", blocks }
         : { kind: "readme", blocks, tableLines: content.tableLines };

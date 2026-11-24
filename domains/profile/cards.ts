@@ -30,6 +30,15 @@ export type TableLines = {
   readonly showOutline: boolean;
 };
 export const TABLE_SWITCHES = ["hideHeaderLine", "hideRowLines", "showColumnLines", "showOutline"] as const;
+/** One single cell side of a table (sh.unset.block.text#edge): shown, or hidden with `hide`. */
+export type TableEdge = {
+  readonly direction: "horizontal" | "vertical";
+  readonly line: number;
+  readonly cell: number;
+  readonly hide: boolean;
+};
+/** One table's single cell sides, named by a fingerprint of each of its lines (ADR 0110 points 4-5). */
+export type TableSides = { readonly lines: readonly string[]; readonly edges: readonly TableEdge[] };
 /** Optional text is "" when unset. */
 export type CardLink = { readonly uri: string; readonly label: string; readonly description: string };
 export type CardEntry = {
@@ -55,8 +64,16 @@ export type CardPicture =
   | { readonly kind: "published"; readonly blob: Obj; readonly width: number; readonly height: number };
 /** What a page shows of a card. */
 export type ShownCardContent =
-  /** `tableLines` only when a switch is on; an edit without it keeps the card's stored table lines. */
-  | { readonly kind: "readme"; readonly text: string; readonly tableLines?: TableLines }
+  /**
+   * `tableLines` only when a switch is on, `tableSides` only when a look is stored; an edit without them keeps the
+   * card's stored table lines.
+   */
+  | {
+      readonly kind: "readme";
+      readonly text: string;
+      readonly tableLines?: TableLines;
+      readonly tableSides?: readonly TableSides[];
+    }
   | { readonly kind: "links"; readonly title: string; readonly layout: CardLayout; readonly items: readonly CardLink[] }
   | {
       readonly kind: "collection";
@@ -220,6 +237,25 @@ function tableLinesOf(style: unknown): TableLines | null {
   };
 }
 
+const DIRECTIONS = ["horizontal", "vertical"] as const;
+
+/** One stored edge, or null when its direction is one this version does not know (the lexicon's knownValues). */
+function readEdge(value: Obj): TableEdge | null {
+  if (!oneOf(DIRECTIONS, value.direction)) return null;
+  const { line, cell } = value;
+  if (!Number.isInteger(line) || !Number.isInteger(cell)) return null;
+  return { direction: value.direction, line: line as number, cell: cell as number, hide: value.hide === true };
+}
+
+/** A Text card's single cell sides (tableStyle.tables), each look's fingerprints and the edges this version knows. */
+function tableSidesOf(style: unknown): TableSides[] {
+  if (!isObject(style) || !Array.isArray(style.tables)) return [];
+  return style.tables.filter(isObject).map((table) => ({
+    lines: Array.isArray(table.lines) ? table.lines.map(text) : [],
+    edges: Array.isArray(table.edges) ? table.edges.filter(isObject).flatMap((edge) => readEdge(edge) ?? []) : [],
+  }));
+}
+
 function readContent(content: Obj): ShownCardContent | null {
   const kind = KIND_OF_BLOCK.get(text(content.$type));
   if (!oneOf(KINDS, kind)) return null;
@@ -228,7 +264,13 @@ function readContent(content: Obj): ShownCardContent | null {
   switch (kind) {
     case "readme": {
       const tableLines = tableLinesOf(content.tableStyle);
-      return tableLines === null ? { kind, text: text(content.text) } : { kind, text: text(content.text), tableLines };
+      const tableSides = tableSidesOf(content.tableStyle);
+      return {
+        kind,
+        text: text(content.text),
+        ...(tableLines === null ? {} : { tableLines }),
+        ...(tableSides.length === 0 ? {} : { tableSides }),
+      };
     }
     case "links":
       return {
