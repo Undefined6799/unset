@@ -4,6 +4,7 @@
 // `items.2.uri` become rows of a list, and a row the member left blank is an unused slot. What each field may hold,
 // and how many rows a card may have, is the domain's to decide.
 
+import { TABLE_LINE_FIELDS } from "@unset/domains-profile";
 import { AppError } from "@unset/shared-errors";
 import { LIMITS } from "@unset/shared-lexicons";
 
@@ -19,7 +20,7 @@ type Shape = {
 };
 
 const SHAPES: Readonly<Record<string, Shape>> = {
-  readme: { fields: ["text"] },
+  readme: { fields: ["text", "tableLines", ...TABLE_LINE_FIELDS] },
   links: {
     fields: ["title", "layout"],
     list: { name: "items", row: ["uri", "label", "description"], max: LIMITS.card.linksMax },

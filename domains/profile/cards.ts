@@ -19,6 +19,17 @@ export type CardSurface = "filled" | "outlined" | "plain";
 export type CardWidth = "full" | "half";
 export type CardLayout = "list" | "carousel" | "grid";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
+/**
+ * The four switches for every table in a Text card (ADR 0110 point 2), each false when left out: our look with none
+ * on draws the header line and the row lines, and no column lines or outline.
+ */
+export type TableLines = {
+  readonly hideHeaderLine: boolean;
+  readonly hideRowLines: boolean;
+  readonly showColumnLines: boolean;
+  readonly showOutline: boolean;
+};
+export const TABLE_SWITCHES = ["hideHeaderLine", "hideRowLines", "showColumnLines", "showOutline"] as const;
 /** Optional text is "" when unset. */
 export type CardLink = { readonly uri: string; readonly label: string; readonly description: string };
 export type CardEntry = {
@@ -44,7 +55,8 @@ export type CardPicture =
   | { readonly kind: "published"; readonly blob: Obj; readonly width: number; readonly height: number };
 /** What a page shows of a card. */
 export type ShownCardContent =
-  | { readonly kind: "readme"; readonly text: string }
+  /** `tableLines` only when a switch is on; an edit without it keeps the card's stored table lines. */
+  | { readonly kind: "readme"; readonly text: string; readonly tableLines?: TableLines }
   | { readonly kind: "links"; readonly title: string; readonly layout: CardLayout; readonly items: readonly CardLink[] }
   | {
       readonly kind: "collection";
@@ -196,14 +208,28 @@ function readButton(value: unknown): CardButton | null {
   return { kind: "link", preset, uri: text(value.uri), label: text(value.label) };
 }
 
+/** A Text card's table switches, or null when none is on. */
+function tableLinesOf(style: unknown): TableLines | null {
+  if (!isObject(style) || !TABLE_SWITCHES.some((name) => style[name] === true)) return null;
+  const on = (name: (typeof TABLE_SWITCHES)[number]) => style[name] === true;
+  return {
+    hideHeaderLine: on("hideHeaderLine"),
+    hideRowLines: on("hideRowLines"),
+    showColumnLines: on("showColumnLines"),
+    showOutline: on("showOutline"),
+  };
+}
+
 function readContent(content: Obj): ShownCardContent | null {
   const kind = KIND_OF_BLOCK.get(text(content.$type));
   if (!oneOf(KINDS, kind)) return null;
   const items = Array.isArray(content.items) ? content.items.filter(isObject) : [];
   const layout = (fallback: CardLayout) => (oneOf(LAYOUTS, content.layout) ? content.layout : fallback);
   switch (kind) {
-    case "readme":
-      return { kind, text: text(content.text) };
+    case "readme": {
+      const tableLines = tableLinesOf(content.tableStyle);
+      return tableLines === null ? { kind, text: text(content.text) } : { kind, text: text(content.text), tableLines };
+    }
     case "links":
       return {
         kind,
