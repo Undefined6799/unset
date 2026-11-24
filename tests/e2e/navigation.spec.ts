@@ -3,7 +3,7 @@
 // a 303 to the member's /<DID>) was matched to /[did] with did "me" and showed not found, and its error page offered
 // Sign in to a member signed in (2026-11-18).
 import { expect, test } from "@playwright/test";
-import { accountButton, accountMenu, openAccountMenu } from "./navbar.ts";
+import { accountButton, accountMenu, CREATE_MENU, openAccountMenu, openMenu, stockMenu } from "./navbar.ts";
 import { addPageCookies, openPage, watch } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -45,12 +45,11 @@ test("the_account_menu_profile_link_reaches_the_member_page_and_closes", async (
 test("the_create_menu_closes_after_a_client_navigation", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertarget="create-menu"]').click();
-  await page.locator("#create-menu").getByRole("link", { name: "Add a profile card" }).click();
+  await (await openMenu(page, CREATE_MENU)).getByRole("menuitem", { name: "Add a profile card" }).click();
   // Codex review of f14b5ab: the item lands on the Add card picker in place (`?add`), which exists with or without
   // script; the old `#add-card` fragment named no element.
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}?add#card-editor`);
-  await expect(page.locator("#create-menu")).toBeHidden();
+  await expect(stockMenu(page, CREATE_MENU)).toHaveCount(0);
   await expect(page.locator("#card-editor")).toBeInViewport();
 });
 
