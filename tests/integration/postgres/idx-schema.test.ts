@@ -52,7 +52,13 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 
-describe("idx schema", () => {
+// Every test here waits on the container, by `docker exec psql` (CALL_MS each) or by the pools, and Vitest's 5 s
+// default sat inside a busy runner's normal spread. Measured on 4 cores (Node 26.12.0, Vitest 5.0.5): one exec costs
+// about 0.12 s, of which the SQL is under 10 ms, and the file's tests take 0.02 to 0.37 s each. In CI the file took
+// 2.5 s on one code job (138231190803) and 18 s on another a minute earlier (138230085089), where a test of two execs
+// took 7.7 s and one of pool queries alone 4.7 s: the whole runner was slow, not one statement (P3.03t). 30 s is about
+// four times the worst seen.
+describe("idx schema", { timeout: 30_000 }, () => {
   test("new_account_row_starts_hidden", async () => {
     await withClient(indexer, null, (c) =>
       c.query("INSERT INTO idx.account (did, track_requested_at, updated_at) VALUES ($1, now(), now())", [A]),
