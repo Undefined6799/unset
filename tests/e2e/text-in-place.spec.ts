@@ -274,7 +274,9 @@ test("discarding_a_layout_change_keeps_an_offered_draft_and_throwing_it_away_rem
   await removeCard(page, word);
 });
 
-// Codex on b7db900: words put back to what was stored while a Save is on its way stay as typed, and unsaved.
+// Codex on b7db900: words put back to what was stored while a Save is on its way stay as typed, and unsaved, in the
+// same editor: a Save from the bar never draws the editor again, which would drop the caret and any words still
+// waiting for their frame.
 test("words_put_back_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) => {
   const word = `back${Date.now()}`;
   await openOwnPage(page);
@@ -296,10 +298,15 @@ test("words_put_back_while_a_save_is_on_its_way_stay_unsaved", async ({ page }) 
   await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
   for (let i = 0; i < " two".length; i += 1) await editor.press("Backspace");
   await expect(editor).toHaveText(`${word} one`);
+  type Kept = { kept?: unknown };
+  await editor.evaluate((node) => {
+    (globalThis as unknown as Kept).kept = node;
+  });
   release();
   await expect(bar(page).getByRole("status")).toHaveText("Saved.");
   await expect(bar(page)).toContainText("1 card has unsaved changes.");
   await expect(editor).toHaveText(`${word} one`);
+  expect(await editor.evaluate((node) => (globalThis as unknown as Kept).kept === node)).toBe(true);
   await page.unroute(/\?\/saveAll$/);
   await bar(page).getByRole("button", { name: "Save" }).click();
   // The first Save's "Saved." is still shown, so wait for this Save to leave nothing unsaved before reloading.
