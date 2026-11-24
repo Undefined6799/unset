@@ -3,6 +3,7 @@
 // formula holding a pipe in a table cell was saved with the pipe bare, which split the cell.
 import katex from "katex";
 import { expect, test } from "vitest";
+import { MAX_TEX_CHARS } from "../profile/math.ts";
 import { parseReadme } from "../profile/parse.ts";
 import { type InlineFormula, pipesAsTex, writeFormulaRun } from "./math-write.ts";
 
@@ -41,6 +42,26 @@ test("a comment in a formula side by side with others moves to the end, so it ta
   const children = [formula("x% note"), formula("\\% y \\verb!%!"), formula("z % last")];
   expect(written(children)).toEqual(["$${x}{\\% y \\verb!%!}{z }% note% last$$", "", ""]);
   expect(shown("{x}{\\% y \\verb!%!}{z }% note% last")).toBe(shown("x\\% y \\verb!%!z"));
+});
+
+// Codex on #2020 (9277e7e): two formulas of 1,100 characters each drew alone, but joined they passed the page's
+// MAX_TEX_CHARS and showed as source. A run is cut where joining would pass it, with a space between the parts.
+test("a run longer than a formula may be is cut into formulas each within it, a space between", () => {
+  const long = "x".repeat(1_100);
+  const children = [formula(long), formula(long), formula("y")];
+  const [markdown] = written(children);
+  expect(markdown).toBe(`$${long}$ $$${`{${long}}{y}`}$$`);
+  const [paragraph] = parseReadme(markdown ?? "");
+  const kinds = paragraph?.kind === "paragraph" ? paragraph.children.map((inline) => inline.kind) : [];
+  expect(kinds).toEqual(["math", "text", "math"]);
+  expect(`{${long}}{y}`.length).toBeLessThanOrEqual(MAX_TEX_CHARS);
+});
+
+// In a table cell each formula's pipes are written as TeX before the run is joined, so the cut counts them.
+test("a run in a table cell is measured with its pipes written as TeX", () => {
+  const children = [formula("|x|"), formula("y")];
+  const cell = (node: InlineFormula) => writeFormulaRun(node, children, writer, pipesAsTex);
+  expect(cell(children[0] as InlineFormula)).toBe('$${{\\char"7C}x{\\char"7C}}{y}$$');
 });
 
 test("a formula with words beside it is written by mdast-util-math's writer as it was", () => {
