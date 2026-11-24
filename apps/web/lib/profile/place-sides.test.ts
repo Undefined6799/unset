@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { parseReadme, sourceLines, topBlocks } from "./parse.ts";
-import { fingerprint, MAX_LOOK_LINES, nameTables, placeSides } from "./place-sides.ts";
+import { fingerprint, MAX_LOOK_LINES, MAX_PLACED_WITH_MATH, nameTables, placeSides } from "./place-sides.ts";
 import type { TableEdge } from "./types.ts";
 
 // SHA-256 over the line without its spaces, first 8 hex characters (node:crypto gave these for "|a|b|" and so on).
@@ -110,5 +110,13 @@ describe("placeSides", () => {
     const hidden = `$$\n\n${TABLE}\n\n$$\n\n${TABLE}`;
     expect(topBlocks(hidden).filter((block) => block.kind === "table")).toHaveLength(2);
     expect(await edgesOf(hidden, [{ lines: A, edges: [EDGE] }])).toEqual([null, undefined]);
+  });
+
+  test("a text longer than half a card that holds a math block shows its tables without looks", async () => {
+    const look = [{ lines: A, edges: [EDGE] }];
+    const filler = "words ".repeat(Math.ceil(MAX_PLACED_WITH_MATH / 6));
+    expect(await edgesOf(`${filler}\n\n${TABLE}`, look)).toEqual([null, [EDGE]]);
+    expect(await edgesOf(`$$\nx\n$$\n\n${filler}\n\n${TABLE}`, look)).toEqual([null, null, undefined]);
+    expect(await edgesOf(`$$\nx\n$$\n\n${TABLE}`, look)).toEqual([null, [EDGE]]);
   });
 });

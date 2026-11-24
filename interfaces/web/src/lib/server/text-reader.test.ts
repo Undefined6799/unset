@@ -6,6 +6,7 @@
 // unbounded parses take seconds, the limits are tens of milliseconds, and each bar sits far from both. What a full
 // card costs to parse is measured as this thread's processor time (`processorMs`), not by the clock.
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
+import { MAX_PLACED_WITH_MATH } from "@unset/apps-web/lib/profile/place-sides.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
 import { createTextReads, readCard, type TextReadLimits, within } from "./text-reader.ts";
@@ -417,6 +418,26 @@ describe("the page's limits", () => {
       runs.push(processorMs(() => parseReadme(text)));
     const each = runs.map((ms) => Math.round(ms)).join(", ");
     expect(Math.min(...runs), `processor ms of each parse: ${each}`).toBeLessThan(TEXT_READ_LIMITS.textMs);
+  });
+
+  // Review of #2028: a text with a math block is read a second time without math to count its tables as the editor
+  // does (place-sides.ts), but only up to half a card, so the whole read of one table and a formula, named, still
+  // fits one text's limit: a full card (read once) and half a card (read twice). Read twice, a full card took about
+  // 180 ms of processor time here.
+  test.each([
+    ["a full card", CEILING],
+    ["half a card", MAX_PLACED_WITH_MATH],
+  ])("%s of one table and a formula is read and named within one text's limit", (_name, size) => {
+    const head = "$$\nx^2\n$$\n\n| a | b | c |\n| --- | --- | --- |\n";
+    const text = `${head}${row.repeat(Math.floor((size - 40 - head.length) / row.length))}`;
+    expect(text.length).toBeGreaterThan(size - 100);
+    expect(text.length).toBeLessThanOrEqual(size);
+    expect(readCard(text).filter((block) => block.kind === "table")).toHaveLength(1);
+    const runs: number[] = [];
+    while (runs.length < 15 && Math.min(...runs) >= TEXT_READ_LIMITS.textMs)
+      runs.push(processorMs(() => readCard(text)));
+    const each = runs.map((ms) => Math.round(ms)).join(", ");
+    expect(Math.min(...runs), `processor ms of each read: ${each}`).toBeLessThan(TEXT_READ_LIMITS.textMs);
   });
 
   test("the page's limit holds two full reads, and no page load reads for more than 300 ms", () => {
