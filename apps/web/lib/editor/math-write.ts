@@ -24,8 +24,24 @@ export function writeFormulaRun(
   while (siblings[last + 1]?.type === "inlineMath") last += 1;
   if (last === at) return write(node, false);
   const run = siblings.slice(at, last + 1).map((formula) => ("value" in formula ? String(formula.value) : ""));
-  return write({ type: "inlineMath", value: run.map((tex) => `{${tex}}`).join("") }, true);
+  const comments: string[] = [];
+  const groups = run.map(
+    (tex) => `{${tex.replace(COMMENT, (found) => (found.startsWith("%") ? keep(found) : found))}}`,
+  );
+  return write({ type: "inlineMath", value: groups.join("") + comments.join("") }, true);
+
+  function keep(comment: string): string {
+    comments.push(comment);
+    return "";
+  }
 }
+
+/**
+ * A TeX comment, which runs from a bare `%` to the line's end and draws nothing (KaTeX 0.16.47 src/Lexer.ts), so in a
+ * run it would take the group's end and the formulas after it; moved to the run's end it takes nothing. `\%` and a `%`
+ * in `\verb` are no comment, so those and every backslash pair are read first, as the Lexer does.
+ */
+const COMMENT = /\\verb(?:\*(.).*?\1|([^*a-zA-Z]).*?\2)|\\[\s\S]|%[^\n]*/g;
 
 /**
  * A formula's TeX with each bare pipe written as `{\char"7C}`, which KaTeX 0.16.47 draws as the same pipe in math and
