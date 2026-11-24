@@ -205,7 +205,11 @@ function inline(node: Phrasing, reading: Reading): Inline[] {
     case "break":
       return [{ kind: "break" }];
     case "inlineMath":
-      return formulaInline(node.value, reading) ?? [{ kind: "text", text: written(reading, node) }];
+      return (
+        (pricesRule(node, reading) ? formulaInline(node.value, reading) : null) ?? [
+          { kind: "text", text: written(reading, node) },
+        ]
+      );
     case "emphasis":
       return [{ kind: "em", children: inlines(node.children, reading) }];
     case "strong":
@@ -230,6 +234,19 @@ function inlines(nodes: readonly Phrasing[], reading: Reading): Inline[] {
   const out: Inline[] = [];
   for (const node of nodes) put(out, inline(node, reading));
   return out;
+}
+
+/**
+ * Whether math between single dollars keeps Pandoc's rule, as Milkdown's Crepe 7.23.0 holds the editor to it
+ * (src/feature/latex/remark.ts, remarkInlineMathGuardPlugin): the opening dollar is followed by a non-space, the
+ * closing one follows a non-space and is not followed by a digit, so "$5 and $10" stays words. Math between two or more
+ * dollars is kept as written.
+ */
+function pricesRule(node: Positioned, reading: Reading): boolean {
+  const raw = written(reading, node);
+  if (raw.startsWith("$$")) return true;
+  const after = reading.source[node.position?.end.offset ?? 0] ?? "";
+  return !/^\$\s/.test(raw) && !/\s\$$/.test(raw) && !/\d/.test(after);
 }
 
 /** A formula in a line, or null when math.ts cannot draw it. */

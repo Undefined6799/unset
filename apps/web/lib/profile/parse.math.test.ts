@@ -33,6 +33,17 @@ describe("math in the text", () => {
     expect(parseReadme("```math\n\\frac{a}{b}\n```")).toEqual([{ kind: "math", tree: tree("\\frac{a}{b}", true) }]);
   });
 
+  // Milkdown's Crepe 7.23.0 keeps the same rule (src/feature/latex/remark.ts, remarkInlineMathGuardPlugin), so the
+  // editor and the page agree: after Pandoc, one dollar opens before a non-space and closes after one, never before a
+  // digit, so prices stay words. Two or more dollars are math as written.
+  test("prices stay words: a single dollar never opens before a space or closes after one or before a digit", () => {
+    expect(parseInline("$5 and $10 each")).toEqual([text("$5 and $10 each")]);
+    expect(parseInline("a $ b$ c")).toEqual([text("a $ b$ c")]);
+    expect(parseInline("a $b $ c")).toEqual([text("a $b $ c")]);
+    expect(parseInline("$x$5")).toEqual([text("$x$5")]);
+    expect(parseInline("$$ x $$")).toEqual([{ kind: "math", tex: "x", tree: tree("x") }]);
+  });
+
   test("an escaped dollar is a dollar", () => {
     expect(parseInline("\\$5 or \\$6")).toEqual([text("$5 or $6")]);
   });
