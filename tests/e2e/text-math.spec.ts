@@ -145,10 +145,12 @@ test("double_dollar_math_before_a_digit_and_code_holding_dollars_survive_a_save"
 test("a_formula_holding_two_dollars_keeps_its_fence_on_save", async ({ page }) => {
   const watched = watch(page);
   const word = `wide${Date.now()}`;
-  const { card, editor } = await cardWithCaret(page, word, `${word} so $$$x$$y$$$5 grows`);
+  // KaTeX 0.16.47 draws "$$" only in text, where it opens and closes math, so the formula holds it there.
+  const text = `${word} so $$$\\text{a$$b}$$$5 grows`;
+  const { card, editor } = await cardWithCaret(page, word, text);
   await expect(editor.locator("[data-math-inline] math")).toHaveCount(1);
   await page.keyboard.type(" now");
-  expect(await markdownOf(page, card)).toBe(`${word} so $$$x$$y$$$5 grows now`);
+  expect(await markdownOf(page, card)).toBe(`${text} now`);
   await discardAndRemove(page, word);
   expect(watched.pageErrors).toEqual([]);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
@@ -229,15 +231,14 @@ test("the_block_menu_adds_a_math_block_and_the_bar_makes_words_a_formula", async
   await inlineMath.click();
   await expect(editor.locator("[data-math-inline]")).toHaveCount(0);
   // The press gives the editor its focus back with the TeX selected, but not at once: on a slow runner a key pressed
-  // before that went to the button, and Backspace then took the whole TeX (CI on #2020 at d170e7f saved "star$t c$").
-  // prosemirror-view 1.42.9 also redraws the selection 20 ms after the focus (editHandlers.focus), as cardWithCaret
-  // waits.
+  // before that went to the button (CI on #2020 at d170e7f). prosemirror-view 1.42.9 also redraws the selection 20 ms
+  // after the focus (editHandlers.focus), as cardWithCaret waits. The TeX is then typed over the selection: an arrow key
+  // moves only the page's selection, which prosemirror-view reads on a later selectionchange (domobserver.ts), so a
+  // Backspace pressed at once still took the whole TeX (CI at 1ee7388 saved "star$t c$" again).
   await expect(editor).toBeFocused();
   await expect.poll(() => editor.evaluate((element) => element.ownerDocument.getSelection()?.toString())).toBe("a+b");
   await page.waitForTimeout(50);
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("Backspace");
-  await page.keyboard.type("c");
+  await page.keyboard.type("a+c");
   await page.keyboard.press("Shift+ArrowLeft");
   await page.keyboard.press("Shift+ArrowLeft");
   await page.keyboard.press("Shift+ArrowLeft");
