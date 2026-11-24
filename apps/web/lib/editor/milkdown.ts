@@ -380,15 +380,26 @@ const pageShapes = $prose(
  * the preset's remarkPreserveEmptyLinePlugin instead makes its serializer drop the text around the empty paragraph.
  */
 const EMPTY_LINE = /^[ >]*<br \/>[ ]*$/;
-const FENCE_LINE = /^[ >]*(```|~~~|\$\$+[ ]*$)/;
+// A fence's marks and what follows them. A fence ends only at a line of the same mark, at least as long, with nothing
+// after it (CommonMark 0.31.2 4.5; micromark-extension-math 3.1.0 holds `$$` to the same rule), so a "$$" line in a
+// code block, or a "```" line in a math block, is the block's own text.
+const FENCE_LINE = /^[ >]*(`{3,}|~{3,}|\${2,})(.*)$/;
+/** The fence open after `line`, given the one open before it (`null`: none). */
+function fenceAfter(line: string, open: string | null): string | null {
+  const [, marks = "", rest = ""] = FENCE_LINE.exec(line) ?? [];
+  const bare = rest.trim() === "";
+  if (open === null) return marks !== "" && (marks[0] !== "$" || bare) ? marks : null;
+  return marks[0] === open[0] && marks.length >= open.length && bare ? null : open;
+}
+
 function stored(markdown: string): string {
   const kept: string[] = [];
-  let fenced = false;
+  let fence: string | null = null;
   let dropped = false;
   for (const line of markdown.replace(/\n$/, "").split("\n")) {
-    if (FENCE_LINE.test(line)) fenced = !fenced;
+    fence = fenceAfter(line, fence);
     const blank = /^[ >]*$/.test(line);
-    if (!fenced && EMPTY_LINE.test(line)) {
+    if (fence === null && EMPTY_LINE.test(line)) {
       dropped = true;
       continue;
     }

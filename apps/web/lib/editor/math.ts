@@ -22,6 +22,7 @@ import type { Node as ProseNode } from "@milkdown/prose/model";
 import { type EditorState, NodeSelection, TextSelection } from "@milkdown/prose/state";
 import type { NodeView } from "@milkdown/prose/view";
 import { $command, $inputRule, $nodeSchema, $remark, $view } from "@milkdown/utils";
+import { mathToMarkdown } from "mdast-util-math";
 import remarkMath from "remark-math";
 import type { MathNode } from "../profile/math.ts";
 import { between, isInlineMath } from "../profile/math-syntax.ts";
@@ -134,9 +135,13 @@ export const toggleMathCommand = $command("ToggleInlineMath", (ctx) => () => (st
     dispatch?.(tr.setSelection(TextSelection.create(tr.doc, selection.from, selection.from + value.length)));
     return true;
   }
-  const value = state.doc.textBetween(selection.from, selection.to);
+  // A formula's TeX is an attribute, which textBetween leaves out unless told (prosemirror-model 1.25.13).
+  const formula = mathInlineSchema.type(ctx);
+  const value = state.doc.textBetween(selection.from, selection.to, null, (leaf) =>
+    leaf.type === formula ? String(leaf.attrs.value) : "",
+  );
   if (selection.empty || value.trim() === "" || !(selection instanceof TextSelection)) return false;
-  dispatch?.(state.tr.replaceSelectionWith(mathInlineSchema.type(ctx).create({ value })));
+  dispatch?.(state.tr.replaceSelectionWith(formula.create({ value })));
   return true;
 });
 
@@ -203,11 +208,16 @@ class MathInlineView implements NodeView {
 
 const mathInlineView = $view(mathInlineSchema.node, () => (node) => new MathInlineView(node));
 
+const writeInlineMath = mathToMarkdown().handlers.inlineMath;
+
 /**
  * How math is written back. A code block whose language is "math" is written as `$$`; every other one as Milkdown
  * writes it. And a dollar that is a word is always escaped: Milkdown 7.23.0's text handler writes text that holds no
  * `*`, `_` or backslash and ends in white space as it is (@milkdown/core src/__internal__/remark-handlers.ts), skipping
  * the escapes mdast-util-math asks for, so "costs \$5 " before bold was saved as "costs $5 ", and "\$x\$ " as math.
+ * And a formula is written between dollars the page's rule reads as math: mdast-util-math 3.0.0 writes single dollars
+ * whatever follows (lib/index.js inlineMath), so "$$x$$5" was saved as "$x$5", which the rule reads as words; a
+ * formula the rule would refuse gets one more dollar each side, which it always reads as math.
  */
 export function writeMath(ctx: Ctx) {
   ctx.update(remarkStringifyOptionsCtx, (prev) => {
@@ -219,6 +229,10 @@ export function writeMath(ctx: Ctx) {
         ...prev.handlers,
         text: (node, parent, state, info) =>
           node.value.includes("$") ? state.safe(node.value, { ...info, encode: [] }) : text(node, parent, state, info),
+        inlineMath: (node, parent, state, info) => {
+          const written = writeInlineMath(node, parent, state, info);
+          return isInlineMath(written, info.after) ? written : `$${written}$`;
+        },
       },
     };
   });

@@ -124,6 +124,39 @@ test("bold_between_two_prices_stays_bold_through_a_save", async ({ page }) => {
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #2020: mdast-util-math 3.0.0 writes every formula between single dollars, so "$$x$$5" was saved as "$x$5",
+// which the price rule then reads as words; and a "$$" line inside a code fence ended the fence for the save's empty
+// line rule, which then dropped the code's own "<br />" line. Both survive an edit elsewhere.
+test("double_dollar_math_before_a_digit_and_code_holding_dollars_survive_a_save", async ({ page }) => {
+  const watched = watch(page);
+  const word = `fence${Date.now()}`;
+  const code = "```text\n$$\n<br />\n$$\n```";
+  const { card, editor } = await cardWithCaret(page, word, `${word} so $$x$$5 grows\n\n${code}`);
+  await expect(editor.locator("[data-math-inline] math")).toHaveCount(1);
+  await page.keyboard.type(" now");
+  expect(await markdownOf(page, card)).toBe(`${word} so $$x$$5 grows now\n\n${code}`);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Codex on #2020: a formula keeps its TeX only in an attribute, which ProseMirror's textBetween leaves out, so words
+// selected with a formula among them became a formula without it. The formula's TeX goes into the new one.
+test("words_selected_with_a_formula_among_them_keep_its_tex_as_one_formula", async ({ page }) => {
+  const watched = watch(page);
+  const word = `mixed${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} a $x$ b`);
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(1);
+  for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowLeft");
+  const floating = page.getByRole("toolbar", { name: "Format the selected words" }).filter({ visible: true });
+  await floating.getByRole("button", { name: "Inline math" }).click();
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(1);
+  expect(await markdownOf(page, card)).toBe(`${word} $a x b$`);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 test("the_block_menu_adds_a_math_block_and_the_bar_makes_words_a_formula", async ({ page }) => {
   const watched = watch(page);
   const word = `menu${Date.now()}`;
