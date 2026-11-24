@@ -7,7 +7,7 @@
 // (interfaces/web text-reader.ts, review of #2028: placing on every load cost a visitor's load up to seconds), with a
 // synchronous hash the reader passes in. Placing then only compares names.
 
-import { type Block, sourceLines, type TableBlock } from "./parse.ts";
+import { type Block, sourceLines, type TableBlock, topBlocks } from "./parse.ts";
 import type { TableEdge, TableSides } from "./types.ts";
 
 /** The most lines a look names (sh.unset.block.text#tableEdges `lines` maxLength): a longer table matches none. */
@@ -22,19 +22,54 @@ export type Sha256Hex = (text: string) => string;
  */
 export const fingerprint = (line: string, sha256: Sha256Hex): string => sha256(line.replace(/[ \t]/g, "")).slice(0, 8);
 
+/** A table's name as a look gives it: the fingerprints of its lines, the delimiter row left out, joined by spaces. */
+function nameOf(lines: readonly string[], from: number, to: number, sha256: Sha256Hex): string {
+  const own = lines.slice(from - 1, to).filter((_, i) => i !== 1);
+  return own.map((line) => fingerprint(line, sha256)).join(" ");
+}
+
 /**
- * The blocks with each top-level table that parse.ts noted the lines of named as a look names it: the fingerprints of
- * its lines, the delimiter row left out, joined by spaces. A table with more lines than a look can name is not hashed.
+ * The blocks with each top-level table that parse.ts noted the lines of named as a look names it. A table with more
+ * lines than a look can name is not hashed.
+ *
+ * The page also draws `$$` math, which the editor does not read (ADR 0110 decision 5, topBlocks), and such math can
+ * hold a table or end one early. So when the text has `$$`, a table keeps its name only if the editor reads a table
+ * on the same lines and reads as many tables of that name as the page shows (Codex on #2028): otherwise one look
+ * meant for a table math hides could be drawn on another.
  */
 export function nameTables(text: string, blocks: readonly Block[], sha256: Sha256Hex): Block[] {
   const lines = sourceLines(text);
-  return blocks.map((block) => {
+  const named = blocks.map((block) => {
     if (block.kind !== "table" || block.from === undefined || block.to === undefined) return block;
     if (block.to - block.from > MAX_LOOK_LINES) return block;
-    const own = lines.slice(block.from - 1, block.to).filter((_, i) => i !== 1);
-    return { ...block, name: own.map((line) => fingerprint(line, sha256)).join(" ") };
+    return { ...block, name: nameOf(lines, block.from, block.to, sha256) };
   });
+  return text.includes("$$") ? asTheEditorReads(text, lines, named, sha256) : named;
 }
+
+/** The named tables the editor reads the same way, each table the editor reads on other lines left unnamed. */
+function asTheEditorReads(text: string, lines: readonly string[], blocks: Block[], sha256: Sha256Hex): Block[] {
+  const editor = topBlocks(text).filter((block) => block.kind === "table" && block.to - block.from <= MAX_LOOK_LINES);
+  const editorNames = new Map(
+    editor.map((table) => [`${table.from}:${table.to}`, nameOf(lines, table.from, table.to, sha256)]),
+  );
+  const count = (names: Iterable<string | undefined>, name: string) => [...names].filter((n) => n === name).length;
+  const kept = blocks.map((block) =>
+    block.kind === "table" && block.name !== undefined && editorNames.get(`${block.from}:${block.to}`) !== block.name
+      ? withoutName(block)
+      : block,
+  );
+  const pageNames = kept.map((block) => (block.kind === "table" ? block.name : undefined));
+  return kept.map((block) =>
+    block.kind === "table" &&
+    block.name !== undefined &&
+    count(pageNames, block.name) !== count(editorNames.values(), block.name)
+      ? withoutName(block)
+      : block,
+  );
+}
+
+const withoutName = ({ name: _, ...table }: TableBlock): TableBlock => table;
 
 /**
  * Which of the card's tables each look is drawn on (ADR 0110 point 5): a look matches a named table whose lines give
