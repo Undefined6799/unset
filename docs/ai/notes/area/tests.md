@@ -84,6 +84,11 @@ mouse press, so its `drag()` sends the browser's own drag events there. Select w
 double click at a paragraph's centre (it hits empty space, and Firefox selects differently). A card whose edits
 end where they began has no unsaved changes: delete it without Discard (`discardAndRemove(..., { changed: false })`).
 
+**Members' state in browser specs (P1.22g).** One test server serves a whole project's run, so a spec must leave a
+seeded member as it found them. The "bell" member's entries stay unseen: a spec that opens the bell as that member
+sets the browser offline first, so the mark fails and the count comes back (`bell-panel.spec.ts`,
+`notifications.spec.ts`). The "inbox" member's count depends on which spec ran first; read its list, never its count.
+
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
   `postgres` entry pins, the base of our gosu-free image (P1.29d), run as upstream ships it (root, then gosu).

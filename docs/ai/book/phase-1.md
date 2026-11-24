@@ -5473,6 +5473,15 @@ to `/notifications` (ADR 0108 point 3, now the fallback, ADR 0114). `notificatio
 both. `/login`, `/join` and the welcome pages follow in P1.22l; the gate's refusal pages stay without script (ADR
 0116 point 4). The plan's §5.4 and §6.1 rows for these pages change here.
 
+Built 2026-11-24, where the code differs from the words above. (1) The three pages say `csr = true` in their own
+`+page.ts` instead of dropping the line: P1.22j's test holds every page with something to draw to its own line.
+(2) The server never draws the bell's panel, on an app page either: it draws the link everywhere, and the client
+draws the panel once it has started (ADR 0116 point 9). So an app page with script off now has the link too; before,
+its native panel opened and could mark nothing. (3) The error page of a route that says `client: false` is sent the
+count alone, so its bell stays the link: the root load runs before the page's load fails and cannot know. After
+P1.22l that is three routes nobody reads. (4) `/request-invite` never gave a form's values back: a refused post
+answers with a catalog code in `?error=`, so `?sent`, read as a flag, is the one thing of the query its load returns.
+
 **Threats.** The boundary is text a visitor or a link supplies, written into the start-up script the server
 hashes. `/request-invite` reads `?sent` and, after a refused post, gives the form's own values back; home and the
 legal pages read the `?error=` code. Each is held to a parsed shape before a load or an action returns it (rule
