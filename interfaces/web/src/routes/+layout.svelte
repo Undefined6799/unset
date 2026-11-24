@@ -232,21 +232,31 @@ const bellOpens = $derived(clientReady && notes?.state !== "count");
 type Stock = typeof import("@unset/apps-web/lib/components/shell/index.ts");
 let stock = $state<Stock | undefined>(undefined);
 // The menus that have a stock version, by the id of the native popover: whether each is open, and its button.
-const STOCK_MENUS = [ACCOUNT] as const;
+const STOCK_MENUS = [MENU, CREATE, ACCOUNT] as const;
 const stockOpen = $state<Record<string, boolean>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, false])));
 const stockButton = $state<Record<string, HTMLElement | null>>(Object.fromEntries(STOCK_MENUS.map((id) => [id, null])));
 let stockAsked = false;
 $effect(() => {
-  if (account === undefined || stockAsked) return;
+  // The core header shows the menus to a visitor too; no other shell has one.
+  if (shell.kind !== "core" || stockAsked) return;
   stockAsked = true;
   import("@unset/apps-web/lib/components/shell/index.ts").then(takeOver, () => undefined);
 });
+// On a phone Create is a row of More actions, which is still a native popover until its own part of P1.22m, and that
+// row opens the native Create panel, with script too. So the native Create panel stays in the document, and while
+// More actions is open it and its row are left as they are.
+function heldByActions(id: string): boolean {
+  return id === CREATE && document.getElementById(ACTIONS)?.matches(":popover-open") === true;
+}
 function takeOver(loaded: Stock): void {
   const focused = document.activeElement;
   let focusOn: string | undefined;
   for (const id of STOCK_MENUS) {
+    if (heldByActions(id)) continue;
     const native = document.getElementById(id);
     stockOpen[id] = native?.matches(":popover-open") === true;
+    // The other native menus leave the document with the swap; the Create panel does not, so it is closed here.
+    if (id === CREATE && stockOpen[id]) native?.hidePopover();
     const hadFocus = focused?.getAttribute("popovertarget") === id || native?.contains(focused) === true;
     if (hadFocus && !stockOpen[id]) focusOn = id;
   }
@@ -286,16 +296,16 @@ const markInBackground: SubmitFunction =
 // drawn as a small badge.
 const badge =
   "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.6875rem] leading-4.5 font-semibold text-primary-foreground";
+// Create's one row that runs today: the member's own page with the Add card picker open; a visitor signs in first.
+const addCardHref = $derived(account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`);
 const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(({ type }) => {
+  // Not when the client starts over the server's page: a menu opened before that is kept, and carried over (takeOver).
+  if (type === "enter") return;
   for (const id of STOCK_MENUS) stockOpen[id] = false;
-  const closing = [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH];
-  // The native account menu too, while it is the menu (the stock one's file is on its way, or never arrived). Not
-  // when the client starts over the server's page: one opened before that is kept, and carried over (takeOver).
-  if (type !== "enter") closing.push(ACCOUNT);
-  for (const id of closing) {
+  for (const id of [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH, ACCOUNT]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
@@ -424,9 +434,25 @@ const row =
   <header data-site-header="core" class="sticky top-0 z-40 border-b bg-secondary">
     <div class="flex h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
       <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-1.5">
-        <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
-          <Icon name="menu" size={20} label={T.menu} />
-        </Button>
+        {#if stock !== undefined}
+          <stock.HeaderMenu
+            bind:open={stockOpen[MENU]}
+            bind:button={stockButton[MENU]}
+            id={MENU}
+            label={T.more}
+            align="start"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control}"
+            soon={SOON_MENU}
+            links={[]}
+            comingSoon={T.comingSoon}
+          >
+            {#snippet trigger()}<Icon name="menu" size={20} label={T.menu} />{/snippet}
+          </stock.HeaderMenu>
+        {:else}
+          <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
+            <Icon name="menu" size={20} label={T.menu} />
+          </Button>
+        {/if}
         <a href="/" class="font-mono text-xl font-semibold whitespace-nowrap max-sm:text-lg text-foreground no-underline" aria-label={T.homeLabel}
           >{T.brandName}<span class="font-normal text-muted-foreground">{T.brandSuffix}</span></a
         >
@@ -451,15 +477,31 @@ const row =
         >
           <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          popovertarget={CREATE}
-          popovertargetaction="toggle"
-          class="h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
-        >
-          <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
-        </Button>
+        {#if stock !== undefined}
+          <!-- No id: the native Create panel stays in the document, for More actions on a phone. -->
+          <stock.HeaderMenu
+            bind:open={stockOpen[CREATE]}
+            bind:button={stockButton[CREATE]}
+            label={T.create}
+            align="end"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'sm' })} h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
+            soon={SOON_CREATE}
+            links={[{ label: T.addCard, icon: "apps", href: addCardHref }]}
+            comingSoon={T.comingSoon}
+          >
+            {#snippet trigger()}<Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />{/snippet}
+          </stock.HeaderMenu>
+        {:else}
+          <Button
+            variant="outline"
+            size="sm"
+            popovertarget={CREATE}
+            popovertargetaction="toggle"
+            class="h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
+          >
+            <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
+          </Button>
+        {/if}
         {#each PANEL_BUTTONS as button (button.id)}
           {#if button.id === NOTIFICATIONS && !bellOpens}
             <!-- ADR 0108 point 3, ADR 0116 point 9: what the server draws. The bell is the way to the page, whose visit
@@ -597,12 +639,14 @@ const row =
       {/if}
     </div>
   {/snippet}
-  <section id={MENU} popover="auto" aria-labelledby="{MENU}-title" class="{panel} right-auto left-3 max-sm:right-2 max-sm:left-2">
-    {@render panelTitle(MENU, T.more, true)}
-    <ul class="flex flex-col gap-1">
-      {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
-    </ul>
-  </section>
+  {#if stock === undefined}
+    <section id={MENU} popover="auto" aria-labelledby="{MENU}-title" class="{panel} right-auto left-3 max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(MENU, T.more, true)}
+      <ul class="flex flex-col gap-1">
+        {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
+      </ul>
+    </section>
+  {/if}
   <section id={CREATE} popover="auto" ontoggle={backToActions} aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
     {@render panelTitle(CREATE, T.create, false)}
     <ul class="flex flex-col gap-1">
@@ -611,7 +655,7 @@ const row =
     <ul class="mt-1 flex flex-col gap-1 border-t pt-1">
       <li>
         <!-- svelte-ignore a11y_autofocus -- the one item that runs today takes focus when the menu opens -->
-        <a href={account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`} class={row} autofocus>
+        <a href={addCardHref} class={row} autofocus>
           <Icon name="apps" size={20} /><span>{T.addCard}</span>
         </a>
       </li>
