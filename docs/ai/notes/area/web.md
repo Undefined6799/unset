@@ -75,7 +75,11 @@ while it fades in, so axe runs after `settled()` (WebKit read 3.48 contrast mid-
 name (`tests/e2e/navbar.ts`), which the native and the stock version both carry. Typeahead holds Space as part of
 the search for a moment after a letter, so a test reaches a row by the arrows before pressing Space. With the script
 files held back WebKit never fires the load event (it waits for the preloaded files), so such a test opens the page
-with `waitUntil: "commit"`.
+with `waitUntil: "commit"`. The stock controls are one file, `shell/index.ts`, loaded on every page with the core
+header (a visitor has the menu and Create too); the layout's `STOCK_MENUS` lists the native ids that have a stock
+version. `afterNavigate` also runs when the layout mounts (type `enter`): closing panels there lost a menu opened
+before the client started, so the close skips `enter`. Until More actions is moved (part 4) the native Create panel
+stays in the document for its row, and the stock Create menu has no fixed id.
 
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
