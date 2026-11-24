@@ -79,7 +79,15 @@ with `waitUntil: "commit"`. The stock controls are one file, `shell/index.ts`, l
 header (a visitor has the menu and Create too); the layout's `STOCK_MENUS` lists the native ids that have a stock
 version. `afterNavigate` also runs when the layout mounts (type `enter`): closing panels there lost a menu opened
 before the client started, so the close skips `enter`. Until More actions is moved (part 4) the native Create panel
-stays in the document for its row, and the stock Create menu has no fixed id.
+stays in the document for its row, and the stock Create menu has no fixed id. Part 3: the header's panels are the
+stock Popover (`shell/header-panel.svelte`, `ui/popover` copied from the registry). bits-ui's Popover content has no
+role, so ours sets `role="dialog"` and `aria-labelledby`; it traps focus by default and does not lock scroll. The
+stock Popover content also has no height cap (the stock menu's has): ours adds
+`max-h-(--bits-popover-content-available-height)` and `overflow-y-auto`, or a panel runs off a short window. A
+Popover mounted already open gives focus back to whatever had focus at mount, so the hand-over focuses the new
+button first and opens after. The header bell is the server's link until the stock panel is in (no native popover
+button in between). The native Messages and Notifications panels also stay for More actions until part 4. A test
+finds a stock panel as `getByRole("dialog", { name })`, never by `[popover]` or the native id.
 
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
@@ -99,7 +107,14 @@ tree to the card's `Block` types. micromark is not bounded: its readme's Securit
 it, and at 20,000 characters `_*` repeated takes about 5 s and `+ ` repeated about 10 s before the stack runs out. So
 no server code calls `parseReadme` bare: a page load takes `services().textReads.forPage(deadlineAt)`
 (`lib/server/text-reader.ts`), which stops each read with node:vm's `timeout` at `TEXT_READ_LIMITS` (limits.ts), shares
-one budget across the page's cards and shows a stopped card with `plainText`. The process keeps what each read gave
+one budget across the page's cards and shows a stopped card with `plainText`. The stop lands where V8 next looks for
+one: at every function entry (an inlined call is none), but in a loop only when the function's interrupt budget runs
+out, and that budget is INT_MAX / 2 while V8 compiles the function to its top tier (sources in text-reader.ts;
+measured 2026-11-24: an empty loop caught there ran 0.3 to 0.6 s past its limit and 2.3 s on a busy CI runner, the
+real parser at most 22 ms in 1,314 stalled reads). So a test's stand-in for a stalling parser must call into real
+code (text-reader.test.ts `forever`), and what time the reader gives, takes and keeps is tested on a clock the test
+moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. The process
+keeps what each read gave
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
 places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
