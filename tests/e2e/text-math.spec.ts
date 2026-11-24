@@ -108,6 +108,22 @@ test("typed_dollars_make_a_formula_and_prices_stay_words", async ({ page }) => {
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Reviewer on #2020: micromark takes "$5 **each** or $" as one span before the price rule refuses it; read back as
+// one piece of text, the first save wrote the bold as "\*\*each\*\*". The words between two prices keep their
+// Markdown, in the editor and through a save.
+test("bold_between_two_prices_stays_bold_through_a_save", async ({ page }) => {
+  const watched = watch(page);
+  const word = `between${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} costs $5 **each** or $10`);
+  await expect(editor.locator("strong")).toHaveText("each");
+  await expect(editor.locator("[data-math-inline]")).toHaveCount(0);
+  await page.keyboard.type(" now");
+  expect(await markdownOf(page, card)).toBe(`${word} costs \\$5 **each** or \\$10 now`);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 test("the_block_menu_adds_a_math_block_and_the_bar_makes_words_a_formula", async ({ page }) => {
   const watched = watch(page);
   const word = `menu${Date.now()}`;
