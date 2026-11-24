@@ -7,9 +7,10 @@ import { PUBLIC_PAGE_CACHE, type ShellData } from "../lib/shell.ts";
 
 const SHELL: ShellData = { kind: "core", active: "home", hiddenHeading: "Home" };
 
-// A full load of this page ships no script. The page says so itself (book P1.22j), so its answer does not follow the
-// root layout's default; the step that switches it on removes the line.
-export const csr = false;
+// Home runs SvelteKit's client (ADR 0116; book P1.22g). The page says so itself (book P1.22j); the server still draws
+// the whole page, so it reads the same with script off (kit docs, page options:
+// https://svelte.dev/docs/kit/page-options#csr, kit 3.2.0).
+export const csr = true;
 
 export const load: Load = ({ setHeaders }) => {
   setHeaders({ "cache-control": PUBLIC_PAGE_CACHE });
