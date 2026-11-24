@@ -33,10 +33,50 @@ export function writeFormulaRun(
  * pipe (GFM 0.29, "Tables (extension)"), and mdast-util-gfm-table 2.0.1 escapes pipes only in inline code (lib/index.js
  * inlineCodeWithTable), so in a cell this keeps the formula and the cells after it. `\|` (TeX's double bar) is no
  * cell's end and stays as it is, and so does `\\`, a line break: a backslash and the character after it are one.
+ * `\verb` shows what it holds as written, so a pipe there is written as a typewriter `\textbar` between two `\verb`s,
+ * and a `\verb` delimited by pipes gets another delimiter (verbAsTex).
  */
 export function pipesAsTex(tex: string): string {
-  return tex.replace(/\\[\s\S]|\|/g, (found: string, at: number) => {
+  return tex.replace(VERB_OR_PIPE, (found: string, ...groups: (string | number | undefined)[]) => {
+    const [starred, starredBody, plain, plainBody, at] = groups;
+    const delimiter = starred ?? plain;
+    const body = starredBody ?? plainBody;
+    if (typeof delimiter === "string" && typeof body === "string") {
+      return verbAsTex(starred === undefined ? "" : "*", delimiter, body, found);
+    }
     if (found !== "|") return found;
-    return /[A-Za-z]/.test(tex[at + 1] ?? "") ? "\\vert " : "\\vert";
+    return /[A-Za-z]/.test(tex[Number(at) + 1] ?? "") ? "\\vert " : "\\vert";
   });
+}
+
+/**
+ * `\verb*` and `\verb` as KaTeX 0.16.47 reads them (src/Lexer.ts tokenRegexString: any one character as the delimiter,
+ * but no letter or star after the unstarred form, then the line up to the same character), tried before the other
+ * backslash pairs as the Lexer does; then a backslash and the character after it; then a bare pipe.
+ */
+const VERB_OR_PIPE = /\\verb(?:\*(.)(.*?)\1|([^*a-zA-Z])(.*?)\3)|\\[\s\S]|\|/g;
+
+/**
+ * One `\verb`'s Markdown in a table cell, showing what it held: its pipes become a typewriter `\textbar` between `\verb`s,
+ * and a pipe delimiter becomes one the piece does not hold. Any character but a letter or a star delimits, and a piece
+ * is shorter than the run from U+00A1 to the surrogates, so one is always free.
+ */
+function verbAsTex(star: string, delimiter: string, body: string, found: string): string {
+  if (delimiter !== "|" && !body.includes("|")) return found;
+  const pieces = body.split("|").map((piece) => {
+    if (piece === "") return "";
+    return `\\verb${star}${delimiter === "|" ? delimited(piece) : `${delimiter}${piece}${delimiter}`}`;
+  });
+  return pieces.join("\\texttt{\\textbar}");
+}
+
+function delimited(piece: string): string {
+  let code = 0xa1;
+  const candidates = [..."!+=/;:@~^,.?'\"#&-_"];
+  let free = candidates.find((char) => !piece.includes(char));
+  while (free === undefined) {
+    const char = String.fromCharCode(code++);
+    if (!piece.includes(char)) free = char;
+  }
+  return `${free}${piece}${free}`;
 }
