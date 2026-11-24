@@ -147,9 +147,12 @@ for (const viewport of [
       await press(page, OWN_PAGE.path);
       await opener.click();
       await landedOn(page, OWN_PAGE.path);
-      // The menu still opens and still takes the member somewhere after the race.
-      if (!(await accountMenu(page).isVisible())) await opener.click();
-      await accountMenu(page).getByRole("menuitem", { name: "Settings" }).click();
+      // The menu still opens and still takes the member somewhere after the race. The navigation closes a menu it
+      // finds open, with the library's short fade, and Escape closes one the press opened after it; so the menu is
+      // waited out of the document before the next press, never read while it is on its way out.
+      await page.keyboard.press("Escape");
+      await expect(accountMenu(page)).toHaveCount(0);
+      await (await openAccountMenu(page)).getByRole("menuitem", { name: "Settings" }).click();
       await landedOn(page, SETTINGS.path);
       expect(seen).toEqual([]);
     });
