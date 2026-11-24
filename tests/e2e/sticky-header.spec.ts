@@ -7,7 +7,7 @@ import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
 import { phone } from "./phone.ts";
 
-const CORE: PageFixture = { path: "/legal/privacy", route: "/legal/:document", group: "public", expectJs: false };
+const CORE: PageFixture = { path: "/legal/privacy", route: "/legal/:document", group: "public", expectJs: true };
 const SITE: PageFixture = { path: "/signed-out", route: "/signed-out", group: "app", expectJs: true };
 const OWN_PAGE: PageFixture = {
   path: `/${ACCOUNT.did}`,

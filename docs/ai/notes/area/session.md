@@ -35,8 +35,10 @@ bearer-credential store. It moved here from the [[postgres]] package in P2.03c.
   (`older_sessions_only`), or it is a sign-in alert whose own mark (`app.notification.seen_at`, migration 0043, ADR
   0108) a browser signed in before it has set. So one look clears every browser's badge; the browser a sign-in is
   about never sees that alert, so it cannot clear it.
-- Only pages in the CSP group `app` draw the bell's panel (`bellOpens`, +layout.server.ts); elsewhere the bell is a
-  link to `/notifications`, because a page with no script cannot post the mark (ADR 0108 point 3).
+- The server never draws the bell's panel: it draws a link to `/notifications`, and the client opens the panel
+  wherever it runs (+layout.svelte `bellOpens`; P1.22g, ADR 0116 points 8 and 9). The shell's data carries the entries
+  only on a route whose page runs the client (`runsClient`, policy.ts); a `client: false` route gets
+  `{ state: "count", count }` (`BellView`), because a page with no script cannot post the mark (ADR 0108 point 3).
 - It never imports the driver or [[postgres]]: the composition root in [[web]] passes postgres's `withClient` over
   the web pool as `withDb`.
 

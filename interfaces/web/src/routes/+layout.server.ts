@@ -10,6 +10,7 @@ import { shellAccount } from "../lib/server/account.ts";
 import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
 import { services } from "../lib/server/compose.ts";
 import { bellView } from "../lib/server/notifications.ts";
+import { runsClient } from "../lib/server/policy.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { config } from "../lib/server/runtime.ts";
 import { themeFromCookies } from "../lib/server/theme.ts";
@@ -45,12 +46,12 @@ export const load: ServerLoad = async (event) => {
   // shows so its dismiss records that one and no newer.
   const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
   // The bell (P2.27): the newest few and their count, brought by the session read on every page a member opens,
-  // so it is current with no script, no polling and no statement of its own. Undefined for a visitor.
-  const notifications = locals.did === undefined ? undefined : await bellView(event);
-  // Whether the bell opens its panel: only a page that runs script can mark what the panel showed (ADR 0085). Every
-  // other page (home, a profile, the legal pages, an error page) draws the bell as a link to /notifications, whose
-  // visit marks it (ADR 0108 point 3).
-  const bellOpens = route.id !== null && policyOf(route.id)?.group === "app";
+  // so it is current with no script, no polling and no statement of its own. Undefined for a visitor. The server
+  // draws the bell as a link to /notifications on every page, and the client opens the panel wherever it runs (ADR
+  // 0116 points 8 and 9), so the entries go only to a route whose page runs the client; an address no route matches
+  // is one (its page is the error page). A route that says `client: false` gets the count alone, its own error page
+  // too: this load cannot know that the page's load will fail, and there the bell stays the link.
+  const notifications = locals.did === undefined ? undefined : await bellView(event, runsClient(policyOf(route.id)));
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
   const siteNoindex = config.SEARCH_LISTING !== "on";
   return {
@@ -60,7 +61,6 @@ export const load: ServerLoad = async (event) => {
     theme,
     privacyNotice,
     notifications,
-    bellOpens,
     siteNoindex,
   };
 };
