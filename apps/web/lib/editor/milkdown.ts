@@ -32,6 +32,7 @@ import { type Command, type EditorState, Plugin, Selection, TextSelection } from
 import type { EditorView } from "@milkdown/prose/view";
 import { $prose, $remark, getMarkdown } from "@milkdown/utils";
 import { codeBlockView } from "./code-block.ts";
+import type { CodeColourLimits } from "./code-colours.ts";
 import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, startLine } from "./place.ts";
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
@@ -221,6 +222,8 @@ export type MountOptions = {
   readonly menus?: Omit<MenusOptions, "isOn">;
   /** Where to draw the table handles, if the editor has them (the in-place editor). */
   readonly tables?: TableOptions;
+  /** The page's code colouring limits (cardEditLimits codeColours); without them code blocks stay plain. */
+  readonly codeColours?: CodeColourLimits;
 };
 
 // The page's parser (apps/web/lib/profile/parse.ts) shows a quote as paragraphs with line breaks, a list item as one
@@ -623,7 +626,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     .use(dropLine)
     .use(gapCaret)
     .use(enterKeys)
-    .use(codeBlockView)
+    .use(codeBlockView(options.codeColours))
     .create();
   return {
     run: (command) =>
