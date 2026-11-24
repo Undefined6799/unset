@@ -17,6 +17,7 @@ jscpd-report/
 /tests/e2e/report.json
 /test-results/
 /playwright-report/
+/blob-report/
 /.lighthouseci/
 /pa11y-results.json
 /e2e-prod.log
