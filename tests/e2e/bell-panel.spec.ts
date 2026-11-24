@@ -5,6 +5,7 @@
 // (nojs.spec.ts), a press follows the link, whose visit marks the list. tests/integration/web/app/notifications.test.ts
 // holds what the server draws and sends, and what the mark does.
 import { expect, type Page, test } from "@playwright/test";
+import { BELL_PANEL, stockPanel } from "./navbar.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 import { BELL_SIZE, INDEXED, type PageFixture, PROD_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -27,7 +28,8 @@ const as = (member: PageFixture["member"], path: string): PageFixture => ({
   ...(member === undefined ? {} : { member }),
 });
 
-const panel = (page: Page) => page.locator("#notifications-menu");
+// With script the bell's panel is the stock Popover, a dialog named by its title (book P1.22m, navbar-panels.spec.ts).
+const panel = (page: Page) => stockPanel(page, BELL_PANEL);
 const rows = (page: Page) => panel(page).locator('a[href^="/notifications?n="]');
 
 for (const place of PLACES) {
@@ -108,7 +110,9 @@ test.describe("on a phone", () => {
     await expect(page.locator('#actions-menu a[href="/notifications"]')).toHaveCount(0);
     await page.locator('header button[popovertarget="actions-menu"]').tap();
     await row.tap();
-    await expect(panel(page)).toBeVisible();
-    await expect(rows(page).first()).toBeVisible();
+    // More actions is still a native popover, and its row opens the native panel (book P1.22m part 4 moves both).
+    const native = page.locator("section#notifications-menu");
+    await expect(native).toBeVisible();
+    await expect(native.locator('a[href^="/notifications?n="]').first()).toBeVisible();
   });
 });

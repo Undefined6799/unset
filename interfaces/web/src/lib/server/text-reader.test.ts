@@ -1,7 +1,9 @@
 // The page's Markdown reader (book P1.21k): a parse that would hold the process is stopped at its limit and the card
 // is shown as plain text, and what a read gave is remembered, so a text costs its time once and not on every page
-// load. The times asserted are loose on purpose: the unbounded parses take seconds, the limits are tens of
-// milliseconds, and each bar sits far from both, so a slow machine does not decide a test.
+// load. Two kinds of test, so a slow machine decides none. What time the reader gives a read, takes from the page and
+// keeps is tested on a clock only the test moves (`onTestClock`), to the millisecond. That the real stop lands is
+// tested in real time, on a task that never ends and on the real parser; those times are loose on purpose: the
+// unbounded parses take seconds, the limits are tens of milliseconds, and each bar sits far from both.
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
@@ -11,10 +13,13 @@ import { createTextReads, readCard, type TextReadLimits, within } from "./text-r
 const LATER = Number.POSITIVE_INFINITY;
 const CEILING = 20_000;
 const repeated = (shape: string) => shape.repeat(Math.ceil(CEILING / shape.length)).slice(0, CEILING);
+// A parser that never ends, for the real stop to stop: it reads the same words over and over. It must call
+// functions, as a parser does, because entering one is where V8 looks for a stop (text-reader.ts has the sources).
+// The empty loop that stood here is looked at only when V8's counter for it runs out, and V8 raises that counter to
+// INT_MAX / 2 while it compiles the loop: the one test that ran then overran its 30 ms by 0.3 to 0.4 s on every
+// local run of this file, and by 2.3 s on a busy CI runner (#2022's code job, 2026-11-24).
 const forever = (): never => {
-  for (;;) {
-    // Never ends by itself.
-  }
+  for (;;) parseReadme("the *same* [words](https://a.example)");
 };
 function timed<T>(run: () => T): { out: T; ms: number } {
   const started = performance.now();
@@ -58,6 +63,39 @@ describe("within", () => {
 const KEPT = { keptBytes: 50_000_000, keptForMs: 600_000 } as const;
 const GENEROUS: TextReadLimits = { textMs: 10_000, pageMs: 10_000, ...KEPT };
 
+/** On the test's clock, a parse that takes this long is one that never ends. */
+const NEVER = Number.POSITIVE_INFINITY;
+
+/**
+ * A reader on the test's own time, so nothing here waits and no machine is too slow for it. `now` is a clock only the
+ * test moves. Parsing `text` takes `takes(text)` of it. The stop holds a parse to its limit on that clock as `within`
+ * does on the real one: the result if the parse ended in time, else stopped with the clock at the limit. `given` is
+ * the limit each parse got, in order, and `parsed` the texts whose parse began.
+ */
+function onTestClock(limits: TextReadLimits, takes: (text: string) => number) {
+  let at = 1_000;
+  const given: number[] = [];
+  const parsed: string[] = [];
+  const reads = createTextReads(
+    limits,
+    (text) => {
+      parsed.push(text);
+      at += takes(text);
+      return parseReadme(text);
+    },
+    () => at,
+    (ms, task) => {
+      given.push(ms);
+      const started = at;
+      const value = task();
+      if (at - started <= ms) return { value };
+      at = started + ms;
+      return { stopped: true };
+    },
+  );
+  return { reads, given, parsed, now: () => at };
+}
+
 describe("one page's reader", () => {
   test("a normal text is read as the parser reads it", () => {
     const text = "# Title\n\nSome **bold** words and a [link](https://a.example).\n\n- one\n- two";
@@ -93,21 +131,16 @@ describe("one page's reader", () => {
     expect(rest.ms).toBeLessThan(100 + 1_000);
   });
 
+  // Each parse takes 30 ms of a page's 50: the first ends in time and leaves 20, the second is stopped at those 20,
+  // and no third begins.
   test("time a read used is taken from the page's limit even when it ended in time", () => {
-    let calls = 0;
-    const slow = (text: string): Block[] => {
-      calls += 1;
-      const until = performance.now() + 30;
-      while (performance.now() < until) {
-        // Works for 30 ms, then ends.
-      }
-      return parseReadme(text);
-    };
-    const read = createTextReads({ textMs: 1_000, pageMs: 50, ...KEPT }, slow).forPage(LATER);
+    const { reads, given, parsed } = onTestClock({ textMs: 1_000, pageMs: 50, ...KEPT }, () => 30);
+    const read = reads.forPage(LATER);
     expect(read("**a**")).toEqual(parseReadme("**a**"));
-    for (let i = 0; i < 10; i += 1) read(`**b${i}**`);
-    expect(calls).toBeLessThanOrEqual(3);
+    expect(read("**b**")).toEqual(plainText("**b**"));
     expect(read("**c**")).toEqual(plainText("**c**"));
+    expect(given).toEqual([50, 20]);
+    expect(parsed).toEqual(["**a**", "**b**"]);
   });
 
   test("no read starts once the request's deadline has passed", () => {
@@ -120,6 +153,20 @@ describe("one page's reader", () => {
     expect(started).toBe(0);
   });
 
+  // The limits allow ten seconds and the request has 30 ms left: the read is given those 30 and no more.
+  test("a read is given what is left to the request's deadline when that comes before the limits", () => {
+    const { reads, given, now } = onTestClock(GENEROUS, () => NEVER);
+    const read = reads.forPage(now() + 30);
+    expect(read("text")).toEqual(plainText("text"));
+    expect(given).toEqual([30]);
+    expect(now()).toBe(1_030);
+    // The deadline has come, so no further read begins.
+    expect(read("more")).toEqual(plainText("more"));
+    expect(given).toEqual([30]);
+  });
+
+  // The same with nothing of the test's own between the reader and the clock: the real stop cuts a parser that never
+  // ends at the request's real deadline, ten seconds before the limits would.
   test("a read is cut at the request's deadline when that comes before the limits", () => {
     const read = createTextReads(GENEROUS, forever).forPage(performance.now() + 30);
     const { out, ms } = timed(() => read("text"));
@@ -195,13 +242,14 @@ describe("what is remembered between page loads", () => {
   });
 
   test("a text stopped at a card's limit is not parsed again on the next page load, and stays plain", () => {
-    const { seen, read } = counted(forever);
-    const reads = createTextReads({ textMs: 20, pageMs: 100, ...KEPT }, read);
+    const { reads, given, parsed, now } = onTestClock({ textMs: 20, pageMs: 100, ...KEPT }, () => NEVER);
     expect(reads.forPage(LATER)("stalls")).toEqual(plainText("stalls"));
-    const again = timed(() => reads.forPage(LATER)("stalls"));
-    expect(again.out).toEqual(plainText("stalls"));
-    expect(seen.calls).toBe(1);
-    expect(again.ms).toBeLessThan(20);
+    expect(now()).toBe(1_020);
+    expect(reads.forPage(LATER)("stalls")).toEqual(plainText("stalls"));
+    // The second load asked for no parse and took no time.
+    expect(given).toEqual([20]);
+    expect(parsed).toEqual(["stalls"]);
+    expect(now()).toBe(1_020);
   });
 
   // The page's real limits and the real parser: the second load of each stalling text runs no parse at all.
@@ -217,22 +265,17 @@ describe("what is remembered between page loads", () => {
   });
 
   // A read cut short by what was left of the page's limit, or by the request's deadline, says nothing about the
-  // text: the next page load reads it, in full.
+  // text: the next page load reads it, in full. Each parse takes 30 ms: "b" gets the 15 the page has left after "a"
+  // and "c" the 10 its request has left.
   test("a text cut short by the page's limit or the request's deadline is read on the next load", () => {
-    const slow = (text: string): Block[] => {
-      const until = performance.now() + 30;
-      while (performance.now() < until) {
-        // Works for 30 ms, then ends.
-      }
-      return parseReadme(text);
-    };
-    const reads = createTextReads({ textMs: 1_000, pageMs: 45, ...KEPT }, slow);
+    const { reads, given, now } = onTestClock({ textMs: 1_000, pageMs: 45, ...KEPT }, () => 30);
     const page = reads.forPage(LATER);
     expect(page("**a**")).toEqual(parseReadme("**a**"));
     expect(page("**b**")).toEqual(plainText("**b**"));
     expect(reads.forPage(LATER)("**b**")).toEqual(parseReadme("**b**"));
-    expect(reads.forPage(performance.now() + 10)("**c**")).toEqual(plainText("**c**"));
+    expect(reads.forPage(now() + 10)("**c**")).toEqual(plainText("**c**"));
     expect(reads.forPage(LATER)("**c**")).toEqual(parseReadme("**c**"));
+    expect(given).toEqual([45, 15, 45, 10, 45]);
   });
 
   // Nothing is kept for ever: a busy moment can stop a text that is merely long, and a text a member deleted should
