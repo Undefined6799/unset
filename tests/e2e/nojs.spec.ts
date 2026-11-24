@@ -169,7 +169,8 @@ test.describe("javascript disabled", () => {
       await expect(panel, id).toBeHidden();
     }
     await expect(page.locator("#core-menu").getByRole("link")).toHaveCount(0);
-    // ADR 0108 point 3: a page with no script cannot mark what a panel showed, so the bell is a link to the page.
+    // ADR 0108 point 3, ADR 0116 point 9: with no script nothing can mark what a panel showed, so the bell is the
+    // server's link to the page.
     await expect(page.locator("header").getByRole("link", { name: "Notifications", exact: true })).toHaveAttribute(
       "href",
       "/notifications",
@@ -179,6 +180,19 @@ test.describe("javascript disabled", () => {
       "href",
       "/legal/privacy",
     );
+  });
+
+  // Book P1.22g (ADR 0116 point 9): the server draws the bell as a link on every page, an app page too (it drew a
+  // panel there until this step, which opened with no script and could mark nothing). The press goes to the page,
+  // whose visit marks the list seen.
+  test("the_bell_is_a_link_to_the_page_on_an_app_page_without_js", async ({ page }) => {
+    await openPage(page, SETTINGS);
+    const bell = page.locator("header").getByRole("link", { name: "Notifications", exact: true });
+    await expect(bell).toHaveAttribute("href", "/notifications");
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
+    await bell.click();
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(page.locator("main")).toBeVisible();
   });
 
   // Alex, 2026-11-18 12:59Z: the footer sits below the first screen, seen only on scrolling, on short pages too. Home
@@ -222,7 +236,7 @@ test.describe("javascript disabled", () => {
       "href",
       "/me",
     );
-    // P2.27, ADR 0108: on a page with no script the bell is a link to the page, which asks a visitor to sign in.
+    // P2.27, ADR 0108: with no script the bell is a link to the page, which asks a visitor to sign in.
     await expect(page.locator("#notifications-menu")).toHaveCount(0);
   });
 

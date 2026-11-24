@@ -8,6 +8,7 @@ import { join, relative } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, test } from "vitest";
 import { startTestSmtp, type TestSmtp } from "../../../support/smtp-server.ts";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+import { inlineScripts, startup, startupData } from "../data-address.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
 const provided = inject("postgres");
@@ -86,16 +87,57 @@ const post = (body: string, options: { server?: RunningWeb; address?: string; or
 const get = (path: string, server = web) => server.fetch(path, { headers: { "x-forwarded-for": clientAddress() } });
 
 describe("the invite-request page", () => {
-  test("invite_request.renders: one email field and the ticks, no script, never indexed", async () => {
+  test("invite_request.renders: one email field and the ticks, only our client, never indexed", async () => {
     const response = await get("/request-invite");
     expect(response.status).toBe(200);
     expect(response.headers.get("x-robots-tag")).toBe("noindex");
     const html = await response.text();
     expect(html).toContain('name="email"');
     expect(html).toContain('name="ageAck"');
-    expect(html).not.toContain("<script");
+    // Book P1.22g: the page runs SvelteKit's client. Its one script is the start-up script (`startup` throws on any
+    // other), and the page's data is the flags and the age the page draws, nothing a visitor sent (rule SE-3).
+    expect(startupData(html, 1)).toEqual({
+      shell: { kind: "core", noindex: true },
+      open: true,
+      signedIn: false,
+      received: false,
+      minAge: expect.any(Number),
+      countryRule: expect.any(Boolean),
+    });
     // The core shell with the app's navigation, not the older site header (staging test 2026-11-21, u7).
     expect(html).toMatch(/<section[^>]*id="core-menu"[^>]*popover="auto"/);
+  });
+
+  // Book P1.22g, Threats. SvelteKit hashes the start-up script it writes, so the policy allows whatever the server put
+  // there. The load reads one thing of the query, whether `sent` is exactly "1", and returns that as a flag (rule
+  // DM-1); a refused post answers with a catalog code in `?error=`, which the browser's own load reads, so nothing a
+  // form or a link's author typed is ever written into the script.
+  test("invite_request.query_is_a_flag: nothing a link says reaches the start-up script", async () => {
+    const plain = await (await get("/request-invite")).text();
+    const values = [
+      "</script><script>alert(1)</script>",
+      "<!--<script>",
+      "javascript:alert(1)",
+      "\u2028x",
+      "true",
+      "11",
+    ];
+    for (const name of ["sent", "error", "email", "next"]) {
+      for (const value of values) {
+        const asked = `/request-invite?${name}=${encodeURIComponent(value)}`;
+        const html = await (await get(asked)).text();
+        expect(startup(html), asked).not.toBeNull();
+        expect(inlineScripts(html), asked).toEqual(inlineScripts(plain));
+        expect(html, asked).not.toContain("<script>alert");
+      }
+    }
+    const sent = await (await get("/request-invite?sent=1")).text();
+    expect(startupData(sent, 1)).toMatchObject({ received: true });
+    expect(inlineScripts(sent)).not.toEqual(inlineScripts(plain));
+    // A refused post gives a code back, never what was typed.
+    const refused = await post(form({ ...ASK, email: '"><script>alert(1)</script>' }));
+    expect(refused.status).toBe(303);
+    expect(refused.headers.get("location")).toBe("/request-invite?error=invite.request_bad_email");
   });
 
   test("invite_request.first_ask: the owner gets one mail naming the address, with it as Reply-To", async () => {

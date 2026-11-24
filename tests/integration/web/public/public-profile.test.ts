@@ -764,7 +764,6 @@ const LIMITED_FIELDS = [
 const MEMBER_SHELL_FIELDS = [
   "account.path",
   "appOpen",
-  "bellOpens",
   "notifications.count",
   "notifications.entries",
   "notifications.more",
@@ -774,7 +773,7 @@ const MEMBER_SHELL_FIELDS = [
   "siteNoindex",
   "theme",
 ];
-/** Each entry of a member's own bell, in place of the empty list. */
+/** Each entry of a member's own bell, in place of the empty list: what the client's panel draws (book P1.22g). */
 const BELL_ENTRY_FIELDS = [
   "notifications.entries[].id",
   "notifications.entries[].reason",
@@ -792,7 +791,6 @@ const VISITOR_SHELL = {
   theme: null,
   privacyNotice: null,
   notifications: undefined,
-  bellOpens: false,
   siteNoindex: true,
 };
 
@@ -848,14 +846,17 @@ describe("the data address (book P1.22h)", () => {
     expect(owner.leaf).toMatchObject({ editHref: `/${WHOLE}` });
     // The shell's part is the viewer's own: their account link, their theme form, their bell. No one else's.
     expect(fieldsOf(owner.layout)).toEqual(MEMBER_SHELL_FIELDS);
-    expect(owner.layout).toMatchObject({ signedIn: true, account: { path: `/${WHOLE}` }, bellOpens: false });
-    expect(member.layout).toMatchObject({ signedIn: true, account: { path: `/${OTHER}` }, bellOpens: false });
+    expect(owner.layout).toMatchObject({ signedIn: true, account: { path: `/${WHOLE}` } });
+    expect(member.layout).toMatchObject({ signedIn: true, account: { path: `/${OTHER}` } });
+    expect(owner.layout).not.toHaveProperty("bellOpens");
     // The owner's shell data holds nothing their page does not draw (the Sign in link's address left the data with
     // book P1.22k; it is worked out where it is drawn).
     expect(undrawn(owner.layout, owner.html, isSwitch)).toEqual([]);
-    // One thing reaches a member that their page does not draw, their own and in this never-stored copy alone: the
-    // bell's entries (the id, reason and time of each of their own notifications). On a page whose bell is a link,
-    // only their count is drawn. They name no one else.
+    // The bell's entries (the id, reason and time of each of the member's own notifications) are what the panel
+    // draws, and the client opens the panel on this page (book P1.22g; tests/e2e/bell-panel.spec.ts holds each entry
+    // to a row of it). The server's markup draws the bell as a link with the count, so there they are the one part
+    // of the data it does not show; a page that runs no client is sent the count alone (notifications.test.ts).
+    // They name no one else, in a copy that is private and never stored.
     const withEntries = MEMBER_SHELL_FIELDS.filter((field) => field !== "notifications.entries");
     expect(fieldsOf(member.layout)).toEqual([...withEntries, ...BELL_ENTRY_FIELDS].sort());
     const beside = undrawn(member.layout, member.html, isSwitch).map((line) => line.split(": ")[0]);
@@ -1014,7 +1015,7 @@ describe("what the browser is sent (book P1.22e, rule SE-3)", () => {
       // The shell's part: a visitor's names no one; a member's is their own account, theme and bell (P1.22g ends the
       // bell entries their page does not draw, pinned in the data address tests above).
       if (cookie === undefined) expect(layout, who).toEqual(VISITOR_SHELL);
-      else expect(startupData(html, 0), who).toMatchObject({ signedIn: true, bellOpens: false });
+      else expect(startupData(html, 0), who).toMatchObject({ signedIn: true });
       for (const text of [html, await data.text()]) {
         for (const word of HIDDEN_WORDS) expect(text, `${who}: ${word}`).not.toContain(word);
       }
