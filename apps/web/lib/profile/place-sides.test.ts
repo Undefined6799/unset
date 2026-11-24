@@ -1,7 +1,7 @@
 // ADR 0110 points 2, 4 and 5: a look's edges are drawn on the table its line fingerprints name, and only there.
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
-import { parseReadme } from "./parse.ts";
+import { parseReadme, sourceLines, topBlocks } from "./parse.ts";
 import { fingerprint, MAX_LOOK_LINES, nameTables, placeSides } from "./place-sides.ts";
 import type { TableEdge } from "./types.ts";
 
@@ -81,5 +81,26 @@ describe("placeSides", () => {
   test("a look for a table that takes more lines than it names does not match: the block must end there", async () => {
     const text = `${TABLE}\n| 5 | 6 |`;
     expect(await edgesOf(text, [{ lines: A, edges: [EDGE] }])).toEqual([undefined]);
+  });
+
+  // ADR 0110 decision 5: the editor places looks on the tables CommonMark with GFM tables reads (topBlocks); the page
+  // also draws `$$` math, which can end a table early or hold one. Such a table takes no look, and the others keep
+  // theirs.
+  test("a table that math ends early or holds takes no look, and the tables after it keep theirs", async () => {
+    const editorLines = (text: string) => {
+      const [table] = topBlocks(text).filter((block) => block.kind === "table");
+      const lines = sourceLines(text).slice((table?.from ?? 1) - 1, table?.to);
+      return lines.filter((_, index) => index !== 1).map((line) => fingerprint(line, sha256));
+    };
+    const ended = `${TABLE}\n$$\nx\n$$`;
+    expect(await edgesOf(ended, [{ lines: editorLines(ended), edges: [EDGE] }])).toEqual([undefined, null]);
+    const held = `$$\n${TABLE}\n$$\n\n${TABLE}`;
+    const second: TableEdge = { ...EDGE, hide: true };
+    expect(await edgesOf(held, [{ lines: A, edges: [second] }])).toEqual([null, [second]]);
+    const both = [
+      { lines: A, edges: [EDGE] },
+      { lines: A, edges: [second] },
+    ];
+    expect(await edgesOf(held, both)).toEqual([null, undefined]);
   });
 });

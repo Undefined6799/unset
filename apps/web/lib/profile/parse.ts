@@ -500,9 +500,10 @@ export function topBlocks(src: string): { readonly kind: string; readonly from: 
 export const sourceLines = (src: string): string[] => normalised(src).split("\n");
 
 /**
- * A top-level table with the lines it is written on, when it is shown whole. The page reads with READ, which makes
- * the same top-level blocks as CommonMark with GFM tables alone (topBlocks, parse.blocks.test.ts), so these are the
- * lines ADR 0110 decision 5 places a look by, read in the same bounded parse as the page (text-reader.ts).
+ * A top-level table with the lines it is written on, when it is shown whole, read in the same bounded parse as the
+ * page (text-reader.ts). The page also draws `$$` math, which topBlocks does not: a table such math ends early or
+ * holds has other lines here than the editor placed its look by, so no look names it (ADR 0110 decision 5, "a
+ * reader may still draw math its own way"), and the fingerprints keep every other table's look in place.
  */
 function placed(node: Flow, shown: Block[]): Block[] {
   const [only] = shown;
