@@ -4,7 +4,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { AXE_ALLOWANCE, expiredAllowances, unallowedViolations } from "./allow.ts";
 import { AXE_TAGS, openPage, pageNoise, watch } from "./observe.ts";
-import { ALL_PAGES, type PageFixture } from "./pages.ts";
+import { ALL_PAGES, JOIN_CODE, type PageFixture } from "./pages.ts";
 import { phone } from "./phone.ts";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -108,6 +108,21 @@ test.describe("javascript disabled", () => {
     await expect(close).toHaveAttribute("href", "/legal/terms");
     await close.click();
     await expect(page).toHaveURL(/\/legal\/terms$/);
+  });
+
+  // Book P1.22l: the join page and the under-age notice run the client now, and with script off they are the same
+  // pages: the code to copy and one plain form, a notice and nothing to press but a link.
+  test("join_page_without_js", async ({ page }) => {
+    await page.goto(`/join?invite=${JOIN_CODE}`);
+    await expect(page.getByLabel("Your invite code")).toHaveValue(JOIN_CODE);
+    await expect(page.locator("form#join")).toHaveAttribute("method", "POST");
+    await expect(page.getByRole("button", { name: "Create account" })).toHaveAttribute("form", "join");
+  });
+
+  test("blocked_notice_without_js", async ({ page }) => {
+    expect((await page.goto("/welcome/blocked"))?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("We can't offer you an account right now");
+    await expect(page.locator("main form")).toHaveCount(0);
   });
 
   // P1.25f, P2.13e, Clean tabs: on a 320px phone the header's menu button opens the drawer and the account button its

@@ -28,6 +28,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "../built-server.ts";
+import { DATA, dataAnswer, inlineScripts, nodeData, startupData } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -741,5 +742,37 @@ describe("verify email", () => {
     const cookies = response.headers.getSetCookie().map((line) => line.split("=")[0]);
     expect(cookies).toContain("__Host-oauth_nonce");
     expect(cookies).toContain("__Host-login_target");
+  });
+});
+
+// Book P1.22l (ADR 0116): the under-age notice runs SvelteKit's client under the app's script policy, as every page a
+// person reads does. It reads nothing of the request but the session, so apart from the reference the appeal link
+// makes anew for each visit (welcome.ts `appeal`), its start-up script is the same whatever a link to it says.
+describe("the blocked page with the client", () => {
+  const withoutReference = (script: string): string => script.replace(/Appeal\+[0-9a-f-]{36}/, "Appeal+");
+
+  test("the_blocked_page_runs_only_our_client_and_its_data_is_what_it_draws", async () => {
+    const response = await get("/welcome/blocked");
+    expect(response.status).toBe(200);
+    const csp = response.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain(`script-src ${ORIGIN}/_app/ 'sha256-`);
+    expect(csp).not.toContain("unsafe-inline");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    const html = await response.text();
+    const drawn = {
+      shell: { kind: "site", noindex: true },
+      appeal: expect.stringMatching(/^mailto:support@unset\.test\?/),
+    };
+    expect(startupData(html, 1)).toEqual(drawn);
+    expect(html).toContain("mailto:support@unset.test?subject=Appeal");
+    expect(nodeData(await dataAnswer(await get(`/welcome/blocked${DATA}`)), 1)).toEqual(drawn);
+    for (const query of [
+      "error=%3C%2Fscript%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E",
+      "next=javascript:alert(1)",
+      "x=%E2%80%A8",
+    ]) {
+      const asked = await (await get(`/welcome/blocked?${query}`)).text();
+      expect(inlineScripts(asked).map(withoutReference), query).toEqual(inlineScripts(html).map(withoutReference));
+    }
   });
 });
