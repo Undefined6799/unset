@@ -24,6 +24,7 @@
 import { createHash } from "node:crypto";
 import { createContext, Script } from "node:vm";
 import { type Block, MAX_CHARS, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
+import { nameTables } from "@unset/apps-web/lib/profile/place-sides.ts";
 
 /**
  * How long reading Markdown may hold the process, and how much of it is remembered (limits.ts TEXT_READ_LIMITS).
@@ -94,6 +95,16 @@ function frozen<T>(value: T): T {
 /** One text's name in what is kept: the parser reads no further than MAX_CHARS, so neither does the name. */
 const keyOf = (text: string): string => createHash("sha256").update(text.slice(0, MAX_CHARS)).digest("base64url");
 
+const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
+
+/**
+ * A card's text as the page draws it: its blocks, each top-level table named by its lines' fingerprints for placing
+ * looks (ADR 0110 point 5). The naming runs here, inside the read's deadline and remembered with it, so a card pays
+ * for it once in `keptForMs` (review of #2028); node:crypto's synchronous hash took 7 to 18 ms for a full card of a
+ * one-column table, where Web Crypto's digest took about 200.
+ */
+export const readCard = (text: string): Block[] => nameTables(text, parseReadme(text), sha256);
+
 /**
  * The process's reader of Text cards. `forPage` gives one page load its reader. `sweep` drops every kept result past
  * its time, asked for again or not, and says how many texts are still kept.
@@ -111,7 +122,7 @@ export type TextReads = {
  */
 export function createTextReads(
   limits: TextReadLimits,
-  read: (text: string) => Block[] = parseReadme,
+  read: (text: string) => Block[] = readCard,
   now: () => number = () => performance.now(),
 ): TextReads {
   // In the order they were last read, oldest first (a Map keeps insertion order).

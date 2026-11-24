@@ -5,7 +5,7 @@
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
-import { createTextReads, type TextReadLimits, within } from "./text-reader.ts";
+import { createTextReads, readCard, type TextReadLimits, within } from "./text-reader.ts";
 
 /** Far past any test's limit, so the request's own deadline decides nothing. */
 const LATER = Number.POSITIVE_INFINITY;
@@ -151,6 +151,19 @@ describe("what is remembered between page loads", () => {
     expect(seen.calls).toBe(1);
   });
 
+  // Review of #2028: a table's lines are hashed to place looks (ADR 0110 point 5) inside the remembered read, so a
+  // full card of a long table pays for its hashing on its first load only.
+  test("the process's reader names each table, and a second page load neither parses nor hashes again", () => {
+    const { seen, read } = counted(readCard);
+    const reads = createTextReads(GENEROUS, read);
+    const text = `| a |\n| - |\n${"| 1 |\n".repeat(999)}`;
+    const [first] = reads.forPage(LATER)(text);
+    expect(first?.kind === "table" && first.name?.split(" ").length).toBe(1_000);
+    expect(reads.forPage(LATER)(text)).toEqual([first]);
+    expect(seen.calls).toBe(1);
+    expect(createTextReads(GENEROUS).forPage(LATER)(text)).toEqual([first]);
+  });
+
   // Every page load that asks gets the one kept copy, so a page that changed it would change it for all.
   test("what a read gave cannot be changed by the page that gets it", () => {
     const reads = createTextReads(GENEROUS);
@@ -161,7 +174,7 @@ describe("what is remembered between page loads", () => {
     expect(all(blocks).length).toBeGreaterThan(10);
     expect(all(blocks).filter((node) => !Object.isFrozen(node))).toEqual([]);
     expect(() => (blocks as Block[]).push({ kind: "rule" })).toThrow(TypeError);
-    expect(reads.forPage(LATER)(text)).toEqual(parseReadme(text));
+    expect(reads.forPage(LATER)(text)).toEqual(readCard(text));
   });
 
   // SvelteKit writes a page's data with devalue, which writes a value it meets twice once and then refers to it

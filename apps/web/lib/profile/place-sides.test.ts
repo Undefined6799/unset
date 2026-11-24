@@ -1,24 +1,49 @@
 // ADR 0110 points 2, 4 and 5: a look's edges are drawn on the table its line fingerprints name, and only there.
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { parseReadme } from "./parse.ts";
-import { fingerprint, placeSides } from "./place-sides.ts";
+import { fingerprint, MAX_LOOK_LINES, nameTables, placeSides } from "./place-sides.ts";
 import type { TableEdge } from "./types.ts";
 
 // SHA-256 over the line without its spaces, first 8 hex characters (node:crypto gave these for "|a|b|" and so on).
 const A = ["5860afe6", "a4f3b853", "85a21f80"];
 const TABLE = "| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |";
 const EDGE: TableEdge = { direction: "vertical", line: 1, cell: 0, hide: false };
+const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 /** For each block of `text`, the edges placed on it: null for a block that is no table. */
-async function edgesOf(text: string, sides: Parameters<typeof placeSides>[2]) {
-  const blocks = parseReadme(text);
-  const placed = await placeSides(text, blocks, sides);
+async function edgesOf(text: string, sides: Parameters<typeof placeSides>[1]) {
+  const blocks = nameTables(text, parseReadme(text), sha256);
+  const placed = placeSides(blocks, sides);
   return blocks.map((block) => (block.kind === "table" ? placed.get(block) : null));
 }
 
 describe("fingerprint", () => {
   test("is the first 8 hex characters of SHA-256 over the line with its spaces and tabs removed", async () => {
-    expect(await fingerprint("| a | b |")).toBe(A[0]);
-    expect(await fingerprint("|\ta\t|b|  ")).toBe(A[0]);
+    expect(fingerprint("| a | b |", sha256)).toBe(A[0]);
+    expect(fingerprint("|\ta\t|b|  ", sha256)).toBe(A[0]);
+  });
+});
+
+// Review of #2028: naming hashes each line, so a table no look can name is never hashed, and a reader that names
+// nothing places nothing.
+describe("nameTables", () => {
+  test("a table with more lines than a look can name is never hashed", () => {
+    const hashed: string[] = [];
+    const counting = (text: string) => {
+      hashed.push(text);
+      return sha256(text);
+    };
+    const long = `| a |\n| - |\n${"| 1 |\n".repeat(MAX_LOOK_LINES)}`;
+    expect(nameTables(long, parseReadme(long), counting).map((block) => "name" in block)).toEqual([false]);
+    expect(hashed).toEqual([]);
+    const most = `| a |\n| - |\n${"| 1 |\n".repeat(MAX_LOOK_LINES - 1)}`;
+    const [named] = nameTables(most, parseReadme(most), counting);
+    expect(named?.kind === "table" && named.name?.split(" ").length).toBe(MAX_LOOK_LINES);
+  });
+
+  test("tables a reader did not name take no look", () => {
+    const placed = placeSides(parseReadme(TABLE), [{ lines: A, edges: [EDGE] }]);
+    expect(placed.size).toBe(0);
   });
 });
 

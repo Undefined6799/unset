@@ -1,8 +1,10 @@
 // What a card shows beside its own words (the profile-card mockup, Alex 2026-11-17): a labelled link names its site,
 // and an email button's address is shown under the buttons.
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import type { CodeColourLimits } from "../editor/code-colours.ts";
 import { MAX_CHARS, parseReadme } from "./parse.ts";
+import { nameTables } from "./place-sides.ts";
 import { contactAction, shownCards, cardViews as viewsWithin } from "./view.ts";
 
 // The numbers interfaces/web limits.ts CODE_COLOUR_LIMITS has today; limits.code.test.ts tests those themselves.
@@ -11,6 +13,10 @@ const readme = (text: string) => ({ kind: "readme", text }) as const;
 /** The page's cards with the parser itself as their reader, as a page with no reading limits would read them. */
 const cardViews = (cards: Parameters<typeof viewsWithin>[0], versions?: ReadonlyMap<string, string>) =>
   viewsWithin(cards, parseReadme, CODE_COLOURS, versions);
+const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
+/** As the page's server reads: tables named for placing looks (text-reader.ts readCard). */
+const namedViews = (cards: Parameters<typeof viewsWithin>[0]) =>
+  viewsWithin(cards, (text) => nameTables(text, parseReadme(text), sha256), CODE_COLOURS);
 
 describe("card views", async () => {
   // ADR 0110 points 4-5, rule SE-3: a look's edges ride on the table it names, and the lines a table was written on
@@ -22,7 +28,7 @@ describe("card views", async () => {
       { lines: ["5860afe6", "a4f3b853"], edges: [edge] },
       { lines: ["00000000"], edges: [edge] },
     ];
-    const [card] = await cardViews([{ key: "k", width: "full", content: { kind: "readme", text, tableSides } }]);
+    const [card] = await namedViews([{ key: "k", width: "full", content: { kind: "readme", text, tableSides } }]);
     const blocks = card?.shown.kind === "readme" ? card.shown.blocks : [];
     expect(blocks.map((block) => (block.kind === "table" ? Object.keys(block).sort() : block.kind))).toEqual([
       ["align", "edges", "head", "kind", "rows"],

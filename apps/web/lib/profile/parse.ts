@@ -59,6 +59,8 @@ export type TableBlock = {
    */
   readonly from?: number;
   readonly to?: number;
+  /** Its lines' fingerprints, joined by spaces, once the page's reader has named it (place-sides.ts nameTables). */
+  readonly name?: string;
 };
 
 /** CommonMark's six heading levels. */

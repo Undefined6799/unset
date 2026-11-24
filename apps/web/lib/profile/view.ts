@@ -21,7 +21,8 @@ import type {
 
 /**
  * Reads a Text card's Markdown into blocks. The page's server passes one that stops a slow parse and keeps what it
- * read (interfaces/web text-reader.ts); parse.ts parseReadme is the parse itself. What it gives may be shared and
+ * read (interfaces/web text-reader.ts), its tables named for placing looks (place-sides.ts nameTables); parse.ts
+ * parseReadme is the parse itself, and a reader that names no table draws no look. What it gives may be shared and
  * frozen, so nothing here changes a block: colouring builds new ones.
  */
 export type TextReader = (text: string) => readonly ParsedBlock[];
@@ -69,7 +70,7 @@ function shownButtons(buttons: Buttons): ShownButton[] {
 /**
  * README blocks as a card shows them: code in colours where its language is known and the page's colouring budget
  * allows, else plain; the language itself is dropped. A table carries the edges placed on it (`edges`, from
- * place-sides.ts) and never the lines it was written on, which only place looks. Every code block and
+ * place-sides.ts) and never the lines it was written on or their names, which only place looks. Every code block and
  * table is a new object and no block is changed.
  */
 export const colourBlocks = (
@@ -96,7 +97,7 @@ async function shownOf(content: CardContent, readText: TextReader, budget: CodeC
   switch (content.kind) {
     case "readme": {
       const parsed = readText(content.text);
-      const blocks = await colourBlocks(parsed, budget, await placeSides(content.text, parsed, content.tableSides));
+      const blocks = await colourBlocks(parsed, budget, placeSides(parsed, content.tableSides));
       return content.tableLines === undefined
         ? { kind: "readme", blocks }
         : { kind: "readme", blocks, tableLines: content.tableLines };
