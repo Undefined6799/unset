@@ -214,8 +214,12 @@ test("the_block_menu_adds_a_math_block_and_the_bar_makes_words_a_formula", async
   await expect(inlineMath).toHaveAttribute("aria-pressed", "true");
   await inlineMath.click();
   await expect(editor.locator("[data-math-inline]")).toHaveCount(0);
-  // The press gave the editor its focus back; prosemirror-view 1.42.9 redraws the selection 20 ms after that
-  // (editHandlers.focus), and a key pressed sooner is undone by it, as cardWithCaret waits.
+  // The press gives the editor its focus back with the TeX selected, but not at once: on a slow runner a key pressed
+  // before that went to the button, and Backspace then took the whole TeX (CI on #2020 at d170e7f saved "star$t c$").
+  // prosemirror-view 1.42.9 also redraws the selection 20 ms after the focus (editHandlers.focus), as cardWithCaret
+  // waits.
+  await expect(editor).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("a+b");
   await page.waitForTimeout(50);
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Backspace");
