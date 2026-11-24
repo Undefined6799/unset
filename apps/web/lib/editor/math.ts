@@ -27,7 +27,7 @@ import { mathToMarkdown } from "mdast-util-math";
 import remarkMath from "remark-math";
 import type { MathBudget, MathNode } from "../profile/math.ts";
 import { between, isInlineMath } from "../profile/math-syntax.ts";
-import { writeFormulaRun } from "./math-write.ts";
+import { pipesAsTex, writeFormulaRun } from "./math-write.ts";
 
 export const MATH_LANGUAGE = "math";
 /** Milkdown's context, as Editor.config hands it over (menus.ts names it the same way). */
@@ -322,13 +322,18 @@ class MathInlineView implements NodeView {
 
 const mathInlineView = $view(mathInlineSchema.node, () => (node, view) => new MathInlineView(node, view));
 
-/** mdast-util-math's own writer of a formula in a line, which writeMath wraps. */
-function inlineMathWriter() {
-  const write = mathToMarkdown().handlers?.inlineMath;
+/**
+ * mdast-util-math's own writer of a formula in a line, which writeMath wraps. Without single dollars it opens with at
+ * least two and still picks a run of dollars the TeX does not hold (lib/index.js inlineMath), so "x$$y" is written
+ * "$$$x$$y$$$" (Codex on #2020: adding one dollar each side to "$x$$y$" let the inner "$$" close it).
+ */
+function inlineMathWriter(singleDollarTextMath: boolean) {
+  const write = mathToMarkdown({ singleDollarTextMath }).handlers?.inlineMath;
   if (write === undefined) throw new Error("mdast-util-math gives no inlineMath writer");
   return write;
 }
-const writeInlineMath = inlineMathWriter();
+const writeInlineMath = inlineMathWriter(true);
+const writeWideInlineMath = inlineMathWriter(false);
 
 /**
  * How math is written back. A code block whose language is "math" is written as `$$`; every other one as Milkdown
@@ -337,8 +342,8 @@ const writeInlineMath = inlineMathWriter();
  * the escapes mdast-util-math asks for, so "costs \$5 " before bold was saved as "costs $5 ", and "\$x\$ " as math.
  * And a formula is written between dollars the page's rule reads as math: mdast-util-math 3.0.0 writes single dollars
  * whatever follows (lib/index.js inlineMath), so "$$x$$5" was saved as "$x$5", which the rule reads as words; a
- * formula the rule would refuse gets one more dollar each side, which it always reads as math. Formulas side by side
- * are written as one (math-write.ts).
+ * formula the rule would refuse is written with at least two dollars, which it always reads as math. Formulas side by
+ * side are written as one, and in a table cell a formula's pipes are written as TeX (math-write.ts).
  */
 export function writeMath(ctx: Ctx) {
   ctx.update(remarkStringifyOptionsCtx, (prev) => {
@@ -351,9 +356,11 @@ export function writeMath(ctx: Ctx) {
         text: (node, parent, state, info) =>
           node.value.includes("$") ? state.safe(node.value, { ...info, encode: [] }) : text(node, parent, state, info),
         inlineMath: (node, parent, state, info) =>
-          writeFormulaRun(node, parent?.children ?? [node], (formula) => {
-            const written = writeInlineMath(formula, parent, state, info);
-            return isInlineMath(written, info.after) ? written : `$${written}$`;
+          writeFormulaRun(node, parent?.children ?? [node], (formula, wide) => {
+            const tex = state.stack.includes("tableCell") ? { ...formula, value: pipesAsTex(formula.value) } : formula;
+            const written = writeInlineMath(tex, parent, state, info);
+            if (!wide && isInlineMath(written, info.after)) return written;
+            return writeWideInlineMath(tex, parent, state, info);
           }),
       },
     };
