@@ -35,12 +35,18 @@ says in its own `+page.ts` whether it runs SvelteKit's client, `csr = true` or `
 layout's `csr = true` decides the error page alone (ADR 0116, P1.22k), so every error page runs the client: an
 unmatched address, and a failed load on any route (kit takes `csr` from the layouts alone there, 3.2.0
 `page/index.js:272-291`, `respond_with_error.js:44-46`). A page that says false also says `client: false` in its
-`policy.ts`, and `gate.test.ts` names each with its reason (since P1.22g: the sign-in, join and welcome pages until
-P1.22l, and three routes nobody reads; home, the legal pages and `/request-invite` run the client). The hook sends SvelteKit's own CSP, narrowed, only when
+`policy.ts`, and `gate.test.ts` names each with its reason (since P1.22l: three routes nobody reads,
+`/login/continue`, `/prefs/theme` and `/privacy-notice/seen`; every page a person reads runs the client). The hook
+sends SvelteKit's own CSP, narrowed, only when
 two things hold: kit's header names a start-up script hash, and the document may run it (the route's own page
 unless `client: false`, or the error page, which the hook knows from `handleError` having run: `locals.erred`).
 That kit sent a header says nothing: it sends one on every page it draws. Refusals, redirects, data addresses and
-files keep the fixed policy. An `app` page without the client still gets kit's hashless policy until P1.22l.
+files keep the fixed policy. An `app` page without the client (the sign-in hop, `/login/continue`) gets the public
+group's fixed policy since P1.22l: styles and fonts, no `script-src`. Before, it kept kit's hashless policy.
+SvelteKit writes a server load's result into the start-up script it hashes, so on a page that runs the client a
+value the request chose is returned only in its parsed shape (`/login`: `next` and `close` as `safeReturnPath`;
+`/join`: the invite as `joinCode`), and `sign-in.test.ts` and `invite.test.ts` read the script with hostile values.
+A route whose load always redirects needs no `+page.svelte` and then says nothing of `csr` (`/welcome`).
 The error page's start-up script holds nothing from the request (ADR 0116 point 6): the root server load returns
 the theme and no path; `+layout.ts` works out the Sign in link's and the theme form's way back from `url`
 (`lib/return-paths.ts`, unchecked there by design: `/login`, `/prefs/theme` and `/privacy-notice/seen` check them
