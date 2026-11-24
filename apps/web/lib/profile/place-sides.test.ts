@@ -103,4 +103,12 @@ describe("placeSides", () => {
     ];
     expect(await edgesOf(held, both)).toEqual([null, undefined]);
   });
+
+  // Codex on #2028: the editor counts the table math holds, so one look for two such tables applies to neither there,
+  // and must not move onto the one the page shows.
+  test("tables are counted as the editor reads them, so a look cannot move onto a table when math hides its own", async () => {
+    const hidden = `$$\n\n${TABLE}\n\n$$\n\n${TABLE}`;
+    expect(topBlocks(hidden).filter((block) => block.kind === "table")).toHaveLength(2);
+    expect(await edgesOf(hidden, [{ lines: A, edges: [EDGE] }])).toEqual([null, undefined]);
+  });
 });
