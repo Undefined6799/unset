@@ -304,4 +304,33 @@ describe("a Text card's table lines", () => {
     const off = stored({ $type: ref("readme"), text: "a", tableStyle: { hideRowLines: false } });
     expect(readCard(key(KEY), off)?.content).toEqual({ kind: "readme", text: "a" });
   });
+
+  // ADR 0110 points 4-5: each look's fingerprints and edges are read; an edge of a direction this version does not
+  // know is dropped (knownValues), and the switches still read as before.
+  test("single cell sides are read into tableSides, an unknown direction dropped and hide false when left out", () => {
+    const tables = [
+      {
+        lines: ["5860afe6", "a4f3b853"],
+        edges: [
+          { direction: "vertical", line: 1, cell: 0 },
+          { direction: "diagonal", line: 0, cell: 0, hide: true },
+          { direction: "horizontal", line: 2, cell: 1, hide: true },
+        ],
+      },
+    ];
+    const value = stored({ $type: ref("readme"), text: "t", tableStyle: { tables } });
+    expect(readCard(key(KEY), value)?.content).toEqual({
+      kind: "readme",
+      text: "t",
+      tableSides: [
+        {
+          lines: ["5860afe6", "a4f3b853"],
+          edges: [
+            { direction: "vertical", line: 1, cell: 0, hide: false },
+            { direction: "horizontal", line: 2, cell: 1, hide: true },
+          ],
+        },
+      ],
+    });
+  });
 });
