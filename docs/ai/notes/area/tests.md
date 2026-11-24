@@ -89,6 +89,15 @@ with the in-place editor, and they sit beside the card's group of controls, not 
 visitors get opens the same page for the same member with script off (`withoutScript` in `text-read.spec.ts`) and
 reads `[data-slot='card']`.
 
+**A reload while the page is still starting is a page error in WebKit (P1.21k, CI on #2013).** SvelteKit's start-up
+awaits the root layout's and the error page's scripts with nothing catching a failure (kit 3.2.0 `client.js`
+`start()`), and WebKit reports a script load that a reload or a navigation cancels as the page error "Importing a
+module script failed". A spec that holds `pageErrors` to none waits for the page to finish starting
+(`waitForLoadState("networkidle")`, as `openOwnPage` in `text-menus.spec.ts`) before it reloads or leaves. The
+Playwright image run with `--cpus=0.5` shows it in two or three repeats. One failed test that leaves a Text card
+behind fails every later test whose locator expects one Text card, and each failure restarts the worker, which
+empties the write pacer (a 24 s wait): a WebKit job can then pass its 30 minutes before any error is printed.
+
 **Members' state in browser specs (P1.22g).** One test server serves a whole project's run, so a spec must leave a
 seeded member as it found them. The "bell" member's entries stay unseen: a spec that opens the bell as that member
 sets the browser offline first, so the mark fails and the count comes back (`bell-panel.spec.ts`,
