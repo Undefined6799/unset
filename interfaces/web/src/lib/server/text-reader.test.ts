@@ -5,6 +5,7 @@
 // tested in real time, on a task that never ends and on the real parser; those times are loose on purpose: the
 // unbounded parses take seconds, the limits are tens of milliseconds, and each bar sits far from both. What a full
 // card costs to parse is measured as this thread's processor time (`processorMs`), not by the clock.
+import { availableParallelism, cpus } from "node:os";
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
@@ -400,6 +401,13 @@ describe("the page's limits", () => {
     expect(parseReadme(text)).not.toEqual(plainText(text));
     const runs = Array.from({ length: 5 }, () => Math.round(processorMs(() => parseReadme(text))));
     expect(Math.min(...runs), `processor ms of five parses: ${runs.join(", ")}`).toBeLessThan(TEXT_READ_LIMITS.textMs);
+    // Measurement for this pull request only, removed before review: what a CI runner's clock and processor say.
+    const clock = Array.from({ length: 5 }, () => Math.round(timed(() => parseReadme(text)).ms));
+    const again = Array.from({ length: 5 }, () => Math.round(processorMs(() => parseReadme(text))));
+    process.stderr.write(
+      `\nSPEED ${_name}: processor ${runs.join(" ")} | clock ${clock.join(" ")} | processor ${again.join(" ")} | ` +
+        `${cpus()[0]?.model} x${availableParallelism()}\n`,
+    );
   });
 
   test("the page's limit holds two full reads, and no page load reads for more than 300 ms", () => {
