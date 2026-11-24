@@ -30,7 +30,7 @@ import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { math } from "micromark-extension-math";
 import { drawMath, type MathBudget, type MathNode, mathBudget } from "./math.ts";
-import { isInlineMath } from "./math-syntax.ts";
+import { between, isInlineMath } from "./math-syntax.ts";
 
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
@@ -242,18 +242,6 @@ function inlines(nodes: readonly Phrasing[], reading: Reading): Inline[] {
 /** Whether math between dollars is math where it stands (math-syntax.ts). */
 const pricesRule = (node: Positioned, reading: Reading): boolean =>
   isInlineMath(written(reading, node), reading.source[node.position?.end.offset ?? 0] ?? "");
-
-/**
- * The text between a refused span's dollars as it was written: micromark-extension-math 3.1.0 drops one space or line
- * ending at each end when both ends have one and there is more (math-text.js resolveMathText), and keeps a line's
- * container marks (a quote's ">") out of the value, so the value with what was dropped put back is that text.
- */
-function between(raw: string, value: string): string {
-  const first = raw[1] ?? "";
-  const last = raw[raw.length - 2] ?? "";
-  const padded = /^[ \n]$/.test(first) && /^[ \n]$/.test(last) && /[^ \n]/.test(value);
-  return padded ? `${first}${value}${last}` : value;
-}
 
 /**
  * Single-dollar math the rule refuses, as the text it is (Codex on #2019): micromark has already taken "$5 **each** or

@@ -11,3 +11,15 @@ export function isInlineMath(raw: string, after: string): boolean {
   if (raw.startsWith("$$")) return true;
   return !/^\$\s/.test(raw) && !/\s\$$/.test(raw) && !/\d/.test(after);
 }
+
+/**
+ * The text between a refused span's dollars as it was written: micromark-extension-math 3.1.0 drops one space or line
+ * ending at each end when both ends have one and there is more (math-text.js resolveMathText), and keeps a line's
+ * container marks (a quote's ">") out of the value, so the value with what was dropped put back is that text.
+ */
+export function between(raw: string, value: string): string {
+  const first = raw[1] ?? "";
+  const last = raw[raw.length - 2] ?? "";
+  const padded = /^[ \n]$/.test(first) && /^[ \n]$/.test(last) && /[^ \n]/.test(value);
+  return padded ? `${first}${value}${last}` : value;
+}
