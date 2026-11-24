@@ -7,7 +7,7 @@
 -- Log out grace: the devices whose door entry this web session last signed in. It only delays (never makes a row
 -- due sooner, never adds or deletes one, never touches a leased row) and keeps the row's DID mark, so a renewal
 -- cannot save the device and it is still ended when the grace runs out. web already may set due_at on any queued row
--- (migration 0052's grant) but reads no door table, so the join to door.browser runs here, as its owner.
+-- (migration 0051's grant) but reads no door table, so the join to door.browser runs here, as its owner.
 -- No new personal data.
 CREATE FUNCTION app.hold_chat_session_end(p_ref text, p_after_s integer) RETURNS integer
   LANGUAGE plpgsql SECURITY DEFINER

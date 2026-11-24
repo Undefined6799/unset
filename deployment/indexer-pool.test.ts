@@ -42,7 +42,7 @@ const DOOR_ROLE = join(DEPLOYMENT, "../infrastructure/postgres/migrations/0045_d
 
 function doorLimit(): number {
   const row = /ALTER ROLE chat_auth LOGIN CONNECTION LIMIT (\d+);/.exec(readFileSync(DOOR_ROLE, "utf8"));
-  if (row?.[1] === undefined) throw new Error("no chat_auth limit in 0044_door_browser.sql");
+  if (row?.[1] === undefined) throw new Error("no chat_auth limit in 0045_door_browser.sql");
   return Number(row[1]);
 }
 

@@ -1,6 +1,6 @@
 -- phase: expand
 -- The erased members' chat accounts become web's queued "deactivate chat account" job (build step 11; ADR 0096
--- decisions 3 and 4). core.erase_did keeps writing app.chat_erasure as its owner (migration 0046's version), with the
+-- decisions 3 and 4). core.erase_did keeps writing app.chat_erasure as its owner (migration 0045's version), with the
 -- chat user and no DID; web claims a due row under a fresh lease, asks chat-admin to deactivate the account (which ends
 -- every session and asks the homeserver to erase it), then deletes the row, or puts it back with a wait. Rows are
 -- never given up: chat cannot be forgotten. The claim reads due rows with no index: one row per erased member, gone
