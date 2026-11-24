@@ -3,6 +3,7 @@
 // scroll-padding use, so the two must stay equal; an anchor scrolls in below the header, not under it; and a dialog
 // still draws over it.
 import { expect, type Page, test } from "@playwright/test";
+import { MAIN_MENU, menuButton } from "./navbar.ts";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -127,7 +128,7 @@ test("a_dialog_draws_over_the_sticky_header", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await page.getByRole("link", { name: "Change picture shape" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  const menu = await page.locator('header button[popovertarget="core-menu"]').boundingBox();
+  const menu = await menuButton(page, MAIN_MENU).boundingBox();
   expect(menu).not.toBeNull();
   const on = await page.evaluate(
     ({ x, y }) => {

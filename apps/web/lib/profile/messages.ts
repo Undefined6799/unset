@@ -20,8 +20,7 @@ export const CARD_TEXT = {
   /** A carousel's buttons, which scroll it by one tile. */
   previous: (title: string) => `Previous in ${title || "Entries"}`,
   next: (title: string) => `Next in ${title || "Entries"}`,
-  /** A code block's button, drawn only with script; the name says what it copies, the button shows "Copy". */
-  copy: "Copy",
+  /** A code block's copy button, drawn only with script: it shows the copy icon, and this is its name. */
   copyCode: "Copy code",
 } as const;
 

@@ -43,6 +43,12 @@ async function openEditor(page: Page, card: Locator) {
   return { dialog, editor };
 }
 
+/** A copy button shows Iconoir's copy icon and no word; its name comes from its label. */
+async function expectCopyIcon(button: Locator) {
+  await expect(button).toHaveText("");
+  await expect(button.locator("svg[aria-hidden='true']")).toHaveCount(1);
+}
+
 /** Deletes the newest Text card, the one this test added. */
 async function deleteNewest(page: Page) {
   const cards = page.getByRole("group", { name: "Text card" });
@@ -261,10 +267,33 @@ test("a_code_block_copies_its_code_with_script_and_draws_no_button_without", asy
   await quiet.context().close();
   const { dialog } = await openEditor(page, card);
   await dialog.getByRole("tab", { name: "Preview" }).click();
+  await expectCopyIcon(dialog.getByRole("button", { name: "Copy code" }));
   await dialog.getByRole("button", { name: "Copy code" }).click();
   expect(await page.evaluate(() => (globalThis as unknown as { copied: string[] }).copied)).toEqual([
     "const a = 1;\n\n<b>x</b>",
   ]);
+  await page.keyboard.press("Escape");
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
+
+// Alex 2026-11-23: "just a copy icon would be fine no?". The editor's code block copies with the same icon and name.
+test("the_editor_code_block_copies_its_code_with_the_copy_icon", async ({ page }) => {
+  const watched = watch(page);
+  await page.addInitScript(() => {
+    const g = globalThis as unknown as { copied: string[]; navigator: { clipboard: unknown } };
+    g.copied = [];
+    Object.defineProperty(g.navigator, "clipboard", {
+      value: { writeText: async (text: string) => void g.copied.push(text) },
+    });
+  });
+  const card = await openStored(page, "```js\nconst b = 2;\n```");
+  const { dialog } = await openEditor(page, card);
+  const copy = dialog.getByRole("button", { name: "Copy code" });
+  await expectCopyIcon(copy);
+  await copy.click();
+  expect(await page.evaluate(() => (globalThis as unknown as { copied: string[] }).copied)).toEqual(["const b = 2;"]);
   await page.keyboard.press("Escape");
   expect(watched.pageErrors).toEqual([]);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
