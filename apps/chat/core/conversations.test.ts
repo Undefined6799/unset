@@ -12,6 +12,7 @@ import {
   composerOnOpen,
   draftAfterSend,
   isQuickReaction,
+  keepStartedText,
   type Message,
   nameOf,
   parseChatId,
@@ -193,6 +194,22 @@ describe("composerAfterStart", () => {
     expect(composerAfterStart("hello", "hello, and more", true)).toEqual({ text: "hello, and more", failed: false });
     expect(composerAfterStart("hello", "hello", false)).toEqual({ text: "hello", failed: true });
     expect(composerAfterStart("hello", "hello again", false)).toEqual({ text: "hello again", failed: true });
+  });
+});
+
+describe("keepStartedText", () => {
+  const a = "!a:unset.test" as ConversationId;
+  test("chat.started_text_kept: what a first send left is kept for its conversation", () => {
+    const unsent = new Map<ConversationId, string>();
+    keepStartedText(unsent, a, "hello");
+    expect(unsent.get(a)).toBe("hello");
+    keepStartedText(unsent, a, "");
+    expect(unsent.get(a)).toBe("hello");
+  });
+  test("chat.started_text_never_overwrites: a draft typed since, in a composer opened meanwhile, stays", () => {
+    const unsent = new Map<ConversationId, string>([[a, "typed while the first send went"]]);
+    keepStartedText(unsent, a, "hello");
+    expect(unsent.get(a)).toBe("typed while the first send went");
   });
 });
 

@@ -149,6 +149,15 @@ export function composerAfterStart(sent: string, now: string, delivered: boolean
 }
 
 /**
+ * Keeps what a conversation's first send left for its composer, unless that conversation already has text kept: a
+ * composer opened on it while the send went (sync shows the room before the start returns) owns the newer draft
+ * (Codex review on b584811b).
+ */
+export function keepStartedText(unsent: Map<ConversationId, string>, id: ConversationId, text: string): void {
+  if (text !== "" && !unsent.has(id)) unsent.set(id, text);
+}
+
+/**
  * What a conversation's composer opens with: what was typed in it and not sent, else, for the conversation a first
  * message just started, what that left. Only ever that conversation's own text, so nothing typed for one person opens
  * in another's (Codex review on dedb86d1).

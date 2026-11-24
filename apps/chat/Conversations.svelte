@@ -24,6 +24,7 @@ import {
   composerAfterStart,
   composerOnOpen,
   type Conversation as Item,
+  keepStartedText,
   startTarget,
 } from "./core/conversations.ts";
 import type { DockMode } from "./core/dock.ts";
@@ -115,7 +116,7 @@ async function startDraft(event: SubmitEvent) {
   problem = null;
   carried = { id: started.id, ...composerAfterStart(sent, first, started.sent) };
   // Kept by the page too: a Message link during the start remounts this list, and its `carried` goes with it.
-  if (carried.text !== "") unsent?.set(started.id, carried.text);
+  if (unsent !== undefined) keepStartedText(unsent, started.id, carried.text);
   first = "";
   draft = null;
   open = started.id;
