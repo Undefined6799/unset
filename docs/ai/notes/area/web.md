@@ -107,7 +107,14 @@ tree to the card's `Block` types. micromark is not bounded: its readme's Securit
 it, and at 20,000 characters `_*` repeated takes about 5 s and `+ ` repeated about 10 s before the stack runs out. So
 no server code calls `parseReadme` bare: a page load takes `services().textReads.forPage(deadlineAt)`
 (`lib/server/text-reader.ts`), which stops each read with node:vm's `timeout` at `TEXT_READ_LIMITS` (limits.ts), shares
-one budget across the page's cards and shows a stopped card with `plainText`. The process keeps what each read gave
+one budget across the page's cards and shows a stopped card with `plainText`. The stop lands where V8 next looks for
+one: at every function entry (an inlined call is none), but in a loop only when the function's interrupt budget runs
+out, and that budget is INT_MAX / 2 while V8 compiles the function to its top tier (sources in text-reader.ts;
+measured 2026-11-24: an empty loop caught there ran 0.3 to 0.6 s past its limit and 2.3 s on a busy CI runner, the
+real parser at most 22 ms in 1,314 stalled reads). So a test's stand-in for a stalling parser must call into real
+code (text-reader.test.ts `forever`), and what time the reader gives, takes and keeps is tested on a clock the test
+moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. The process
+keeps what each read gave
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
 places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
