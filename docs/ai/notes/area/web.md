@@ -10,7 +10,7 @@ importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-11-23
+checked: 2026-11-24
 ---
 # web
 
@@ -88,6 +88,16 @@ places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader
 Preview, loaded when Preview opens, on the owner's own text; the Preview's code colouring (`colourBlocks`, with CodeMirror's language list) is loaded there too, never by a static import in a component: one in `card-editor.svelte` put 90 KiB gzip on the owner's first load (257.8 against 167.7, measured at the merge of #2008). The reader's blocks are kept and frozen (text-reader.ts), so `colourBlocks` builds new code blocks and changes none. Vite's alias for `decode-named-character-reference`
 (`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
 without it neither the Preview nor Milkdown reads a text holding `&amp;`.
+
+**Math (P1.21v, 2026-11-24).** The page's own parse also reads micromark-extension-math 3.1.0 (`$…$`, `$$…$$`) and
+draws a ```` ```math ```` block as a formula; `topBlocks` reads without it, so looks are still placed on CommonMark's
+blocks (ADR 0110 decision 5). `math.ts` draws a formula with KaTeX 0.16.47 (`output: "mathml"`, `trust: false`,
+`maxExpand` 100, `maxSize` 10), reads KaTeX's string back with parse5 8.0.1 and keeps only allowlisted MathML
+elements and attributes with plain values (no colour, style, link or picture); `readme.svelte` draws the tree with
+`svelte:element` and an `xmlns`, which svelte 5.57.3 takes as the element's namespace. A string from KaTeX never
+reaches the page. A formula KaTeX cannot read, longer than 2,000 characters, or past the card's 200 formulas or
+20,000 elements is its source. The math runs inside the same read (and deadline) as the Markdown; in the browser it
+is in the Preview's chunk only (about 119 KiB gzip with the reader), never on a first load.
 
 **Rules worth knowing.**
 - Only server files (`*.server.ts`, `+server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or

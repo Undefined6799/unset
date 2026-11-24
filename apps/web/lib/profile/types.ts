@@ -3,6 +3,7 @@
 // every address already through safeHref, so a component never decides whether a link is safe.
 
 import type { CodeColourLimits, CodeRun } from "../editor/code-colours.ts";
+import type { MathNode } from "./math.ts";
 
 export type CardLayout = "list" | "carousel" | "grid";
 /** How the avatar is cropped (sh.unset.profile avatarShape). */
@@ -47,6 +48,8 @@ export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "break" }
+  /** A formula drawn in the line as MathML (math.ts); `tex` is its source. */
+  | { readonly kind: "math"; readonly tex: string; readonly tree: MathNode }
   | { readonly kind: "strong"; readonly children: readonly Inline[] }
   | { readonly kind: "em"; readonly children: readonly Inline[] }
   | { readonly kind: "del"; readonly children: readonly Inline[] }
@@ -64,6 +67,8 @@ export type Block =
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "code"; readonly runs: readonly CodeRun[] }
   | { readonly kind: "rule" }
+  /** A display formula as MathML (math.ts). */
+  | { readonly kind: "math"; readonly tree: MathNode }
   | {
       readonly kind: "table";
       readonly align: readonly ("left" | "center" | "right" | null)[];

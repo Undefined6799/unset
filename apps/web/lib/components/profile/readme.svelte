@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
+import type { MathNode } from "../../profile/math.ts";
 import type { Block, Inline, ListBlock } from "../../profile/types.ts";
 
 let {
@@ -19,11 +20,15 @@ let {
 /** The block's code as stored: a coloured block carries only its runs, which join back to it (code-colours.ts). */
 const codeText = (block: { readonly text: string } | { readonly runs: readonly { readonly text: string }[] }) =>
   "runs" in block ? block.runs.map((run) => run.text).join("") : block.text;
+// A formula's elements are MathML, so each is made in that namespace (svelte 5.57.3 svelte-element.js takes it from
+// the xmlns attribute); its names and attributes are math.ts's allowlists, and every string in it is a text node.
+const MATHML = "http://www.w3.org/1998/Math/MathML";
 /** A task's words as plain text, its checkbox's accessible name (WCAG 2.2 SC 4.1.2). */
 const plainText = (nodes: readonly Inline[]): string =>
   nodes
     .map((node) => {
       if (node.kind === "text" || node.kind === "code") return node.text;
+      if (node.kind === "math") return node.tex;
       if (node.kind === "break") return " ";
       return plainText(node.children);
     })
@@ -45,9 +50,15 @@ const HEADING_LOOK = [
 ] as const;
 </script>
 
+{#snippet mathml(node: MathNode)}
+  <svelte:element this={node.name} xmlns={MATHML} {...node.attrs}
+    >{#each node.children as child, k (k)}{#if typeof child === "string"}{child}{:else}{@render mathml(child)}{/if}{/each}</svelte:element
+  >
+{/snippet}
+
 {#snippet inline(nodes: readonly Inline[])}
   {#each nodes as node, i (i)}
-    {#if node.kind === "text"}{node.text}{:else if node.kind === "break"}<br />{:else if node.kind === "code"}<code class="rounded-sm bg-muted px-1 font-mono text-sm">{node.text}</code
+    {#if node.kind === "text"}{node.text}{:else if node.kind === "break"}<br />{:else if node.kind === "math"}{@render mathml(node.tree)}{:else if node.kind === "code"}<code class="rounded-sm bg-muted px-1 font-mono text-sm">{node.text}</code
       >{:else if node.kind === "strong"}<strong>{@render inline(node.children)}</strong
       >{:else if node.kind === "em"}<em>{@render inline(node.children)}</em
       >{:else if node.kind === "del"}<del>{@render inline(node.children)}</del
@@ -124,6 +135,9 @@ const HEADING_LOOK = [
           {/if}
         </table>
       </div>
+    {:else if block.kind === "math"}
+      <!-- A wide formula scrolls inside the card rather than widening it. -->
+      <div class="overflow-x-auto">{@render mathml(block.tree)}</div>
     {:else if block.kind === "rule"}
       <hr />
     {/if}

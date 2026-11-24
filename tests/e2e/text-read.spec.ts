@@ -3,7 +3,7 @@
 // more; and reading in the browser (the editor, and its Preview tab) keeps the Trusted Types rule. The owner's own page
 // shows a Text card in the editor, so the card as the server draws it is read with script off. The cards added are
 // deleted again.
-import { type Browser, expect, type Page, test } from "@playwright/test";
+import { type Browser, expect, type Locator, type Page, test } from "@playwright/test";
 import { addCard, OWN_PAGE, paceWrites, postedText, spendsWrites, writeText } from "./cards.ts";
 import { openPage, pageNoise, watch } from "./observe.ts";
 
@@ -122,6 +122,43 @@ test("the_preview_shows_code_in_the_pages_colours", async ({ page }) => {
   const code = dialog.getByRole("tabpanel", { name: "Preview" }).locator("pre code");
   await expect(code).toHaveText("const a = 1;");
   await expect(code.locator(".code-keyword")).toHaveText("const");
+  await page.keyboard.press("Escape");
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteNewest(page);
+});
+
+const MATHML = "http://www.w3.org/1998/Math/MathML";
+
+/** The namespace of every formula element under `where`. */
+const mathNamespaces = (where: Locator) =>
+  where
+    .locator("math, mrow, mfrac, msup")
+    .evaluateAll((all) => all.map((el) => (el as unknown as { namespaceURI: string }).namespaceURI));
+
+// Math in GitHub's syntax is drawn by the server as MathML (apps/web/lib/profile/math.ts), which the browser draws
+// itself: no math script, stylesheet or font, nothing the CSP refuses. A colour or a link written in a formula is
+// dropped. The Preview reads it in the browser the same way.
+test("math_is_drawn_as_mathml_by_the_server_and_in_the_preview", async ({ browser, page }) => {
+  const watched = watch(page);
+  await addStored(page, "so $x^2$ grows\n\n$$\n\\frac{a}{b}\n$$\n\n$\\color{red}{y}\\href{https://example.com}{z}$");
+  const quiet = await withoutScript(browser, page);
+  const card = textCards(quiet).last();
+  await expect(card.locator("math")).toHaveCount(3);
+  expect(new Set(await mathNamespaces(card))).toEqual(new Set([MATHML]));
+  // Drawn as a fraction, one part over the other, so taller than the line of text above it.
+  const fraction = await card.locator("mfrac").boundingBox();
+  const line = await card.locator("p").first().boundingBox();
+  expect(fraction?.height ?? 0).toBeGreaterThan(line?.height ?? Number.POSITIVE_INFINITY);
+  await expect(card.locator("math [mathcolor], math [style], math [href], math a")).toHaveCount(0);
+  await quiet.context().close();
+  await textCards(page).last().getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("tab", { name: "Preview" }).click();
+  // Made by the client this time (svelte:element), each element in the MathML namespace all the same.
+  const preview = dialog.getByRole("tabpanel", { name: "Preview" });
+  await expect(preview.locator("math")).toHaveCount(3);
+  expect(new Set(await mathNamespaces(preview))).toEqual(new Set([MATHML]));
   await page.keyboard.press("Escape");
   expect(watched.pageErrors).toEqual([]);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });

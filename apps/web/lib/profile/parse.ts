@@ -3,7 +3,10 @@
 // parts of GitHub Flavored Markdown (https://github.github.com/gfm/), as ADR 0086 lets readers extend CommonMark:
 // tables, strikethrough, task list items and bare addresses. Tables are the only one that changes how the text is cut
 // into blocks, so the page's top-level blocks are those of CommonMark plus GFM tables, which is the count a style is
-// anchored by (ADR 0110). No footnotes and no math: either would move that count.
+// anchored by (ADR 0110). No footnotes. Math in GitHub's syntax is drawn (math.ts), so the page's own parse also reads
+// micromark-extension-math 3.1.0, which makes a `$$` block one block where CommonMark makes paragraphs; looks are
+// placed by `topBlocks`, which reads without it, as ADR 0110 decision 5 says ("a reader may still draw math its own
+// way").
 //
 // The tree is then mapped to the blocks readme.svelte draws as escaped elements. micromark's own HTML is never used:
 // raw HTML in the text is an `html` node, shown here as the text it is. A link is kept only when safeHref accepts it
@@ -20,15 +23,20 @@ import { gfmAutolinkLiteralFromMarkdown } from "mdast-util-gfm-autolink-literal"
 import { gfmStrikethroughFromMarkdown } from "mdast-util-gfm-strikethrough";
 import { gfmTableFromMarkdown } from "mdast-util-gfm-table";
 import { gfmTaskListItemFromMarkdown } from "mdast-util-gfm-task-list-item";
+import { mathFromMarkdown } from "mdast-util-math";
 import { gfmAutolinkLiteral } from "micromark-extension-gfm-autolink-literal";
 import { gfmStrikethrough } from "micromark-extension-gfm-strikethrough";
 import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
+import { math } from "micromark-extension-math";
+import { drawMath, type MathBudget, type MathNode, mathBudget } from "./math.ts";
 
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "break" }
+  /** A formula drawn in the line; `tex` is its source, a checkbox's name when it is a task's words. */
+  | { readonly kind: "math"; readonly tex: string; readonly tree: MathNode }
   | { readonly kind: "strong" | "em" | "del"; readonly children: readonly Inline[] }
   | { readonly kind: "link"; readonly href: SafeHref; readonly children: readonly Inline[] };
 
@@ -39,6 +47,8 @@ export type Block =
   | ListBlock
   | CodeBlock
   | { readonly kind: "rule" }
+  /** A formula on lines of its own, drawn as a display formula. */
+  | { readonly kind: "math"; readonly tree: MathNode }
   | TableBlock;
 
 /**
@@ -103,6 +113,12 @@ const READ = {
   ],
 };
 
+/** What the page draws from: READ, and math in GitHub's syntax, single dollars included (the extension's default). */
+const DRAW = {
+  extensions: [...READ.extensions, math()],
+  mdastExtensions: [...READ.mdastExtensions, mathFromMarkdown()],
+};
+
 type Root = ReturnType<typeof fromMarkdown>;
 type Flow = Root["children"][number];
 type Of<Node extends { type: string }, Type extends Node["type"]> = Extract<Node, { type: Type }>;
@@ -113,8 +129,16 @@ type MdTable = Of<Flow, "table">;
 type Offset = { readonly offset?: number | undefined };
 type Positioned = { readonly position?: { readonly start: Offset; readonly end: Offset } | undefined };
 
-/** One card's text as it is read: the source, its link reference definitions, and what is left of its cell guard. */
-type Reading = { readonly source: string; readonly definitions: ReadonlyMap<string, string>; cells: number };
+/**
+ * One card's text as it is read: the source, its link reference definitions, and what is left of its cell guard and
+ * of its math budget.
+ */
+type Reading = {
+  readonly source: string;
+  readonly definitions: ReadonlyMap<string, string>;
+  cells: number;
+  readonly math: MathBudget;
+};
 
 // ---- Inline ------------------------------------------------------------------------------------------------------
 
@@ -180,6 +204,8 @@ function inline(node: Phrasing, reading: Reading): Inline[] {
       return [{ kind: "code", text: shown(node.value) }];
     case "break":
       return [{ kind: "break" }];
+    case "inlineMath":
+      return formulaInline(node.value, reading) ?? [{ kind: "text", text: written(reading, node) }];
     case "emphasis":
       return [{ kind: "em", children: inlines(node.children, reading) }];
     case "strong":
@@ -206,7 +232,16 @@ function inlines(nodes: readonly Phrasing[], reading: Reading): Inline[] {
   return out;
 }
 
+/** A formula in a line, or null when math.ts cannot draw it. */
+function formulaInline(tex: string, reading: Reading): Inline[] | null {
+  const tree = drawMath(tex, false, reading.math);
+  return tree === null ? null : [{ kind: "math", tex, tree }];
+}
+
 // ---- Blocks ------------------------------------------------------------------------------------------------------
+
+/** GitHub draws a fenced code block whose language is `math` as a formula. */
+const isMathFence = (node: Of<Flow, "code">) => node.lang === "math";
 
 /**
  * The paragraph Milkdown's preset-commonmark 7.23.0 wrote for an empty line before P1.21s (paragraph.ts
@@ -224,6 +259,10 @@ function lines(rows: readonly (readonly Inline[])[]): Inline[] {
   return out;
 }
 
+/** Code as lines of inline code. */
+const codeLines = (value: string): Inline[] =>
+  lines(value.split("\n").map((line): Inline[] => [{ kind: "code", text: shown(line) }]));
+
 /**
  * What a quote or a list item shows of a block inside it. Both hold only lines of text (the view types, which
  * readme.svelte draws), so each paragraph, heading and table cell is its words, and code and raw HTML are their text,
@@ -234,8 +273,10 @@ function textLines(node: Flow, reading: Reading): Inline[][] {
     case "paragraph":
     case "heading":
       return [inlines(node.children, reading)];
+    case "math":
+      return [formulaInline(node.value, reading) ?? codeLines(node.value)];
     case "code":
-      return [lines(node.value.split("\n").map((line): Inline[] => [{ kind: "code", text: shown(line) }]))];
+      return [(isMathFence(node) ? formulaInline(node.value, reading) : null) ?? codeLines(node.value)];
     case "html":
       return isEmptyLineMark(node.value) ? [] : [[{ kind: "text", text: shown(node.value) }]];
     case "blockquote":
@@ -303,6 +344,12 @@ function table(node: MdTable, reading: Reading): Block[] {
   return left === undefined ? [block] : [block, ...paragraphOf(written(reading, left, node))];
 }
 
+/** A display formula, or its source as plain code when math.ts cannot draw it. */
+function formulaBlock(tex: string, reading: Reading): Block {
+  const tree = drawMath(tex, true, reading.math);
+  return tree === null ? { kind: "code", text: shown(tex), language: "" } : { kind: "math", tree };
+}
+
 function block(node: Flow, reading: Reading): Block[] {
   switch (node.type) {
     case "heading":
@@ -311,7 +358,10 @@ function block(node: Flow, reading: Reading): Block[] {
       return [{ kind: "paragraph", children: inlines(node.children, reading) }];
     case "thematicBreak":
       return [{ kind: "rule" }];
+    case "math":
+      return [formulaBlock(node.value, reading)];
     case "code":
+      if (isMathFence(node)) return [formulaBlock(node.value, reading)];
       return [{ kind: "code", text: shown(node.value), language: node.lang ?? "" }];
     case "blockquote": {
       const paragraphs = node.children.flatMap((child) => textLines(child, reading)).filter((line) => line.length > 0);
@@ -394,8 +444,8 @@ export function topBlocks(src: string): { readonly kind: string; readonly from: 
 export function parseReadme(src: string): Block[] {
   const source = normalised(src);
   try {
-    const root = fromMarkdown(source, READ);
-    const reading: Reading = { source, definitions: definitionsOf(root), cells: MAX_CELLS };
+    const root = fromMarkdown(source, DRAW);
+    const reading: Reading = { source, definitions: definitionsOf(root), cells: MAX_CELLS, math: mathBudget() };
     const blocks: Block[] = [];
     for (const node of root.children) {
       if (blocks.length >= MAX_BLOCKS) break;
