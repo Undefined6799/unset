@@ -11,10 +11,13 @@ import { createTextReads, type TextReadLimits, within } from "./text-reader.ts";
 const LATER = Number.POSITIVE_INFINITY;
 const CEILING = 20_000;
 const repeated = (shape: string) => shape.repeat(Math.ceil(CEILING / shape.length)).slice(0, CEILING);
+// A parser that never ends, for the real stop to stop: it reads the same words over and over. It must call
+// functions, as a parser does, because entering one is where V8 looks for a stop (text-reader.ts has the sources).
+// The empty loop that stood here is looked at only when V8's counter for it runs out, and V8 raises that counter to
+// INT_MAX / 2 while it compiles the loop: the one test that ran then overran its 30 ms by 0.3 to 0.4 s on every
+// local run of this file, and by 2.3 s on a busy CI runner (#2022's code job, 2026-11-24).
 const forever = (): never => {
-  for (;;) {
-    // Never ends by itself.
-  }
+  for (;;) parseReadme("the *same* [words](https://a.example)");
 };
 function timed<T>(run: () => T): { out: T; ms: number } {
   const started = performance.now();
