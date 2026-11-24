@@ -34,7 +34,8 @@
     "local:down": "node deployment/preflight/stack.ts -- down --env local --compose deployment/compose.local.yaml --interpolation-env ../unset-dev-env/dev-public.env"
   },
   "dependencies": {
-    "aws4fetch": "1.0.20"
+    "aws4fetch": "1.0.20",
+    "parse5": "8.0.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
