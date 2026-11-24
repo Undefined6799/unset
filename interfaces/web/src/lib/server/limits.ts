@@ -3,6 +3,7 @@
 // A page names one of these in its policy.ts; a page that needs a new policy adds it here.
 import type { CodeColourLimits } from "@unset/apps-web/lib/editor/code-colours.ts";
 import { definePolicies, type PolicyTable } from "@unset/shared-http";
+import type { TextReadLimits } from "./text-reader.ts";
 
 /**
  * The site-wide page ceiling (ADR 0042; sized for thousands of members by P1.21j, Proposed ADR 0071, from 3000 at once
@@ -82,6 +83,19 @@ export const IMAGE_UPLOADS_IN_FLIGHT = 4;
  * tests/integration/web/review-lanes.test.ts holds the two numbers together.
  */
 export const REVIEW_LANES = 2;
+
+/**
+ * Reading a member's Markdown on the server, inside the page load (P1.21k; text-reader.ts has the measurements): at
+ * most 150 ms for one card's text and 300 ms for all of a page's, past which a card is shown as plain text. A full
+ * card of 20,000 characters reads in about 15 ms as prose and 35 to 60 ms as a dense list or table, so a normal page
+ * reaches neither. What a read gave is kept for ten minutes, so a text is parsed once in that time however often its
+ * page is loaded: at most 50 MB of results by the reader's upper estimate (text-reader.ts `bytesIn`: objects, strings
+ * and the text itself), which is 50 full cards as tables, 75 as dense lists, 600 as one paragraph, and thousands of
+ * ordinary ones. A text stopped at its 150 ms is kept as stopped the same ten
+ * minutes, so text written to stall the parser costs the process 150 ms once in ten minutes, not on every page load,
+ * and a long text stopped in a busy moment comes back by itself.
+ */
+export const TEXT_READ_LIMITS: TextReadLimits = { textMs: 150, pageMs: 300, keptBytes: 50_000_000, keptForMs: 600_000 };
 
 /**
  * Colouring a member's code on the server, inside the page load (P1.21v; review of #2004 at e36de8a; measured in

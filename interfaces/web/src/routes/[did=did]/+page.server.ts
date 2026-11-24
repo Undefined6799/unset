@@ -117,7 +117,8 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? await cardViews(own.cards, CODE_COLOUR_LIMITS, own.versions) : [];
+  const readText = services().textReads.forPage(locals.deadlineAt);
+  const cards = own.kind === "ok" ? await cardViews(own.cards, readText, CODE_COLOUR_LIMITS, own.versions) : [];
   return {
     shell,
     account,

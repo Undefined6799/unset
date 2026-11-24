@@ -1,7 +1,16 @@
-// The README parser's images and nested lists (staging walkthrough 2026-11-18, finding 7). The sweep for slow input
-// is in parse.adversarial.test.ts.
+// The Text card's Markdown as the page reads it (parse.ts; micromark since P1.21k): images and nested lists (staging
+// walkthrough 2026-11-18, finding 7), the CommonMark and GFM cases the page draws, and what the editor writes. Where
+// the hand-written parser before P1.21k was not CommonMark, the test now holds what CommonMark says and names it.
+// How the text is cut into blocks is in parse.blocks.test.ts; slow and hostile text in parse.adversarial.test.ts and,
+// for the page's limits, interfaces/web text-reader.test.ts.
 import { describe, expect, test } from "vitest";
-import { parseInline, parseReadme } from "./parse.ts";
+import { type Inline, MAX_CHARS, parseReadme, plainText } from "./parse.ts";
+
+/** The inline nodes of a text that is one paragraph. */
+function parseInline(src: string): readonly Inline[] {
+  const [block] = parseReadme(src);
+  return block?.kind === "paragraph" ? block.children : [];
+}
 
 const text = (t: string) => ({ kind: "text", text: t });
 const item = (t: string, lists: unknown[] = []) => ({ text: [text(t)], lists });
@@ -53,7 +62,9 @@ describe("parseReadme", () => {
   });
 });
 
-describe("parseReadme, the CommonMark subset (moved from the React card's test, P1.20k)", () => {
+describe("parseReadme, CommonMark (moved from the React card's test, P1.20k)", () => {
+  // CommonMark 0.31.2: a line end inside a paragraph stays a line end in its text (section 6.8, drawn as a space),
+  // and a changed bullet character starts a new list (section 5.3); the parser before P1.21k joined both.
   test("headings, paragraphs, lists, quotes, code and rules", () => {
     const src = [
       "# Hello",
@@ -84,17 +95,11 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
           { kind: "strong", children: [{ kind: "text", text: "small" }] },
           { kind: "text", text: " tools and " },
           { kind: "em", children: [{ kind: "text", text: "write" }] },
-          { kind: "text", text: " about them. Second line." },
+          { kind: "text", text: " about them.\nSecond line." },
         ],
       },
-      {
-        kind: "list",
-        ordered: false,
-        items: [
-          { text: [{ kind: "text", text: "one" }], lists: [] },
-          { text: [{ kind: "text", text: "two" }], lists: [] },
-        ],
-      },
+      { kind: "list", ordered: false, items: [{ text: [{ kind: "text", text: "one" }], lists: [] }] },
+      { kind: "list", ordered: false, items: [{ text: [{ kind: "text", text: "two" }], lists: [] }] },
       {
         kind: "list",
         ordered: true,
@@ -130,6 +135,8 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
+  // An autolink shows the address as it was written (CommonMark 0.31.2, "Autolinks"); before P1.21k the page showed
+  // the address safeHref made of it.
   test("inline code, links and autolinks", () => {
     expect(parseReadme("Run `npm ci` then see [the docs](https://x.example/d) or <https://y.example>.")).toEqual([
       {
@@ -140,7 +147,7 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
           { kind: "text", text: " then see " },
           { kind: "link", href: "https://x.example/d", children: [{ kind: "text", text: "the docs" }] },
           { kind: "text", text: " or " },
-          { kind: "link", href: "https://y.example/", children: [{ kind: "text", text: "https://y.example/" }] },
+          { kind: "link", href: "https://y.example/", children: [{ kind: "text", text: "https://y.example" }] },
           { kind: "text", text: "." },
         ],
       },
@@ -195,7 +202,7 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
   });
 
   test("an indented line cannot break into a paragraph: it continues it", () => {
-    expect(parseReadme("words\n    more")).toEqual([{ kind: "paragraph", children: [text("words more")] }]);
+    expect(parseReadme("words\n    more")).toEqual([{ kind: "paragraph", children: [text("words\nmore")] }]);
   });
 
   test("markup in indented code is text", () => {
@@ -211,8 +218,16 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
-  test("NUL and other controls are removed before parsing", () => {
-    expect(parseReadme("a\u0000b\u0007c")).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: "abc" }] }]);
+  // CommonMark 0.31.2, "Insecure characters": NUL is read as U+FFFD, so a line holding only a NUL is still a block
+  // for every reader. The other controls are still never drawn.
+  test("NUL is the replacement character, and other controls are not drawn", () => {
+    expect(parseReadme("a\u0000b\u0007c\u007fd")).toEqual([
+      { kind: "paragraph", children: [{ kind: "text", text: "a\uFFFDbcd" }] },
+    ]);
+    expect(parseReadme("`a\u0007b`\n\n    c\u0001d")).toEqual([
+      { kind: "paragraph", children: [{ kind: "code", text: "ab" }] },
+      { kind: "code", text: "cd", language: "" },
+    ]);
   });
 });
 
@@ -289,7 +304,7 @@ describe("what the in-place editor writes (P1.21s)", () => {
     expect(parseReadme("one\\\ntwo  \nthree\nfour")).toEqual([
       {
         kind: "paragraph",
-        children: [text("one"), { kind: "break" }, text("two"), { kind: "break" }, text("three four")],
+        children: [text("one"), { kind: "break" }, text("two"), { kind: "break" }, text("three\nfour")],
       },
     ]);
   });
@@ -298,7 +313,7 @@ describe("what the in-place editor writes (P1.21s)", () => {
     expect(parseReadme("> first\n> line\\\n> next\n>\n> second")).toEqual([
       {
         kind: "quote",
-        paragraphs: [[text("first line"), { kind: "break" }, text("next")], [text("second")]],
+        paragraphs: [[text("first\nline"), { kind: "break" }, text("next")], [text("second")]],
       },
     ]);
   });
@@ -407,7 +422,7 @@ describe("what the in-place editor writes (P1.21s)", () => {
 
   test("a header whose cells do not match the delimiter row is no table", () => {
     expect(parseReadme("| abc | def |\n| --- |\n| bar |")).toEqual([
-      { kind: "paragraph", children: [text("| abc | def | | --- | | bar |")] },
+      { kind: "paragraph", children: [text("| abc | def |\n| --- |\n| bar |")] },
     ]);
   });
 });
@@ -437,10 +452,12 @@ describe("bare addresses", () => {
     ]);
   });
 
+  // The `&amp;` after the address is a character reference, read as its character (CommonMark 0.31.2, "Entity and
+  // numeric character references"); before P1.21k the page showed a named one as typed.
   test("an address ends at a space or a <, and a trailing &name; is not part of it", () => {
     expect(parseInline("www.a.example/x&amp; and https://b.example<c")).toEqual([
       link("https://www.a.example/x", "www.a.example/x"),
-      text("&amp; and "),
+      text("& and "),
       link("https://b.example/", "https://b.example"),
       text("<c"),
     ]);
@@ -452,11 +469,12 @@ describe("bare addresses", () => {
     ]);
   });
 
+  // A bare "www." is a link for micromark-extension-gfm-autolink-literal 2.1.0, so in the editor too; before P1.21k
+  // the page left it as text.
   test("what is not an address stays text", () => {
     for (const words of [
       "awww.example.org",
       "xhttps://example.org",
-      "www.",
       "https://",
       "www.a_b.example_c",
       "https://exa_mple.com",
@@ -472,5 +490,221 @@ describe("bare addresses", () => {
 
   test("an address inside a link's words is not a second link", () => {
     expect(parseInline("[www.a.example](https://b.example/)")).toEqual([link("https://b.example/", "www.a.example")]);
+  });
+});
+
+// Book P1.21k: the page reads with the editor's parser. The first three were wrong on the page before (review of
+// #1958 and #1968): the editor drew a table, a heading and one list where the page drew text, a table and two lists.
+describe("where the page and the editor used to disagree", () => {
+  test("a table straight after a paragraph line is a table", () => {
+    expect(parseReadme("words\n| a | b |\n| - | - |\n| 1 | 2 |")).toEqual([
+      { kind: "paragraph", children: [text("words")] },
+      { kind: "table", align: [null, null], head: [[text("a")], [text("b")]], rows: [[[text("1")], [text("2")]]] },
+    ]);
+  });
+
+  test("a line over a row of hyphens is a heading, and a one-column table needs its delimiter row's pipes", () => {
+    expect(parseReadme("| a |\n---")).toEqual([{ kind: "heading", level: 2, children: [text("| a |")] }]);
+    expect(parseReadme("| a |\n| - |\n| 1 |")).toEqual([
+      { kind: "table", align: [null], head: [[text("a")]], rows: [[[text("1")]]] },
+    ]);
+  });
+
+  test("items with a blank line between them are one list", () => {
+    expect(parseReadme("- one\n\n- two")).toEqual([
+      { kind: "list", ordered: false, items: [item("one"), item("two")] },
+    ]);
+  });
+
+  test("a line under a row of = or - is a heading of level 1 or 2", () => {
+    expect(parseReadme("Title\n=====\n\nPart\n----")).toEqual([
+      { kind: "heading", level: 1, children: [text("Title")] },
+      { kind: "heading", level: 2, children: [text("Part")] },
+    ]);
+  });
+
+  test("a line that starts no block continues the paragraph of the quote or item above it", () => {
+    expect(parseReadme("> quote\ncontinued\n\n- item\ncontinued too")).toEqual([
+      { kind: "quote", paragraphs: [[text("quote\ncontinued")]] },
+      { kind: "list", ordered: false, items: [item("item\ncontinued too")] },
+    ]);
+  });
+
+  test("a link by reference is a link, and its definition draws nothing", () => {
+    const link = (words: string) => ({ kind: "link", href: "https://a.example/x", children: [text(words)] });
+    expect(parseReadme("[docs]: https://a.example/x\n\nSee [the docs][docs], [docs] or ![a picture][docs].")).toEqual([
+      {
+        kind: "paragraph",
+        children: [
+          text("See "),
+          link("the docs"),
+          text(", "),
+          link("docs"),
+          text(" or "),
+          link("a picture"),
+          text("."),
+        ],
+      },
+    ]);
+    expect(parseReadme("> [in a quote]: https://a.example/x\n\n[in a quote]")).toEqual([
+      { kind: "paragraph", children: [link("in a quote")] },
+    ]);
+  });
+
+  test("a link by reference whose address is refused is shown as written", () => {
+    expect(parseReadme("[x]: javascript:alert(1)\n\n[click][x] and ![pic][x]")).toEqual([
+      { kind: "paragraph", children: [text("[click][x] and ![pic][x]")] },
+    ]);
+  });
+
+  // No footnotes and no math on the page: either would move the block count a style is anchored by (ADR 0110).
+  test("a footnote definition is a link reference definition, and a math block is paragraphs", () => {
+    expect(parseReadme("[^1]: note\n\ntext[^1]")).toEqual([{ kind: "paragraph", children: [text("text[^1]")] }]);
+    expect(parseReadme("$$\nx = 1\n\ny = 2\n$$")).toEqual([
+      { kind: "paragraph", children: [text("$$\nx = 1")] },
+      { kind: "paragraph", children: [text("y = 2\n$$")] },
+    ]);
+  });
+
+  test("an HTML block is the text it was typed as, and Markdown inside it is not read", () => {
+    expect(parseReadme("<div>\n**x**\n</div>\n\nafter <b>this</b>")).toEqual([
+      { kind: "paragraph", children: [text("<div>\n**x**\n</div>")] },
+      { kind: "paragraph", children: [text("after <b>this</b>")] },
+    ]);
+  });
+
+  test("character references are their characters, named ones too", () => {
+    expect(parseInline("AT&amp;T &copy; &#35; &nosuchname;")).toEqual([text("AT&T © # &nosuchname;")]);
+  });
+
+  test("a byte order mark at the start is not text, and what is shown as written is still whole", () => {
+    expect(parseReadme("﻿see [x](javascript:alert(1))")).toEqual([
+      { kind: "paragraph", children: [text("see [x](javascript:alert(1))")] },
+    ]);
+  });
+
+  test("a line end of any kind ends a line", () => {
+    expect(parseReadme("# A\r\n\r\none\rtwo\r\n")).toEqual([
+      { kind: "heading", level: 1, children: [text("A")] },
+      { kind: "paragraph", children: [text("one\ntwo")] },
+    ]);
+  });
+
+  test("an image with no alt text is a link with no words, as before", () => {
+    expect(parseInline("![](https://a.example/x.png)")).toEqual([
+      { kind: "link", href: "https://a.example/x.png", children: [] },
+    ]);
+  });
+});
+
+// A quote holds paragraphs and a list item holds text and lists (the view types readme.svelte draws), where CommonMark
+// lets both hold any block. What they cannot hold is flattened on purpose, so every word still shows, in order.
+describe("blocks inside a quote or a list item", () => {
+  test("a quote shows each block inside it as a paragraph of its words", () => {
+    const src = [
+      "> - a",
+      "> - b",
+      ">",
+      "> # Title",
+      ">",
+      ">     code",
+      "> > inner",
+      ">",
+      "> | h |",
+      "> | - |",
+      "> | c |",
+    ];
+    expect(parseReadme(src.join("\n"))).toEqual([
+      {
+        kind: "quote",
+        paragraphs: [
+          [text("a")],
+          [text("b")],
+          [text("Title")],
+          [{ kind: "code", text: "code" }],
+          [text("inner")],
+          [text("h")],
+          [text("c")],
+        ],
+      },
+    ]);
+  });
+
+  test("a list item's own paragraphs and code are lines of its text, and its lists stay lists", () => {
+    const src = ["- a", "", "  second", "", "  ```", "  one", "  two", "  ```", "  - sub", "", "  tail"].join("\n");
+    expect(parseReadme(src)).toEqual([
+      {
+        kind: "list",
+        ordered: false,
+        items: [
+          {
+            text: [
+              text("a"),
+              { kind: "break" },
+              text("second"),
+              { kind: "break" },
+              { kind: "code", text: "one" },
+              { kind: "break" },
+              { kind: "code", text: "two" },
+              { kind: "break" },
+              text("tail"),
+            ],
+            lists: [{ kind: "list", ordered: false, items: [item("sub")] }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("a quote or an item with nothing to draw is not drawn", () => {
+    expect(parseReadme(">\n\n> <br />")).toEqual([]);
+    expect(parseReadme("-\n- b")).toEqual([
+      { kind: "list", ordered: false, items: [{ text: [], lists: [] }, item("b")] },
+    ]);
+  });
+});
+
+describe("the parser's own guards", () => {
+  const paragraphs = (count: number) => Array.from({ length: count }, (_, i) => `p${i}`).join("\n\n");
+
+  test("a text is read to 20,000 characters, the lexicon's ceiling in bytes, and no further", () => {
+    expect(MAX_CHARS).toBe(20_000);
+    const full = `${"a".repeat(MAX_CHARS - 8)}\n\n# kept`;
+    expect(full).toHaveLength(MAX_CHARS);
+    expect(parseReadme(full).at(-1)).toEqual({ kind: "heading", level: 1, children: [text("kept")] });
+    expect(parseReadme(`${"a".repeat(MAX_CHARS)}\n\n# late`)).toHaveLength(1);
+    expect(plainText(`${"a".repeat(MAX_CHARS)}\n\nlate`)).toHaveLength(1);
+  });
+
+  test("at most 2,000 blocks are drawn", () => {
+    expect(parseReadme(paragraphs(2_000))).toHaveLength(2_000);
+    expect(parseReadme(paragraphs(2_001))).toHaveLength(2_000);
+    expect(plainText(paragraphs(2_001))).toHaveLength(2_000);
+  });
+
+  test("a table of 50 columns is a table, and one of 51 is shown as written", () => {
+    const wide = (columns: number) => `|${"h|".repeat(columns)}\n|${"-|".repeat(columns)}\n|${"c|".repeat(columns)}`;
+    expect(parseReadme(wide(50))).toMatchObject([{ kind: "table", head: { length: 50 }, rows: [{ length: 50 }] }]);
+    expect(parseReadme(wide(51))).toEqual([{ kind: "paragraph", children: [text(wide(51))] }]);
+  });
+
+  test("the rows the cell guard has no room for are shown as written, after the table", () => {
+    const head = `|${"h|".repeat(50)}\n|${"-|".repeat(50)}\n`;
+    const [table, rest, ...more] = parseReadme(`${head}${"x\n".repeat(198)}y\nz`);
+    // 10,000 cells: the header's 50 and 199 rows of 50.
+    expect(table).toMatchObject({ kind: "table", rows: { length: 199 } });
+    expect(rest).toEqual({ kind: "paragraph", children: [text("z")] });
+    expect(more).toEqual([]);
+  });
+});
+
+describe("plainText", () => {
+  test("every character is text: a paragraph for each run of lines, a line break for each line end", () => {
+    expect(plainText("# not a heading\n**not bold**\r\n\r\n\n<script>alert(1)</script>\n")).toEqual([
+      { kind: "paragraph", children: [text("# not a heading"), { kind: "break" }, text("**not bold**")] },
+      { kind: "paragraph", children: [text("<script>alert(1)</script>")] },
+    ]);
+    expect(plainText("")).toEqual([]);
+    expect(plainText("a\u0000b\u0007")).toEqual([{ kind: "paragraph", children: [text("ab")] }]);
   });
 });
