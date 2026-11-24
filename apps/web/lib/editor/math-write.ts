@@ -80,6 +80,15 @@ const COMMENT = /\\verb(?:\*(.).*?\1|([^*a-zA-Z]).*?\2)|\\[\s\S]|%[^\n]*/g;
  * and a `\verb` delimited by pipes gets another delimiter (verbAsTex).
  */
 export function pipesAsTex(tex: string): string {
+  const written = pipesWritten(tex, false);
+  return written.length > MAX_TEX_CHARS && tex.length <= MAX_TEX_CHARS ? pipesWritten(tex, true) : written;
+}
+
+/**
+ * The pipes written as TeX; `short` writes bare ones as `\vert` too, half the length of `{\char"7C}` but math only, for
+ * a formula that would otherwise pass the page's MAX_TEX_CHARS and show as source.
+ */
+function pipesWritten(tex: string, short: boolean): string {
   return tex.replace(VERB_OR_PIPE, (found: string, ...groups: (string | number | undefined)[]) => {
     const [starred, starredBody, plain, plainBody, at] = groups;
     const delimiter = starred ?? plain;
@@ -87,14 +96,14 @@ export function pipesAsTex(tex: string): string {
     if (typeof delimiter === "string" && typeof body === "string") {
       return verbAsTex(starred === undefined ? "" : "*", delimiter, body, found);
     }
-    return pipeAsTex(found, tex[Number(at) + found.length] ?? "");
+    return pipeAsTex(found, tex[Number(at) + found.length] ?? "", short);
   });
 }
 
 /** A bare pipe, a delimiter pipe or a backslash pair, given the character after it. */
-function pipeAsTex(found: string, after: string): string {
-  if (found === "|") return '{\\char"7C}';
-  if (found.length <= 2 || !found.endsWith("|")) return found;
+function pipeAsTex(found: string, after: string, short: boolean): string {
+  if (found === "|" && !short) return '{\\char"7C}';
+  if (found !== "|" && (found.length <= 2 || !found.endsWith("|"))) return found;
   return `${found.slice(0, -1)}\\vert${/[A-Za-z]/.test(after) ? " " : ""}`;
 }
 
