@@ -85,12 +85,38 @@ describe("Readme", () => {
 
     const all = { hideHeaderLine: true, hideRowLines: true, showColumnLines: true, showOutline: true };
     expect(lined(tag(TABLE, all, "th"), "border-b")).toEqual([false, false]);
-    expect(lined(tag(TABLE, all, "td"), "border-b")).toEqual([false, false]);
-    // A column line stands between columns: the first column has none on its start side.
-    expect(lined(tag(TABLE, all, "th"), "border-s")).toEqual([false, true]);
-    expect(lined(tag(TABLE, all, "td"), "border-s")).toEqual([false, true]);
-    expect(lined(tag(TABLE, all, "table"), "border")).toEqual([true]);
+    // The outline is drawn on the outer cells (ADR 0110 point 5: an edge can hide part of it), so the bottom row's
+    // cells draw it under them and the table draws none of its own.
+    expect(lined(tag(TABLE, all, "th"), "border-t")).toEqual([true, true]);
+    expect(lined(tag(TABLE, all, "td"), "border-b")).toEqual([true, true]);
+    expect(lined(tag(TABLE, all, "th"), "border-s")).toEqual([true, true]);
+    expect(lined(tag(TABLE, all, "td"), "border-e")).toEqual([true, true]);
+    expect(lined(tag(TABLE, all, "table"), "border")).toEqual([false]);
+    // Without the outline a column line stands between columns only.
+    const columns = { ...NONE, showColumnLines: true };
+    expect(lined(tag(TABLE, columns, "td"), "border-s")).toEqual([false, true]);
+    expect(lined(tag(TABLE, columns, "td"), "border-e")).toEqual([true, false]);
     expect(lined(tag(TABLE, NONE, "td"), "border-b")).toEqual([true, true]);
+  });
+
+  // ADR 0110 points 4-5: a look placed on a table (view.ts) shows or hides single cell sides whatever the switches say.
+  test("a table's edges show and hide single cell sides on both cells beside them", () => {
+    const [table] = parseReadme("| a | b |\n| - | - |\n| 1 | 2 |");
+    if (table?.kind !== "table") throw new Error("a table");
+    const edges = [
+      { direction: "horizontal", line: 1, cell: 1, hide: true },
+      { direction: "vertical", line: 1, cell: 1, hide: false },
+    ] as const;
+    const { body } = render(Readme, { props: { blocks: [{ ...table, edges }] } });
+    const classes = (name: string) =>
+      [...body.matchAll(new RegExp(`<${name} class="([^"]*)"`, "g"))].map((match) => (match[1] ?? "").split(" "));
+    expect(classes("th").map((names) => names.includes("border-b"))).toEqual([true, false]);
+    expect(classes("td").map((names) => names.includes("border-t"))).toEqual([true, false]);
+    expect(classes("td").map((names) => [names.includes("border-e"), names.includes("border-s")])).toEqual([
+      [true, false],
+      [false, true],
+    ]);
+    expect(classes("th").map((names) => names.includes("border-e"))).toEqual([false, false]);
   });
 
   test("an ordered list keeps its first number", () => {

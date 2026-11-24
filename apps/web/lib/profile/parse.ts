@@ -64,6 +64,14 @@ export type TableBlock = {
   readonly align: readonly ("left" | "center" | "right" | null)[];
   readonly head: readonly (readonly Inline[])[];
   readonly rows: readonly (readonly (readonly Inline[])[])[];
+  /**
+   * The lines a top-level table is written on, counted from 1 (ADR 0110 decision 5: a look is placed by them). Left
+   * out for a table inside another block and for one shown cut short, which no look is placed on.
+   */
+  readonly from?: number;
+  readonly to?: number;
+  /** Its lines' fingerprints, joined by spaces, once the page's reader has named it (place-sides.ts nameTables). */
+  readonly name?: string;
 };
 
 /** CommonMark's six heading levels. */
@@ -468,20 +476,49 @@ export function topBlocks(src: string): { readonly kind: string; readonly from: 
     .map((node) => ({ kind: node.type, from: node.position?.start.line ?? 0, to: node.position?.end.line ?? 0 }));
 }
 
-export function parseReadme(src: string): Block[] {
+/** The text's lines as topBlocks counts them: line n is entry n - 1. */
+export const sourceLines = (src: string): string[] => normalised(src).split("\n");
+
+/**
+ * A top-level table with the lines it is written on, when it is shown whole, read in the same bounded parse as the
+ * page (text-reader.ts). The page also draws `$$` math, which topBlocks does not: a table such math ends early or
+ * holds has other lines here than the editor placed its look by, so no look names it (ADR 0110 decision 5, "a
+ * reader may still draw math its own way"), and the fingerprints keep every other table's look in place.
+ */
+function placed(node: Flow, shown: Block[]): Block[] {
+  const [only] = shown;
+  if (node.type !== "table" || shown.length !== 1 || only?.kind !== "table" || node.position === undefined)
+    return shown;
+  return [{ ...only, from: node.position.start.line, to: node.position.end.line }];
+}
+
+/**
+ * A card's blocks, and whether the page shows each of its top-level tables whole. It does not when MAX_BLOCKS stops
+ * the read early, or a guard shows a table as written or cut short; then a look must be counted against the tables a
+ * placement parse reads (place-sides.ts, Codex on #2028), since the page has fewer of them.
+ */
+export type CardRead = { readonly blocks: Block[]; readonly whole: boolean };
+
+export function readCardBlocks(src: string): CardRead {
   const source = normalised(src);
   try {
     const root = fromMarkdown(source, DRAW);
     const reading: Reading = { source, definitions: definitionsOf(root), cells: MAX_CELLS, math: mathBudget() };
     const blocks: Block[] = [];
+    let whole = true;
     for (const node of root.children) {
-      if (blocks.length >= MAX_BLOCKS) break;
-      blocks.push(...block(node, reading));
+      if (blocks.length >= MAX_BLOCKS) return { blocks, whole: false };
+      const shown = placed(node, block(node, reading));
+      const [first] = shown;
+      if (node.type === "table" && (first?.kind !== "table" || first.from === undefined)) whole = false;
+      blocks.push(...shown);
     }
-    return blocks;
+    return { blocks, whole };
   } catch {
     // micromark recurses once per level of nesting, so thousands of nested quotes or lists overflow the stack
-    // (a RangeError); such a card is shown as written rather than failing the page.
-    return plainText(src);
+    // (a RangeError); such a card is shown as written rather than failing the page. It shows no table.
+    return { blocks: plainText(src), whole: true };
   }
 }
+
+export const parseReadme = (src: string): Block[] => readCardBlocks(src).blocks;

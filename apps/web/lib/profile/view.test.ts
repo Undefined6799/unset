@@ -1,8 +1,10 @@
 // What a card shows beside its own words (the profile-card mockup, Alex 2026-11-17): a labelled link names its site,
 // and an email button's address is shown under the buttons.
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import type { CodeColourLimits } from "../editor/code-colours.ts";
-import { MAX_CHARS, parseReadme } from "./parse.ts";
+import { MAX_CHARS, parseReadme, readCardBlocks } from "./parse.ts";
+import { nameTables } from "./place-sides.ts";
 import { contactAction, shownCards, cardViews as viewsWithin } from "./view.ts";
 
 // The numbers interfaces/web limits.ts CODE_COLOUR_LIMITS has today; limits.code.test.ts tests those themselves.
@@ -11,8 +13,30 @@ const readme = (text: string) => ({ kind: "readme", text }) as const;
 /** The page's cards with the parser itself as their reader, as a page with no reading limits would read them. */
 const cardViews = (cards: Parameters<typeof viewsWithin>[0], versions?: ReadonlyMap<string, string>) =>
   viewsWithin(cards, parseReadme, CODE_COLOURS, versions);
+const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
+/** As the page's server reads: tables named for placing looks (text-reader.ts readCard). */
+const namedViews = (cards: Parameters<typeof viewsWithin>[0]) =>
+  viewsWithin(cards, (text) => nameTables(text, readCardBlocks(text), sha256), CODE_COLOURS);
 
 describe("card views", async () => {
+  // ADR 0110 points 4-5, rule SE-3: a look's edges ride on the table it names, and the lines a table was written on
+  // stay on the server, as does a look that names no table.
+  test("a_look_is_drawn_on_the_table_it_names_and_no_table_carries_its_source_lines", async () => {
+    const text = "| a | b |\n| --- | --- |\n| 1 | 2 |\n\n| x |\n| - |";
+    const edge = { direction: "vertical", line: 1, cell: 0, hide: false } as const;
+    const tableSides = [
+      { lines: ["5860afe6", "a4f3b853"], edges: [edge] },
+      { lines: ["00000000"], edges: [edge] },
+    ];
+    const [card] = await namedViews([{ key: "k", width: "full", content: { kind: "readme", text, tableSides } }]);
+    const blocks = card?.shown.kind === "readme" ? card.shown.blocks : [];
+    expect(blocks.map((block) => (block.kind === "table" ? Object.keys(block).sort() : block.kind))).toEqual([
+      ["align", "edges", "head", "kind", "rows"],
+      ["align", "head", "kind", "rows"],
+    ]);
+    expect(blocks[0]).toMatchObject({ edges: [edge] });
+  });
+
   test("a_labelled_link_names_its_host_and_an_unlabelled_one_shows_the_host_as_its_text", async () => {
     const [card] = await cardViews([
       {
