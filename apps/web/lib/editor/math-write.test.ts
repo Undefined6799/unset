@@ -50,7 +50,14 @@ test("a run longer than a formula may be is cut into formulas each within it, a 
   const long = "x".repeat(1_100);
   const children = [formula(long), formula(long), formula("y")];
   const [markdown] = written(children);
-  expect(markdown).toBe(`$${long}$ $$${`{${long}}{y}`}$$`);
+  expect(markdown).toBe(`$$${long}$$ $$${`{${long}}{y}`}$$`);
+  // The writer is told what follows the whole run, not a part, so every part is written wide (review of c2a74a8: a
+  // run cut into [a, b] and [c] before "5" saved "$c$5", which the page reads as words).
+  const tail = written([formula(long), formula(long), words("5")]);
+  expect(tail[0]).toBe(`$$${long}$$ $$${long}$$`);
+  const [digits] = parseReadme(tail.join(""));
+  const after = digits?.kind === "paragraph" ? digits.children.map((inline) => inline.kind) : [];
+  expect(after).toEqual(["math", "text", "math", "text"]);
   const [paragraph] = parseReadme(markdown ?? "");
   const kinds = paragraph?.kind === "paragraph" ? paragraph.children.map((inline) => inline.kind) : [];
   expect(kinds).toEqual(["math", "text", "math"]);
