@@ -22,6 +22,12 @@ const HOSTILE_LANGUAGE = `"><img/src=/none/onerror=document.title='${PWNED}'>`;
 
 async function openStored(page: Page, stored: string) {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  // The page finishes starting before the reload below. SvelteKit's start-up awaits the root layout's and the error
+  // page's scripts with nothing catching a failure (@sveltejs/kit 3.2.0 src/runtime/client/client.js start(), called
+  // uncaught from the page's own boot script, src/runtime/server/page/render.js), and WebKit reports a script load
+  // that a reload cancels as a page error, "Importing a module script failed", which the tests here hold to none
+  // (CI on #2013 at c30f664; main's 3a24b2e fails the same with the browser held to half a CPU).
+  await page.waitForLoadState("networkidle");
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: stored });
   await page.reload();
   await page.waitForLoadState("networkidle");

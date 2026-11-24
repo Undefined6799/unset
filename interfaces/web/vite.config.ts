@@ -3,10 +3,14 @@
 // the startup script SvelteKit writes; hooks.server.ts narrows 'self' in the file directives to our paths at runtime.
 // Trusted Types names the policies Svelte 5.57.3 and SvelteKit create (svelte src/internal/client/dom/reconciler.js,
 // kit src/runtime/server/page/render.js). No prerendering (ADR 0056): every response passes the hook.
+import { createRequire } from "node:module";
 import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
+
+/** decode-named-character-reference's file for everything but a browser (its `exports.default`): no DOM. */
+const NAMED_CHARACTERS = createRequire(import.meta.url).resolve("decode-named-character-reference");
 
 export default defineConfig({
   // One tsconfig for every file the build transforms (Vite 8.3.5 UserConfig.tsconfig, passed to rolldown as a fixed
@@ -16,6 +20,12 @@ export default defineConfig({
   // Never inline an imported file as a data: URL (Vite 8.3.5 build.assetsInlineLimit, default 4096 bytes): no policy
   // here allows data:, so the 1 KB favicon would not load. Every file is emitted under /_app/ instead (P1.20k).
   build: { assetsInlineLimit: 0 },
+  // micromark decodes a named character reference ("&amp;") through decode-named-character-reference 1.3.0, whose
+  // package.json `exports` gives browsers index.dom.js: it assigns the reference to an element's innerHTML, which
+  // `require-trusted-types-for 'script'` below refuses with a TypeError, so the Text editor did not load on such a text.
+  // Every build takes the package's default file instead, index.js, a lookup in the character-entities table: the one
+  // the server already runs, and no policy is added (P1.21k).
+  resolve: { alias: { "decode-named-character-reference": NAMED_CHARACTERS } },
   plugins: [
     tailwindcss(),
     sveltekit({
