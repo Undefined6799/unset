@@ -1217,11 +1217,24 @@ As ruled (architecture thread, 2026-10-05 00:00Z; carried by the Phase 0 thread)
   - Test `audit_override_only_in_audit_job` (`scripts/guards/workflow-pins.test.ts`): the string `@unset:registry=`
     appears in `ci.yml` exactly once, inside the `audit` job's `npm audit signatures` line.
 
-Note from P0.07p (2026-11-24): the registry answered `/-/npm/v1/attestations/axe-core@4.14.0` with status 200 and
-the text `OK` four times that night, for some runners and not others. npm does not retry that, and a bounded retry on
-the same runner, tried for real, did not recover (`docs/ai/notes/pitfall/npm-registry-answers-attestations-with-ok.md`).
-P0.07p changed nothing in this check: it moved the lockfile's axe-core to 4.14.1, so the audit no longer asks for
-that address. A failure of this command is still never retried, ignored or turned into a warning.
+Extended by P0.07p (2026-11-24): the `audit` job keeps the attestation documents it verified from run to run.
+registry.npmjs.org's CDN held the text `OK` in place of single packages' attestation documents (axe-core@4.14.0,
+then playwright@1.64.1), stored with a one-year lifetime; npm does not retry that, nothing a client sends gets past
+it, and a bounded retry, tried for real, did not recover
+(`docs/ai/notes/pitfall/npm-registry-answers-attestations-with-ok.md`).
+  - The command gains `--cache="$HOME/.cache/npm-audit-signatures"`, and `actions/cache` keeps that folder's
+    `_cacache` under the key `audit-attestations-<os>-<lockfile hash>`. A failed job saves nothing.
+  - `scripts/ci/keep-attestation-documents.ts` runs before the audit and again before the save. It deletes every
+    index entry whose key is not an attestation address of registry.npmjs.org, and everything it cannot read, then
+    lets `npm cache verify` delete the unreferenced content. It fails if anything else is left.
+  - Why pruned: npm answers from a stale kept packument when the registry cannot be reached, which would let the
+    audit pass on old signatures. Packuments, signing keys and Sigstore's trust root are fetched on every run.
+  - Every signature and every attestation is still verified in every run; an attestation document that verified
+    once is read from the store. A failure of this command is never retried, ignored or turned into a warning.
+  - Tests: `attestation_store_*` (`scripts/ci/keep-attestation-documents.test.ts`, real npm against a stand-in
+    registry) and `attestation_store_is_pruned_around_the_audit_and_used_nowhere_else`
+    (`scripts/guards/workflow-pins.test.ts`), which pins the job's steps; `audit_override_only_in_audit_job` pins
+    the new command line.
 
 Extended by P1.01s (2026-10-05): custom rule ids must appear in the SARIF rule list. `semgrep-rules-ran.ts` reads the
 ids declared under `.semgrep/rules/` and fails if any is missing from `semgrep.sarif`, so the custom rules loading
