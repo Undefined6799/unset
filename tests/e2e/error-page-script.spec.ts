@@ -6,6 +6,7 @@
 // script off). tests/integration/web holds the same page's header by value and the bytes of its start-up script
 // (every-answer.test.ts, public/public-pages.test.ts, public/public-profile.test.ts).
 import { expect, type Page, type Request, type Response, test } from "@playwright/test";
+import { openAccountMenu } from "./navbar.ts";
 import { expectOnlyText, openPage, pageNoise, type Watched, watch } from "./observe.ts";
 import { HIDDEN, INDEXED, type PageFixture, PROD_ORIGIN, TEST_ORIGIN } from "./pages.ts";
 
@@ -190,17 +191,17 @@ test("a_members_hostile_address_runs_nothing_and_its_theme_picker_saves", async 
   await page.waitForLoadState("networkidle");
   await expect(page.locator("h1")).toHaveText(NOT_FOUND);
   await expectOnlyText(page);
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  const dark = page.locator("#account-menu").getByRole("button", { name: "Dark" });
+  const menu = await openAccountMenu(page);
+  const dark = menu.getByRole("menuitemradio", { name: "Dark" });
   const saved = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
   await dark.click();
   expect((await saved).request().postData()).toContain(`return=${encodeURIComponent(HOSTILE_ADDRESSES[0])}`);
-  await expect(dark).toHaveAttribute("aria-pressed", "true");
+  await expect(dark).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page).toHaveURL(`${TEST_ORIGIN}${HOSTILE_ADDRESSES[0]}`);
   await expectOnlyText(page);
   expect(await noiseOf(page, watched)).toEqual([]);
-  await page.locator("#account-menu").getByRole("button", { name: "System" }).click();
+  await menu.getByRole("menuitemradio", { name: "System" }).click();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
 });
 

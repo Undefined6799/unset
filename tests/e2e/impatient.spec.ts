@@ -12,6 +12,7 @@
 // navigating about twice a second (measured in the P1.20o PR); P1.20r raised it to 60 (ADR 0066). These tests keep
 // each burst under the zone on purpose (BURST below) so that what they judge is the app.
 import { expect, type Page, type Response, test } from "@playwright/test";
+import { accountButton, accountMenu, openAccountMenu } from "./navbar.ts";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 
@@ -119,8 +120,7 @@ for (const viewport of [
       await page.waitForLoadState("networkidle");
       // Three client navigations by real clicks (a history entry a script pushes without a click is one Chromium's
       // Back may skip), so Back and Forward stay inside SvelteKit's router.
-      await page.locator('header button[popovertarget="account-menu"]').click();
-      await page.locator("#account-menu").getByRole("link", { name: "Settings" }).click();
+      await (await openAccountMenu(page)).getByRole("menuitem", { name: "Settings" }).click();
       await expect(page).toHaveURL(`${TEST_ORIGIN}${SETTINGS.path}`);
       await page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Account" }).click();
       await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/account`);
@@ -143,13 +143,13 @@ for (const viewport of [
       expect((await openPage(page, SETTINGS))?.status()).toBe(200);
       await page.waitForLoadState("networkidle");
       const seen = trouble(page);
-      const opener = page.locator('header button[popovertarget="account-menu"]');
+      const opener = accountButton(page);
       await press(page, OWN_PAGE.path);
       await opener.click();
       await landedOn(page, OWN_PAGE.path);
       // The menu still opens and still takes the member somewhere after the race.
-      if (!(await page.locator("#account-menu").isVisible())) await opener.click();
-      await page.locator("#account-menu").getByRole("link", { name: "Settings" }).click();
+      if (!(await accountMenu(page).isVisible())) await opener.click();
+      await accountMenu(page).getByRole("menuitem", { name: "Settings" }).click();
       await landedOn(page, SETTINGS.path);
       expect(seen).toEqual([]);
     });
@@ -183,18 +183,19 @@ test("pressing_each_theme_fast_leaves_the_last_one_chosen", async ({ page }) => 
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   const seen = trouble(page);
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  const menu = page.locator("#account-menu");
+  const menu = await openAccountMenu(page);
   for (const name of ["Dark", "Light", "System", "Dark"]) {
-    await menu.getByRole("button", { name }).click({ noWaitAfter: true });
+    await menu.getByRole("menuitemradio", { name }).click({ noWaitAfter: true });
   }
   await page.waitForLoadState("networkidle");
   await landedOn(page, SETTINGS.path);
   // The last press wins, in the picker now and in what the server kept (P1.20o review).
-  await expect(menu.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+  await expect(menu.getByRole("menuitemradio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
   await page.reload();
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  await expect(menu.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+  await expect((await openAccountMenu(page)).getByRole("menuitemradio", { name: "Dark" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   expect(seen).toEqual([]);
 });
 
