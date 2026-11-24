@@ -26,6 +26,8 @@ export const load: ServerLoad = ({ url, locals, setHeaders }) => {
     shell: SHELL,
     open: services().inviteRequests !== null,
     signedIn: locals.did !== undefined,
+    // The one thing of the query this load reads, and only as a flag (rule DM-1): the page's data is written into the
+    // start-up script the server hashes (ADR 0116), so no text of the query may be in it.
     received: url.searchParams.get("sent") === "1",
     minAge: config.MIN_AGE,
     countryRule: config.INVITE_COUNTRY_RULE === "on",

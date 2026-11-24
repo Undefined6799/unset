@@ -5473,6 +5473,15 @@ to `/notifications` (ADR 0108 point 3, now the fallback, ADR 0114). `notificatio
 both. `/login`, `/join` and the welcome pages follow in P1.22l; the gate's refusal pages stay without script (ADR
 0116 point 4). The plan's §5.4 and §6.1 rows for these pages change here.
 
+Built 2026-11-24, where the code differs from the words above. (1) The three pages say `csr = true` in their own
+`+page.ts` instead of dropping the line: P1.22j's test holds every page with something to draw to its own line.
+(2) The server never draws the bell's panel, on an app page either: it draws the link everywhere, and the client
+draws the panel once it has started (ADR 0116 point 9). So an app page with script off now has the link too; before,
+its native panel opened and could mark nothing. (3) The error page of a route that says `client: false` is sent the
+count alone, so its bell stays the link: the root load runs before the page's load fails and cannot know. After
+P1.22l that is three routes nobody reads. (4) `/request-invite` never gave a form's values back: a refused post
+answers with a catalog code in `?error=`, so `?sent`, read as a flag, is the one thing of the query its load returns.
+
 **Threats.** The boundary is text a visitor or a link supplies, written into the start-up script the server
 hashes. `/request-invite` reads `?sent` and, after a refused post, gives the form's own values back; home and the
 legal pages read the `?error=` code. Each is held to a parsed shape before a load or an action returns it (rule
@@ -5603,6 +5612,16 @@ invite code. A load returns a value only after it is parsed to its shape, return
 and returns no value that authorises anything: the OAuth state, nonce and PKCE verifier stay on the server, and
 the test reads each page's start-up script and data address for them. Hostile text in each query value runs
 nothing. `/login/continue` keeps no script, so the hop to the sign-in server never waits for a file.
+
+**Built 2026-11-24, where the code differs from the words above.** (1) `/login`, `/join` and `/welcome/blocked` say
+`csr = true` in their own `+page.ts`, as P1.22j's test asks of every page with something to draw. (2) `/welcome`
+only ever redirects, so it loses its `+page.ts` and its empty `+page.svelte` and says nothing, as `/profile` does:
+the same test wants a page that says true to be seen running the client, and nothing of `/welcome` is ever drawn.
+(3) `/login` no longer reads `handle` (the form has posted one button since P2.05r); of the request its load
+returns `next` and Close's address from the Referer, each a `safeReturnPath` or nothing, and both are in the
+start-up script in that shape. (4) The hop is settled: an `app` page without the client is sent the public group's
+fixed policy (styles and fonts, no `script-src`) in place of SvelteKit's policy without a hash, so no document
+without the client names a script source at all. That tightens the hook and needs no line.
 
 ### P1.22m — Move the navbar's controls to the stock components (added step, 2026-11-23)
 

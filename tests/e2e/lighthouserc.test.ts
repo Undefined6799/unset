@@ -56,10 +56,12 @@ describe("lhci_no_public_upload", () => {
     expect(config.ci.collect.settings).not.toHaveProperty("chromeIgnoreDefaultFlags");
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
-    // expectJs false stays at 0 scripts, an error. A page that runs SvelteKit's client (an app page, ADR 0054, and
-    // since book P1.22e the public profile, ADR 0114) has the app pages' line: the
-    // one bundle of output.bundleStrategy "single" was 99214 bytes as served (brotli) at P1.20k. Its 120 KiB is a
-    // warning, never a failure (Alex, 2026-11-18T04:18:09Z; scripts/budgets/app-js.ts measures it in gzip).
+    // Every page a person reads runs SvelteKit's client (ADR 0054 for the app pages; ADR 0116 for the rest: the
+    // public profile since book P1.22e, home, the legal pages and the invite request since P1.22g, the sign-in, join
+    // and blocked pages since P1.22l), so the "0 scripts" row is gone and each has the app pages' line: the one
+    // bundle of output.bundleStrategy "single" was 99214 bytes as served (brotli) at P1.20k. Its 120 KiB is a warning,
+    // never a failure (Alex, 2026-11-18T04:18:09Z; scripts/budgets/app-js.ts measures it in gzip). A page that turns
+    // the client off again would need its own row with "0 scripts" as an error, which the loop below asks for.
     const matrix = config.ci.assert.assertMatrix;
     for (const row of matrix) {
       expect(row.assertions["categories:accessibility"]).toEqual(["error", { minScore: 1 }]);

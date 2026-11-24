@@ -19,6 +19,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "../built-server.ts";
+import { DATA, dataAnswer, inlineScripts, nodeData, startupData } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
@@ -285,6 +286,56 @@ describe("the join page", () => {
     const html = await response.text();
     expect(html).toContain('value="pds-test-abcde-fghij"');
     expect(html).toContain("Create account");
+  });
+
+  // Book P1.22l (ADR 0116): the join page runs SvelteKit's client under the app group's script policy. The code is a
+  // credential the page shows, so it is in the page's start-up script as it is in its markup, and that document is
+  // never stored and sends no Referer, so no request for a build file carries the address.
+  test("join.runs_client: only our client, and its data is what the page draws", async () => {
+    const response = await get("/join?invite=pds-test-abcde-fghij");
+    const csp = response.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain(`script-src ${ORIGIN}/_app/ 'sha256-`);
+    expect(csp).not.toContain("unsafe-inline");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const drawn = {
+      code: "pds-test-abcde-fghij",
+      malformed: false,
+      signedIn: false,
+      pdsHost: PDS_HOST,
+      countryRule: expect.any(Boolean),
+    };
+    expect(startupData(await response.text(), 1)).toEqual(drawn);
+    const data = await get(`/join${DATA}?invite=pds-test-abcde-fghij`);
+    expect(data.headers.get("content-security-policy")).not.toContain("script-src");
+    expect(data.headers.get("cache-control")).toContain("no-store");
+    expect(nodeData(await dataAnswer(data), 1)).toEqual(drawn);
+  });
+
+  // The Threats of book P1.22l. SvelteKit hashes the start-up script it writes, so the policy allows whatever the
+  // server put there. The load returns the invite only as a code (letters, digits and dashes, rule DM-1) and
+  // otherwise a flag, so whatever a link's author typed, the script is one of two the server would write anyway.
+  test("join.query_is_a_code_or_a_flag: nothing else a link says reaches the start-up script", async () => {
+    const none = inlineScripts(await (await get("/join")).text());
+    const broken = inlineScripts(await (await get("/join?invite=not%20a%20code")).text());
+    expect(broken).not.toEqual(none);
+    const values = [
+      "</script><script>alert(1)</script>",
+      "<!--<script>",
+      "javascript:alert(1)",
+      "pds-test\u2028abcde",
+      'pds-test"-abcde',
+      `pds-${"a".repeat(80)}`,
+    ];
+    for (const value of values) {
+      const html = await (await get(`/join?invite=${encodeURIComponent(value)}`)).text();
+      expect(inlineScripts(html), value).toEqual(broken);
+      expect(startupData(html, 1), value).toMatchObject({ code: null, malformed: true });
+    }
+    for (const name of ["error", "next", "code", "handle", "sent"]) {
+      const html = await (await get(`/join?${name}=${encodeURIComponent(values[0] ?? "")}`)).text();
+      expect(inlineScripts(html), name).toEqual(none);
+    }
   });
 
   test("join.code_malformed: a value that is not a code is never echoed", async () => {

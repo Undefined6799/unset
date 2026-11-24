@@ -17,7 +17,7 @@ import { openApp } from "./lib/server/app-gate.ts";
 import { services, startServices } from "./lib/server/compose.ts";
 import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
 import type { PolicyName } from "./lib/server/limits.ts";
-import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
+import { type PageGroup, type RoutePolicy, runsClient } from "./lib/server/policy.ts";
 import { refusalPage, wantsPage } from "./lib/server/refusal-page.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote, stylesheet } from "./lib/server/runtime.ts";
@@ -245,13 +245,6 @@ export const handle: Handle = async (input) => {
 };
 
 /**
- * Whether a route's own page runs SvelteKit's client: every page does unless its policy says `client: false` (ADR
- * 0116 points 1 and 4), and a route with no policy has no page. Read from the route's policy alone, never from the
- * request, so nothing a visitor sends turns it on.
- */
-const runsClient = (policy: RoutePolicy | undefined): boolean => policy !== undefined && policy.client !== false;
-
-/**
  * What the response headers follow: the route's group, whether its own page runs the client, and whether SvelteKit
  * reported an error for this request (handleError below), which is when it draws the error page.
  */
@@ -274,10 +267,11 @@ type Audience = Readonly<{ member: boolean; optional: boolean }>;
  * unless its policy says `client: false`, or the error page, drawn when SvelteKit reported an error (for it SvelteKit
  * takes `csr` from the layouts alone, kit 3.2.0 src/runtime/server/page/index.js:272-291, and the root layout says
  * true). That SvelteKit sent a policy is not the signal: it sends one with every page it draws (page/render.js:577-579).
- * A page that says `client: false` and still carried a start-up script gets the fixed policy, in either group, and
- * runs nothing. Every other response gets its group's fixed one: refusals, redirects, the data address, files. One
- * exception stays as it was: an `app` page without the client (/login, the form targets) keeps SvelteKit's policy
- * while that names no hash, so no inline script runs there; book P1.22l settles what those pages carry. An
+ * Every other response gets a fixed policy under which no script runs: refusals, redirects, the data address, files,
+ * and a page that says `client: false`, whether or not it carried a start-up script. Such a page in the `app` group
+ * (the hop to the sign-in server) is a document SvelteKit drew, so it is sent the public group's fixed policy, which
+ * loads the build's styles and our fonts and has no `script-src`, as a styled refusal page is; the group's own
+ * fallback would block its stylesheet. Until book P1.22l it kept SvelteKit's policy without a hash. An
  * `app` page, and the data its client loads (__data.json), may differ per member, so it is private, never stored and
  * varies on Cookie, as interfaces/http/prefs/theme.ts has it. So is any other response rendered for a member, or one
  * that clears a cookie, whatever the page asked for. A page with an `optional` session varies on Cookie even for a
@@ -307,11 +301,11 @@ function withGroupHeaders(
     out.headers.append("vary", "Cookie");
   }
   const kit = out.headers.get("content-security-policy");
-  const mayRunClient = route.client || route.erred;
-  // With a start-up script in the document, SvelteKit's policy only where that document may run it; with none, only
-  // on an app page, as before.
-  const keepsKit = kit !== null && (namesStartUpScript(kit) ? mayRunClient : group === "app");
-  out.headers.set("content-security-policy", keepsKit ? kitPolicy(kit) : ZERO_SCRIPT[cspGroup]);
+  // SvelteKit's policy only with a start-up script in the document, and only where that document may run it.
+  const keepsKit = kit !== null && namesStartUpScript(kit) && (route.client || route.erred);
+  // SvelteKit sends its policy with every page it draws, so one that is not kept here is a page without the client.
+  const plainPage = kit !== null && html && cspGroup === "app";
+  out.headers.set("content-security-policy", keepsKit ? kitPolicy(kit) : ZERO_SCRIPT[plainPage ? "public" : cspGroup]);
   return out;
 }
 

@@ -69,7 +69,7 @@ export type PageFixture = {
   /** The route it matches, as pages.test.ts names route folders. */
   readonly route: string;
   readonly group: PageGroup;
-  /** The page runs SvelteKit's client (csr, +page.ts): most app pages, and a public page ADR 0114 switched on. */
+  /** The page runs SvelteKit's client (csr, +page.ts): every page a person reads does (ADR 0116, book P1.22l). */
   readonly expectJs: boolean;
   /** Opened on the test server signed in as this member; without one, on the production server signed out. */
   readonly member?: MemberName;
@@ -91,21 +91,21 @@ const signedIn = (path: string, member: MemberName, route = path): PageFixture =
 
 /** Documents the production server renders to a visitor with no session. */
 export const PAGES: readonly PageFixture[] = [
-  signedOut("/", "public"),
-  signedOut("/legal/terms", "public", "/legal/:document"),
-  signedOut("/legal/privacy", "public", "/legal/:document"),
-  signedOut("/legal/domains", "public", "/legal/:document"),
-  // The public profile runs the client under the app group's script policy (ADR 0114, book P1.22e).
+  // The public pages run the client under the app group's script policy (ADR 0114, ADR 0116): the profile since book
+  // P1.22e; home, the legal pages and the invite request since book P1.22g.
+  signedOut("/", "public", "/", true),
+  signedOut("/legal/terms", "public", "/legal/:document", true),
+  signedOut("/legal/privacy", "public", "/legal/:document", true),
+  signedOut("/legal/domains", "public", "/legal/:document", true),
   signedOut(`/@${INDEXED.did}`, "public", "/@:actor", true),
-  // The sign-in page and the blocked page run no script, as on Hono: nothing on them needs it (lighthouserc.json's
-  // zero-script row).
-  signedOut("/login", "app", "/login", false),
+  // The sign-in page, the blocked page and the join page run the client since book P1.22l.
+  signedOut("/login", "app"),
   signedOut("/signed-out", "app"),
-  signedOut("/welcome/blocked", "app", "/welcome/blocked", false),
+  signedOut("/welcome/blocked", "app"),
   // P2.10: the page an invite link opens, with a well-formed code (it never checks or spends it).
-  signedOut(`/join?invite=${JOIN_CODE}`, "public", "/join"),
+  signedOut(`/join?invite=${JOIN_CODE}`, "public", "/join", true),
   // P2.10r: asking for an invite (closed on the test servers, which send no mail; ADR 0080).
-  signedOut("/request-invite", "public"),
+  signedOut("/request-invite", "public", "/request-invite", true),
 ];
 
 /** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */
@@ -138,7 +138,6 @@ export const NOT_DOCUMENTS: readonly { readonly route: string; readonly reason: 
   { route: "/login/continue", reason: "sign-in handoff, covered by the web integration tests" },
   { route: "/privacy-notice/seen", reason: "the banner's dismiss answer; tested in the web integration tests" },
   { route: "/prefs/theme", reason: "the no-script theme form's answer; the footer form is tested in nojs.spec.ts" },
-  { route: "/welcome", reason: "always redirects to the current onboarding step" },
 ];
 
 export type ThemeCell =

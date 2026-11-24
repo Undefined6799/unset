@@ -12,6 +12,8 @@ export const load: ServerLoad = ({ url, locals, setHeaders }) => {
   setHeaders({ "referrer-policy": "no-referrer", "cache-control": "no-store", "x-robots-tag": "noindex" });
   const raw = url.searchParams.get("invite");
   const code = joinCode(raw);
+  // The page runs the client (book P1.22l), so SvelteKit writes this result into the start-up script it hashes. Of
+  // the query it holds the invite only as a code (letters, digits and dashes, rule DM-1) or as a flag.
   return {
     code,
     // A value that is not a code is never echoed; the page says the link looks broken.

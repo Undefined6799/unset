@@ -4,7 +4,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { AXE_ALLOWANCE, expiredAllowances, unallowedViolations } from "./allow.ts";
 import { AXE_TAGS, openPage, pageNoise, watch } from "./observe.ts";
-import { ALL_PAGES, type PageFixture } from "./pages.ts";
+import { ALL_PAGES, JOIN_CODE, type PageFixture } from "./pages.ts";
 import { phone } from "./phone.ts";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -110,6 +110,21 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
+  // Book P1.22l: the join page and the under-age notice run the client now, and with script off they are the same
+  // pages: the code to copy and one plain form, a notice and nothing to press but a link.
+  test("join_page_without_js", async ({ page }) => {
+    await page.goto(`/join?invite=${JOIN_CODE}`);
+    await expect(page.getByLabel("Your invite code")).toHaveValue(JOIN_CODE);
+    await expect(page.locator("form#join")).toHaveAttribute("method", "POST");
+    await expect(page.getByRole("button", { name: "Create account" })).toHaveAttribute("form", "join");
+  });
+
+  test("blocked_notice_without_js", async ({ page }) => {
+    expect((await page.goto("/welcome/blocked"))?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("We can't offer you an account right now");
+    await expect(page.locator("main form")).toHaveCount(0);
+  });
+
   // P1.25f, P2.13e, Clean tabs: on a 320px phone the header's menu button opens the drawer and the account button its
   // menu, with no script, and nothing scrolls sideways. A native popover closes on Escape and gives focus back to the
   // button that opened it (HTML "hide popover algorithm", focusPreviousElement).
@@ -169,7 +184,8 @@ test.describe("javascript disabled", () => {
       await expect(panel, id).toBeHidden();
     }
     await expect(page.locator("#core-menu").getByRole("link")).toHaveCount(0);
-    // ADR 0108 point 3: a page with no script cannot mark what a panel showed, so the bell is a link to the page.
+    // ADR 0108 point 3, ADR 0116 point 9: with no script nothing can mark what a panel showed, so the bell is the
+    // server's link to the page.
     await expect(page.locator("header").getByRole("link", { name: "Notifications", exact: true })).toHaveAttribute(
       "href",
       "/notifications",
@@ -179,6 +195,19 @@ test.describe("javascript disabled", () => {
       "href",
       "/legal/privacy",
     );
+  });
+
+  // Book P1.22g (ADR 0116 point 9): the server draws the bell as a link on every page, an app page too (it drew a
+  // panel there until this step, which opened with no script and could mark nothing). The press goes to the page,
+  // whose visit marks the list seen.
+  test("the_bell_is_a_link_to_the_page_on_an_app_page_without_js", async ({ page }) => {
+    await openPage(page, SETTINGS);
+    const bell = page.locator("header").getByRole("link", { name: "Notifications", exact: true });
+    await expect(bell).toHaveAttribute("href", "/notifications");
+    await expect(page.locator("#notifications-menu")).toHaveCount(0);
+    await bell.click();
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(page.locator("main")).toBeVisible();
   });
 
   // Alex, 2026-11-18 12:59Z: the footer sits below the first screen, seen only on scrolling, on short pages too. Home
@@ -222,7 +251,7 @@ test.describe("javascript disabled", () => {
       "href",
       "/me",
     );
-    // P2.27, ADR 0108: on a page with no script the bell is a link to the page, which asks a visitor to sign in.
+    // P2.27, ADR 0108: with no script the bell is a link to the page, which asks a visitor to sign in.
     await expect(page.locator("#notifications-menu")).toHaveCount(0);
   });
 

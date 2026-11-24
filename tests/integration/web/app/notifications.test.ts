@@ -18,6 +18,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+import { DATA, dataAnswer, nodeData, startupData } from "../data-address.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -139,7 +140,7 @@ describe("the bell and the notifications page", () => {
     const response = await get("/notifications");
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/login?next=%2Fnotifications");
-    // A page with no script draws the bell as a link to the page, which sends a visitor to sign in (ADR 0108).
+    // The server draws the bell as a link to the page, which sends a visitor to sign in (ADR 0108, ADR 0116 point 9).
     expect(await (await get("/legal/terms")).text()).toMatch(/<a [^>]*href="\/notifications"/);
   });
 
@@ -248,20 +249,35 @@ describe("the bell and the notifications page", () => {
     expect(await html("/notifications", laptop)).toContain(SIGN_IN);
   });
 
-  test("notifications.the_bell_is_a_link_to_the_page_where_no_script_runs", async () => {
-    // ADR 0108 point 3: a page that runs no script (home, a profile, the legal pages) cannot mark what a popover showed,
-    // so its bell is a plain link to the page, whose visit marks it; a page with script keeps the popover.
+  test("notifications.the_server_draws_the_bell_as_a_link_and_the_client_s_panel_gets_its_entries", async () => {
+    // ADR 0116 points 8 and 9 (book P1.22g): on every page the server draws the bell as a plain link to the page, so
+    // with no script a press goes there and the visit marks the list seen (ADR 0108 point 3). The panel and the form
+    // that marks what it showed are the client's to draw, from the entries in the page's data, wherever the client
+    // runs: an app page, home, a legal page, the invite request, the error page (tests/e2e/bell-panel.spec.ts opens it).
     const { did, cookie } = await member();
     await signInElsewhere(did);
-    for (const path of ["/", "/legal/terms"]) {
+    for (const path of ["/", "/legal/terms", "/request-invite", "/notifications/sign-ins", "/no/such/page"]) {
       const page = await html(path, cookie);
-      expect(page).toMatch(/<a [^>]*href="\/notifications"[^>]*>(?:(?!<\/a>).)*Notifications, 1 waiting/s);
-      expect(page).not.toContain('id="notifications-menu"');
-      expect(page).not.toContain("?/seen");
+      expect(page, path).toMatch(/<a [^>]*href="\/notifications"[^>]*>(?:(?!<\/a>).)*Notifications, 1 waiting/s);
+      expect(page, path).not.toContain('id="notifications-menu"');
+      expect(page, path).not.toContain("?/seen");
+      const bell = (startupData(page, 0) as { notifications?: unknown }).notifications;
+      expect(bell, path).toMatchObject({ state: "ready", count: 1, entries: [{ reason: "sign_in" }] });
     }
-    const app = await html("/notifications/sign-ins", cookie);
-    expect(app).toContain('id="notifications-menu"');
-    expect(app).toContain('action="/notifications?/seen"');
+    // A route whose own page runs no client cannot open the panel: its shell holds the count the link shows and no
+    // entry (rule SE-3). Since book P1.22l the only such route a member's session reaches is a form's target with no
+    // screen. Its GET is the error page, which does run the client; the shell was loaded for the route, so that one
+    // error page keeps the link.
+    const plain = await get(`/privacy-notice/seen${DATA}`, cookie);
+    expect(plain.status).toBe(200);
+    const shell = nodeData(await dataAnswer(plain), 0) as { notifications?: unknown };
+    expect(shell.notifications).toEqual({ state: "count", count: 1 });
+    const refused = await html("/privacy-notice/seen", cookie);
+    expect((startupData(refused, 0) as { notifications?: unknown }).notifications).toEqual({
+      state: "count",
+      count: 1,
+    });
+    expect(refused).toMatch(/<a [^>]*href="\/notifications"[^>]*>(?:(?!<\/a>).)*Notifications, 1 waiting/s);
   });
 
   test("notifications.only_a_visit_from_our_pages_or_a_typed_address_marks_seen", async () => {
@@ -289,8 +305,8 @@ describe("the bell and the notifications page", () => {
   test("notifications.opening_the_bell_marks_seen_only_what_this_browser_may_see", async () => {
     const { did, cookie: laptop } = await member();
     const thief = await signInElsewhere(did);
-    // A page with script draws the bell's panel and its hidden form; the sign-ins tab marks nothing on its own.
-    const [id] = listed(await html("/notifications/sign-ins", laptop));
+    // The id the bell's panel would post, read off the page (a request with no Fetch Metadata marks nothing).
+    const [id] = listed(await html("/notifications", laptop));
     // The browser the sign-in is about cannot see it, so its mark does not clear the laptop's badge.
     const refused = await post("/notifications?/seen", { upTo: id as string }, thief);
     expect(refused.status).toBe(303);
@@ -300,9 +316,8 @@ describe("the bell and the notifications page", () => {
     expect(forged.status).toBe(403);
     expect(await html("/legal/terms", laptop)).toContain("Notifications, 1 waiting");
     await post("/notifications?/seen", { upTo: id as string }, laptop);
-    const after = await html("/notifications/sign-ins", laptop);
-    expect(after).not.toMatch(WAITING);
-    expect(after).toContain(SIGN_IN); // still listed in the bell's panel until dismissed
+    expect(await html("/notifications/sign-ins", laptop)).not.toMatch(WAITING);
+    expect(await html("/notifications", laptop)).toContain(SIGN_IN); // still listed until dismissed
   });
 
   test("notifications.viewing_or_showing_an_entry_changes_nothing", async () => {

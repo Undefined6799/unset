@@ -35,15 +35,28 @@ says in its own `+page.ts` whether it runs SvelteKit's client, `csr = true` or `
 layout's `csr = true` decides the error page alone (ADR 0116, P1.22k), so every error page runs the client: an
 unmatched address, and a failed load on any route (kit takes `csr` from the layouts alone there, 3.2.0
 `page/index.js:272-291`, `respond_with_error.js:44-46`). A page that says false also says `client: false` in its
-`policy.ts`, and `gate.test.ts` names each with its reason. The hook sends SvelteKit's own CSP, narrowed, only when
+`policy.ts`, and `gate.test.ts` names each with its reason (since P1.22l: three routes nobody reads,
+`/login/continue`, `/prefs/theme` and `/privacy-notice/seen`; every page a person reads runs the client). The hook
+sends SvelteKit's own CSP, narrowed, only when
 two things hold: kit's header names a start-up script hash, and the document may run it (the route's own page
 unless `client: false`, or the error page, which the hook knows from `handleError` having run: `locals.erred`).
 That kit sent a header says nothing: it sends one on every page it draws. Refusals, redirects, data addresses and
-files keep the fixed policy. An `app` page without the client still gets kit's hashless policy until P1.22l.
+files keep the fixed policy. An `app` page without the client (the sign-in hop, `/login/continue`) gets the public
+group's fixed policy since P1.22l: styles and fonts, no `script-src`. Before, it kept kit's hashless policy.
+SvelteKit writes a server load's result into the start-up script it hashes, so on a page that runs the client a
+value the request chose is returned only in its parsed shape (`/login`: `next` and `close` as `safeReturnPath`;
+`/join`: the invite as `joinCode`), and `sign-in.test.ts` and `invite.test.ts` read the script with hostile values.
+A route whose load always redirects needs no `+page.svelte` and then says nothing of `csr` (`/welcome`).
 The error page's start-up script holds nothing from the request (ADR 0116 point 6): the root server load returns
 the theme and no path; `+layout.ts` works out the Sign in link's and the theme form's way back from `url`
 (`lib/return-paths.ts`, unchecked there by design: `/login`, `/prefs/theme` and `/privacy-notice/seen` check them
 on use). The server load still reads `url.pathname` so that it reruns on every navigation.
+The bell (P1.22g, ADR 0116 points 8 and 9): the server draws a link to `/notifications` on every page and never the
+panel; `+layout.svelte` turns it into the panel's button once mounted (`clientReady`), so a press before the client
+is ready, or with no script, follows the link. The root server load sends the entries only where the route's page
+runs the client (`runsClient(policyOf(route.id))`, one rule shared with the hook, policy.ts), else the count alone.
+A page that reads the query and runs the client returns it as a parsed flag or reads it in the universal load, so
+no query text is in the hashed start-up script (`/request-invite` `?sent`, `?error=`; tests hold the bytes).
 `every-answer.test.ts` (P1.22j) names every route of the built server and what its GET and data address answer for a
 visitor and a member, plus the answers no route gives (unmatched, refusals, redirects, build files, a 304), and pins
 each CSP header by value: a new route, or a page with no `csr` line, fails it until it has a row.

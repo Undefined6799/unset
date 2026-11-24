@@ -1,5 +1,5 @@
 // What a browser page is allowed to do while the harness watches it (P1.26).
-import type { BrowserContext, Page, Response } from "@playwright/test";
+import { type BrowserContext, expect, type Page, type Response } from "@playwright/test";
 import { memberCookie, originOf, type PageFixture, type ThemeCell } from "./pages.ts";
 
 /** @axe-core/playwright 4.13.0 tags for WCAG 2.2 AA. https://github.com/dequelabs/axe-core/blob/v4.13.0/doc/rule-descriptions.md */
@@ -108,4 +108,19 @@ export async function addPageCookies(context: BrowserContext, fixture: PageFixtu
 export async function openPage(page: Page, fixture: PageFixture, cell?: ThemeCell): Promise<Response | null> {
   await addPageCookies(page.context(), fixture, cell);
   return page.goto(`${originOf(fixture)}${fixture.path}`);
+}
+
+/**
+ * Nothing that text from outside (an address, a query, a member's words) would do if a browser read it as markup, as
+ * script or as a link: no `globalThis.ran` set, no element, handler or script address of its own, and one script
+ * element only, SvelteKit's start-up script. The specs' hostile values each set `ran` when run.
+ */
+export async function expectOnlyText(page: Page): Promise<void> {
+  expect(await page.evaluate(() => (globalThis as unknown as { ran?: unknown }).ran)).toBeUndefined();
+  await expect(page.locator('img[src="x"]')).toHaveCount(0);
+  await expect(page.locator("[onerror]")).toHaveCount(0);
+  await expect(page.locator('[href^="javascript:" i], [src^="javascript:" i], [action^="javascript:" i]')).toHaveCount(
+    0,
+  );
+  await expect(page.locator("script")).toHaveCount(1);
 }

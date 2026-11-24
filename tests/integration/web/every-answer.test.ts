@@ -61,12 +61,9 @@ const POLICIES = {
   /** A document that runs SvelteKit's client: our build's files and the one start-up script, by its hash. */
   script: appPolicy(`${BUILD} ${START_UP}`),
   /**
-   * An app-group page that runs no client (/login, /login/continue, /welcome/blocked): SvelteKit's policy with no
-   * hash, and no script in the body. The directive still names our build's files; nothing in the page asks for one.
-   * Pinned as it is; book P1.22l settles what these pages carry.
+   * The fixed policy of a page that runs no client: styles, fonts and build images, and no script-src at all. It is
+   * the public group's, and since book P1.22l also what an app page without the client is sent (the sign-in hop).
    */
-  "app, no hash": appPolicy(BUILD),
-  /** The public group's fixed policy: styles, fonts and build images, and no script-src at all. */
   plain:
     `default-src 'none'; img-src ${BUILD}; style-src ${BUILD}; font-src ${ORIGIN}/fonts/; form-action 'self'; ` +
     "base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'",
@@ -133,26 +130,27 @@ const MEMBERS_PAGE = { visitor: TO_SIGN_IN, member: "200 page: script" } as cons
 /** Every route id of the build (build/server/manifest.js). The test routes are served only with TEST_ROUTES on. */
 const ROUTES: Readonly<Record<string, Row>> = {
   // Pages anyone reads.
-  "/": { get: "200 page: plain", data: PUBLIC_DATA, client: false },
+  "/": { get: "200 page: script", data: PUBLIC_DATA, client: true },
   "/@[actor]": { at: `/@${SHOWN}`, get: "200 page: script", data: PUBLIC_DATA, client: true },
-  "/legal/[document=legal]": { at: "/legal/terms", get: "200 page: plain", data: PUBLIC_DATA, client: false },
-  "/request-invite": { get: "200 page: plain", data: PUBLIC_DATA, client: false },
-  "/join": { get: "200 page: plain", data: PUBLIC_DATA, client: false },
+  "/legal/[document=legal]": { at: "/legal/terms", get: "200 page: script", data: PUBLIC_DATA, client: true },
+  "/request-invite": { get: "200 page: script", data: PUBLIC_DATA, client: true },
+  "/join": { get: "200 page: script", data: PUBLIC_DATA, client: true },
 
   // Signing in and out. A member has nothing to sign in to and is sent on.
-  "/login": { get: { visitor: "200 page: app, no hash", member: SENT_ON }, data: APP_DATA, client: false },
-  "/login/continue": { state: "mid sign-in", get: "200 page: app, no hash", data: APP_DATA, client: false },
+  "/login": { get: { visitor: "200 page: script", member: SENT_ON }, data: APP_DATA, client: true },
+  "/login/continue": { state: "mid sign-in", get: "200 page: plain", data: APP_DATA, client: false },
   "/signed-out": { get: { visitor: "200 page: script", member: SENT_ON }, data: APP_DATA, client: true },
   "/oauth/callback": { get: SENT_ON },
   "/logout": { get: "405 no content type: static" },
   "/logout/everywhere": { get: "405 no content type: static" },
 
-  // Onboarding. /welcome only ever sends a member to their step; a visitor may read the under-age notice.
-  "/welcome": { get: SENT_ON, data: APP_DATA, client: false },
+  // Onboarding. /welcome only ever sends a member to their step and has no page of its own to draw; a visitor may
+  // read the under-age notice.
+  "/welcome": { get: SENT_ON, data: APP_DATA },
   "/welcome/age": { state: "at age", get: MEMBERS_PAGE, data: APP_DATA, client: true },
   "/welcome/terms": { state: "at terms", get: MEMBERS_PAGE, data: APP_DATA, client: true },
   "/welcome/chat": { state: "at chat", get: MEMBERS_PAGE, data: APP_DATA, client: true },
-  "/welcome/blocked": { get: { visitor: "200 page: app, no hash", member: SENT_ON }, data: APP_DATA, client: false },
+  "/welcome/blocked": { get: { visitor: "200 page: script", member: SENT_ON }, data: APP_DATA, client: true },
   "/verify-email": { get: MEMBERS_PAGE, data: APP_DATA, client: true },
 
   // The app's pages.
