@@ -43,6 +43,12 @@ Each route folder has a `policy.ts`. [`interfaces/web/src/lib/server/route-table
 
 Each header menu is a `popover="auto"` element, with a title and a Close button. It opens with no script, and closes on Close, a click outside or Escape ([HTML popover](https://html.spec.whatwg.org/multipage/popover.html)).
 
+With script, a header menu becomes the stock component once the client has started ([ADR 0116](../decisions/0116-every-page-runs-our-script-the-error-page-included.md) points 8 and 9; step P1.22m). The account menu is the first: the stock Dropdown Menu ([`apps/web/lib/components/shell/account-menu.svelte`](../../../apps/web/lib/components/shell/account-menu.svelte)), with arrow keys, Home and End, a letter to jump to a row, Escape, and focus back on its button. Its rows do what the native menu's do: two links, the theme choices, and Sign out, which posts the same form. Three things hold for every menu moved this way:
+
+- The layout loads the stock menu after the client starts, so no page's first load carries the library's menu code. Until the file is in, and if it never arrives, the native popover stays and works.
+- A press the native menu took is not lost. A menu found open stays open as the stock one, and focus on its button stays on the button.
+- The row under the pointer or the keys is drawn with the muted colour, because the theme's accent colour is the menu's own surface.
+
 The page scrolls as one document. The header and main share a column with `min-h-svh`, and the footer follows that column, so the footer starts below the first screen.
 
 Below the `sm` breakpoint the search field and the Create, Messages and Notifications buttons are hidden. A search button and a More actions button take their place and open the same panels. On a coarse pointer the icon controls use a larger target (`pointer-coarse:size-11`). The Notifications button carries the unread count, and so does More actions on a phone ([notifications](notifications.md)).
