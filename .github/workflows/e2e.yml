@@ -308,10 +308,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      # cp fails the step (bash -e) when a shard left no blob, so a missing shard cannot shrink a browser's report.
-      # The blob is report-<shard>.zip (the blob reporter's default name under --shard, playwright 1.64.1
-      # lib/runner/index.js _defaultReportName). PLAYWRIGHT_JSON_OUTPUT_FILE names the JSON reporter's file (same file,
-      # resolveOutputFile).
+      # Each shard must have left exactly one blob, or the step fails, so a missing shard cannot shrink a browser's
+      # report. Its name is taken as found: with --project it is report-<project>-<shard>.zip (playwright 1.64.1
+      # lib/runner/index.js computeCommandHash and _defaultReportName; Codex on #2031). PLAYWRIGHT_JSON_OUTPUT_FILE
+      # names the JSON reporter's file (same file, resolveOutputFile).
       - name: Merge each browser's shard reports into one (P0.07q)
         env:
           REPORTS: ${{ runner.temp }}/e2e
@@ -319,7 +319,12 @@ jobs:
           for project in chromium firefox webkit; do
             mkdir -p "$REPORTS/$project-blobs"
             for shard in $(seq "$E2E_SHARDS"); do
-              cp "$REPORTS/e2e-$project-$shard/blob-report/report-$shard.zip" "$REPORTS/$project-blobs/"
+              blobs=("$REPORTS/e2e-$project-$shard"/blob-report/*.zip)
+              if [ "${#blobs[@]}" -ne 1 ] || [ ! -f "${blobs[0]}" ]; then
+                echo "::error::$project shard $shard left ${#blobs[@]} blob reports, not one"
+                exit 1
+              fi
+              cp "${blobs[0]}" "$REPORTS/$project-blobs/"
             done
             PLAYWRIGHT_JSON_OUTPUT_FILE="$REPORTS/$project.json" npx playwright merge-reports --reporter json "$REPORTS/$project-blobs"
           done

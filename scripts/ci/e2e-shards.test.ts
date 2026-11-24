@@ -63,9 +63,15 @@ describe("browser shards (P0.07q)", () => {
     expect(config.globalTimeout).toBeLessThanOrEqual(limit - 5 * 60_000);
   });
 
+  // Playwright 1.64.1 names a shard's blob report-<project>-<shard>.zip when --project is given (computeCommandHash and
+  // the blob reporter's _defaultReportName, lib/runner/index.js; Codex on #2031), so the gate takes the one zip each
+  // shard left, whatever its name.
+  const blob = (project: string, shard: number) => `report-${project}-${shard}.zip`;
+
   // Runs the merge step as Actions does (`bash -e`) over downloaded shard folders; npx stands in for Playwright and
-  // logs its arguments, the JSON file it was told to write and the blobs in the folder it was given.
-  function runMerge(present: (project: string, shard: number) => boolean) {
+  // logs its arguments, the JSON file it was told to write and the blobs in the folder it was given. `blobs` names
+  // the zips one shard left.
+  function runMerge(blobs: (project: string, shard: number) => readonly string[]) {
     const root = mkdtempSync(join(tmpdir(), "e2e-merge-"));
     const bin = join(root, "bin");
     const reports = join(root, "reports");
@@ -73,10 +79,9 @@ describe("browser shards (P0.07q)", () => {
     mkdirSync(bin);
     for (const project of E2E_PROJECTS) {
       for (let shard = 1; shard <= shards; shard++) {
-        if (!present(project, shard)) continue;
         const dir = join(reports, `e2e-${project}-${shard}`, "blob-report");
         mkdirSync(dir, { recursive: true });
-        writeFileSync(join(dir, `report-${shard}.zip`), "");
+        for (const name of blobs(project, shard)) writeFileSync(join(dir, name), "");
       }
     }
     const npx = `#!/bin/bash\necho "$* > $PLAYWRIGHT_JSON_OUTPUT_FILE < $(ls "\${@: -1}" | xargs)" >> "${log}"\n`;
@@ -93,21 +98,24 @@ describe("browser shards (P0.07q)", () => {
 
   test("the_gate_merges_every_shard_of_each_browser_into_its_report", () => {
     expect(merge?.env?.REPORTS).toBe(`$${"{{"} runner.temp }}/e2e`);
-    const { status, calls, reports } = runMerge(() => true);
+    const { status, calls, reports } = runMerge((project, shard) => [blob(project, shard)]);
     expect(status).toBe(0);
-    const zips = Array.from({ length: shards }, (_, i) => `report-${i + 1}.zip`).join(" ");
+    const zips = (project: string) => Array.from({ length: shards }, (_, i) => blob(project, i + 1)).join(" ");
     expect(calls).toEqual(
       E2E_PROJECTS.map(
         (project) =>
-          `playwright merge-reports --reporter json ${reports}/${project}-blobs > ${reports}/${project}.json < ${zips}`,
+          `playwright merge-reports --reporter json ${reports}/${project}-blobs > ${reports}/${project}.json < ${zips(project)}`,
       ),
     );
   });
 
-  test("a_missing_shard_report_fails_the_gate", () => {
+  test("a_shard_without_exactly_one_blob_fails_the_gate", () => {
     for (const project of E2E_PROJECTS) {
-      const { status } = runMerge((p, shard) => !(p === project && shard === shards));
-      expect(status, project).not.toBe(0);
+      const missing = runMerge((p, shard) => (p === project && shard === shards ? [] : [blob(p, shard)]));
+      expect(missing.status, `${project} missing`).not.toBe(0);
+      const extra = (p: string, shard: number) =>
+        p === project && shard === 1 ? [blob(p, shard), "report-old.zip"] : [blob(p, shard)];
+      expect(runMerge(extra).status, `${project} extra`).not.toBe(0);
     }
   });
 });
