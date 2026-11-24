@@ -359,6 +359,9 @@ function logOutDock(event: SubmitEvent) {
 /** The box's page has loaded (again, after a renewal): say hello first, so the box learns this origin from us. */
 function dockLoaded() {
   dockGreeted = true;
+  // A new page in the box is a new client: the poll keeps the count until it reports one (a renewal replaces the
+  // page without count_stopped, apps/chat/boot.ts renew).
+  dockCounting = false;
   toDock({ type: `${DOCK}hello` });
   toDock({ type: `${DOCK}theme`, theme: current });
   toDock({ type: `${DOCK}shown`, shown: dockShown });
