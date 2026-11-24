@@ -75,7 +75,7 @@ export type Colouring = { readonly runs: readonly CodeRun[] } | { readonly plain
 export async function colourCode(text: string, language: string, budget: CodeColourBudget): Promise<Colouring> {
   if (!withinSize(text, budget.limits)) return { plain: "size" };
   const found = language === "" ? null : LanguageDescription.matchLanguageName(languages, language, true);
-  if (found === null || PLAIN.has(found.name)) return { plain: "language" };
+  if (found === null || !colourable(found.name, text, budget.limits)) return { plain: "language" };
   let parser: Parser;
   try {
     parser = (await found.load()).language.parser;
@@ -96,6 +96,14 @@ export async function colourCode(text: string, language: string, budget: CodeCol
 
 /** Languages whose parser takes a step no line limit bounds (see the top of this file): their code stays plain. */
 const PLAIN: ReadonlySet<string> = new Set(["Markdown"]);
+
+/**
+ * Whether code in the language CodeMirror names `name` may be coloured: the page's own size and language rules, which
+ * the editor asks before it loads a language and again on every change (code-block.ts), so it never runs a parser on
+ * what the page would leave plain.
+ */
+export const colourable = (name: string, text: string, limits: CodeColourLimits): boolean =>
+  !PLAIN.has(name) && withinSize(text, limits);
 
 /** Every language's name, for the sweep that holds each one to the limits (limits.code.test.ts in interfaces/web). */
 export const CODE_LANGUAGES: readonly string[] = languages.map(({ name }) => name);

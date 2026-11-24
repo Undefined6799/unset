@@ -5,7 +5,7 @@
 // real numbers and the sweep over every language are in interfaces/web/src/lib/server/limits.code.test.ts.
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { CODE_COLOURS, type CodeColourLimits, codeColourBudget, colourCode } from "./code-colours.ts";
+import { CODE_COLOURS, type CodeColourLimits, codeColourBudget, colourable, colourCode } from "./code-colours.ts";
 
 const repo = new URL("../../../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, repo), "utf8");
@@ -109,6 +109,21 @@ describe("colourCode's limits", () => {
     expect(budget.spentMs).toBeGreaterThanOrEqual(5);
     expect(await colourCode("let a;", "js", budget)).toEqual({ plain: "time" });
     expect(performance.now() - started).toBeLessThan(500);
+  });
+});
+
+// The editor's CodeMirror asks the same question before it loads a language, and again on every change, so it never
+// colours what the page would not (code-block.ts).
+describe("colourable", () => {
+  test("a language within the limits may be coloured", () => {
+    expect(colourable("JavaScript", "let a;\nlet b;", LIMITS)).toBe(true);
+  });
+  test("a line or a block past the limits may not", () => {
+    expect(colourable("JavaScript", `let a = "${"x".repeat(100)}";`, LIMITS)).toBe(false);
+    expect(colourable("JavaScript", "let a;\n".repeat(400), LIMITS)).toBe(false);
+  });
+  test("Markdown never is: its parser takes a whole paragraph in one step", () => {
+    expect(colourable("Markdown", "*a*", LIMITS)).toBe(false);
   });
 });
 

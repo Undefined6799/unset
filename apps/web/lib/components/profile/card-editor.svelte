@@ -331,7 +331,7 @@ const buttonRows = $derived([
         </Tabs.List>
         <!-- An inactive tab's panel stays in the page, hidden (bits-ui 2.20.6 tabs-content.svelte), so the text still posts. -->
         <Tabs.Content value="write">
-          <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
+          <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} {codeColours} required />
         </Tabs.Content>
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
           {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={colouredPreview ?? previewBlocks} />{/if}

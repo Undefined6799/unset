@@ -265,6 +265,23 @@ test("a_code_block_copies_its_code_with_script_and_draws_no_button_without", asy
   await deleteNewest(page);
 });
 
+// The editor colours what the page colours (CODE_COLOUR_LIMITS through cardEditLimits): the same parsers froze the
+// member's own tab on one long line (Textile "<a " repeated: 94 s per 20,000-character line, "Make page code colouring
+// safe" thread on #2008), since a stream parser takes a whole line in one step that nothing interrupts.
+test("code_grown_past_the_limits_turns_plain_and_shrunk_back_is_coloured_again", async ({ page }) => {
+  await openStored(page, "```js\nlet a = 1;\n```");
+  const content = page.locator("main .cm-editor .cm-content").last();
+  await expect(content.locator(".code-keyword")).toHaveText("let");
+  await content.click();
+  await page.keyboard.press("End");
+  // One line past the page's 400 characters (interfaces/web limits.ts CODE_COLOUR_LIMITS lineChars).
+  await page.keyboard.insertText(` // ${"x".repeat(450)}`);
+  await expect(content.locator(".code-keyword")).toHaveCount(0);
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(content.locator(".code-keyword")).toHaveText("let");
+  await deleteNewest(page);
+});
+
 test("a_script_pasted_into_a_code_block_stays_text", async ({ page }) => {
   const watched = watch(page);
   const card = await openStored(page, "```\nx\n```");
