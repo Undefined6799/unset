@@ -35,6 +35,14 @@ test("formulas side by side keep their own groups, so scripts at their edges do 
   expect(() => shown("{x^2}{^3}")).not.toThrow();
 });
 
+// Codex on #2020 (7d3ca66): a TeX comment runs to the line's end (KaTeX 0.16.47 src/Lexer.ts), so in "{x% note}{y}" it
+// took the group's end and the next formula. Comments, which draw nothing, move to the end of the run.
+test("a comment in a formula side by side with others moves to the end, so it takes nothing after it", () => {
+  const children = [formula("x% note"), formula("\\% y \\verb!%!"), formula("z % last")];
+  expect(written(children)).toEqual(["$${x}{\\% y \\verb!%!}{z }% note% last$$", "", ""]);
+  expect(shown("{x}{\\% y \\verb!%!}{z }% note% last")).toBe(shown("x\\% y \\verb!%!z"));
+});
+
 test("a formula with words beside it is written by mdast-util-math's writer as it was", () => {
   expect(written([formula("x"), words(" and "), formula("y")])).toEqual(["$x$", " and ", "$y$"]);
 });
