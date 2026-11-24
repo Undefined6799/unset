@@ -141,6 +141,20 @@ Preview, loaded when Preview opens, on the owner's own text; the Preview's code 
 (`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
 without it neither the Preview nor Milkdown reads a text holding `&amp;`.
 
+**Math (P1.21v, 2026-11-24).** The page's own parse also reads micromark-extension-math 3.1.0 (`$…$`, `$$…$$`) and
+draws a ```` ```math ```` block as a formula; `topBlocks` reads without it, so looks are still placed on CommonMark's
+blocks (ADR 0110 decision 5). `math.ts` draws a formula with KaTeX 0.16.47 (`output: "mathml"`, `trust: false`,
+`maxExpand` 100, `maxSize` 10), reads KaTeX's string back with parse5 8.0.1 and keeps only allowlisted MathML
+elements and attributes with plain values (no colour, style, link or picture); `readme.svelte` draws the tree with
+`svelte:element` and an `xmlns`, which svelte 5.57.3 takes as the element's namespace. A string from KaTeX never
+reaches the page. A formula KaTeX cannot read, longer than 2,000 characters, or past the card's 200 formulas or
+20,000 elements is its source. The math runs inside the same read (and deadline) as the Markdown; in the browser it
+is in the Preview's chunk only (about 119 KiB gzip with the reader), never on a first load. Between single dollars the page keeps
+Pandoc's rule, as Crepe 7.23.0 does (`remarkInlineMathGuardPlugin`), so "$5 and $10" stays words; the editor must too.
+micromark has already taken a refused span ("$5 **each** or $") as one node, so the page reads the Markdown between
+its dollars again, without math, rather than showing it as written (Codex on #2019); Crepe shows it as written. Each
+read again spends one of the card's 200 formulas, so thousands of refused spans cost what formulas may.
+
 **Rules worth knowing.**
 - Only server files (`*.server.ts`, `+server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or
   infrastructure (`svelte-screens-no-core`); SvelteKit's own guard keeps `lib/server` out of browser code.
