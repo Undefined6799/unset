@@ -5613,6 +5613,16 @@ and returns no value that authorises anything: the OAuth state, nonce and PKCE v
 the test reads each page's start-up script and data address for them. Hostile text in each query value runs
 nothing. `/login/continue` keeps no script, so the hop to the sign-in server never waits for a file.
 
+**Built 2026-11-24, where the code differs from the words above.** (1) `/login`, `/join` and `/welcome/blocked` say
+`csr = true` in their own `+page.ts`, as P1.22j's test asks of every page with something to draw. (2) `/welcome`
+only ever redirects, so it loses its `+page.ts` and its empty `+page.svelte` and says nothing, as `/profile` does:
+the same test wants a page that says true to be seen running the client, and nothing of `/welcome` is ever drawn.
+(3) `/login` no longer reads `handle` (the form has posted one button since P2.05r); of the request its load
+returns `next` and Close's address from the Referer, each a `safeReturnPath` or nothing, and both are in the
+start-up script in that shape. (4) The hop is settled: an `app` page without the client is sent the public group's
+fixed policy (styles and fonts, no `script-src`) in place of SvelteKit's policy without a hash, so no document
+without the client names a script source at all. That tightens the hook and needs no line.
+
 ### P1.22m — Move the navbar's controls to the stock components (added step, 2026-11-23)
 
 **Tags:** — · **Depends on:** P1.22g · **Plan:** §5.4
