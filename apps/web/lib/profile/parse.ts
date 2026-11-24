@@ -512,20 +512,33 @@ function placed(node: Flow, shown: Block[]): Block[] {
   return [{ ...only, from: node.position.start.line, to: node.position.end.line }];
 }
 
-export function parseReadme(src: string): Block[] {
+/**
+ * A card's blocks, and whether the page shows each of its top-level tables whole. It does not when MAX_BLOCKS stops
+ * the read early, or a guard shows a table as written or cut short; then a look must be counted against the tables a
+ * placement parse reads (place-sides.ts, Codex on #2028), since the page has fewer of them.
+ */
+export type CardRead = { readonly blocks: Block[]; readonly whole: boolean };
+
+export function readCardBlocks(src: string): CardRead {
   const source = normalised(src);
   try {
     const root = fromMarkdown(source, DRAW);
     const reading: Reading = { source, definitions: definitionsOf(root), cells: MAX_CELLS, math: mathBudget() };
     const blocks: Block[] = [];
+    let whole = true;
     for (const node of root.children) {
-      if (blocks.length >= MAX_BLOCKS) break;
-      blocks.push(...placed(node, block(node, reading)));
+      if (blocks.length >= MAX_BLOCKS) return { blocks, whole: false };
+      const shown = placed(node, block(node, reading));
+      const [first] = shown;
+      if (node.type === "table" && (first?.kind !== "table" || first.from === undefined)) whole = false;
+      blocks.push(...shown);
     }
-    return blocks;
+    return { blocks, whole };
   } catch {
     // micromark recurses once per level of nesting, so thousands of nested quotes or lists overflow the stack
-    // (a RangeError); such a card is shown as written rather than failing the page.
-    return plainText(src);
+    // (a RangeError); such a card is shown as written rather than failing the page. It shows no table.
+    return { blocks: plainText(src), whole: true };
   }
 }
+
+export const parseReadme = (src: string): Block[] => readCardBlocks(src).blocks;

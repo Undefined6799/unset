@@ -7,7 +7,7 @@
 // (interfaces/web text-reader.ts, review of #2028: placing on every load cost a visitor's load up to seconds), with a
 // synchronous hash the reader passes in. Placing then only compares names.
 
-import { type Block, MAX_CHARS, sourceLines, type TableBlock, topBlocks } from "./parse.ts";
+import { type Block, type CardRead, MAX_CHARS, sourceLines, type TableBlock, topBlocks } from "./parse.ts";
 import type { TableEdge, TableSides } from "./types.ts";
 
 /** The most lines a look names (sh.unset.block.text#tableEdges `lines` maxLength): a longer table matches none. */
@@ -35,26 +35,27 @@ function nameOf(lines: readonly string[], from: number, to: number, sha256: Sha2
 const MATH_FENCE = /^[ \t>*+\-\d.)]*\$\$/m;
 
 /**
- * The longest text with a math block whose tables are placed. Placing on such a text parses it a second time without
- * math (below), and the page's read must still fit one text's limit (text-reader.ts, review of #2028): a full card
- * parsed twice took about 180 ms of processor time against 150. A longer text with a math block shows its tables
- * without looks, which ADR 0110 allows: a disagreement between parsers drops a look, it never moves one.
+ * The longest text that is read a second time to count its tables as the editor does (nameTables, below): the page's
+ * read must still fit one text's limit (text-reader.ts, review of #2028), and a full card read twice took about 180 ms
+ * of processor time against 150. A longer text that needs it shows its tables without looks, which ADR 0110 allows: a
+ * disagreement between parsers drops a look, it never moves one.
  */
-export const MAX_PLACED_WITH_MATH = MAX_CHARS / 2;
+export const MAX_READ_TWICE = MAX_CHARS / 2;
 
 /**
  * The blocks with each top-level table that parse.ts noted the lines of named as a look names it. A table with more
  * lines than a look can name is not hashed.
  *
- * The page also draws `$$` math, which the editor does not read (ADR 0110 decision 5, topBlocks), and a math block
- * can hold a table or end one early. So when the text may hold one, a table keeps its name only if the editor reads a
- * table on the same lines and reads as many tables of that name as the page shows (Codex on #2028): otherwise one
- * look meant for a table math hides could be drawn on another.
+ * Looks are counted against the tables the editor reads (ADR 0110 decision 5, topBlocks), and the page can show fewer:
+ * `$$` math, which the editor does not read, can hold a table or end one early, and the page's guards can stop
+ * before a table or show one as written (CardRead.whole). Then a table keeps its name only if the editor reads a table
+ * on the same lines and as many tables of that name as the page shows (Codex on #2028): otherwise one look meant for
+ * a table the page hides could be drawn on another.
  */
-export function nameTables(text: string, blocks: readonly Block[], sha256: Sha256Hex): Block[] {
-  if (!MATH_FENCE.test(text)) return named(text, blocks, sha256);
-  if (text.length > MAX_PLACED_WITH_MATH) return [...blocks];
-  return asTheEditorReads(text, named(text, blocks, sha256), sha256);
+export function nameTables(text: string, read: CardRead, sha256: Sha256Hex): Block[] {
+  if (read.whole && !MATH_FENCE.test(text)) return named(text, read.blocks, sha256);
+  if (text.length > MAX_READ_TWICE) return [...read.blocks];
+  return asTheEditorReads(text, named(text, read.blocks, sha256), sha256);
 }
 
 function named(text: string, blocks: readonly Block[], sha256: Sha256Hex): Block[] {
@@ -73,7 +74,9 @@ function asTheEditorReads(text: string, blocks: Block[], sha256: Sha256Hex): Blo
   for (const block of blocks)
     if (block.kind === "table" && block.name) onPage.set(`${block.from}:${block.to}`, block.name);
   const editor = new Map<string, string>();
-  for (const { kind, from, to } of topBlocks(text)) {
+  const placement = editorBlocks(text);
+  if (placement === null) return blocks.map((block) => (block.kind === "table" ? withoutName(block) : block));
+  for (const { kind, from, to } of placement) {
     if (kind !== "table" || to - from > MAX_LOOK_LINES) continue;
     editor.set(`${from}:${to}`, onPage.get(`${from}:${to}`) ?? nameOf(lines, from, to, sha256));
   }
@@ -95,6 +98,18 @@ function counts(names: Iterable<string>): Map<string, number> {
   const seen = new Map<string, number>();
   for (const name of names) seen.set(name, (seen.get(name) ?? 0) + 1);
   return seen;
+}
+
+/**
+ * The text's top-level blocks as the editor reads them, or null when that parse overflows the stack on deep nesting
+ * (a RangeError, as parse.ts readCardBlocks catches for the page; Codex on #2028): then no table takes a look.
+ */
+function editorBlocks(text: string): ReturnType<typeof topBlocks> | null {
+  try {
+    return topBlocks(text);
+  } catch {
+    return null;
+  }
 }
 
 const withoutName = ({ name: _, ...table }: TableBlock): TableBlock => table;

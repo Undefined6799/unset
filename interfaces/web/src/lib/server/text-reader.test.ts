@@ -6,7 +6,7 @@
 // unbounded parses take seconds, the limits are tens of milliseconds, and each bar sits far from both. What a full
 // card costs to parse is measured as this thread's processor time (`processorMs`), not by the clock.
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
-import { MAX_PLACED_WITH_MATH } from "@unset/apps-web/lib/profile/place-sides.ts";
+import { MAX_READ_TWICE } from "@unset/apps-web/lib/profile/place-sides.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
 import { createTextReads, readCard, type TextReadLimits, within } from "./text-reader.ts";
@@ -426,7 +426,7 @@ describe("the page's limits", () => {
   // 180 ms of processor time here.
   test.each([
     ["a full card", CEILING],
-    ["half a card", MAX_PLACED_WITH_MATH],
+    ["half a card", MAX_READ_TWICE],
   ])("%s of one table and a formula is read and named within one text's limit", (_name, size) => {
     const head = "$$\nx^2\n$$\n\n| a | b | c |\n| --- | --- | --- |\n";
     const text = `${head}${row.repeat(Math.floor((size - 40 - head.length) / row.length))}`;

@@ -1,8 +1,8 @@
 // ADR 0110 points 2, 4 and 5: a look's edges are drawn on the table its line fingerprints name, and only there.
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
-import { parseReadme, sourceLines, topBlocks } from "./parse.ts";
-import { fingerprint, MAX_LOOK_LINES, MAX_PLACED_WITH_MATH, nameTables, placeSides } from "./place-sides.ts";
+import { parseReadme, readCardBlocks, sourceLines, topBlocks } from "./parse.ts";
+import { fingerprint, MAX_LOOK_LINES, MAX_READ_TWICE, nameTables, placeSides } from "./place-sides.ts";
 import type { TableEdge } from "./types.ts";
 
 // SHA-256 over the line without its spaces, first 8 hex characters (node:crypto gave these for "|a|b|" and so on).
@@ -12,7 +12,7 @@ const EDGE: TableEdge = { direction: "vertical", line: 1, cell: 0, hide: false }
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 /** For each block of `text`, the edges placed on it: null for a block that is no table. */
 async function edgesOf(text: string, sides: Parameters<typeof placeSides>[1]) {
-  const blocks = nameTables(text, parseReadme(text), sha256);
+  const blocks = nameTables(text, readCardBlocks(text), sha256);
   const placed = placeSides(blocks, sides);
   return blocks.map((block) => (block.kind === "table" ? placed.get(block) : null));
 }
@@ -34,10 +34,10 @@ describe("nameTables", () => {
       return sha256(text);
     };
     const long = `| a |\n| - |\n${"| 1 |\n".repeat(MAX_LOOK_LINES)}`;
-    expect(nameTables(long, parseReadme(long), counting).map((block) => "name" in block)).toEqual([false]);
+    expect(nameTables(long, readCardBlocks(long), counting).map((block) => "name" in block)).toEqual([false]);
     expect(hashed).toEqual([]);
     const most = `| a |\n| - |\n${"| 1 |\n".repeat(MAX_LOOK_LINES - 1)}`;
-    const [named] = nameTables(most, parseReadme(most), counting);
+    const [named] = nameTables(most, readCardBlocks(most), counting);
     expect(named?.kind === "table" && named.name?.split(" ").length).toBe(MAX_LOOK_LINES);
   });
 
@@ -112,9 +112,29 @@ describe("placeSides", () => {
     expect(await edgesOf(hidden, [{ lines: A, edges: [EDGE] }])).toEqual([null, undefined]);
   });
 
+  // Codex on #2028: the page's guards can drop a table the editor still reads, so one look for two such tables must
+  // not land on the one the page shows; and a placement parse that overflows on deep nesting places nothing.
+  test("a table the page's guards leave out still counts, so the one shown takes no look meant for two", async () => {
+    const look = [{ lines: A, edges: [EDGE] }];
+    const cut = `${TABLE}\n\n${"***\n".repeat(2_000)}\n${TABLE}`;
+    expect(cut.length).toBeLessThanOrEqual(MAX_READ_TWICE);
+    expect(readCardBlocks(cut).whole).toBe(false);
+    expect((await edgesOf(cut, look))[0]).toBeUndefined();
+    const wide = `${TABLE}\n\n|${" x |".repeat(51)}\n|${" - |".repeat(51)}\n\n${TABLE}`;
+    expect(readCardBlocks(wide).whole).toBe(false);
+    expect((await edgesOf(wide, look)).filter((edges) => edges !== null)).toEqual([undefined, undefined]);
+  });
+
+  test("a math card nested too deep for the placement parse names no table and does not throw", () => {
+    const deep = `$$\nx\n$$\n\n${TABLE}\n\n${"> - ".repeat(2_400)}deep`;
+    expect(deep.length).toBeLessThanOrEqual(MAX_READ_TWICE);
+    expect(() => topBlocks(deep)).toThrow(RangeError);
+    expect(nameTables(deep, readCardBlocks(deep), sha256).filter((block) => "name" in block)).toEqual([]);
+  }, 30_000);
+
   test("a text longer than half a card that holds a math block shows its tables without looks", async () => {
     const look = [{ lines: A, edges: [EDGE] }];
-    const filler = "words ".repeat(Math.ceil(MAX_PLACED_WITH_MATH / 6));
+    const filler = "words ".repeat(Math.ceil(MAX_READ_TWICE / 6));
     expect(await edgesOf(`${filler}\n\n${TABLE}`, look)).toEqual([null, [EDGE]]);
     expect(await edgesOf(`$$\nx\n$$\n\n${filler}\n\n${TABLE}`, look)).toEqual([null, null, undefined]);
     expect(await edgesOf(`$$\nx\n$$\n\n${TABLE}`, look)).toEqual([null, [EDGE]]);

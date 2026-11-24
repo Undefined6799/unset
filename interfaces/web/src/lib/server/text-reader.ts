@@ -37,7 +37,7 @@
 // leaves this memory by itself.
 import { createHash } from "node:crypto";
 import { createContext, Script } from "node:vm";
-import { type Block, MAX_CHARS, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
+import { type Block, MAX_CHARS, plainText, readCardBlocks } from "@unset/apps-web/lib/profile/parse.ts";
 import { nameTables } from "@unset/apps-web/lib/profile/place-sides.ts";
 
 /**
@@ -117,7 +117,7 @@ const sha256 = (text: string): string => createHash("sha256").update(text, "utf8
  * for it once in `keptForMs` (review of #2028); node:crypto's synchronous hash took 7 to 18 ms for a full card of a
  * one-column table, where Web Crypto's digest took about 200.
  */
-export const readCard = (text: string): Block[] => nameTables(text, parseReadme(text), sha256);
+export const readCard = (text: string): Block[] => nameTables(text, readCardBlocks(text), sha256);
 
 /**
  * The process's reader of Text cards. `forPage` gives one page load its reader. `sweep` drops every kept result past

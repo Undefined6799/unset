@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import type { CodeColourLimits } from "../editor/code-colours.ts";
-import { MAX_CHARS, parseReadme } from "./parse.ts";
+import { MAX_CHARS, parseReadme, readCardBlocks } from "./parse.ts";
 import { nameTables } from "./place-sides.ts";
 import { contactAction, shownCards, cardViews as viewsWithin } from "./view.ts";
 
@@ -16,7 +16,7 @@ const cardViews = (cards: Parameters<typeof viewsWithin>[0], versions?: Readonly
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 /** As the page's server reads: tables named for placing looks (text-reader.ts readCard). */
 const namedViews = (cards: Parameters<typeof viewsWithin>[0]) =>
-  viewsWithin(cards, (text) => nameTables(text, parseReadme(text), sha256), CODE_COLOURS);
+  viewsWithin(cards, (text) => nameTables(text, readCardBlocks(text), sha256), CODE_COLOURS);
 
 describe("card views", async () => {
   // ADR 0110 points 4-5, rule SE-3: a look's edges ride on the table it names, and the lines a table was written on
