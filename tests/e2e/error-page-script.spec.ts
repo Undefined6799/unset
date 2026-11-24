@@ -6,13 +6,11 @@
 // script off). tests/integration/web holds the same page's header by value and the bytes of its start-up script
 // (every-answer.test.ts, public/public-pages.test.ts, public/public-profile.test.ts).
 import { expect, type Page, type Request, type Response, test } from "@playwright/test";
-import { openPage, pageNoise, type Watched, watch } from "./observe.ts";
+import { expectOnlyText, openPage, pageNoise, type Watched, watch } from "./observe.ts";
 import { HIDDEN, INDEXED, type PageFixture, PROD_ORIGIN, TEST_ORIGIN } from "./pages.ts";
 
 const NOT_FOUND = "That page does not exist.";
 const MISSING = `did:plc:${"z".repeat(24)}`;
-
-type Probe = { ran?: unknown };
 
 /**
  * Addresses nobody serves, each holding text that would set `globalThis.ran` if a browser ever read it as markup, as
@@ -30,18 +28,6 @@ const HOSTILE_ADDRESSES = [
   "/nope?%3C/script%3E%3Cscript%3EglobalThis.ran=1%3C/script%3E",
   "/@%3C%2Fscript%3E%3Cscript%3EglobalThis.ran=1%3C%2Fscript%3E",
 ] as const;
-
-/** Nothing of the address ran or became markup: no global set, no element, handler or script address of its own. */
-async function expectOnlyText(page: Page): Promise<void> {
-  expect(await page.evaluate(() => (globalThis as unknown as Probe).ran)).toBeUndefined();
-  await expect(page.locator('img[src="x"]')).toHaveCount(0);
-  await expect(page.locator("[onerror]")).toHaveCount(0);
-  await expect(page.locator('[href^="javascript:" i], [src^="javascript:" i], [action^="javascript:" i]')).toHaveCount(
-    0,
-  );
-  // The one script element is SvelteKit's start-up script.
-  await expect(page.locator("script")).toHaveCount(1);
-}
 
 /**
  * What the page said that it should not have. A browser notes the document's own 404 in its console (Chromium:

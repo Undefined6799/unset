@@ -6,24 +6,10 @@
 // page still reads whole (ADR 0114 point 5). tests/integration/web/public/public-profile.test.ts holds the same page's
 // header by value and the data its start-up script carries.
 import { expect, type Page, test } from "@playwright/test";
-import { pageNoise, watch } from "./observe.ts";
+import { expectOnlyText, pageNoise, watch } from "./observe.ts";
 import { HOSTILE, PROD_ORIGIN } from "./pages.ts";
 
 const PROFILE = `${PROD_ORIGIN}/@${HOSTILE.did}`;
-
-type Probe = { ran?: unknown };
-
-/** Nothing the member wrote ran or became markup: no global set, no element, handler or script address of theirs. */
-async function expectOnlyText(page: Page): Promise<void> {
-  expect(await page.evaluate(() => (globalThis as unknown as Probe).ran)).toBeUndefined();
-  await expect(page.locator('img[src="x"]')).toHaveCount(0);
-  await expect(page.locator("[onerror]")).toHaveCount(0);
-  await expect(page.locator('[href^="javascript:" i], [src^="javascript:" i], [action^="javascript:" i]')).toHaveCount(
-    0,
-  );
-  // The one script element is SvelteKit's start-up script; the member's `<script>` is text beside it.
-  await expect(page.locator("script")).toHaveCount(1);
-}
 
 /** The first place the page shows `text` whole (the About panel holds a hidden copy of the headline). */
 const shown = (page: Page, text: string) => page.getByText(text, { exact: true }).filter({ visible: true }).first();
