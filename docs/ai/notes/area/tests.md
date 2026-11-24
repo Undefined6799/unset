@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]", "[[visitors-behind-one-address]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-11-21
+checked: 2026-11-23
 ---
 # tests
 
@@ -83,6 +83,20 @@ handle, "/" menu, floating bar, link editor and empty-line hint. Playwright's We
 mouse press, so its `drag()` sends the browser's own drag events there. Select words with `selectText()`, not a
 double click at a paragraph's centre (it hits empty space, and Firefox selects differently). A card whose edits
 end where they began has no unsaved changes: delete it without Discard (`discardAndRemove(..., { changed: false })`).
+
+**A Text card as the server draws it (P1.21k).** With script, the owner's page replaces a Text card's drawn words
+with the in-place editor, and they sit beside the card's group of controls, not in it. A spec that checks what
+visitors get opens the same page for the same member with script off (`withoutScript` in `text-read.spec.ts`) and
+reads `[data-slot='card']`.
+
+**A reload while the page is still starting is a page error in WebKit (P1.21k, CI on #2013).** SvelteKit's start-up
+awaits the root layout's and the error page's scripts with nothing catching a failure (kit 3.2.0 `client.js`
+`start()`), and WebKit reports a script load that a reload or a navigation cancels as the page error "Importing a
+module script failed". A spec that holds `pageErrors` to none waits for the page to finish starting
+(`waitForLoadState("networkidle")`, as `openOwnPage` in `text-menus.spec.ts`) before it reloads or leaves. The
+Playwright image run with `--cpus=0.5` shows it in two or three repeats. One failed test that leaves a Text card
+behind fails every later test whose locator expects one Text card, and each failure restarts the worker, which
+empties the write pacer (a 24 s wait): a WebKit job can then pass its 30 minutes before any error is printed.
 
 **Members' state in browser specs (P1.22g).** One test server serves a whole project's run, so a spec must leave a
 seeded member as it found them. The "bell" member's entries stay unseen: a spec that opens the bell as that member

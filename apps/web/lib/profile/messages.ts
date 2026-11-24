@@ -79,6 +79,7 @@ export const CARD_EDIT = {
   write: "Write",
   preview: "Preview",
   previewEmpty: "Nothing to preview yet.",
+  previewFailed: "The preview could not load. Reload the page to see it.",
   save: "Save",
   add: "Add",
   cancel: "Cancel",
