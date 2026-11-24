@@ -3,7 +3,8 @@
 // load. Two kinds of test, so a slow machine decides none. What time the reader gives a read, takes from the page and
 // keeps is tested on a clock only the test moves (`onTestClock`), to the millisecond. That the real stop lands is
 // tested in real time, on a task that never ends and on the real parser; those times are loose on purpose: the
-// unbounded parses take seconds, the limits are tens of milliseconds, and each bar sits far from both.
+// unbounded parses take seconds, the limits are tens of milliseconds, and each bar sits far from both. What a full
+// card costs to parse is measured as this thread's processor time (`processorMs`), not by the clock.
 import { type Block, parseReadme, plainText } from "@unset/apps-web/lib/profile/parse.ts";
 import { describe, expect, test } from "vitest";
 import { TEXT_READ_LIMITS } from "./limits.ts";
@@ -25,6 +26,17 @@ function timed<T>(run: () => T): { out: T; ms: number } {
   const started = performance.now();
   const out = run();
   return { out, ms: performance.now() - started };
+}
+/**
+ * What `run` cost this thread's processor, in ms: the time it takes when the processor is its own. Node 26
+ * doc/api/process.md, `process.threadCpuUsage([previousValue])`: "returns the user and system CPU time usage of the
+ * current worker thread", in microseconds, as a difference when given an earlier reading.
+ */
+function processorMs(run: () => unknown): number {
+  const before = process.threadCpuUsage();
+  run();
+  const used = process.threadCpuUsage(before);
+  return (used.user + used.system) / 1_000;
 }
 
 describe("within", () => {
@@ -382,8 +394,13 @@ describe("what is remembered between page loads", () => {
 
 describe("the page's limits", () => {
   // Normal use fits inside the limit (Alex 2026-11-19): the largest card the lexicon allows, as prose and as the
-  // densest ordinary formatting, parses well within one text's limit (about 15, 35 and 55 ms). The quickest of five
-  // parses is taken, with no deadline running, so a busy moment on the test machine does not count.
+  // densest ordinary formatting, parses within one text's limit (about 25, 60 and 75 ms in this file, here and on a
+  // CI runner). Other work on the machine can only add to a parse's time, so the quickest parse is the one that
+  // counts: up to fifteen are timed, until one fits, each by its own processor time and with no deadline running.
+  // The clock also counts the time other work held the processor (beside eleven other parsers on four processors a
+  // parse took 337 ms by the clock and 69 ms of processor time; alone, 57 and 56), and by the clock the quickest of
+  // five failed on a CI runner (#2026's code job, 2026-11-24: 161 ms). A slow processor still counts. This is no
+  // proof for a slower server or a fresh process, where the first parse of the full table takes about 140 ms here.
   const prose = "The quick brown fox jumps over the lazy dog, and then it rests for a while.\n\n";
   const formatted = "- **term** and *more* with [a link](https://a.example/x) and `code`\n";
   const row = "| **one** | _two_ | `three` |\n";
@@ -394,9 +411,12 @@ describe("the page's limits", () => {
   ])("a full card of %s parses within one text's limit", (_name, text) => {
     expect(text.length).toBeLessThanOrEqual(CEILING);
     expect(text.length).toBeGreaterThan(CEILING - 100);
-    const runs = Array.from({ length: 5 }, () => timed(() => parseReadme(text)));
-    expect(runs[0]?.out).not.toEqual(plainText(text));
-    expect(Math.min(...runs.map((run) => run.ms))).toBeLessThan(TEXT_READ_LIMITS.textMs);
+    expect(parseReadme(text)).not.toEqual(plainText(text));
+    const runs: number[] = [];
+    while (runs.length < 15 && Math.min(...runs) >= TEXT_READ_LIMITS.textMs)
+      runs.push(processorMs(() => parseReadme(text)));
+    const each = runs.map((ms) => Math.round(ms)).join(", ");
+    expect(Math.min(...runs), `processor ms of each parse: ${each}`).toBeLessThan(TEXT_READ_LIMITS.textMs);
   });
 
   test("the page's limit holds two full reads, and no page load reads for more than 300 ms", () => {
