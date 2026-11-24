@@ -30,6 +30,7 @@ import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { math } from "micromark-extension-math";
 import { drawMath, type MathBudget, type MathNode, mathBudget } from "./math.ts";
+import { isInlineMath } from "./math-syntax.ts";
 
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
@@ -236,18 +237,9 @@ function inlines(nodes: readonly Phrasing[], reading: Reading): Inline[] {
   return out;
 }
 
-/**
- * Whether math between single dollars keeps Pandoc's rule, as Milkdown's Crepe 7.23.0 holds the editor to it
- * (src/feature/latex/remark.ts, remarkInlineMathGuardPlugin): the opening dollar is followed by a non-space, the
- * closing one follows a non-space and is not followed by a digit, so "$5 and $10" stays words. Math between two or more
- * dollars is kept as written.
- */
-function pricesRule(node: Positioned, reading: Reading): boolean {
-  const raw = written(reading, node);
-  if (raw.startsWith("$$")) return true;
-  const after = reading.source[node.position?.end.offset ?? 0] ?? "";
-  return !/^\$\s/.test(raw) && !/\s\$$/.test(raw) && !/\d/.test(after);
-}
+/** Whether math between dollars is math where it stands (math-syntax.ts). */
+const pricesRule = (node: Positioned, reading: Reading): boolean =>
+  isInlineMath(written(reading, node), reading.source[node.position?.end.offset ?? 0] ?? "");
 
 /** A formula in a line, or null when math.ts cannot draw it. */
 function formulaInline(tex: string, reading: Reading): Inline[] | null {
