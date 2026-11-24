@@ -282,9 +282,14 @@ const badge =
 const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
-afterNavigate(() => {
+afterNavigate(({ type }) => {
   accountOpen = false;
-  for (const id of [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH]) {
+  const closing = [MENU, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH];
+  // The native account menu too, while it is the menu (the stock one's file is on its way, or never arrived). Not
+  // when the client starts over the server's page: one opened before that is kept, and carried over
+  // (takeAccountMenuOver).
+  if (type !== "enter") closing.push(ACCOUNT);
+  for (const id of closing) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
