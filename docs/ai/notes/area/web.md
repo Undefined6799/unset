@@ -113,7 +113,14 @@ out, and that budget is INT_MAX / 2 while V8 compiles the function to its top ti
 measured 2026-11-24: an empty loop caught there ran 0.3 to 0.6 s past its limit and 2.3 s on a busy CI runner, the
 real parser at most 22 ms in 1,314 stalled reads). So a test's stand-in for a stalling parser must call into real
 code (text-reader.test.ts `forever`), and what time the reader gives, takes and keeps is tested on a clock the test
-moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. The process
+moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. What a full
+card costs to parse ("the page's limits" tests) is measured as the test thread's processor time
+(`process.threadCpuUsage`), not by the clock, which also counts the time other work held the processor: by the clock
+the full table card took 161 ms on a CI runner against the 150 ms limit (#2026, 2026-11-24), and beside eleven other
+parsers on four processors a parse took 337 ms by the clock and 69 ms of processor time. The margin itself is thin
+and not the test's to give: the full table card (20,000 characters, every cell formatted) costs about 60 ms of
+processor time when warm and about 140 ms as a fresh process's first parse, where the reader cut it in 5 of 8 fresh
+processes. The process
 keeps what each read gave
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
