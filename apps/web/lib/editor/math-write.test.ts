@@ -1,6 +1,7 @@
 // Codex on #2020: two formulas side by side in the editor were saved as "$x$$y$", which micromark-extension-math 3.1.0
 // reads as one formula "x$$y" (a closing run must be as long as the opening one), so the card showed its source. And a
 // formula holding a pipe in a table cell was saved with the pipe bare, which split the cell.
+import katex from "katex";
 import { expect, test } from "vitest";
 import { parseReadme } from "../profile/parse.ts";
 import { type InlineFormula, pipesAsTex, writeFormulaRun } from "./math-write.ts";
@@ -34,4 +35,24 @@ test("pipes in a formula become the TeX that draws them, so a table cell keeps i
     ["math"],
     ["text"],
   ]);
+});
+
+// Codex on #2020 (b301932): a pipe in \verb is shown as it is written (KaTeX 0.16.47 Lexer: \verb and \verb* take
+// any one delimiter and the line up to the next), so "\vert" there would show as the word. The page must show the same.
+const shown = (tex: string) =>
+  katex
+    .renderToString(tex, { output: "mathml", throwOnError: true })
+    .replace(/<annotation[\s\S]*?<\/annotation>/g, "")
+    .replace(/<[^>]+>/g, "");
+
+test.each([
+  ["\\verb!a|b!", "\\verb!a!\\texttt{\\textbar}\\verb!b!"],
+  ["\\verb*!a |b!", "\\verb*!a !\\texttt{\\textbar}\\verb*!b!"],
+  ["\\verb|x y|", "\\verb!x y!"],
+  ["\\verb|!+=/;:@~^,.?'\"#&-_|", "\\verb\u00a1!+=/;:@~^,.?'\"#&-_\u00a1"],
+  ["\\verb!|!+|x|", "\\texttt{\\textbar}+\\vert x\\vert"],
+])("a pipe in \\verb stays one the page shows as written: %s", (tex, expected) => {
+  expect(pipesAsTex(tex)).toBe(expected);
+  expect(pipesAsTex(tex)).not.toMatch(/(?<!\\)\|/);
+  expect(shown(pipesAsTex(tex))).toBe(shown(tex));
 });
