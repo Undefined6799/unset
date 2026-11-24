@@ -23,13 +23,9 @@ import { AXE_TAGS, addPageCookies, openPage, pageNoise, undersizedTargets, watch
 import { type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
 
-const SETTINGS: PageFixture = {
-  path: "/settings/profile",
-  route: "/settings/profile",
-  group: "app",
-  expectJs: true,
-  member: "account",
-};
+// A visitor: with chat on, a member's Messages is the top bar's link to the chat page and their phone finds Search under
+// More actions (navigation.spec.ts, "phone chat icon"), so Messages and the phone's Search button are a visitor's panels.
+const VISITOR_HOME: PageFixture = { path: "/", route: "/", group: "public", expectJs: true };
 // The "inbox" member's list is read already, so opening the bell posts nothing and other specs' counts stay.
 const INBOX_HOME: PageFixture = { path: "/", route: "/", group: "public", expectJs: true, member: "inbox" };
 
@@ -44,7 +40,7 @@ async function ready(page: Page, fixture: PageFixture): Promise<void> {
 
 test("the_messages_panel_is_a_dialog_that_holds_focus_and_gives_it_back", async ({ page }) => {
   const watched = watch(page);
-  await ready(page, SETTINGS);
+  await ready(page, VISITOR_HOME);
   const button = panelButton(page, MESSAGES_PANEL);
   const panel = stockPanel(page, MESSAGES_PANEL);
   await expect(panel).toHaveCount(0);
@@ -72,7 +68,7 @@ test("the_messages_panel_is_a_dialog_that_holds_focus_and_gives_it_back", async 
 });
 
 test("close_and_a_press_outside_close_the_messages_panel", async ({ page }) => {
-  await ready(page, SETTINGS);
+  await ready(page, VISITOR_HOME);
   const panel = await openPanel(page, MESSAGES_PANEL);
   await panel.getByRole("button", { name: "Close Messages" }).click();
   await expect(panel).toHaveCount(0);
@@ -152,7 +148,7 @@ test.describe("before the client is ready", () => {
   test("a_press_on_the_native_messages_panel_is_carried_over_to_the_stock_one", async ({ page }) => {
     const watched = watch(page);
     const release = await holdScripts(page);
-    expect(await openHeld(page, SETTINGS)).toBe(200);
+    expect(await openHeld(page, VISITOR_HOME)).toBe(200);
     const button = panelButton(page, MESSAGES_PANEL);
     await expect(button).toHaveAttribute("popovertarget", MESSAGES_PANEL.native);
     await button.click();
@@ -188,7 +184,7 @@ test.describe("before the client is ready", () => {
   // (bell-panel.spec.ts until_the_client_is_ready_the_bell_is_the_link_to_the_page).
   test("the_native_messages_panel_stays_when_the_script_files_are_refused", async ({ page }) => {
     await page.route("**/_app/**/*.js", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "" }));
-    expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    expect((await openPage(page, VISITOR_HOME))?.status()).toBe(200);
     await panelButton(page, MESSAGES_PANEL).click();
     await expect(page.locator(`section#${MESSAGES_PANEL.native}`)).toContainText("Messages are coming soon.");
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -197,7 +193,7 @@ test.describe("before the client is ready", () => {
 
 for (const scheme of ["light", "dark"] as const) {
   for (const [name, which, fixture] of [
-    ["messages", MESSAGES_PANEL, SETTINGS],
+    ["messages", MESSAGES_PANEL, VISITOR_HOME],
     ["bell", BELL_PANEL, INBOX_HOME],
   ] as const) {
     test(`the_open_${name}_panel_passes_axe_${scheme}`, async ({ page }) => {
@@ -214,7 +210,7 @@ test.describe("phone", () => {
   test.use(phone({ width: 320, height: 700 }));
 
   test("the_search_panel_fits_a_phone_and_says_search_is_coming", async ({ page }) => {
-    await ready(page, SETTINGS);
+    await ready(page, VISITOR_HOME);
     await panelButton(page, SEARCH_PANEL).tap();
     const panel = stockPanel(page, SEARCH_PANEL);
     await expect(panel).toBeVisible();
@@ -232,7 +228,7 @@ test.describe("phone", () => {
   // Messages is a row of More actions on a phone, and that menu is still the native one: its row opens the native
   // panel after the client is ready too (navigation.spec.ts holds Escape and focus there).
   test("messages_from_more_actions_still_opens_the_native_panel", async ({ page }) => {
-    await ready(page, SETTINGS);
+    await ready(page, VISITOR_HOME);
     await page
       .locator("header")
       .getByRole("button", { name: /^More actions/ })
