@@ -26,6 +26,8 @@ const SETTINGS: PageFixture = {
   member: "account",
 };
 
+const HOME: PageFixture = { path: "/", route: "/", group: "public", expectJs: true, member: "account" };
+
 const today = new Date().toISOString().slice(0, 10);
 
 /** The background colour an element is drawn with. */
@@ -207,6 +209,36 @@ test.describe("before the client is ready", () => {
     await expect(accountButton(page)).toHaveAttribute("aria-haspopup", "menu");
     await expect(accountButton(page)).toBeFocused();
     await expect(accountMenu(page)).toHaveCount(0);
+  });
+
+  // The client runs, but the stock menu's file does not arrive (a tab older than the deploy): the native menu is the
+  // menu, and a link in it is followed in place. It is closed after that navigation, as every header panel is
+  // (Codex review of #2017).
+  test("the_native_menu_is_closed_after_a_navigation_when_the_stock_file_is_refused", async ({ page }) => {
+    await page.route("**/_app/**/*.js", async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      // The stock menu's own pieces carry this name (ui/dropdown-menu); nothing the home page starts with does.
+      if (body.includes("dropdown-menu-content")) {
+        await route.fulfill({ status: 404, contentType: "text/plain", body: "" });
+      } else await route.fulfill({ response, body });
+    });
+    expect((await openPage(page, HOME))?.status()).toBe(200);
+    await page.waitForLoadState("networkidle");
+    let documents = 0;
+    page.on("request", (request) => {
+      if (request.isNavigationRequest()) documents += 1;
+    });
+    const button = accountButton(page);
+    await expect(button).toHaveAttribute("popovertarget", "account-menu");
+    await button.click();
+    const native = page.locator("section#account-menu");
+    await native.getByRole("link", { name: "Settings" }).click();
+    await expect(page).toHaveURL(`${TEST_ORIGIN}${SETTINGS.path}`);
+    // The client followed the link: the document is the same one, and its native menu is closed.
+    expect(documents).toBe(0);
+    await expect(native).toBeHidden();
+    await expect(accountButton(page)).toHaveAttribute("popovertarget", "account-menu");
   });
 
   // With its script files refused the menu stays the server's, and works (csp.spec.ts app_page_works_without_its_script).
