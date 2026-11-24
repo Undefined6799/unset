@@ -1217,14 +1217,11 @@ As ruled (architecture thread, 2026-10-05 00:00Z; carried by the Phase 0 thread)
   - Test `audit_override_only_in_audit_job` (`scripts/guards/workflow-pins.test.ts`): the string `@unset:registry=`
     appears in `ci.yml` exactly once, inside the `audit` job's `npm audit signatures` line.
 
-Extended by P0.07p (2026-11-24): the `audit` job runs that command through `scripts/ci/npm-audit-signatures.ts`,
-which is handed the override as its one argument, so `audit_override_only_in_audit_job` now pins that line. The
-registry answered an attestation request with the text `OK` three times that night and npm does not retry it
-(`docs/ai/notes/pitfall/npm-registry-answers-attestations-with-ok.md`). The script runs the whole command again, at
-most twice, with an empty npm cache, only when npm exited non-zero, printed no verdict and reported that parse
-failure for an attestation address of registry.npmjs.org. A pass is always one complete run that exited 0. An
-invalid or missing signature, a failed attestation and every other error still fail at once, and Algorithm step 6
-above still applies to them.
+Note from P0.07p (2026-11-24): the registry answered `/-/npm/v1/attestations/axe-core@4.14.0` with status 200 and
+the text `OK` four times that night, for some runners and not others. npm does not retry that, and a bounded retry on
+the same runner, tried for real, did not recover (`docs/ai/notes/pitfall/npm-registry-answers-attestations-with-ok.md`).
+P0.07p changed nothing in this check: it moved the lockfile's axe-core to 4.14.1, so the audit no longer asks for
+that address. A failure of this command is still never retried, ignored or turned into a warning.
 
 Extended by P1.01s (2026-10-05): custom rule ids must appear in the SARIF rule list. `semgrep-rules-ran.ts` reads the
 ids declared under `.semgrep/rules/` and fails if any is missing from `semgrep.sarif`, so the custom rules loading
