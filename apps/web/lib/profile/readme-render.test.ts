@@ -98,7 +98,8 @@ describe("Readme", () => {
     "[x](javascript:alert(1))",
     "</code></pre><script>alert(1)</script>",
   ];
-  const CARD_ELEMENTS = new Set(["pre", "code", "p", "br", "blockquote", "ul", "li"]);
+  // "div" is the code block's own wrapper, the corner a Copy button sits in once script runs (P1.21v, #2012).
+  const CARD_ELEMENTS = new Set(["div", "pre", "code", "p", "br", "blockquote", "ul", "li"]);
   type Node = { nodeName: string; value?: string; attrs?: unknown[]; childNodes?: Node[] };
   /** The markup's elements and its text, as an HTML parser reads it (parse5, the WHATWG algorithm). */
   function read(markup: string): { elements: { name: string; attributes: number }[]; text: string } {
@@ -143,8 +144,9 @@ describe("Readme", () => {
   });
 
   test("a fence's language is never drawn, whatever it holds", () => {
-    expect(html('```"><script>alert(1)</script>\nx\n```')).toBe("<pre><code>x</code></pre>");
-    expect(html("~~~ <img src=x onerror=alert(1)>\nx\n~~~")).toBe("<pre><code>x</code></pre>");
+    const drawn = "<div><pre><code>x</code></pre></div>";
+    expect(html('```"><script>alert(1)</script>\nx\n```').replaceAll(" ", "")).toBe(drawn);
+    expect(html("~~~ <img src=x onerror=alert(1)>\nx\n~~~").replaceAll(" ", "")).toBe(drawn);
   });
 
   // Raw HTML outside code is text too, as a block and inside a line (CommonMark's HTML blocks and inline HTML).
