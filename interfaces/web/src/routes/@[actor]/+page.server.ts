@@ -83,7 +83,11 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     owner === null
       ? []
       : shownCards(
-          await cardViews(pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX), CODE_COLOUR_LIMITS),
+          await cardViews(
+            pageCards(owner, found.page, found.sections).slice(0, CARDS_MAX),
+            services().textReads.forPage(locals.deadlineAt),
+            CODE_COLOUR_LIMITS,
+          ),
         );
   return {
     shell: listed ? LISTED_SHELL : SHELL,

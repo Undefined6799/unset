@@ -10,7 +10,7 @@ importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-11-23
+checked: 2026-11-24
 ---
 # web
 
@@ -20,8 +20,8 @@ screens, `render.tsx`, the island runtime and Hono are deleted; nothing in the r
 
 - `apps/web/lib/components/`: stock shadcn-svelte in `ui/` (themed only by `shared/ui/theme.css`), our `icon/`,
   `profile/` and `settings/` components beside it; `inventory.json` lists them all. `app.css` is the Tailwind entry.
-- `apps/web/lib/profile/`: the card views and the README parser. They run on the server only (the member page's
-  load); the components render what they return, every link already through `safeHref`.
+- `apps/web/lib/profile/`: the card views and the Markdown reader (`parse.ts`). The views run on the server only
+  (the member page's load); the components render what they return, every link already through `safeHref`.
 - `apps/web/legal/`: the three legal texts, read as `?raw` by the legal pages.
 - `interfaces/web/`: the SvelteKit server. `server.ts` (adapter-node custom server: host check, base headers, the
   log line, listen and drain; the base headers are `STATIC_CSP` from `src/lib/server/csp.ts`, web's only CSP source,
@@ -35,12 +35,18 @@ says in its own `+page.ts` whether it runs SvelteKit's client, `csr = true` or `
 layout's `csr = true` decides the error page alone (ADR 0116, P1.22k), so every error page runs the client: an
 unmatched address, and a failed load on any route (kit takes `csr` from the layouts alone there, 3.2.0
 `page/index.js:272-291`, `respond_with_error.js:44-46`). A page that says false also says `client: false` in its
-`policy.ts`, and `gate.test.ts` names each with its reason (since P1.22g: the sign-in, join and welcome pages until
-P1.22l, and three routes nobody reads; home, the legal pages and `/request-invite` run the client). The hook sends SvelteKit's own CSP, narrowed, only when
+`policy.ts`, and `gate.test.ts` names each with its reason (since P1.22l: three routes nobody reads,
+`/login/continue`, `/prefs/theme` and `/privacy-notice/seen`; every page a person reads runs the client). The hook
+sends SvelteKit's own CSP, narrowed, only when
 two things hold: kit's header names a start-up script hash, and the document may run it (the route's own page
 unless `client: false`, or the error page, which the hook knows from `handleError` having run: `locals.erred`).
 That kit sent a header says nothing: it sends one on every page it draws. Refusals, redirects, data addresses and
-files keep the fixed policy. An `app` page without the client still gets kit's hashless policy until P1.22l.
+files keep the fixed policy. An `app` page without the client (the sign-in hop, `/login/continue`) gets the public
+group's fixed policy since P1.22l: styles and fonts, no `script-src`. Before, it kept kit's hashless policy.
+SvelteKit writes a server load's result into the start-up script it hashes, so on a page that runs the client a
+value the request chose is returned only in its parsed shape (`/login`: `next` and `close` as `safeReturnPath`;
+`/join`: the invite as `joinCode`), and `sign-in.test.ts` and `invite.test.ts` read the script with hostile values.
+A route whose load always redirects needs no `+page.svelte` and then says nothing of `csr` (`/welcome`).
 The error page's start-up script holds nothing from the request (ADR 0116 point 6): the root server load returns
 the theme and no path; `+layout.ts` works out the Sign in link's and the theme form's way back from `url`
 (`lib/return-paths.ts`, unchecked there by design: `/login`, `/prefs/theme` and `/privacy-notice/seen` check them
@@ -57,6 +63,20 @@ each CSP header by value: a new route, or a page with no `csr` line, fails it un
 A client navigation keeps the document, so the layout's `afterNavigate` applies the theme a full load of the new page
 would have (system where `prefs` is absent); without it a visitor's saved theme was lost from the profile to /login.
 
+The navbar's stock controls (P1.22m, 2026-11-24). Each is its own file under `apps/web/lib/components/shell/`, loaded
+by a dynamic import in the root layout after the client starts; the server's native popover is the control until
+then, with no script, and when the file does not arrive. Import one with the layout and every page's first load
+grows by the library's menu code (36.6 KiB gzip measured). The swap carries over an open native panel and focus on
+its button. Rows pass `data-highlighted:bg-muted focus:bg-muted`: the stock mark is the accent colour, which equals
+the popover surface in `shared/ui/theme.css`, so it does not show (the card menu still has that fault). While a
+stock menu is open the library takes the pointer off the page behind, so a test presses outside with `page.mouse`,
+not a locator; a row's box is smaller while the menu zooms in, so sizes are polled, and its text is part see-through
+while it fades in, so axe runs after `settled()` (WebKit read 3.48 contrast mid-fade). Tests find a control by its
+name (`tests/e2e/navbar.ts`), which the native and the stock version both carry. Typeahead holds Space as part of
+the search for a moment after a letter, so a test reaches a row by the arrows before pressing Space. With the script
+files held back WebKit never fires the load event (it waits for the preloaded files), so such a test opens the page
+with `waitUntil: "commit"`.
+
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
 `is_data_request`, `data/index.js`). So a load on a script-free page is still sent to anyone who asks, and a page
@@ -68,6 +88,20 @@ home's cache rule) and a skipped page load (`?x-sveltekit-invalidated=10`) set n
 on every data address itself. A missing page is an error node under status 200. The tests are the "data address"
 blocks in `tests/integration/web/public/`, read back with `tests/integration/web/data-address.ts`. A member's copy
 still carries their own bell entries and a Sign in address their page does not draw (pinned there).
+
+**Reading Markdown (P1.21k, 2026-11-23).** `parse.ts` reads a Text card with micromark 4.0.3 (CommonMark, the GFM
+table, strikethrough, task and autolink extensions; no footnote, no math), the reader Milkdown uses, and narrows the
+tree to the card's `Block` types. micromark is not bounded: its readme's Security section says a small text can crash
+it, and at 20,000 characters `_*` repeated takes about 5 s and `+ ` repeated about 10 s before the stack runs out. So
+no server code calls `parseReadme` bare: a page load takes `services().textReads.forPage(deadlineAt)`
+(`lib/server/text-reader.ts`), which stops each read with node:vm's `timeout` at `TEXT_READ_LIMITS` (limits.ts), shares
+one budget across the page's cards and shows a stopped card with `plainText`. The process keeps what each read gave
+for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
+page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
+places looks by; `parse.blocks.test.ts` is its corpus. In the browser the reader runs only in the card dialog's
+Preview, loaded when Preview opens, on the owner's own text; the Preview's code colouring (`colourBlocks`, with CodeMirror's language list) is loaded there too, never by a static import in a component: one in `card-editor.svelte` put 90 KiB gzip on the owner's first load (257.8 against 167.7, measured at the merge of #2008). The reader's blocks are kept and frozen (text-reader.ts), so `colourBlocks` builds new code blocks and changes none. Vite's alias for `decode-named-character-reference`
+(`vite.config.ts`) must stay: the package's browser file writes to `innerHTML`, which Trusted Types refuses, and
+without it neither the Preview nor Milkdown reads a text holding `&amp;`.
 
 **Rules worth knowing.**
 - Only server files (`*.server.ts`, `+server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or

@@ -5062,6 +5062,16 @@ line, so `- one\n\n- two` is drawn as two lists, where CommonMark 0.31.2 §5.3 m
 does); the page must draw one. Ownership: apps/web/lib/profile
 (parser) → apps/web (Text card). Styles build only after this merges.
 
+As built (2026-11-23): "safe and cheap" above did not hold for text written to hurt. micromark's readme (Security,
+read at 4.0.3) says a small text can crash it; measured at the text block's 20,000 characters, `_*` repeated takes
+about 5 s and `+ ` repeated about 10 s before the stack runs out, and a normal card costs 1 to 4 ms for each 1,000
+characters, where the old reader took about 0.1 ms. So a page load reads each card under a deadline
+(`interfaces/web/src/lib/server/text-reader.ts`, limits.ts `TEXT_READ_LIMITS`: 150 ms a card, 300 ms a page) and shows
+a stopped card as plain escaped text; the process keeps each read's result ten minutes, so a text is parsed once in
+that time and a stalling one costs its 150 ms once, not on every load. Strikethrough, task items and bare addresses ride on the page's parse (they
+change no top-level block); the count itself is `topBlocks`, table-only as decided. The dialog's Preview loads the
+reader when it opens, so the owner's page carries no parser at first load either.
+
 ### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1
@@ -5613,6 +5623,16 @@ and returns no value that authorises anything: the OAuth state, nonce and PKCE v
 the test reads each page's start-up script and data address for them. Hostile text in each query value runs
 nothing. `/login/continue` keeps no script, so the hop to the sign-in server never waits for a file.
 
+**Built 2026-11-24, where the code differs from the words above.** (1) `/login`, `/join` and `/welcome/blocked` say
+`csr = true` in their own `+page.ts`, as P1.22j's test asks of every page with something to draw. (2) `/welcome`
+only ever redirects, so it loses its `+page.ts` and its empty `+page.svelte` and says nothing, as `/profile` does:
+the same test wants a page that says true to be seen running the client, and nothing of `/welcome` is ever drawn.
+(3) `/login` no longer reads `handle` (the form has posted one button since P2.05r); of the request its load
+returns `next` and Close's address from the Referer, each a `safeReturnPath` or nothing, and both are in the
+start-up script in that shape. (4) The hop is settled: an `app` page without the client is sent the public group's
+fixed policy (styles and fonts, no `script-src`) in place of SvelteKit's policy without a hash, so no document
+without the client names a script source at all. That tightens the hook and needs no line.
+
 ### P1.22m — Move the navbar's controls to the stock components (added step, 2026-11-23)
 
 **Tags:** — · **Depends on:** P1.22g · **Plan:** §5.4
@@ -5625,6 +5645,36 @@ never lost. Before building, list for Alex what the library already offers for e
 anything, would still be ours. `inventory.json` lists what is added; `a11y.spec.ts`, `csp.spec.ts` (no violation
 with each control open) and `nojs.spec.ts` hold both versions, and a keyboard test walks each control. Refined
 when it is next: split by control if the change passes about 400 lines.
+
+**Refined 2026-11-24, when it was next.** What the library offers was listed for Alex first (the doc "Navbar
+controls: what the library gives us", 2026-11-23, from the bits-ui 2.20.6 source and the shadcn-svelte 1.8.1
+registry). The step is split by control, one PR each, all titled P1.22m:
+
+1. the account menu, on the stock Dropdown Menu (already copied in);
+2. Create and the menu button's panel, on the same Dropdown Menu;
+3. the stock Popover copied in, then the bell, Messages and the phone's Search;
+4. More actions on a phone.
+
+Three rules hold for every part, found while building the first:
+
+- **The stock control is loaded after the client starts**, by a dynamic import in the root layout, and is never part
+  of a page's first load. Imported with the layout, the library's menu code added 36.6 KiB gzip to every page (home
+  went from 91.8 to 128.4 KiB, `scripts/budgets/app-js.ts`); loaded after, home is 92.5 KiB. Until the file is in,
+  and when it does not arrive, the native control stays and works.
+- **A press the native control took is carried over.** A native panel found open is open as the stock one after the
+  swap, and focus found on its button or inside it is on the stock button after.
+- **The row the pointer or the keys are on is drawn with the muted colour.** The library marks it with the accent
+  colour, which in our theme is the menu's own surface (`shared/ui/theme.css`), so its own mark does not show. The
+  profile's card menu has the same fault today and is not touched here.
+
+**Built 2026-11-24: part 1, the account menu.** `apps/web/lib/components/shell/account-menu.svelte` is the stock
+Dropdown Menu: the member's two links are link rows, the theme choices are radio rows that keep the menu open, and
+Sign out is a submit button of a sign-out form the layout holds. A theme row presses its button in the native
+picker's form, which the layout keeps undrawn, so one save path serves both menus. Where it differs from the list
+sent to Alex: the current theme is marked with a tick (our copy of the radio row draws our `done` icon), and the
+menu has no title row or close button. `tests/e2e/navbar-account.spec.ts` walks it by keyboard, holds the
+hand-over, the policy with the menu open, axe in both themes and the phone's sizes; `tests/e2e/navbar.ts` finds the
+control by name, which both versions carry. `nojs.spec.ts` and `cards-nojs.spec.ts` hold the native menu, unchanged.
 
 ---
 

@@ -481,6 +481,12 @@
         "origin": "ours",
         "purpose": "The two tabs of /notifications (P2.27c): Notifications and Sign-in history, plain links, the current one aria-current=page."
       }
+    },
+    "shell": {
+      "account-menu.svelte": {
+        "origin": "ours",
+        "purpose": "The header's account menu with script (book P1.22m, ADR 0116 points 8 and 9): the stock Dropdown Menu holding the member's two links, the theme choices as radio rows, and Sign out as a submit button of the shell's sign-out form. The shell draws the menu with no script itself and loads this file after the client starts."
+      }
     }
   }
 }

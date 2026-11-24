@@ -42,7 +42,7 @@ export type CardContent =
       )[];
     };
 
-/** README inline text, as apps/web/lib/readme/parse.ts reads it; `href` is a safeHref result. */
+/** README inline text, as apps/web/lib/profile/parse.ts reads it; `href` is a safeHref result. */
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "code"; readonly text: string }

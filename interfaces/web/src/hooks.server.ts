@@ -271,10 +271,11 @@ type Audience = Readonly<{ member: boolean; optional: boolean }>;
  * unless its policy says `client: false`, or the error page, drawn when SvelteKit reported an error (for it SvelteKit
  * takes `csr` from the layouts alone, kit 3.2.0 src/runtime/server/page/index.js:272-291, and the root layout says
  * true). That SvelteKit sent a policy is not the signal: it sends one with every page it draws (page/render.js:577-579).
- * A page that says `client: false` and still carried a start-up script gets the fixed policy, in either group, and
- * runs nothing. Every other response gets its group's fixed one: refusals, redirects, the data address, files. One
- * exception stays as it was: an `app` page without the client (/login, the form targets) keeps SvelteKit's policy
- * while that names no hash, so no inline script runs there; book P1.22l settles what those pages carry. An
+ * Every other response gets a fixed policy under which no script runs: refusals, redirects, the data address, files,
+ * and a page that says `client: false`, whether or not it carried a start-up script. Such a page in the `app` group
+ * (the hop to the sign-in server) is a document SvelteKit drew, so it is sent the public group's fixed policy, which
+ * loads the build's styles and our fonts and has no `script-src`, as a styled refusal page is; the group's own
+ * fallback would block its stylesheet. Until book P1.22l it kept SvelteKit's policy without a hash. An
  * `app` page, and the data its client loads (__data.json), may differ per member, so it is private, never stored and
  * varies on Cookie, as interfaces/http/prefs/theme.ts has it. So is any other response rendered for a member, or one
  * that clears a cookie, whatever the page asked for. A page with an `optional` session varies on Cookie even for a
@@ -304,11 +305,11 @@ function withGroupHeaders(
     out.headers.append("vary", "Cookie");
   }
   const kit = out.headers.get("content-security-policy");
-  const mayRunClient = route.client || route.erred;
-  // With a start-up script in the document, SvelteKit's policy only where that document may run it; with none, only
-  // on an app page, as before.
-  const keepsKit = kit !== null && (namesStartUpScript(kit) ? mayRunClient : group === "app");
-  out.headers.set("content-security-policy", keepsKit ? kitPolicy(kit) : ZERO_SCRIPT[cspGroup]);
+  // SvelteKit's policy only with a start-up script in the document, and only where that document may run it.
+  const keepsKit = kit !== null && namesStartUpScript(kit) && (route.client || route.erred);
+  // SvelteKit sends its policy with every page it draws, so one that is not kept here is a page without the client.
+  const plainPage = kit !== null && html && cspGroup === "app";
+  out.headers.set("content-security-policy", keepsKit ? kitPolicy(kit) : ZERO_SCRIPT[plainPage ? "public" : cspGroup]);
   return out;
 }
 

@@ -17,6 +17,12 @@ All of these live under [`interfaces/web/src/routes/`](../../../interfaces/web/s
 - `invite/` is where a member asks for a one-use sign-up code and sees join links from the last 7 days. The app gate applies: onboarding done, and a confirmed email.
 - `join/` is the page an invite link opens (`/join?invite=<code>`). Anyone may read it. The form starts a sign-up at our PDS. The code is checked by the PDS's sign-up form.
 
+## With script and without
+
+The sign-in page, the join page and the under-age notice run SvelteKit's client under the app's script policy ([ADR 0116](../decisions/0116-every-page-runs-our-script-the-error-page-included.md), book P1.22l). Each is still a plain page. Its form posts the page itself, with script or without, and `login/continue` runs no script, so the hop to the sign-in server never waits for a file.
+
+SvelteKit writes a load's result into the page's start-up script and hashes it, so the script policy allows whatever the server wrote there. These loads return only what their page draws, each value in its parsed shape: `next` and Close's address as a checked return path, the invite as a code or as a flag that says the link is broken. The OAuth state, the nonce and the PKCE verifier stay on the server. `tests/integration/web/sign-in.test.ts` reads each page's start-up script and data address for them, and `tests/e2e/public-pages-script.spec.ts` opens the pages with hostile query values.
+
 ## Operation
 
 The work is in [`interfaces/web/src/lib/server/`](../../../interfaces/web/src/lib/server).

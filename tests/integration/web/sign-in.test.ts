@@ -22,6 +22,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "./built-server.ts";
+import { DATA, dataAnswer, inlineScripts, nodeData, startup, startupData } from "./data-address.ts";
 import { readyMember } from "./members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
@@ -224,6 +225,114 @@ describe("the sign-in form", () => {
       await web.fetch("/login?next=%2Flegal%2Fterms", { headers: headers({ referer: `${ORIGIN}/legal/terms` }) })
     ).text();
     expect(html).toContain('href="/legal/terms"');
+  });
+});
+
+// Book P1.22l (ADR 0116 points 1 and 2): the sign-in page runs SvelteKit's client under the app's script policy.
+// SvelteKit writes a load's result into the start-up script and then hashes it (kit 3.2.0
+// src/runtime/server/page/render.js), so the policy allows whatever the server wrote there: these tests read it.
+describe("the sign-in page with the client", () => {
+  const SCRIPT_POLICY = `script-src ${ORIGIN}/_app/ 'sha256-`;
+  /** What a link's author, or the page a visitor came from, might put where the page reads a path. */
+  const HOSTILE = [
+    "/</script><script>alert(1)</script>",
+    "/x?q=</script><script>alert(1)</script>",
+    "/<!--<script>",
+    "/x\u2028alert(1)\u2029",
+    '/"onmouseover="alert(1)',
+    "/x#</script><img src=x onerror=alert(1)>",
+    "https://evil.test/x",
+    "//evil.test/x",
+    "javascript:alert(1)",
+    "/\\evil.test",
+  ];
+  /** A path as `safeReturnPath` gives it: one slash first, then printable ASCII with no quote, angle bracket or `\`. */
+  const CHECKED_PATH = /^\/(?!\/)[!#-;=?-[\]-~]*$/;
+
+  /** A script with each string's text taken out, and `next` read as a string whether it was sent or not. */
+  const outsideStrings = (script: string): string =>
+    script.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace("next:null", 'next:""');
+
+  test("the_sign_in_page_runs_only_our_client_and_its_data_is_what_it_draws", async () => {
+    const from = headers({ referer: `${ORIGIN}/legal/terms` });
+    const response = await web.fetch("/login?next=%2Fsettings", { headers: from });
+    expect(response.status).toBe(200);
+    const csp = response.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain(SCRIPT_POLICY);
+    expect(csp).not.toContain("unsafe-inline");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const html = await response.text();
+    const drawn = { next: "/settings", pdsHost: PDS_HOST, close: "/legal/terms", shell: { kind: "bare" } };
+    expect(startupData(html, 1)).toEqual(drawn);
+    // Each value is on the page: the hidden field, the sentence naming the server, and Close's address.
+    expect(html).toContain('value="/settings"');
+    expect(html).toContain(PDS_HOST);
+    expect(html).toContain('href="/legal/terms"');
+    // The data address says the same, under the fixed header that runs nothing.
+    const data = await web.fetch(`/login${DATA}?next=%2Fsettings`, { headers: from });
+    expect(data.headers.get("content-security-policy")).not.toContain("script-src");
+    expect(nodeData(await dataAnswer(data), 1)).toEqual(drawn);
+  });
+
+  test("next_and_the_referer_reach_the_start_up_script_only_as_checked_paths", async () => {
+    const plain = await (await web.fetch("/login", { headers: headers() })).text();
+    expect(startupData(plain, 1)).toMatchObject({ next: null, close: "/" });
+    for (const value of HOSTILE) {
+      const asked = `/login?next=${encodeURIComponent(value)}`;
+      // A browser percent-encodes the Referer it sends; a program that writes its own header need not.
+      const from = /^[\x20-\x7e]*$/.test(value) ? value : encodeURI(value);
+      const referer = value.startsWith("/") ? `${ORIGIN}${from}` : from;
+      const html = await (await web.fetch(asked, { headers: headers({ referer }) })).text();
+      const page = startupData(html, 1) as { next: string | null; close: string };
+      expect(Object.keys(page).sort(), asked).toEqual(["close", "next", "pdsHost", "shell"]);
+      if (page.next !== null) expect(page.next, asked).toMatch(CHECKED_PATH);
+      expect(page.close, asked).toMatch(CHECKED_PATH);
+      // Nothing of the value is in the script as markup or as a line end, and outside its strings the script is the
+      // plain page's: no string ended early.
+      const script = inlineScripts(html).join("\n");
+      expect(script, asked).not.toMatch(/<|\u2028|\u2029/);
+      expect(outsideStrings(script), asked).toBe(outsideStrings(inlineScripts(plain).join("\n")));
+    }
+    // A value that is no path of ours leaves the script as it is with no `next` at all.
+    for (const value of ["https://evil.test/x", "//evil.test/x", "javascript:alert(1)", "/login", "/oauth/callback"]) {
+      const html = await (await web.fetch(`/login?next=${encodeURIComponent(value)}`, { headers: headers() })).text();
+      expect(inlineScripts(html), value).toEqual(inlineScripts(plain));
+    }
+    // Any other query value is not read by the server at all.
+    for (const name of ["error", "handle", "state", "code", "iss"]) {
+      const html = await (
+        await web.fetch(`/login?${name}=${encodeURIComponent(HOSTILE[0] ?? "")}`, { headers: headers() })
+      ).text();
+      expect(inlineScripts(html), name).toEqual(inlineScripts(plain));
+    }
+  });
+
+  // The Threats of book P1.22l: no value that authorises anything is in a page's script or at its data address. The
+  // browser here is in the middle of a sign-in and holds both of its cookies. The state is the key of the stored row
+  // that seals the PKCE verifier; the request_uri is what the authorization server takes in its place.
+  test("nothing_that_authorises_a_sign_in_reaches_a_page_s_script_or_data", async () => {
+    const { nonce, target } = await startSignIn();
+    const state = await newestState();
+    const secrets = [value(nonce), value(target), state, REQUEST_URI, encodeURIComponent(REQUEST_URI)];
+    expect(secrets.every((secret) => secret.length >= 16)).toBe(true);
+    const cookie = `__Host-oauth_nonce=${value(nonce)}; __Host-login_target=${value(target)}`;
+    const pages = ["/login", "/login?error=login.expired&next=%2Fsettings", "/join", "/welcome/blocked"];
+    for (const path of pages) {
+      const page = await web.fetch(path, { headers: headers({ cookie }) });
+      expect(page.status, path).toBe(200);
+      const html = await page.text();
+      expect(startup(html), path).not.toBeNull();
+      const [address, query = ""] = path.split("?");
+      const data = await (await web.fetch(`${address}${DATA}?${query}`, { headers: headers({ cookie }) })).text();
+      for (const secret of secrets) {
+        expect(html, path).not.toContain(secret);
+        expect(data, path).not.toContain(secret);
+      }
+    }
+    // The hop that does hold the address keeps no script: it must not wait for a file (ADR 0116 point 4).
+    const hop = await web.fetch("/login/continue", { headers: headers({ cookie }) });
+    expect(hop.status).toBe(200);
+    expect(startup(await hop.text())).toBeNull();
   });
 });
 

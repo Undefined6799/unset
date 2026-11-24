@@ -167,7 +167,9 @@ function backToText(event: Event) {
         <!-- The tick follows the editor only: the item's own toggle on select is dropped (bits-ui CheckboxItem). -->
         <DropdownMenu.Content align="start" preventScroll={false} onCloseAutoFocus={backToText}>
           {#each STYLES as style (style.command)}
+            <!-- Muted, not the stock accent, marks the row: the theme's --accent equals --popover. -->
             <DropdownMenu.CheckboxItem
+              class="data-highlighted:bg-muted focus:bg-muted"
               bind:checked={() => toolbar.active.has(style.command), () => {}}
               disabled={!toolbar.enabled.has(style.command) && !toolbar.active.has(style.command)}
               onSelect={() => editor?.run(style.command)}>{style.label}</DropdownMenu.CheckboxItem
