@@ -1,12 +1,12 @@
 // The block menu's items in their groups, as Crepe 7.23.0 lists them (src/feature/block-edit/menu/config.ts), less
-// Image and Math, which the page cannot show yet. Imported by the editor (menus.ts) and by the menu's markup
+// Image, which the page cannot show yet. Imported by the editor (menus.ts) and by the menu's markup
 // (text-menus.svelte), which the page bundle holds, so this file imports nothing.
 
 /** Each group's items, in order; the menu's tabs are the groups. */
 export const BLOCK_GROUPS = {
   text: ["text", "heading1", "heading2", "heading3", "heading4", "heading5", "heading6", "quote", "divider"],
   list: ["bullets", "numbers", "tasks"],
-  advanced: ["codeBlock", "table"],
+  advanced: ["codeBlock", "table", "math"],
 } as const;
 
 export type BlockGroup = keyof typeof BLOCK_GROUPS;

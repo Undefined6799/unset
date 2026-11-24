@@ -37,6 +37,7 @@ import { breakLine, type Count, countChars, emptyCount, type Place, placeOf, sta
 import "@milkdown/prose/view/style/prosemirror.css";
 import "@milkdown/prose/gapcursor/style/gapcursor.css";
 import { enterKeys } from "./enter-keys.ts";
+import { isMathSelected, math, writeMathBlocksAsDollars } from "./math.ts";
 import { type Menus, type MenusOptions, withMenus } from "./menus.ts";
 import { type TableOptions, type TableTools, withTables } from "./tables.ts";
 
@@ -375,11 +376,11 @@ const pageShapes = $prose(
  * The markdown as the card stores it. remark-stringify ends the document with a line feed; the plain field never did,
  * so neither does the editor. And an empty line is a blank line: preset-commonmark 7.23.0 writes each empty paragraph
  * as a line of html "<br />" (node/paragraph.ts EMPTY_LINE_PLACEHOLDER), which the page would show as text, so such a
- * line goes (in a quote or a list too, never in a code block) with the blank line it leaves doubled. Removing the preset's
- * remarkPreserveEmptyLinePlugin instead makes its serializer drop the text around the empty paragraph.
+ * line goes (in a quote or a list too, never in a code or math block) with the blank line it leaves doubled. Removing
+ * the preset's remarkPreserveEmptyLinePlugin instead makes its serializer drop the text around the empty paragraph.
  */
 const EMPTY_LINE = /^[ >]*<br \/>[ ]*$/;
-const FENCE_LINE = /^[ >]*(```|~~~)/;
+const FENCE_LINE = /^[ >]*(```|~~~|\$\$+[ ]*$)/;
 function stored(markdown: string): string {
   const kept: string[] = [];
   let fenced = false;
@@ -522,7 +523,10 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
   const menus =
     options.menus === undefined
       ? undefined
-      : withMenus(made, { ...options.menus, isOn: (item, state) => isActive(item, state) });
+      : withMenus(made, {
+          ...options.menus,
+          isOn: (item, state) => (item === "math" ? isMathSelected(state) : isActive(item, state)),
+        });
   const tables = options.tables === undefined ? undefined : withTables(made, options.tables);
   const editor = await made
     .config((ctx) => {
@@ -550,6 +554,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
           return { ...schema, toDOM: (node) => [cellTag(node), cellAttrs(node), 0] };
         });
       }
+      writeMathBlocksAsDollars(ctx);
       ctx.update(emphasisSchema.key, (prev) => (schemaCtx) => {
         const schema = prev(schemaCtx);
         return {
@@ -617,6 +622,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
     })
     .use(commonmark)
     .use(gfm)
+    .use(math)
     .use(wwwOverHttps)
     .use(taskBox)
     .use(clipboard)

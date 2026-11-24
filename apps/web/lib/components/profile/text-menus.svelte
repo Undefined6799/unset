@@ -64,6 +64,7 @@ const BLOCK_ICONS: Record<BlockItem, IconName> = {
   tasks: "task-list",
   codeBlock: "code-block",
   table: "table",
+  math: "sigma-function",
 };
 /** The tabs: each group with an item shown, and its first shown item, which a press on the tab makes active. */
 const tabs = $derived(
@@ -81,6 +82,7 @@ const BAR_ICONS: Record<BarItem, IconName> = {
   emphasis: "italic",
   strike: "strikethrough",
   code: "inline-code",
+  math: "sigma-function",
   link: "link",
 };
 const refusedId = $props.id();
@@ -171,7 +173,7 @@ const control =
 </div>
 
 <div bind:this={bar} data-show="false" role="toolbar" tabindex="-1" aria-label={TEXT_MENUS.bar} class="{floating} gap-0.5 rounded-md border bg-popover p-0.5 shadow-md" onpointerdown={keep}>
-  {#each ["strong", "emphasis", "strike", "code", "link"] as const as item (item)}
+  {#each ["strong", "emphasis", "strike", "code", "math", "link"] as const as item (item)}
     <button
       type="button"
       class="{control} aria-pressed:bg-accent aria-pressed:text-accent-foreground"

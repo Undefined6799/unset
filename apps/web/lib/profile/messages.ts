@@ -245,8 +245,16 @@ export const TEXT_MENUS = {
     tasks: "Task list",
     codeBlock: "Code",
     table: "Table",
+    math: "Math",
   },
-  format: { strong: "Bold", emphasis: "Italic", strike: "Strikethrough", code: "Inline code", link: "Link" },
+  format: {
+    strong: "Bold",
+    emphasis: "Italic",
+    strike: "Strikethrough",
+    code: "Inline code",
+    math: "Inline math",
+    link: "Link",
+  },
   /** What an empty line with the caret says. */
   hint: "Type / to choose a block, Shift+Enter for a new one",
   /** The handles above a table's column and beside its row, and their menus (target-look decision 7). */
