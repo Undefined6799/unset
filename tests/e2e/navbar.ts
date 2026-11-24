@@ -19,11 +19,14 @@ export async function openAccountMenu(page: Page): Promise<Locator> {
 }
 
 /** A header menu as a test names it: its button, the stock menu's own name, and the id of its native twin. */
-export type HeaderMenu = { readonly button: string; readonly menu: string; readonly native: string };
+export type HeaderMenu = { readonly button: string | RegExp; readonly menu: string; readonly native: string };
 /** The three-line menu at the header's left edge. */
 export const MAIN_MENU: HeaderMenu = { button: "Menu", menu: "More on unset.sh", native: "core-menu" };
-/** The Create menu, a header button from 640px up. On a phone More actions opens its native twin (nojs.spec.ts). */
+/** The Create menu, a header button from 640px up. On a phone its rows are in More actions. */
 export const CREATE_MENU: HeaderMenu = { button: "Create", menu: "Create", native: "create-menu" };
+
+/** More actions, a header button under 640px. Its name carries the bell's count when something is waiting. */
+export const ACTIONS_MENU: HeaderMenu = { button: /^More actions/, menu: "More actions", native: "actions-menu" };
 
 /** A header menu's button: the native popover button before the client is ready, the stock menu's trigger after. */
 export const menuButton = (page: Page, which: HeaderMenu): Locator =>
@@ -40,6 +43,10 @@ export async function openMenu(page: Page, which: HeaderMenu): Promise<Locator> 
   await expect(menu).toBeVisible();
   return menu;
 }
+
+/** A row of the stock More actions menu, by the words it starts with: the bell's row ends with its count. */
+export const actionsRow = (menu: Locator, label: string): Locator =>
+  menu.getByRole("menuitem", { name: new RegExp(`^${label}`) });
 
 /** A header panel as a test names it: its button, the stock panel's title, and the id of its native twin. */
 export type HeaderPanel = { readonly button: string | RegExp; readonly title: string; readonly native: string };

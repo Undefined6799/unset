@@ -8,10 +8,11 @@
   library measured (--bits-popover-content-available-height, bits-ui dist/internal/floating-svelte/
   floating-utils.svelte.js), which leaves the 8px it keeps from the window's edges; the stock Popover file sets no
   cap. The shell draws Messages and Search with no script itself, as native popovers, and the bell as a link to its
-  page, and loads this file once the client has started.
+  page, and loads this file once the client has started. Under 640px Messages and the bell have no button of their
+  own: More actions opens them, and the panel sits under the button the shell names.
 -->
 <script lang="ts">
-import type { Snippet } from "svelte";
+import { type Snippet, untrack } from "svelte";
 import { Icon } from "../icon/index.ts";
 import { buttonVariants } from "../ui/button/index.ts";
 import * as Popover from "../ui/popover/index.ts";
@@ -24,6 +25,7 @@ let {
   triggerClass,
   trigger,
   class: className = "",
+  anchor = null,
   onOpened,
   children,
 }: {
@@ -38,21 +40,35 @@ let {
   trigger: Snippet;
   /** The panel's width, where it is not the header panels' own. */
   class?: string;
-  /** Called each time the panel opens. */
+  /** The button the panel sits under when its own is not drawn. */
+  anchor?: HTMLElement | null;
+  /** Called each time the panel opens, whoever opened it. */
   onOpened?: (() => void) | undefined;
   children: Snippet;
 } = $props();
 
 const id = $props.id();
+
+// Each opening, by the panel's own button or by the shell: where the panel sits is settled before it is drawn and
+// kept until it has gone, and the shell is told.
+let borrowed = $state<HTMLElement | null>(null);
+$effect.pre(() => {
+  if (!open) return;
+  untrack(() => {
+    borrowed = button?.getClientRects().length === 0 ? anchor : null;
+    onOpened?.();
+  });
+});
 </script>
 
-<Popover.Root bind:open onOpenChange={(now) => now && onOpened?.()}>
+<Popover.Root bind:open>
   <Popover.Trigger bind:ref={button} class={triggerClass}>{@render trigger()}</Popover.Trigger>
   <Popover.Content
     role="dialog"
     aria-labelledby="{id}-title"
     align="end"
     collisionPadding={8}
+    customAnchor={borrowed}
     class="flex max-h-(--bits-popover-content-available-height) w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-x-hidden overflow-y-auto rounded-lg p-2 {className}"
   >
     <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
