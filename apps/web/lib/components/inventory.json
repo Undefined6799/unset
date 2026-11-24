@@ -499,6 +499,10 @@
         "origin": "ours",
         "purpose": "A header menu with script (book P1.22m, ADR 0116 points 8 and 9), used for the three-line menu and the Create menu: the stock Dropdown Menu holding the rows whose feature is coming as disabled menu items, then the rows that run today as links. The shell draws each menu with no script itself and loads this file after the client starts."
       },
+      "header-panel.svelte": {
+        "origin": "ours",
+        "purpose": "A header panel with script (book P1.22m, ADR 0116 points 8 and 9), used for Messages, the bell's panel and Search on a phone: the stock Popover as a dialog named by its title, with a title row and a Close button, holding what the shell passes. The shell draws the native control with no script itself and loads this file after the client starts."
+      },
       "account-menu.svelte": {
         "origin": "ours",
         "purpose": "The header's account menu with script (book P1.22m, ADR 0116 points 8 and 9): the stock Dropdown Menu holding the member's two links, the theme choices as radio rows, and Sign out as a submit button of the shell's sign-out form. The shell draws the menu with no script itself and loads this file after the client starts."
