@@ -16,12 +16,13 @@ import {
   menuButton,
   openMenu,
   openPanel,
+  SEARCH_PANEL,
   settled,
   stockMenu,
   stockPanel,
 } from "./navbar.ts";
 import { AXE_TAGS, addPageCookies, openPage, pageNoise, undersizedTargets, watch } from "./observe.ts";
-import { BELL_SIZE, PAGES, type PageFixture, TEST_ORIGIN } from "./pages.ts";
+import { BELL_SIZE, originOf, PAGES, type PageFixture } from "./pages.ts";
 import { phone } from "./phone.ts";
 
 const WIDTH = 320;
@@ -38,6 +39,9 @@ const SETTINGS: PageFixture = {
 const BELL_HOME: PageFixture = { path: "/", route: "/", group: "public", expectJs: true, member: "bell" };
 const HOME = PAGES.find((entry) => entry.path === "/");
 if (HOME === undefined) throw new Error("the home page is not among the pages under test");
+// Build step 10: with chat on, a member's Messages is the top bar's link to the chat page and their More actions has
+// Search in its place, so the Messages row and its panel are a visitor's (the home page, signed out).
+const VISITOR: PageFixture = HOME;
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -48,7 +52,8 @@ async function ready(page: Page, fixture: PageFixture): Promise<void> {
   await expect(menuButton(page, ACTIONS_MENU)).toHaveAttribute("aria-haspopup", "menu");
 }
 
-test("more_actions_is_a_menu_of_create_s_rows_then_messages_and_notifications", async ({ page }) => {
+// A member's, with chat on: Search takes Messages' row (navigation.spec.ts, "phone chat icon").
+test("more_actions_is_a_menu_of_create_s_rows_then_search_and_notifications", async ({ page }) => {
   const watched = watch(page);
   await ready(page, SETTINGS);
   const button = menuButton(page, ACTIONS_MENU);
@@ -68,10 +73,12 @@ test("more_actions_is_a_menu_of_create_s_rows_then_messages_and_notifications", 
   await expect(addCard).toHaveAttribute("href", /\?add#/);
   await expect(menu.getByRole("menuitem")).toHaveCount(6);
 
-  // The keys skip the rows that are coming: focus opens on the first row that runs, then Messages, then the bell.
+  await expect(actionsRow(menu, "Messages")).toHaveCount(0);
+
+  // The keys skip the rows that are coming: focus opens on the first row that runs, then Search, then the bell.
   await expect(addCard).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(actionsRow(menu, "Messages")).toBeFocused();
+  await expect(actionsRow(menu, SEARCH_PANEL.title)).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(actionsRow(menu, "Notifications")).toBeFocused();
   await page.keyboard.press("Home");
@@ -84,14 +91,14 @@ test("more_actions_is_a_menu_of_create_s_rows_then_messages_and_notifications", 
   await expect(menu).toHaveCount(0);
   await expect(button).toBeFocused();
   // No native twin is left in the document once the client is ready.
-  for (const id of [ACTIONS_MENU.native, CREATE_MENU.native, MESSAGES_PANEL.native, BELL_PANEL.native]) {
+  for (const id of [ACTIONS_MENU.native, CREATE_MENU.native, SEARCH_PANEL.native, BELL_PANEL.native]) {
     await expect(page.locator(`section#${id}`)).toHaveCount(0);
   }
 });
 
 test("a_row_opens_its_panel_under_more_actions_by_the_keys", async ({ page }) => {
   const watched = watch(page);
-  await ready(page, SETTINGS);
+  await ready(page, VISITOR);
   const button = menuButton(page, ACTIONS_MENU);
   await button.press("Enter");
   const menu = stockMenu(page, ACTIONS_MENU);
@@ -129,7 +136,7 @@ test("a_row_opens_its_panel_under_more_actions_by_the_keys", async ({ page }) =>
 });
 
 test("a_press_on_more_actions_closes_the_panel_and_opens_the_menu", async ({ page }) => {
-  await ready(page, SETTINGS);
+  await ready(page, VISITOR);
   await actionsRow(await openMenu(page, ACTIONS_MENU), "Messages").tap();
   const panel = stockPanel(page, MESSAGES_PANEL);
   await expect(panel).toBeVisible();
@@ -200,7 +207,7 @@ test("a_visitor_s_more_actions_has_the_same_rows_and_the_bell_says_to_sign_in", 
 // it, and an open menu keeps the pointer off the page. So the control is closed: it is looked for here by its
 // attribute, which a hidden one still has. navbar-panels.spec.ts holds the other direction.
 test("widening_past_640px_closes_an_open_more_actions", async ({ page }) => {
-  await ready(page, SETTINGS);
+  await ready(page, VISITOR);
   await openMenu(page, ACTIONS_MENU);
   await page.setViewportSize({ width: 700, height: WIDTH });
   await expect(page.locator('[role="menu"]')).toHaveCount(0);
@@ -220,10 +227,10 @@ test.describe("before the client is ready", () => {
     return held.resolve;
   }
 
-  /** Opens the settings page without waiting for its load event, which WebKit holds back for the held files. */
-  async function openHeld(page: Page): Promise<number | undefined> {
-    await addPageCookies(page.context(), SETTINGS);
-    return (await page.goto(`${TEST_ORIGIN}${SETTINGS.path}`, { waitUntil: "commit" }))?.status();
+  /** Opens a page without waiting for its load event, which WebKit holds back for the held files. */
+  async function openHeld(page: Page, fixture: PageFixture = SETTINGS): Promise<number | undefined> {
+    await addPageCookies(page.context(), fixture);
+    return (await page.goto(`${originOf(fixture)}${fixture.path}`, { waitUntil: "commit" }))?.status();
   }
 
   const nativeActions = (page: Page) => page.locator(`section#${ACTIONS_MENU.native}`);
@@ -265,7 +272,7 @@ test.describe("before the client is ready", () => {
   test("native_messages_from_more_actions_is_carried_over_to_the_stock_panel", async ({ page }) => {
     const watched = watch(page);
     const release = await holdScripts(page);
-    expect(await openHeld(page)).toBe(200);
+    expect(await openHeld(page, VISITOR)).toBe(200);
     await menuButton(page, ACTIONS_MENU).tap();
     await nativeActions(page).getByRole("button", { name: "Messages", exact: true }).tap();
     await expect(page.locator(`section#${MESSAGES_PANEL.native}`)).toContainText("Messages are coming soon.");
@@ -284,7 +291,7 @@ test.describe("before the client is ready", () => {
   // Until the stock controls are in, the bell's row is the link to its page, as the bell is on a wide screen.
   test("native_more_actions_stays_and_works_when_the_script_files_are_refused", async ({ page }) => {
     await page.route("**/_app/**/*.js", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "" }));
-    expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    expect((await openPage(page, VISITOR))?.status()).toBe(200);
     await menuButton(page, ACTIONS_MENU).tap();
     await expect(nativeActions(page).locator('a[href="/notifications"]')).toBeVisible();
     await nativeActions(page).getByRole("button", { name: "Messages", exact: true }).tap();
