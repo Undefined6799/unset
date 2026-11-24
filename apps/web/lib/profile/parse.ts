@@ -206,7 +206,9 @@ function inline(node: Phrasing, reading: Reading): Inline[] {
       return [{ kind: "break" }];
     case "inlineMath":
       return (
-        (pricesRule(node, reading) ? formulaInline(node.value, reading) : null) ?? [
+        (pricesRule(node, reading)
+          ? formulaInline(node.value, reading)
+          : refusedMath(written(reading, node), node.value, reading)) ?? [
           { kind: "text", text: written(reading, node) },
         ]
       );
@@ -247,6 +249,34 @@ function pricesRule(node: Positioned, reading: Reading): boolean {
   if (raw.startsWith("$$")) return true;
   const after = reading.source[node.position?.end.offset ?? 0] ?? "";
   return !/^\$\s/.test(raw) && !/\s\$$/.test(raw) && !/\d/.test(after);
+}
+
+/**
+ * The text between a refused span's dollars as it was written: micromark-extension-math 3.1.0 drops one space or line
+ * ending at each end when both ends have one and there is more (math-text.js resolveMathText), and keeps a line's
+ * container marks (a quote's ">") out of the value, so the value with what was dropped put back is that text.
+ */
+function between(raw: string, value: string): string {
+  const first = raw[1] ?? "";
+  const last = raw[raw.length - 2] ?? "";
+  const padded = /^[ \n]$/.test(first) && /^[ \n]$/.test(last) && /[^ \n]/.test(value);
+  return padded ? `${first}${value}${last}` : value;
+}
+
+/**
+ * Single-dollar math the rule refuses, as the text it is (Codex on #2019): micromark has already taken "$5 **each** or
+ * $" as one span, so its dollars stay words and the Markdown between them is read again, without math, keeping its
+ * bold, links and code. Each read again spends one of the card's formulas (math.ts MathBudget), so a card of thousands
+ * of refused spans costs what its formulas may; past them, and when that reading is not one paragraph, it is null and
+ * the caller shows the span as written.
+ */
+function refusedMath(raw: string, value: string, reading: Reading): Inline[] | null {
+  if (reading.math.formulas <= 0) return null;
+  reading.math.formulas -= 1;
+  const again = `$${between(raw, value)}$`;
+  const [only, more] = fromMarkdown(again, READ).children;
+  if (only?.type !== "paragraph" || more !== undefined) return null;
+  return inlines(only.children, { ...reading, source: again });
 }
 
 /** A formula in a line, or null when math.ts cannot draw it. */
