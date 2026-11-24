@@ -53,6 +53,13 @@ test("the_edit_form_sets_a_text_cards_table_lines_and_the_page_and_preview_draw_
   await expect(lines.getByRole("checkbox", { name: "Between rows" })).toBeChecked();
   await expect(lines.getByRole("checkbox", { name: "Between columns" })).not.toBeChecked();
   await expect(lines.getByRole("checkbox", { name: "Around the table" })).not.toBeChecked();
+  // A choice closed without saving is gone when Edit opens again (Codex on #2026).
+  await lines.getByRole("checkbox", { name: "Around the table" }).check();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await card.getByRole("link", { name: "Edit" }).click();
+  await expect(lines.getByRole("checkbox", { name: "Around the table" })).not.toBeChecked();
+
   await lines.getByRole("checkbox", { name: "Between rows" }).uncheck();
   await lines.getByRole("checkbox", { name: "Between columns" }).check();
   await lines.getByRole("checkbox", { name: "Around the table" }).check();

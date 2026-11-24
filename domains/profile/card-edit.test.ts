@@ -437,6 +437,26 @@ describe("table lines", () => {
     expect(written.ok && validateRecord("sh.unset.card", written.record, "write").ok).toBe(true);
   });
 
+  // Codex on #2026: a key of tableStyle this editor does not own (another client's, a newer release's) is kept, as
+  // ADR 0038 keeps every unowned field; only the four switches are replaced.
+  test("an Edit save replaces only the four switches and keeps any other key of the stored tableStyle", () => {
+    const existing = stored({
+      $type: ref("readme"),
+      text: "old",
+      tableStyle: { hideRowLines: true, showOutline: true, laterKey: { a: 1 } },
+    });
+    const lined = parsed({ kind: "readme", text: "new", tableLines: "", headerLine: "on", columnLines: "on" });
+    const written = toCardRecord(lined.content, lined.width, existing, NOW);
+    expect(written.ok && (written.record.content as { tableStyle?: unknown }).tableStyle).toEqual({
+      hideRowLines: true,
+      showColumnLines: true,
+      laterKey: { a: 1 },
+    });
+    const ours = parsed({ kind: "readme", text: "new", tableLines: "", headerLine: "on", rowLines: "on" });
+    const plain = toCardRecord(ours.content, ours.width, existing, NOW);
+    expect(plain.ok && (plain.record.content as { tableStyle?: unknown }).tableStyle).toEqual({ laterKey: { a: 1 } });
+  });
+
   test("our look writes no tableStyle, and a save without the marker keeps the stored one", () => {
     const existing = stored({ $type: ref("readme"), text: "old", tableStyle: { showOutline: true } });
     const off = parsed({ kind: "readme", text: "new", tableLines: "", headerLine: "on", rowLines: "on" });

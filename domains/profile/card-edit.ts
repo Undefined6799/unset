@@ -449,16 +449,19 @@ function tableSwitches(lines: TableLines | undefined): Obj {
 }
 
 /**
- * A Text card's content to write: when the edit sent its switches, they replace the stored ones and the stored cell
- * sides (`tables`, which this version does not write yet) are kept beside them; with no switch on and no cell sides,
- * no tableStyle is left. An edit that sent none keeps the stored tableStyle as it is.
+ * A Text card's content to write: when the edit sent its switches, they replace the four stored ones and every other
+ * key of the stored tableStyle is kept (ADR 0038 keeps unowned fields: the stored cell sides, `tables`, and whatever a
+ * newer release or another client wrote there; Codex on #2026); with nothing left, no tableStyle is written. An edit
+ * that sent none keeps the stored tableStyle as it is.
  */
 function withTableStyle(content: CardContent, merged: Obj, stored: Obj): Obj {
   if (content.kind !== "readme" || content.tableLines === undefined) return merged;
   const { tableStyle: _s, ...rest } = merged;
-  const tables = isObject(stored.tableStyle) ? stored.tableStyle.tables : undefined;
+  const kept = Object.entries(isObject(stored.tableStyle) ? stored.tableStyle : {}).filter(
+    ([name]) => !(TABLE_SWITCHES as readonly string[]).includes(name),
+  );
   const switches = tableSwitches(content.tableLines).tableStyle;
-  const style = { ...(isObject(switches) ? switches : {}), ...(tables === undefined ? {} : { tables }) };
+  const style = { ...Object.fromEntries(kept), ...(isObject(switches) ? switches : {}) };
   return Object.keys(style).length === 0 ? rest : { ...rest, tableStyle: style };
 }
 

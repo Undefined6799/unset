@@ -282,6 +282,12 @@ const drawn = $state(
     boolean
   >,
 );
+// Each opening starts from the card as stored: a choice closed without saving is gone (Codex on #2026). The editor
+// stays mounted between openings (card-controls.svelte); a refused save keeps it open, and what was checked stays.
+$effect(() => {
+  if (!open) return;
+  for (const line of TABLE_LINES) drawn[line] = lineDrawn(line);
+});
 const previewLines = $derived({
   hideHeaderLine: !drawn.headerLine,
   hideRowLines: !drawn.rowLines,
