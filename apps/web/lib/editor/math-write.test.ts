@@ -3,7 +3,7 @@
 // formula holding a pipe in a table cell was saved with the pipe bare, which split the cell.
 import katex from "katex";
 import { expect, test } from "vitest";
-import { MAX_TEX_CHARS } from "../profile/math.ts";
+import { MAX_TEX_CHARS } from "../profile/math-syntax.ts";
 import { parseReadme } from "../profile/parse.ts";
 import { type InlineFormula, pipesAsTex, writeFormulaRun } from "./math-write.ts";
 
@@ -103,9 +103,10 @@ test.each([
 
 // Codex on #2020 (bebe04e): KaTeX 0.16.47 defines \vert in math only (src/symbols.ts), so "\text{a|b}" became TeX that
 // does not render. \char"7C draws the pipe in both modes; only a delimiter after \left and its kin needs \vert.
+const PIPE = '{\\char"7C}';
 test.each([
   ["\\text{a|b}", '\\text{a{\\char"7C}b}'],
-  ["\\text{$|x|$}", '\\text{${\\char"7C}x{\\char"7C}$}'],
+  ["\\text{$|x|$}", `\\text{$${PIPE}x${PIPE}$}`],
   ["\\left|x\\right|", "\\left\\vert x\\right\\vert"],
   ["\\bigl| x \\Bigr|", "\\bigl\\vert x \\Bigr\\vert"],
 ])("a pipe outside \\verb becomes TeX that draws it where it stands: %s", (tex, expected) => {

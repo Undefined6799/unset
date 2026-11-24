@@ -1,6 +1,9 @@
 // Where math between dollars is read as math, shared by the page (parse.ts) and the editor (lib/editor/math.ts), so
 // both read a card alike. This file imports nothing: the editor's first load must not carry KaTeX.
 
+/** A formula's TeX past this many characters is shown as its source (math.ts drawMath; the editor's writer, too). */
+export const MAX_TEX_CHARS = 2_000;
+
 /**
  * Whether math written as `raw` (its dollars included), followed in the text by `after`, is math: between two or more
  * dollars always; between single dollars only by Pandoc's rule, as Milkdown's Crepe 7.23.0 holds its editor to it

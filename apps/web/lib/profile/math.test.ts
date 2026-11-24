@@ -2,7 +2,8 @@
 // through (colours, styles, links, pictures), and where a formula is shown as its source instead.
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
-import { drawMath, MATH_ATTRIBUTES, MATH_ELEMENTS, MAX_TEX_CHARS, type MathNode, mathBudget } from "./math.ts";
+import { drawMath, MATH_ATTRIBUTES, MATH_ELEMENTS, type MathNode, mathBudget } from "./math.ts";
+import { MAX_TEX_CHARS } from "./math-syntax.ts";
 
 const draw = (tex: string, display = false) => drawMath(tex, display, mathBudget());
 

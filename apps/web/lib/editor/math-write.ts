@@ -1,6 +1,6 @@
-// How formulas in a line are written back (Codex on #2020). This file imports only the page's limit, so a test can
-// hold it to the page's reader without loading the editor.
-import { MAX_TEX_CHARS } from "../profile/math.ts";
+// How formulas in a line are written back (Codex on #2020). This file imports only the page's limit, from a file that
+// imports nothing, so the editor's first load carries no KaTeX and a test can hold it to the page's reader.
+import { MAX_TEX_CHARS } from "../profile/math-syntax.ts";
 
 /** A formula in a line as mdast-util-math 3.0.0 gives it to the writer. */
 export type InlineFormula = { readonly type: "inlineMath"; readonly value: string };
