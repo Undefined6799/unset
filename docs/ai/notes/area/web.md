@@ -114,10 +114,12 @@ measured 2026-11-24: an empty loop caught there ran 0.3 to 0.6 s past its limit 
 real parser at most 22 ms in 1,314 stalled reads). So a test's stand-in for a stalling parser must call into real
 code (text-reader.test.ts `forever`), and what time the reader gives, takes and keeps is tested on a clock the test
 moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. What a full
-card costs to parse ("the page's limits" tests) is measured as the test thread's processor time
-(`process.threadCpuUsage`), not by the clock, which also counts the time other work held the processor: by the clock
-the full table card took 161 ms on a CI runner against the 150 ms limit (#2026, 2026-11-24), and beside eleven other
-parsers on four processors a parse took 337 ms by the clock and 69 ms of processor time. The margin itself is thin
+card costs to parse ("the page's limits" tests) is the quickest of up to fifteen parses, each measured as the test
+thread's processor time (`process.threadCpuUsage`), not by the clock, which also counts the time other work held the
+processor: by the clock the quickest of five took 161 ms on a CI runner against the 150 ms limit (#2026,
+2026-11-24), and beside eleven other parsers on four processors a parse took 337 ms by the clock and 69 ms of
+processor time. On a CI runner (AMD EPYC 9V74, four processors, #2030) the full table took 71 to 110 ms of processor
+time inside the test run, as it does here. The margin itself is thin
 and not the test's to give: the full table card (20,000 characters, every cell formatted) costs about 60 ms of
 processor time when warm and about 140 ms as a fresh process's first parse, where the reader cut it in 5 of 8 fresh
 processes. The process
