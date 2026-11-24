@@ -5646,6 +5646,36 @@ anything, would still be ours. `inventory.json` lists what is added; `a11y.spec.
 with each control open) and `nojs.spec.ts` hold both versions, and a keyboard test walks each control. Refined
 when it is next: split by control if the change passes about 400 lines.
 
+**Refined 2026-11-24, when it was next.** What the library offers was listed for Alex first (the doc "Navbar
+controls: what the library gives us", 2026-11-23, from the bits-ui 2.20.6 source and the shadcn-svelte 1.8.1
+registry). The step is split by control, one PR each, all titled P1.22m:
+
+1. the account menu, on the stock Dropdown Menu (already copied in);
+2. Create and the menu button's panel, on the same Dropdown Menu;
+3. the stock Popover copied in, then the bell, Messages and the phone's Search;
+4. More actions on a phone.
+
+Three rules hold for every part, found while building the first:
+
+- **The stock control is loaded after the client starts**, by a dynamic import in the root layout, and is never part
+  of a page's first load. Imported with the layout, the library's menu code added 36.6 KiB gzip to every page (home
+  went from 91.8 to 128.4 KiB, `scripts/budgets/app-js.ts`); loaded after, home is 92.5 KiB. Until the file is in,
+  and when it does not arrive, the native control stays and works.
+- **A press the native control took is carried over.** A native panel found open is open as the stock one after the
+  swap, and focus found on its button or inside it is on the stock button after.
+- **The row the pointer or the keys are on is drawn with the muted colour.** The library marks it with the accent
+  colour, which in our theme is the menu's own surface (`shared/ui/theme.css`), so its own mark does not show. The
+  profile's card menu has the same fault today and is not touched here.
+
+**Built 2026-11-24: part 1, the account menu.** `apps/web/lib/components/shell/account-menu.svelte` is the stock
+Dropdown Menu: the member's two links are link rows, the theme choices are radio rows that keep the menu open, and
+Sign out is a submit button of a sign-out form the layout holds. A theme row presses its button in the native
+picker's form, which the layout keeps undrawn, so one save path serves both menus. Where it differs from the list
+sent to Alex: the current theme is marked with a tick (our copy of the radio row draws our `done` icon), and the
+menu has no title row or close button. `tests/e2e/navbar-account.spec.ts` walks it by keyboard, holds the
+hand-over, the policy with the menu open, axe in both themes and the phone's sizes; `tests/e2e/navbar.ts` finds the
+control by name, which both versions carry. `nojs.spec.ts` and `cards-nojs.spec.ts` hold the native menu, unchanged.
+
 ---
 
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)

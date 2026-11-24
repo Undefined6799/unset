@@ -7,6 +7,7 @@
 // unknown version and every old piece 404, and ask the impatient-member question: the member lands on a real page,
 // never a blank one or a framework error. The server is the one build throughout, so the full load gets real files.
 import { expect, type Page, type Response, test } from "@playwright/test";
+import { openAccountMenu } from "./navbar.ts";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 
@@ -107,8 +108,7 @@ test("a_click_in_a_tab_older_than_the_deploy_loads_the_page_in_full", async ({ p
   await openOlderTab(page);
   const seen = trouble(page);
   const { documents, gone } = await redeploy(page, { unchecked: true });
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  await page.locator("#account-menu").getByRole("link", { name: "Settings" }).click();
+  await (await openAccountMenu(page)).getByRole("menuitem", { name: "Settings" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
   await expect(page.locator("main h1").first()).toContainText("Profile");
   await expect(page.locator("body")).not.toContainText(/Internal Error|Something went wrong|Not Found/i);

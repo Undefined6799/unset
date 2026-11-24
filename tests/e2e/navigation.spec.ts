@@ -3,6 +3,7 @@
 // a 303 to the member's /<DID>) was matched to /[did] with did "me" and showed not found, and its error page offered
 // Sign in to a member signed in (2026-11-18).
 import { expect, test } from "@playwright/test";
+import { accountButton, accountMenu, openAccountMenu } from "./navbar.ts";
 import { addPageCookies, openPage, watch } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 import { phone } from "./phone.ts";
@@ -36,10 +37,9 @@ test("continue_after_a_confirmed_email_reaches_the_member_page", async ({ page }
 test("the_account_menu_profile_link_reaches_the_member_page_and_closes", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  await page.locator("#account-menu").getByRole("link", { name: "Your profile" }).click();
+  await (await openAccountMenu(page)).getByRole("menuitem", { name: "Your profile" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}`);
-  await expect(page.locator("#account-menu")).toBeHidden();
+  await expect(accountMenu(page)).toHaveCount(0);
 });
 
 test("the_create_menu_closes_after_a_client_navigation", async ({ page }) => {
@@ -59,7 +59,7 @@ test("a_legal_page_shows_the_member_signed_in", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.locator("footer").getByRole("link", { name: "Terms" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/legal/terms`);
-  await expect(page.locator('header button[popovertarget="account-menu"]')).toBeVisible();
+  await expect(accountButton(page)).toBeVisible();
   await expect(page.locator("header").getByRole("link", { name: "Sign in" })).toHaveCount(0);
 });
 
@@ -72,12 +72,12 @@ test.describe("phone", () => {
     const account: PageFixture = { ...SETTINGS, path: "/settings/account", route: "/settings/account" };
     expect((await openPage(page, account))?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
-    await page.locator('header button[popovertarget="account-menu"]').tap();
-    const drawer = page.locator("#account-menu");
-    await expect(drawer).toBeVisible();
-    await drawer.getByRole("link", { name: "Settings" }).tap();
+    await accountButton(page).tap();
+    const menu = accountMenu(page);
+    await expect(menu).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Settings" }).tap();
     await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
-    await expect(drawer).toBeHidden();
+    await expect(menu).toHaveCount(0);
   });
 
   // Outside audit of staging, 2026-11-19: More actions, then one of its panels, then Escape left More actions open
@@ -104,19 +104,17 @@ test.describe("phone", () => {
 test("the_home_page_seen_as_a_visitor_shows_the_member_after_sign_in", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   expect((await page.goto(`${TEST_ORIGIN}/`))?.status()).toBe(200);
-  const accountMenu = page.locator('header button[popovertarget="account-menu"]');
-  await expect(accountMenu).toHaveCount(0);
+  await expect(accountButton(page)).toHaveCount(0);
   await addPageCookies(page.context(), HOME_SIGNED_IN, { kind: "cookie", theme: "dark" });
   await page.goto(`${TEST_ORIGIN}/`);
-  await expect(accountMenu).toHaveCount(1);
+  await expect(accountButton(page)).toHaveCount(1);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
 test("your_profile_from_the_home_page_reaches_the_member_page", async ({ page }) => {
   const watched = watch(page);
   expect((await openPage(page, HOME_SIGNED_IN))?.status()).toBe(200);
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  await page.locator("#account-menu").getByRole("link", { name: "Your profile" }).click();
+  await (await openAccountMenu(page)).getByRole("menuitem", { name: "Your profile" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}`);
   expect(watched.pageErrors).toEqual([]);
 });
@@ -149,19 +147,17 @@ type DocumentLike = {
 test("the_account_menu_theme_picker_saves_in_place", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  const drawer = page.locator("#account-menu");
-  const light = drawer.getByRole("button", { name: "Light" });
-  await expect(light).toHaveAttribute("aria-pressed", "false");
+  const menu = await openAccountMenu(page);
+  const light = menu.getByRole("menuitemradio", { name: "Light" });
+  await expect(light).toHaveAttribute("aria-checked", "false");
   const saved = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
   await light.click();
   await saved;
-  await expect(light).toHaveAttribute("aria-pressed", "true");
+  await expect(light).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(drawer).toBeVisible();
+  await expect(menu).toBeVisible();
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.locator('header button[popovertarget="account-menu"]').click();
-  await drawer.getByRole("button", { name: "System" }).click();
+  await (await openAccountMenu(page)).getByRole("menuitemradio", { name: "System" }).click();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
 });
