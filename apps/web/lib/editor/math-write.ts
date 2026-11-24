@@ -1,5 +1,6 @@
-// How formulas in a line are written back (Codex on #2020). This file imports nothing, so a test can hold it to the
-// page's reader without loading the editor.
+// How formulas in a line are written back (Codex on #2020). This file imports only the page's limit, so a test can
+// hold it to the page's reader without loading the editor.
+import { MAX_TEX_CHARS } from "../profile/math.ts";
 
 /** A formula in a line as mdast-util-math 3.0.0 gives it to the writer. */
 export type InlineFormula = { readonly type: "inlineMath"; readonly value: string };
@@ -10,30 +11,52 @@ export type InlineFormula = { readonly type: "inlineMath"; readonly value: strin
  * run of dollars as long as the one that opened it (dev/lib/math-text.js), so the page read one formula "x$$y" and
  * showed its source. Dollars cannot divide two formulas with nothing between them, so a run of them is written as one
  * formula, each formula's TeX in its own group, so "\alpha" does not run into a letter and "x^2" and "^3" do not
- * become a double superscript (KaTeX 0.16.47 src/Parser.ts), by the writer asked for at least two dollars, which the page always reads as math (math-syntax.ts
- * isInlineMath). The first of the run writes it; the others write nothing.
+ * become a double superscript (KaTeX 0.16.47 src/Parser.ts), by the writer asked for at least two dollars, which the
+ * page always reads as math (math-syntax.ts isInlineMath). The page draws no formula longer than MAX_TEX_CHARS
+ * (profile/math.ts drawMath), so a run that would pass it is cut there, a space between the parts. `tex` is the TeX
+ * each formula is written as (its pipes in a table cell), so the cut counts what is written. The first of the run
+ * writes it; the others write nothing.
  */
 export function writeFormulaRun(
   node: InlineFormula,
   siblings: readonly { readonly type: string }[],
   write: (formula: InlineFormula, wide: boolean) => string,
+  tex: (value: string) => string = (value) => value,
 ): string {
   const at = siblings.indexOf(node);
   if (siblings[at - 1]?.type === "inlineMath") return "";
   let last = at;
   while (siblings[last + 1]?.type === "inlineMath") last += 1;
-  if (last === at) return write(node, false);
-  const run = siblings.slice(at, last + 1).map((formula) => ("value" in formula ? String(formula.value) : ""));
-  const comments: string[] = [];
-  const groups = run.map(
-    (tex) => `{${tex.replace(COMMENT, (found) => (found.startsWith("%") ? keep(found) : found))}}`,
-  );
-  return write({ type: "inlineMath", value: groups.join("") + comments.join("") }, true);
+  const run = siblings.slice(at, last + 1).map((formula) => tex("value" in formula ? String(formula.value) : ""));
+  return withinLimit(run)
+    .map((part) => (part.length === 1 ? write(formulaOf(part[0] ?? ""), false) : write(formulaOf(joined(part)), true)))
+    .join(" ");
+}
 
-  function keep(comment: string): string {
+const formulaOf = (value: string): InlineFormula => ({ type: "inlineMath", value });
+
+/** The run's formulas in parts, each joined within MAX_TEX_CHARS; a formula longer than that stays alone. */
+function withinLimit(run: readonly string[]): string[][] {
+  const parts: string[][] = [];
+  for (const value of run) {
+    const part = parts.at(-1);
+    if (part !== undefined && joined([...part, value]).length <= MAX_TEX_CHARS) part.push(value);
+    else parts.push([value]);
+  }
+  return parts;
+}
+
+/** Formulas side by side as one TeX: each in its own group, their comments moved to the end. */
+function joined(run: readonly string[]): string {
+  const comments: string[] = [];
+  const keep = (comment: string) => {
     comments.push(comment);
     return "";
-  }
+  };
+  const groups = run.map(
+    (value) => `{${value.replace(COMMENT, (found) => (found.startsWith("%") ? keep(found) : found))}}`,
+  );
+  return groups.join("") + comments.join("");
 }
 
 /**

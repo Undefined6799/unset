@@ -356,12 +356,16 @@ export function writeMath(ctx: Ctx) {
         text: (node, parent, state, info) =>
           node.value.includes("$") ? state.safe(node.value, { ...info, encode: [] }) : text(node, parent, state, info),
         inlineMath: (node, parent, state, info) =>
-          writeFormulaRun(node, parent?.children ?? [node], (formula, wide) => {
-            const tex = state.stack.includes("tableCell") ? { ...formula, value: pipesAsTex(formula.value) } : formula;
-            const written = writeInlineMath(tex, parent, state, info);
-            if (!wide && isInlineMath(written, info.after)) return written;
-            return writeWideInlineMath(tex, parent, state, info);
-          }),
+          writeFormulaRun(
+            node,
+            parent?.children ?? [node],
+            (formula, wide) => {
+              const written = writeInlineMath(formula, parent, state, info);
+              if (!wide && isInlineMath(written, info.after)) return written;
+              return writeWideInlineMath(formula, parent, state, info);
+            },
+            state.stack.includes("tableCell") ? pipesAsTex : undefined,
+          ),
       },
     };
   });
