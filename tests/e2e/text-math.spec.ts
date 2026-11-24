@@ -140,6 +140,20 @@ test("double_dollar_math_before_a_digit_and_code_holding_dollars_survive_a_save"
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
 
+// Codex on #2020 (54bc9ad): widening a formula by wrapping it in one more dollar on each side made "$$$x$$y$$$" into
+// "$$$$x$$y$$$$", which no longer reads as math. mdast-util-math's own writer picks a fence the TeX does not hold.
+test("a_formula_holding_two_dollars_keeps_its_fence_on_save", async ({ page }) => {
+  const watched = watch(page);
+  const word = `wide${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} so $$$x$$y$$$5 grows`);
+  await expect(editor.locator("[data-math-inline] math")).toHaveCount(1);
+  await page.keyboard.type(" now");
+  expect(await markdownOf(page, card)).toBe(`${word} so $$$x$$y$$$5 grows now`);
+  await discardAndRemove(page, word);
+  expect(watched.pageErrors).toEqual([]);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
 // Codex on #2020: a formula keeps its TeX only in an attribute, which ProseMirror's textBetween leaves out, so words
 // selected with a formula among them became a formula without it. The formula's TeX goes into the new one.
 test("words_selected_with_a_formula_among_them_keep_its_tex_as_one_formula", async ({ page }) => {
