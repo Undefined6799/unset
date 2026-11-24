@@ -78,16 +78,26 @@ files held back WebKit never fires the load event (it waits for the preloaded fi
 with `waitUntil: "commit"`. The stock controls are one file, `shell/index.ts`, loaded on every page with the core
 header (a visitor has the menu and Create too); the layout's `STOCK_MENUS` lists the native ids that have a stock
 version. `afterNavigate` also runs when the layout mounts (type `enter`): closing panels there lost a menu opened
-before the client started, so the close skips `enter`. Until More actions is moved (part 4) the native Create panel
-stays in the document for its row, and the stock Create menu has no fixed id. Part 3: the header's panels are the
+before the client started, so the close skips `enter`. Part 3: the header's panels are the
 stock Popover (`shell/header-panel.svelte`, `ui/popover` copied from the registry). bits-ui's Popover content has no
 role, so ours sets `role="dialog"` and `aria-labelledby`; it traps focus by default and does not lock scroll. The
 stock Popover content also has no height cap (the stock menu's has): ours adds
 `max-h-(--bits-popover-content-available-height)` and `overflow-y-auto`, or a panel runs off a short window. A
 Popover mounted already open gives focus back to whatever had focus at mount, so the hand-over focuses the new
 button first and opens after. The header bell is the server's link until the stock panel is in (no native popover
-button in between). The native Messages and Notifications panels also stay for More actions until part 4. A test
-finds a stock panel as `getByRole("dialog", { name })`, never by `[popover]` or the native id.
+button in between). A test finds a stock panel as `getByRole("dialog", { name })`, never by `[popover]` or the
+native id. Part 4: More actions under 640px is `header-menu.svelte` with a group heading and action rows; every
+native panel is drawn only while `stock === undefined`. A panel whose own button is not drawn sits under the button
+passed as `anchor` (bits-ui `customAnchor`); the library does not count a press on that element as outside, so
+the layout closes the panels when More actions opens (closing from the panel's own `onInteractOutside` failed in
+WebKit, where the menu had opened first and the panel's layer was no longer asked). bits-ui calls `onOpenChange` only for a change it made, so a panel
+opened by setting the bound `open` tells the shell through an effect. A row that opens a panel waits for the menu's
+`onOpenChangeComplete(false)`, then focuses the menu's button and opens the panel: opened at once, the closing menu
+and the opening panel both move focus. When a control's button stops being drawn (the width crosses 640px) bits-ui
+sets `visibility: hidden` on the open control and only sometimes closes it; a hidden open menu still holds
+`pointer-events: none` on the body, so the layout closes every stock control on that `matchMedia` change, and a test
+looks for the control by `[role="menu"]`, which sees a hidden one where `getByRole` does not. A client that runs with only the stock chunk refused is tested by fulfilling
+`**/_app/**/*.js` from `route.fetch()` and answering 404 where the body holds `dropdown-menu-content`.
 
 **A page's data address (P1.22h, 2026-11-23).** SvelteKit answers `<page>/__data.json` for every page route with the
 whole result of its server loads (root layout and page), whatever `csr` says (kit 3.2.0 `src/runtime/server/respond.js`
@@ -113,7 +123,16 @@ out, and that budget is INT_MAX / 2 while V8 compiles the function to its top ti
 measured 2026-11-24: an empty loop caught there ran 0.3 to 0.6 s past its limit and 2.3 s on a busy CI runner, the
 real parser at most 22 ms in 1,314 stalled reads). So a test's stand-in for a stalling parser must call into real
 code (text-reader.test.ts `forever`), and what time the reader gives, takes and keeps is tested on a clock the test
-moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. The process
+moves, with its own stop (`onTestClock`, `createTextReads`' fourth argument), never by elapsed time. What a full
+card costs to parse ("the page's limits" tests) is the quickest of up to fifteen parses, each measured as the test
+thread's processor time (`process.threadCpuUsage`), not by the clock, which also counts the time other work held the
+processor: by the clock the quickest of five took 161 ms on a CI runner against the 150 ms limit (#2026,
+2026-11-24), and beside eleven other parsers on four processors a parse took 337 ms by the clock and 69 ms of
+processor time. On a CI runner (AMD EPYC 9V74, four processors, #2030) the full table took 71 to 110 ms of processor
+time inside the test run, as it does here. The margin itself is thin
+and not the test's to give: the full table card (20,000 characters, every cell formatted) costs about 60 ms of
+processor time when warm and about 140 ms as a fresh process's first parse, where the reader cut it in 5 of 8 fresh
+processes. The process
 keeps what each read gave
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110

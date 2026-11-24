@@ -291,3 +291,17 @@ describe("shownCards and pageCards (the page's cards, own or public)", () => {
     expect(pageCards(OWNER, "not a record", records)).toEqual([]);
   });
 });
+
+// ADR 0110 point 2: a Text card's four table switches are read from its tableStyle; any other value reads as off.
+describe("a Text card's table lines", () => {
+  test("switches that are on are read, and a card with none on has no tableLines", () => {
+    const tableStyle = { hideHeaderLine: true, showOutline: true, hideRowLines: false };
+    expect(readCard(key(KEY), stored({ $type: ref("readme"), text: "| a |\n| - |", tableStyle }))?.content).toEqual({
+      kind: "readme",
+      text: "| a |\n| - |",
+      tableLines: { hideHeaderLine: true, hideRowLines: false, showColumnLines: false, showOutline: true },
+    });
+    const off = stored({ $type: ref("readme"), text: "a", tableStyle: { hideRowLines: false } });
+    expect(readCard(key(KEY), off)?.content).toEqual({ kind: "readme", text: "a" });
+  });
+});

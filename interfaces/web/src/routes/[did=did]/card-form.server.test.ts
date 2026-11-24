@@ -29,6 +29,17 @@ describe("readCardForm", () => {
     });
   });
 
+  test("a Text form carries its table lines marker and checked boxes (ADR 0110 point 2)", () => {
+    const fields: [string, string][] = [
+      ["kind", "readme"],
+      ["text", "| a |\n| - |"],
+      ["tableLines", ""],
+      ["rowLines", "on"],
+      ["outline", "on"],
+    ];
+    expect(read(fields)).toEqual(Object.fromEntries(fields));
+  });
+
   test("a picture form is its kind, draft id, alt text, caption and fit, and no list", () => {
     const fields: [string, string][] = [
       ["kind", "image"],

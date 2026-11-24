@@ -79,6 +79,12 @@ export const CARD_EDIT = {
   write: "Write",
   preview: "Preview",
   previewEmpty: "Nothing to preview yet.",
+  /** The Text card's table lines (ADR 0110 point 2): one box per line, for every table in the card. */
+  tableLines: "Table lines",
+  headerLine: "Under the header",
+  rowLines: "Between rows",
+  columnLines: "Between columns",
+  outline: "Around the table",
   previewFailed: "The preview could not load. Reload the page to see it.",
   save: "Save",
   add: "Add",

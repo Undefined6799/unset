@@ -3,16 +3,19 @@
 // it is open, closes on Escape, its Close button or a press outside, and gives focus back to its button
 // (node_modules/bits-ui/dist/bits/popover/components/popover-content.svelte, trapFocus). The server still draws
 // Messages and Search as native popovers and the bell as a link to its page (bell-panel.spec.ts); a press before the
-// client is ready is carried over. On a phone Messages and the bell are rows of More actions, which is still native
-// and opens the native panels until that menu's own part.
+// client is ready is carried over. On a phone Messages and the bell are rows of More actions, which opens the same
+// panels under its own button (navbar-actions.spec.ts).
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { AXE_ALLOWANCE, unallowedViolations } from "./allow.ts";
 import {
+  ACTIONS_MENU,
+  actionsRow,
   BELL_PANEL,
   MAIN_MENU,
   MESSAGES_PANEL,
   menuButton,
+  openMenu,
   openPanel,
   panelButton,
   SEARCH_PANEL,
@@ -128,6 +131,18 @@ test("a_panel_taller_than_the_window_stays_inside_it_and_scrolls", async ({ page
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
+// Under 640px the header does not draw a panel's own button, so a panel left open across that line loses the button
+// it sits under (navbar-actions.spec.ts says what the library does then). It is closed, and looked for here by its
+// attribute, which a hidden one still has.
+test("narrowing_under_640px_closes_an_open_panel", async ({ page }) => {
+  await ready(page, VISITOR_HOME);
+  await openPanel(page, MESSAGES_PANEL);
+  await page.setViewportSize({ width: 500, height: 700 });
+  await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+  // The page takes the next press: More actions is drawn now, and opens.
+  await openMenu(page, ACTIONS_MENU);
+});
+
 test.describe("before the client is ready", () => {
   /** Holds every script file back until `release` is called, so the page is the server's until then. */
   async function holdScripts(page: Page): Promise<() => void> {
@@ -225,16 +240,12 @@ test.describe("phone", () => {
     await expect(panel).toHaveCount(0);
   });
 
-  // Messages is a row of More actions on a phone, and that menu is still the native one: its row opens the native
-  // panel after the client is ready too (navigation.spec.ts holds Escape and focus there).
-  test("messages_from_more_actions_still_opens_the_native_panel", async ({ page }) => {
+  // On a phone Messages is a row of More actions, which opens the same stock panel (navbar-actions.spec.ts); no
+  // native panel is left once the client is ready. A visitor's: with chat on, a member's Messages is the chat link.
+  test("messages_from_more_actions_opens_the_stock_panel", async ({ page }) => {
     await ready(page, VISITOR_HOME);
-    await page
-      .locator("header")
-      .getByRole("button", { name: /^More actions/ })
-      .tap();
-    await page.locator("#actions-menu").getByRole("button", { name: "Messages", exact: true }).tap();
-    await expect(page.locator(`section#${MESSAGES_PANEL.native}`)).toContainText("Messages are coming soon.");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await actionsRow(await openMenu(page, ACTIONS_MENU), "Messages").tap();
+    await expect(stockPanel(page, MESSAGES_PANEL)).toContainText("Messages are coming soon.");
+    await expect(page.locator(`section#${MESSAGES_PANEL.native}`)).toHaveCount(0);
   });
 });
