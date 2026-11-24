@@ -220,6 +220,19 @@ describe("Readme", () => {
     expect(body).toContain("&lt;script>alert(1)&lt;/script>");
   });
 
+  // MathML Core (https://www.w3.org/TR/mathml-core/): each element in its namespace, drawn by the browser itself.
+  test("a formula is MathML, in a line or as a block, with no colour, style or link", () => {
+    const ns = 'xmlns="http://www.w3.org/1998/Math/MathML"';
+    expect(html("so $x^2$")).toBe(
+      `<p>so <span><math ${ns}><mrow ${ns}><msup ${ns}><mi ${ns}>x</mi><mn ${ns}>2</mn></msup></mrow></math></span></p>`,
+    );
+    expect(html("$$\n\\text{<b>}\n$$")).toBe(
+      `<div><math ${ns} display="block"><mrow ${ns}><mtext ${ns}>&lt;b></mtext></mrow></math></div>`,
+    );
+    const shown = html("$\\color{red}{x}\\href{javascript:x}{y}\\colorbox{red}{z}$");
+    expect(shown).not.toMatch(/\s(mathcolor|mathbackground|style|href)=/);
+  });
+
   test("links open as user content", () => {
     expect(html("[a](https://a.example)")).toBe(
       '<p><a href="https://a.example/" rel="nofollow ugc noopener noreferrer">a</a></p>',
@@ -258,6 +271,12 @@ describe("Readme", () => {
       "https://a.example",
       "<script>",
       " onerror=",
+      "$",
+      "$$\n",
+      "\\text{",
+      "\\href{",
+      "\\color{red}",
+      "}",
       "x",
       " ",
     );
@@ -266,6 +285,7 @@ describe("Readme", () => {
         const out = html(parts.join(""));
         expect(out).not.toMatch(/<script/i);
         expect(out).not.toMatch(/<[a-z]+[^>]*\son[a-z]+=/i);
+        expect(out).not.toMatch(/<[a-z]+[^>]*\s(style|mathcolor|mathbackground)=/i);
         for (const [, href] of out.matchAll(/<a href="([^"]*)"/g)) expect(href).toMatch(/^https?:\/\//);
       }),
       { numRuns: 10_000, seed: 51 },

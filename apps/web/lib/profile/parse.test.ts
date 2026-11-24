@@ -570,13 +570,10 @@ describe("where the page and the editor used to disagree", () => {
     ]);
   });
 
-  // No footnotes and no math on the page: either would move the block count a style is anchored by (ADR 0110).
-  test("a footnote definition is a link reference definition, and a math block is paragraphs", () => {
+  // No footnotes on the page: they would move the block count a style is anchored by (ADR 0110). Math is drawn
+  // (parse.math.test.ts) but moves no counted block (topBlocks).
+  test("a footnote definition is a link reference definition", () => {
     expect(parseReadme("[^1]: note\n\ntext[^1]")).toEqual([{ kind: "paragraph", children: [text("text[^1]")] }]);
-    expect(parseReadme("$$\nx = 1\n\ny = 2\n$$")).toEqual([
-      { kind: "paragraph", children: [text("$$\nx = 1")] },
-      { kind: "paragraph", children: [text("y = 2\n$$")] },
-    ]);
   });
 
   test("an HTML block is the text it was typed as, and Markdown inside it is not read", () => {
