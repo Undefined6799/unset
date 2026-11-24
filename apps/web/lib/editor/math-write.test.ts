@@ -11,16 +11,28 @@ type Phrase = InlineFormula | { readonly type: "text"; readonly value: string };
 const formula = (value: string): InlineFormula => ({ type: "inlineMath", value });
 const words = (value: string): Phrase => ({ type: "text", value });
 /** mdast-util-math 3.0.0's writer for these values: one dollar, or two when asked for at least two. */
+/** What KaTeX 0.16.47 shows for some TeX, as text; it throws where the TeX does not render. */
+const shown = (tex: string) =>
+  katex
+    .renderToString(tex, { output: "mathml", throwOnError: true })
+    .replace(/<annotation[\s\S]*?<\/annotation>/g, "")
+    .replace(/<[^>]+>/g, "");
 const writer = (node: InlineFormula, wide: boolean) => (wide ? `$$${node.value}$$` : `$${node.value}$`);
 const written = (children: Phrase[]) =>
   children.map((node) => (node.type === "inlineMath" ? writeFormulaRun(node, children, writer) : node.value));
 
 test("formulas side by side are written as one, at least two dollars wide, so the page reads them as math", () => {
   const children = [words("a "), formula("x"), formula("\\alpha"), formula("y"), words(" b")];
-  expect(written(children)).toEqual(["a ", "$$x \\alpha y$$", "", "", " b"]);
+  expect(written(children)).toEqual(["a ", "$${x}{\\alpha}{y}$$", "", "", " b"]);
   const [paragraph] = parseReadme(written(children).join(""));
   const kinds = paragraph?.kind === "paragraph" ? paragraph.children.map((inline) => inline.kind) : [];
   expect(kinds).toEqual(["text", "math", "text"]);
+});
+
+// Codex on #2020 (bebe04e): joined by a space, "x^2" and "^3" made "x^2 ^3", a double superscript. Each keeps its group.
+test("formulas side by side keep their own groups, so scripts at their edges do not meet", () => {
+  expect(written([formula("x^2"), formula("^3")])).toEqual(["$${x^2}{^3}$$", ""]);
+  expect(() => shown("{x^2}{^3}")).not.toThrow();
 });
 
 test("a formula with words beside it is written by mdast-util-math's writer as it was", () => {
@@ -28,7 +40,9 @@ test("a formula with words beside it is written by mdast-util-math's writer as i
 });
 
 test("pipes in a formula become the TeX that draws them, so a table cell keeps its formula and its neighbours", () => {
-  expect(pipesAsTex("|x| + \\|y\\| + \\\\|z")).toBe("\\vert x\\vert + \\|y\\| + \\\\\\vert z");
+  const tex = "|x| + \\|y\\| + \\\\|z";
+  expect(pipesAsTex(tex)).toBe('{\\char"7C}x{\\char"7C} + \\|y\\| + \\\\{\\char"7C}z');
+  expect(shown(pipesAsTex(tex))).toBe(shown(tex));
   const text = `| a | b |\n| --- | --- |\n| $${pipesAsTex("|x|")}$ | keep |`;
   const [table] = parseReadme(text);
   expect(table?.kind === "table" && table.rows[0]?.map((cell) => cell.map((inline) => inline.kind))).toEqual([
@@ -39,19 +53,26 @@ test("pipes in a formula become the TeX that draws them, so a table cell keeps i
 
 // Codex on #2020 (b301932): a pipe in \verb is shown as it is written (KaTeX 0.16.47 Lexer: \verb and \verb* take
 // any one delimiter and the line up to the next), so "\vert" there would show as the word. The page must show the same.
-const shown = (tex: string) =>
-  katex
-    .renderToString(tex, { output: "mathml", throwOnError: true })
-    .replace(/<annotation[\s\S]*?<\/annotation>/g, "")
-    .replace(/<[^>]+>/g, "");
-
 test.each([
   ["\\verb!a|b!", "\\verb!a!\\texttt{\\textbar}\\verb!b!"],
   ["\\verb*!a |b!", "\\verb*!a !\\texttt{\\textbar}\\verb*!b!"],
   ["\\verb|x y|", "\\verb!x y!"],
   ["\\verb|!+=/;:@~^,.?'\"#&-_|", "\\verb\u00a1!+=/;:@~^,.?'\"#&-_\u00a1"],
-  ["\\verb!|!+|x|", "\\texttt{\\textbar}+\\vert x\\vert"],
+  ["\\verb!|!+|x|", '\\texttt{\\textbar}+{\\char"7C}x{\\char"7C}'],
 ])("a pipe in \\verb stays one the page shows as written: %s", (tex, expected) => {
+  expect(pipesAsTex(tex)).toBe(expected);
+  expect(pipesAsTex(tex)).not.toMatch(/(?<!\\)\|/);
+  expect(shown(pipesAsTex(tex))).toBe(shown(tex));
+});
+
+// Codex on #2020 (bebe04e): KaTeX 0.16.47 defines \vert in math only (src/symbols.ts), so "\text{a|b}" became TeX that
+// does not render. \char"7C draws the pipe in both modes; only a delimiter after \left and its kin needs \vert.
+test.each([
+  ["\\text{a|b}", '\\text{a{\\char"7C}b}'],
+  ["\\text{$|x|$}", '\\text{${\\char"7C}x{\\char"7C}$}'],
+  ["\\left|x\\right|", "\\left\\vert x\\right\\vert"],
+  ["\\bigl| x \\Bigr|", "\\bigl\\vert x \\Bigr\\vert"],
+])("a pipe outside \\verb becomes TeX that draws it where it stands: %s", (tex, expected) => {
   expect(pipesAsTex(tex)).toBe(expected);
   expect(pipesAsTex(tex)).not.toMatch(/(?<!\\)\|/);
   expect(shown(pipesAsTex(tex))).toBe(shown(tex));
