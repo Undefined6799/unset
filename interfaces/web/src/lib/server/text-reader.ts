@@ -5,13 +5,27 @@
 // the text block's 20,000 characters: "_*" repeated takes about 5 s, "+ " repeated about 10 s and then overflows the
 // stack. A normal card takes 1 to 4 ms for each 1,000 characters.
 //
-// So each parse runs under a deadline it cannot outlive: node:vm's `timeout` stops synchronous JavaScript from a
+// So each parse runs under a deadline: node:vm's `timeout` stops synchronous JavaScript from a
 // watchdog thread (Node 26 doc/api/vm.md, script.runInContext: "Specifies the number of milliseconds to execute `code`
 // before terminating execution. If execution is terminated, an Error will be thrown"; it starts a thread per call, about
 // 0.3 ms here). The parse stays in this thread, so there is no worker to feed or to queue behind. That page also says
 // node:vm "is not a security mechanism": it is no sandbox for untrusted code, and none is run here; the code is our
 // own parser and only the member's text is untrusted. Its note that promises and timers escape the timeout does not
 // apply: the parse is synchronous and schedules nothing.
+//
+// How soon after the deadline the parse stops is V8's to say. The watchdog asks on time (Node 26.12
+// src/node_watchdog.cc `Watchdog::Timer` calls `Isolate::TerminateExecution`), and the running code sees the request
+// at its next interrupt check. Entering a function is one (V8 14.6 src/builtins/x64/builtins-x64.cc
+// `Generate_InterpreterEntryTrampoline`, "Perform interrupt stack check"), unless V8 has inlined the call. Going round
+// a loop is one only when the function's interrupt budget runs out (src/interpreter/interpreter-assembler.cc
+// `JumpBackward` and `DecreaseInterruptBudget`), and while V8 compiles that function to its top tier the budget is
+// INT_MAX / 2 (src/execution/tiering-manager.cc `InterruptBudgetFor`: "Avoid interrupts while we're already
+// tiering"). Measured 2026-11-24 on Node 26.12: an empty loop caught at that moment ran 0.3 to 0.6 s past its limit,
+// and 2.3 s on a busy CI runner, and so did a loop around one small function, which V8 inlines; a loop that calls
+// into the parser each turn, and the parser on each text the tests stall it with (1,314 reads, in fresh and in warm
+// processes), stopped at most 22 ms late. So the limit holds for code that keeps entering functions, as the parser
+// did in every read measured; it is no bound on a loop that enters none, and nothing proves the parser holds no such
+// loop. A read that outlives its limit by more than a few milliseconds is that.
 //
 // A card stopped there is shown as plain text: every character escaped, nothing formatted. One page's cards share one
 // budget, and no parse starts past the request's own deadline (rule RE-1).
@@ -44,8 +58,8 @@ const call = new Script("task()");
 type Stopped = { readonly code?: unknown };
 
 /**
- * Runs `task` and stops it once `ms` (a whole number, at least 1) have passed: its result, or `stopped`. An error the
- * task throws is the caller's, as without the deadline.
+ * Runs `task` and stops it once `ms` (a whole number, at least 1) have passed, at V8's next look for a stop (the top
+ * of this file): its result, or `stopped`. An error the task throws is the caller's, as without the deadline.
  */
 export function within<T>(ms: number, task: () => T): { readonly value: T } | { readonly stopped: true } {
   context.task = task;
@@ -106,13 +120,14 @@ export type TextReads = {
 /**
  * The reader a process keeps (compose.ts builds the one). `forPage` gives a page load its reader: each call reads a
  * card's text as blocks, from what is kept or by parsing within what is left of the limits and of the request
- * (`deadlineAt`, on `now`'s clock), or gives it as plain text. `read` is the parser and `now` the clock, in
- * milliseconds; tests pass their own.
+ * (`deadlineAt`, on `now`'s clock), or gives it as plain text. `read` is the parser, `now` the clock in milliseconds
+ * and `stop` what holds a parse to the time it is given; tests pass their own.
  */
 export function createTextReads(
   limits: TextReadLimits,
   read: (text: string) => Block[] = parseReadme,
   now: () => number = () => performance.now(),
+  stop: typeof within = within,
 ): TextReads {
   // In the order they were last read, oldest first (a Map keeps insertion order).
   const kept = new Map<string, Kept>();
@@ -167,7 +182,7 @@ export function createTextReads(
         if (known !== undefined) return known.blocks === null ? plainText(text) : once(key, known.blocks);
         const ms = Math.floor(Math.min(limits.textMs, left, deadlineAt - started));
         if (ms < 1) return plainText(text);
-        const outcome = within(ms, () => read(text));
+        const outcome = stop(ms, () => read(text));
         left -= now() - started;
         if ("value" in outcome) {
           const blocks = frozen(outcome.value);
