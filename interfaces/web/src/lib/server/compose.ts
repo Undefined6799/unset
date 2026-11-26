@@ -84,7 +84,7 @@ import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
 import { createSignInLock } from "./sign-in-lock.ts";
 import { startSweeps } from "./sweeps.ts";
-import { createTextReads, type TextReads } from "./text-reader.ts";
+import { createTextReads, type TextReads, warmParser } from "./text-reader.ts";
 
 /** How often idle rate-limit buckets are dropped. */
 const SWEEP_MS = 10_000;
@@ -281,6 +281,8 @@ async function build(): Promise<Services> {
     onError: () => log.error("ratelimit.error", {}),
   });
   const textReads = createTextReads(TEXT_READ_LIMITS);
+  // Before the server listens (the `init` hook awaits this build): about a third of a second, once for the process.
+  warmParser();
   const sweeper = setInterval(() => {
     limiter.sweep();
     textReads.sweep();

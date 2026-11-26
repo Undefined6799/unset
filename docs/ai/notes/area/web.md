@@ -132,7 +132,11 @@ processor time. On a CI runner (AMD EPYC 9V74, four processors, #2030) the full 
 time inside the test run, as it does here. The margin itself is thin
 and not the test's to give: the full table card (20,000 characters, every cell formatted) costs about 60 ms of
 processor time when warm and about 140 ms as a fresh process's first parse, where the reader cut it in 5 of 8 fresh
-processes. The process
+processes. So the process reads a text of its own eight times before it serves (`warmParser`, called in compose.ts;
+about a third of a second): that first parse then took 70 to 104 ms and was cut in none of twelve fresh processes
+(`text-reader.warm.test.ts` starts fresh Node processes to hold that). It is no bound: a server half as fast, or a
+busy one, can still cut a full table card, and whether `textMs` should move waits on a timing on staging
+(`/mnt/project-files/plans/text-reader/time-full-cards.mjs`) and is Alex's call. The process
 keeps what each read gave
 for ten minutes, by a hash of the text, a stop included, so a text is parsed once in that time however often its
 page is loaded (review of #2013: uncached, a stalling page cost 300 ms on every load). The process's 10 s timer (compose.ts) sweeps out what is past its ten minutes, so a changed or deleted text does not stay in memory. `topBlocks` gives the top-level blocks and their lines, the count ADR 0110
