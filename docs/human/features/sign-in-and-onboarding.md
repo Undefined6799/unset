@@ -16,6 +16,7 @@ All of these live under [`interfaces/web/src/routes/`](../../../interfaces/web/s
 - `signed-out/` points at the sign-in server after sign-out.
 - `invite/` is where a member asks for a one-use sign-up code and sees join links from the last 7 days. The app gate applies: onboarding done, and a confirmed email.
 - `join/` is the page an invite link opens (`/join?invite=<code>`). Anyone may read it. The form starts a sign-up at our PDS. The code is checked by the PDS's sign-up form.
+- `request-invite/` is where a visitor asks for an invite. Anyone may read it ([`policy.ts`](../../../interfaces/web/src/routes/request-invite/policy.ts)); the session is optional, and a signed-in POST goes to `invite/`. It is off until `INVITE_REQUESTS=on` ([ADR 0080](../decisions/0080-invite-requests-mail-the-owner.md)). On, the owner gets one mail for an address that has not asked in the last 30 days of this process: the notice names the address and sets it as Reply-To. Mail goes only to the owner. The address is not written to disk: [`invite-requests.ts`](../../../interfaces/web/src/lib/server/invite-requests.ts) keeps a keyed hash in memory, and a restart forgets it.
 
 ## With script and without
 
@@ -86,4 +87,4 @@ Unit tests sit beside the server files, `domains/identity/`, `infrastructure/pds
 
 ## When it is off or replaced
 
-There is no switch. Without a session, the public pages still answer and the rest of the app sends the browser to sign in.
+There is no switch for sign-in. Without a session, the public pages still answer and the rest of the app sends the browser to sign in. `request-invite/` stays closed until `INVITE_REQUESTS=on`.
