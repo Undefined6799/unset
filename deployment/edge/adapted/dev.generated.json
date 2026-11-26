@@ -56,13 +56,7 @@
           }
         },
         "level": "ERROR",
-        "exclude": [
-          "http.log.access",
-          "http.log.access.log0",
-          "http.log.access.log1",
-          "http.log.access.log2",
-          "http.stdlib"
-        ]
+        "exclude": ["http.log.access", "http.log.access.log0", "http.log.access.log1", "http.stdlib"]
       },
       "log0": {
         "writer": {
@@ -145,47 +139,6 @@
           }
         },
         "include": ["http.log.access.log1"]
-      },
-      "log2": {
-        "writer": {
-          "output": "stdout"
-        },
-        "encoder": {
-          "fields": {
-            "request>client_ip": {
-              "filter": "delete"
-            },
-            "request>headers": {
-              "filter": "delete"
-            },
-            "request>proto": {
-              "filter": "delete"
-            },
-            "request>remote_ip": {
-              "filter": "delete"
-            },
-            "request>remote_port": {
-              "filter": "delete"
-            },
-            "request>tls": {
-              "filter": "delete"
-            },
-            "request>uri": {
-              "filter": "delete"
-            },
-            "resp_headers": {
-              "filter": "delete"
-            },
-            "user_id": {
-              "filter": "delete"
-            }
-          },
-          "format": "filter",
-          "wrap": {
-            "format": "json"
-          }
-        },
-        "include": ["http.log.access.log2"]
       }
     }
   },
@@ -199,99 +152,6 @@
           "write_timeout": 255000000000,
           "idle_timeout": 120000000000,
           "routes": [
-            {
-              "match": [
-                {
-                  "host": ["docs-host.invalid"]
-                }
-              ],
-              "handle": [
-                {
-                  "handler": "subroute",
-                  "routes": [
-                    {
-                      "handle": [
-                        {
-                          "handler": "headers",
-                          "response": {
-                            "deferred": true,
-                            "delete": ["Server", "Via"],
-                            "set": {
-                              "Strict-Transport-Security": ["max-age=63072000; includeSubDomains"],
-                              "X-Content-Type-Options": ["nosniff"]
-                            }
-                          }
-                        },
-                        {
-                          "handler": "headers",
-                          "response": {
-                            "require": {
-                              "headers": {
-                                "Referrer-Policy": null
-                              }
-                            },
-                            "set": {
-                              "Referrer-Policy": ["no-referrer"]
-                            }
-                          }
-                        },
-                        {
-                          "handler": "headers",
-                          "response": {
-                            "set": {
-                              "Content-Security-Policy": [
-                                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
-                              ]
-                            }
-                          }
-                        },
-                        {
-                          "handler": "headers",
-                          "response": {
-                            "set": {
-                              "X-Robots-Tag": ["noindex, nofollow"]
-                            }
-                          }
-                        },
-                        {
-                          "handler": "subroute",
-                          "routes": [
-                            {
-                              "handle": [
-                                {
-                                  "disable_metrics": true,
-                                  "handler": "rate_limit",
-                                  "rate_limits": {
-                                    "docs_global": {
-                                      "ipv6_prefix": 64,
-                                      "key": "{http.vars.client_ip}",
-                                      "max_events": 6000,
-                                      "window": 300000000000
-                                    }
-                                  }
-                                },
-                                {
-                                  "handler": "file_server",
-                                  "hide": [
-                                    "/etc/caddy/sites/enabled/docs.caddy",
-                                    "/etc/caddy/snippets/log.caddy",
-                                    "/etc/caddy/snippets/security-headers.caddy",
-                                    "/etc/caddy/snippets/tls.caddy",
-                                    "/etc/caddy/snippets/too-many-tries.caddy"
-                                  ],
-                                  "root": "/srv/docs"
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ],
-              "terminal": true
-            },
             {
               "match": [
                 {
@@ -1012,132 +872,6 @@
               {
                 "match": [
                   {
-                    "host": ["docs-host.invalid"]
-                  }
-                ],
-                "handle": [
-                  {
-                    "handler": "subroute",
-                    "routes": [
-                      {
-                        "handle": [
-                          {
-                            "handler": "subroute",
-                            "routes": [
-                              {
-                                "handle": [
-                                  {
-                                    "handler": "headers",
-                                    "response": {
-                                      "set": {
-                                        "Content-Type": ["text/html; charset=utf-8"]
-                                      }
-                                    }
-                                  }
-                                ],
-                                "match": [
-                                  {
-                                    "header": {
-                                      "Sec-Fetch-Mode": ["navigate"]
-                                    }
-                                  }
-                                ]
-                              },
-                              {
-                                "handle": [
-                                  {
-                                    "handler": "headers",
-                                    "response": {
-                                      "deferred": true,
-                                      "delete": ["Server", "Via"],
-                                      "set": {
-                                        "Strict-Transport-Security": ["max-age=63072000; includeSubDomains"],
-                                        "X-Content-Type-Options": ["nosniff"]
-                                      }
-                                    }
-                                  },
-                                  {
-                                    "handler": "headers",
-                                    "response": {
-                                      "require": {
-                                        "headers": {
-                                          "Referrer-Policy": null
-                                        }
-                                      },
-                                      "set": {
-                                        "Referrer-Policy": ["no-referrer"]
-                                      }
-                                    }
-                                  },
-                                  {
-                                    "handler": "headers",
-                                    "response": {
-                                      "set": {
-                                        "Cache-Control": ["no-store"],
-                                        "Content-Security-Policy": [
-                                          "default-src 'none'; style-src 'sha256-OhohhPP16pWhW6Z/EmVxKjFY8saJBHVHQzJ57EyLeb0='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
-                                        ]
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              {
-                                "handle": [
-                                  {
-                                    "body": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Too many tries</title>\n<style>:root{color-scheme:light dark;--bg:light-dark(#f0edee,#17161b);--fg:light-dark(#0a090c,#f0edee);--muted:light-dark(#5a575b,#a19ea2);--card:light-dark(#fbfafa,#232227);--line:light-dark(#d6d2d4,#312f36)}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;font-size:16px;line-height:1.5}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>\n</head>\n<body>\n<main>\n<h1>Too many tries</h1>\n<p>Wait a moment, then try again. If this page comes back, wait a few minutes.</p>\n<p><a href=\"/\">Go to the home page</a></p>\n</main>\n</body>\n</html>",
-                                    "handler": "static_response",
-                                    "status_code": 429
-                                  }
-                                ],
-                                "match": [
-                                  {
-                                    "header": {
-                                      "Sec-Fetch-Mode": ["navigate"]
-                                    }
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ],
-                        "match": [
-                          {
-                            "expression": "{http.error.status_code} in [429]"
-                          }
-                        ]
-                      },
-                      {
-                        "handle": [
-                          {
-                            "handler": "subroute",
-                            "routes": [
-                              {
-                                "handle": [
-                                  {
-                                    "error": "edge error",
-                                    "handler": "error",
-                                    "status_code": 500
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ],
-                        "match": [
-                          {
-                            "expression": "{http.error.status_code} >= 500 && {http.error.status_code} <= 599"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ],
-                "terminal": true
-              },
-              {
-                "match": [
-                  {
                     "host": ["app-host.invalid"]
                   }
                 ],
@@ -1392,7 +1126,7 @@
           "tls_connection_policies": [
             {
               "match": {
-                "sni": ["docs-host.invalid", "app-host.invalid", "pds-host.invalid"]
+                "sni": ["app-host.invalid", "pds-host.invalid"]
               },
               "certificate_selection": {
                 "any_tag": ["cert0"]
@@ -1409,8 +1143,7 @@
           "logs": {
             "logger_names": {
               "app-host.invalid": ["log0"],
-              "docs-host.invalid": ["log1"],
-              "pds-host.invalid": ["log2"]
+              "pds-host.invalid": ["log1"]
             }
           }
         },

@@ -25,7 +25,6 @@ export const ENV_NAMES = {
   ACME_EMAIL: /^[A-Za-z0-9._%+-]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/,
   APP_HOST: HOST,
   APP_UPSTREAM: UPSTREAM_SHAPE,
-  DOCS_HOST: HOST,
 } as const;
 export type EnvName = keyof typeof ENV_NAMES;
 /** The values a config was adapted with; a name the env does not set is absent. */
@@ -37,10 +36,6 @@ export const DEV_TLS = ["/run/secrets/dev_tls_cert", "/run/secrets/dev_tls_key"]
 export const LOCAL_TLS = ["/run/secrets/local_tls_cert", "/run/secrets/local_tls_key"] as const;
 /** The dev stack's app site, exactly (P1.36b; ADR 0025). */
 export const DEV_APP = { APP_HOST: "staging.unset.sh", APP_UPSTREAM: "web:8080" } as const;
-/** The dev stack's docs site, exactly (P1.21w; ADR 0075): files from DOCS_ROOT, no upstream. */
-export const DEV_DOCS = { DOCS_HOST: "docs.unset.sh" } as const;
-/** Where the dev edge reads the built docs (compose.dev.yaml's one folder bind). */
-export const DOCS_ROOT = "/srv/docs";
 /** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */
 export const DEV_PROXY_ADDRESS = "10.250.37.2";
 /** The edge's own address on newt_edge, the only listener of the dev sites (ADR 0030 Decision 2). */
@@ -150,13 +145,6 @@ const SECURITY_HEADERS: Json[] = [
     response: { require: { headers: { "Referrer-Policy": null } }, set: { "Referrer-Policy": ["no-referrer"] } },
   },
 ];
-/**
- * The docs site's policy (dev/docs.caddy; ADR 0075): scripts, styles, the search index and the manifest from its own
- * origin, images from it or data:, and nothing inline or evaluated.
- */
-export const DOCS_CSP =
-  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
-const DOCS_HEADERS: Json = { handler: "headers", response: { set: { "Content-Security-Policy": [DOCS_CSP] } } };
 const NOINDEX: Json = { handler: "headers", response: { set: { "X-Robots-Tag": ["noindex, nofollow"] } } };
 const XRPC = "^/xrpc/(?:_health|[A-Za-z][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)+)(?:\\?[^#]*)?$";
 const XRPC_GUARD: Json[] = [
@@ -373,20 +361,10 @@ const STYLE_TEXT = /^[a-z0-9 #:;,.()%{}-]*$/;
 const STYLE_BLOCK = /^[a-z-]+:[^{}]*$/;
 const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
 
-type Host = "PDS_HOST" | "APP_HOST" | "DOCS_HOST";
-/** The sites that proxy, by their upstream's name; the docs site serves files and has none. */
-type ProxiedHost = "PDS_HOST" | "APP_HOST";
+type Host = "PDS_HOST" | "APP_HOST";
 const UPSTREAM = { PDS_HOST: "PDS_UPSTREAM", APP_HOST: "APP_UPSTREAM" } as const;
-/**
- * The public sites each env serves: the PDS everywhere, the app under dev and local (P1.34a, P1.36b), the docs under
- * dev alone (P1.21w).
- */
-const HOSTS: Readonly<Record<EdgeMode, readonly Host[]>> = {
-  shipped: ["PDS_HOST"],
-  local: ["APP_HOST", "PDS_HOST"],
-  dev: ["APP_HOST", "PDS_HOST", "DOCS_HOST"],
-};
-const hostsOf = (mode: EdgeMode): readonly Host[] => HOSTS[mode];
+/** The public sites each env serves: the PDS everywhere, the app under dev and local (P1.34a, P1.36b). */
+const hostsOf = (mode: EdgeMode): Host[] => (mode === "shipped" ? ["PDS_HOST"] : ["APP_HOST", "PDS_HOST"]);
 
 /** Every handler at or below `handlers`, in the order Caddy runs them. */
 function handlersIn(handlers: Json[]): Obj[] {
@@ -445,10 +423,10 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
  * Exported so the preflight judges the values before it hands them to a container (P1.39e).
  */
 export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
-  const needed: EnvName[] = hostsOf(mode).flatMap((host) => (host === "DOCS_HOST" ? [host] : [host, UPSTREAM[host]]));
+  const needed: EnvName[] = hostsOf(mode).flatMap((host) => [host, UPSTREAM[host]]);
   if (mode === "shipped") needed.push("ACME_EMAIL");
   const found = needed.filter((name) => !ENV_NAMES[name].test(env[name] ?? "")).map((name) => `{$${name}} is not set`);
-  for (const host of ["PDS_HOST", "APP_HOST", "DOCS_HOST"] as const) {
+  for (const host of ["PDS_HOST", "APP_HOST"] as const) {
     if (env[host] !== undefined && env[host] !== env[host].toLowerCase()) found.push(`{$${host}} is not lower case`);
   }
   if (mode !== "shipped") {
@@ -459,7 +437,6 @@ export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
     for (const name of ["APP_HOST", "APP_UPSTREAM"] as const) {
       if (env[name] !== DEV_APP[name]) found.push(`{$${name}} is not the dev app site's ruled value`);
     }
-    if (env.DOCS_HOST !== DEV_DOCS.DOCS_HOST) found.push("{$DOCS_HOST} is not the dev docs site's ruled value");
   }
   return found;
 }
@@ -742,51 +719,8 @@ function tlsProblems(top: Obj, server: Obj, mode: EdgeMode, env: AdaptedEnv): st
   ];
 }
 
-/**
- * The docs site (P1.21w; ADR 0075): one plain route, as every site; before it exactly the security headers, the docs
- * CSP and noindex; inside it one unmatched route that counts in the docs zone, then serves files from DOCS_ROOT. No
- * upstream and no other handler, so the file server's root is the only thing the site can answer from.
- */
-function docsSiteProblems(route: Obj): string[] {
-  const name = "{$DOCS_HOST}";
-  const [outer, ...extra] = arr(route.handle).map(obj);
-  const [only, ...otherRoutes] = arr(outer?.routes).map(obj);
-  const site = arr(only?.handle).map(obj);
-  const inner = site.at(-1);
-  if (
-    outer?.handler !== "subroute" ||
-    extra.length > 0 ||
-    only === undefined ||
-    otherRoutes.length > 0 ||
-    "match" in only ||
-    inner?.handler !== "subroute"
-  ) {
-    return [`${name}: not exactly one plain route`];
-  }
-  const found: string[] = [];
-  if (!same(site.slice(0, -1), [...SECURITY_HEADERS, DOCS_HEADERS, NOINDEX])) {
-    found.push(`${name}: the site's headers are not the ruled ones`);
-  }
-  const [counted, ...more] = arr(inner.routes).map(obj);
-  const [limit, files, ...after] = arr(counted?.handle).map(obj);
-  if (counted === undefined || more.length > 0 || "match" in counted || after.length > 0) {
-    return [...found, `${name}: the route is not the zone then the files`];
-  }
-  if (!same(limit, limiter(DOCS_ZONES))) found.push(`${name}: the zones are not the ruled ones`);
-  if (!isDocsFiles(files)) found.push(`${name}: the files are not served from ${DOCS_ROOT} alone`);
-  return found;
-}
-
-/** The docs file server: root DOCS_ROOT and Caddy's own `hide` list of the config files it read, nothing else. */
-const isDocsFiles = (handler: Obj | undefined): boolean =>
-  handler?.handler === "file_server" &&
-  handler.root === DOCS_ROOT &&
-  same(Object.keys(handler).sort(), ["handler", "hide", "root"]) &&
-  arr(handler.hide).every((path) => typeof path === "string" && path.startsWith("/etc/caddy/"));
-
 /** One site's rules; `route` is the public server's route for `host`. */
 function siteProblems(route: Obj, host: Host, mode: EdgeMode, env: AdaptedEnv): string[] {
-  if (host === "DOCS_HOST") return docsSiteProblems(route);
   const name = `{$${host}}`;
   const [outer, ...extra] = arr(route.handle).map(obj);
   const [only, ...otherRoutes] = arr(outer?.routes).map(obj);
@@ -814,8 +748,7 @@ function siteProblems(route: Obj, host: Host, mode: EdgeMode, env: AdaptedEnv): 
   if (named(routesIn(routes), "reverse_proxy").length !== proxies.length) {
     found.push(`${name}: a reverse_proxy is outside the route`);
   }
-  const upstream = env[UPSTREAM[host as ProxiedHost]] as string;
-  for (const proxy of proxies) found.push(...proxyProblems(name, proxy, upstream));
+  for (const proxy of proxies) found.push(...proxyProblems(name, proxy, env[UPSTREAM[host]] as string));
   found.push(...snippetProblems(name, site, routes, host, mode), ...headerProblems(name, all, host, env));
   found.push(...strayRouteProblems(name, site, routes));
   return [...found, ...fontProblems(name, routes, host, env)];
@@ -836,10 +769,10 @@ function zoneProblems(name: string, routes: Obj[], all: Obj[], host: Host, mode:
   }
   if (limits.length !== 1) found.push(`${name}: ${limits.length} rate_limit blocks`);
   const own = host === "APP_HOST" && mode === "dev" ? "app_global" : "global";
-  const others = GLOBALS.filter((each) => each !== own);
+  const other = own === "global" ? "app_global" : "global";
   const ruled = own === "global" ? PDS_ZONES : APP_ZONES;
   if (!limits.every((each) => same(each, limiter(ruled)))) found.push(`${name}: the zones are not the ruled ones`);
-  return [...found, ...limits.flatMap((each) => zoneSetProblems(name, obj(each.rate_limits), own, others))];
+  return [...found, ...limits.flatMap((each) => zoneSetProblems(name, obj(each.rate_limits), own, other))];
 }
 
 type Zone = readonly [name: string, events: number, seconds: number, match?: Json];
@@ -921,10 +854,6 @@ const APP_ZONES: readonly Zone[] = [
   ["app_global", 1200, 300],
   ["app_signin", 10, 300, [{ method: ["POST"], path: ["/login", "/join"] }]],
 ];
-/** The docs site's one zone (dev/docs.caddy; limits.json docsRateLimitZones): every request, by client. */
-const DOCS_ZONES: readonly Zone[] = [["docs_global", 6000, 300]];
-/** Each site's unmatched zone, which no other site's rate_limit may hold. */
-const GLOBALS = ["global", "app_global", "docs_global"];
 /** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64, but web's. */
 const limiter = (zones: readonly Zone[]): Json => ({
   handler: "rate_limit",
@@ -946,14 +875,14 @@ const limiter = (zones: readonly Zone[]): Json => ({
  * One rate_limit's zones: the site's own global zone, unmatched but for web's mark; no other site's; every zone keyed
  * on the client, but web's own, which match web's mark exactly.
  */
-function zoneSetProblems(name: string, zones: Obj, own: string, others: readonly string[]): string[] {
+function zoneSetProblems(name: string, zones: Obj, own: string, other: string): string[] {
   const found: string[] = [];
   const ownMatch = obj(zones[own]).match;
   if (!(own in zones)) found.push(`${name}: there is no ${own} zone`);
   else if (ownMatch !== undefined && !same(ownMatch, [{ not: [WEB_MARK] }])) {
     found.push(`${name}: the ${own} zone has a matcher`);
   }
-  if (others.some((other) => other in zones)) found.push(`${name}: the route applies another site's zones`);
+  if (other in zones) found.push(`${name}: the route applies another site's zones`);
   // A fixed label: the zone's name is input, and a message repeats nothing it was given.
   const keyed = ([zone, settings]: [string, Json]) =>
     WEB_ZONES.includes(zone)
@@ -1134,20 +1063,13 @@ function strayProblems(top: Obj, server: Obj, mode: EdgeMode, env: AdaptedEnv): 
   const fontServers = routesIn(routes)
     .flatMap((handler) => arr(handler.routes).map(obj))
     .filter(isFontFile).length;
-  // The docs site's file server is judged whole by docsSiteProblems; it may sit only there.
-  const docsSite = siteRoute(server, env.DOCS_HOST ?? "");
-  const docsServers = docsSite === null ? 0 : named(handlersIn(arr(docsSite.handle)), "file_server").length;
-  if (named(all, "file_server").length !== fontServers + docsServers) {
-    found.push("serves files outside pds-fonts");
-  }
+  if (named(all, "file_server").length !== fontServers) found.push("serves files outside pds-fonts");
   for (const handler of named(all, "headers")) {
     const fonts = same(handler, append);
     if ("require" in obj(handler.response) && !fonts && !same(handler, SECURITY_HEADERS[1])) {
       found.push("a response matcher outside pds-fonts");
     }
-    if (touchesCsp(handler) && !fonts && !same(handler, DOCS_HEADERS)) {
-      found.push("changes a Content-Security-Policy outside pds-fonts");
-    }
+    if (touchesCsp(handler) && !fonts) found.push("changes a Content-Security-Policy outside pds-fonts");
   }
   return [...found, ...valueProblems(top, append, mode, env)];
 }

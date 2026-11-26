@@ -32,7 +32,6 @@ Configurable: `deployment/edge/limits.json`, applied in `deployment/edge/snippet
 | `app_burst` | app host | 60 per 10s |
 | `app_files` | app host | 120 per 10s |
 | `app_global` | app host | 1200 per 5m |
-| `docs_global` | docs host | 6000 per 5m |
 
 ## App rate limits (web)
 

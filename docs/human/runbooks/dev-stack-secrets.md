@@ -301,16 +301,14 @@ its password, DID and email live only with that person (ADR 0026).
 
 ## The dev edge's self-signed leaf (P1.38e, dev only; ADR 0032)
 
-Under dev the edge serves every staging name (the app, the PDS and the docs site, ADR 0075) with one self-signed leaf
-certificate that nobody trusts and nothing installs; Pangolin reaches it through Newt without verifying it. Every
-name must be on the leaf: Caddy asks a public CA for a certificate for any site name no loaded certificate covers
-(Caddy v2.11.9 `modules/caddyhttp/autohttps.go:200-207`), and `edge.test.ts` holds the list below to the dev sites. Make the pair on the staging host, in the folder that
+Under dev the edge serves both staging names with one self-signed leaf certificate that nobody trusts and nothing
+installs; Pangolin reaches it through Newt without verifying it. Make the pair on the staging host, in the folder that
 holds `unset-dev-secrets/`, with the host's own OpenSSL (checked with OpenSSL 3.0.13, Ubuntu 24.04's): a P-256 key,
-the three staging names as SANs, no CA flag, 825 days. The key never leaves the host.
+both staging names as SANs, no CA flag, 825 days. The key never leaves the host.
 
 ```sh
 umask 077
-printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh\n' \
+printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac\n' \
   > unset-dev-secrets/.leaf.ext
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-secrets/.leaf.key
 openssl req -new -key unset-dev-secrets/.leaf.key -subj "/CN=staging.unset.sh" \
@@ -361,7 +359,7 @@ the host's own `sh`, curl, OpenSSL and GNU `date`, and needs no secret. It print
 status 0, or prints one `FAIL` line per problem and ends with status 1; a failure stops the deploy. For each staging
 name it takes the certificate the edge serves for that name as SNI and checks that it is the one self-signed leaf
 (`-check_ss_sig`, since OpenSSL 3.0.13 accepts a broken self-signature without it), with no CA flag, a P-256 key,
-exactly the three staging names, at most 825 days of validity and more than 30 days left (`-checkend`: this failure is the
+exactly the two staging names, at most 825 days of validity and more than 30 days left (`-checkend`: this failure is the
 only expiry guard, ADR 0032 Decision 1), and that `:80` answers only an empty `308` to its https URL (caddy v2.11.7
 modules/caddyhttp/autohttps.go:229-268). Then it asks the PDS's health route at the edge, and makes one request through
 Pangolin to each name. Every network call gives up after 10 seconds (`timeout 10`, `--max-time 10`), so a stalled edge or
@@ -370,15 +368,15 @@ Pangolin fails the check instead of hanging the deploy.
 ```sh
 edge=10.250.37.3 failed=0 tmp=$(mktemp -d)
 fail() { echo "FAIL $*"; failed=1; }
-for name in staging.unset.sh staging.unset.ac docs.unset.sh; do
+for name in staging.unset.sh staging.unset.ac; do
   timeout 10 openssl s_client -connect "$edge:443" -servername "$name" </dev/null 2>/dev/null | openssl x509 >"$tmp/$name.pem" 2>/dev/null \
     || { fail "$name: no certificate over TLS"; continue; }
   leaf="$tmp/$name.pem"
   openssl verify -check_ss_sig -CAfile "$leaf" "$leaf" >/dev/null 2>&1 || fail "$name: not a validly self-signed leaf"
   openssl x509 -in "$leaf" -noout -ext basicConstraints | grep -q 'CA:FALSE' || fail "$name: not marked CA:FALSE"
   openssl x509 -in "$leaf" -noout -text | grep -q 'ASN1 OID: prime256v1' || fail "$name: key is not P-256"
-  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh" ] \
-    || fail "$name: names are not exactly the three staging names"
+  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac" ] \
+    || fail "$name: names are not exactly the two staging names"
   start=$(date -d "$(openssl x509 -in "$leaf" -noout -startdate | cut -d= -f2)" +%s)
   end=$(date -d "$(openssl x509 -in "$leaf" -noout -enddate | cut -d= -f2)" +%s)
   [ $((end - start)) -le $((825 * 86400)) ] || fail "$name: valid for more than 825 days"
@@ -386,9 +384,7 @@ for name in staging.unset.sh staging.unset.ac docs.unset.sh; do
   [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url} %{size_download}' --resolve "$name:80:$edge" "http://$name/")" \
     = "308 https://$name/ 0" ] || fail "$name: :80 is not only an empty 308 to https"
 done
-for other in staging.unset.ac docs.unset.sh; do
-  cmp -s "$tmp/staging.unset.sh.pem" "$tmp/$other.pem" || fail "$other: not served the same leaf as staging.unset.sh"
-done
+cmp -s "$tmp/staging.unset.sh.pem" "$tmp/staging.unset.ac.pem" || fail "the two names are not served one leaf"
 [ "$(curl -sS --max-time 10 -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.ac:443:$edge" https://staging.unset.ac/xrpc/_health)" = 200 ] \
   || fail "staging.unset.ac: the PDS health route does not answer 200 at the edge"
 for url in https://staging.unset.sh/ https://staging.unset.ac/xrpc/_health; do

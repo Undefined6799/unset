@@ -10,11 +10,9 @@ import {
   type AdaptedEnv,
   adaptedProblems,
   DEV_APP,
-  DEV_DOCS,
   DEV_LISTENER,
   DEV_PROXY_ADDRESS,
   DEV_TLS,
-  DOCS_CSP,
   type EdgeMode,
   type EnvName,
   type Json,
@@ -31,7 +29,7 @@ const PDS = { PDS_HOST: "pds.example.org", PDS_UPSTREAM: "pds:3000" } as const;
 const ENVS: Readonly<Record<EdgeMode, AdaptedEnv>> = {
   shipped: { ...PDS, ACME_EMAIL: "edge@example.org" },
   local: { ...PDS, APP_HOST: "app.example.org", APP_UPSTREAM: "web:8080" },
-  dev: { ...PDS, ...DEV_APP, ...DEV_DOCS },
+  dev: { ...PDS, ...DEV_APP },
 };
 const FILES: Readonly<Record<EdgeMode, string>> = { shipped: "prod", local: "local", dev: "dev" };
 
@@ -1192,84 +1190,6 @@ const REVIEW: Red[] = [
   ],
 ];
 
-/** The docs site (P1.21w; ADR 0075): its headers, its one zone and its one file server, each whole. */
-const DOCS = DEV_DOCS.DOCS_HOST;
-/** The handlers of the docs site's one inner route: its zone, then its file server. */
-const docsHandlers = (c: Json): Json[] => a(o(inner(c, DOCS)[0]).handle);
-const DOCS_REDS: readonly Red[] = [
-  [
-    "a wider docs policy",
-    "dev",
-    (c) => {
-      const csp = site(c, DOCS)
-        .map(o)
-        .find((each) => JSON.stringify(each).includes("script-src")) as Obj;
-      o(o(csp.response).set)["Content-Security-Policy"] = ["default-src 'none'; script-src 'self' 'unsafe-inline'"];
-    },
-    "{$DOCS_HOST}: the site's headers are not the ruled ones",
-  ],
-  [
-    "a docs site without noindex",
-    "dev",
-    (c) => void site(c, DOCS).splice(3, 1),
-    "{$DOCS_HOST}: the site's headers are not the ruled ones",
-  ],
-  [
-    "another docs root",
-    "dev",
-    (c) => void Object.assign(o(docsHandlers(c)[1]), { root: "/" }),
-    "{$DOCS_HOST}: the files are not served from /srv/docs alone",
-  ],
-  [
-    "a docs file server that lists folders",
-    "dev",
-    (c) => void Object.assign(o(docsHandlers(c)[1]), { browse: {} }),
-    "{$DOCS_HOST}: the files are not served from /srv/docs alone",
-  ],
-  [
-    "a docs zone that counts less",
-    "dev",
-    (c) => void Object.assign(o(o(o(docsHandlers(c)[0]).rate_limits).docs_global), { max_events: 30 }),
-    "{$DOCS_HOST}: the zones are not the ruled ones",
-  ],
-  [
-    "a docs site that skips its zone",
-    "dev",
-    (c) => void docsHandlers(c).shift(),
-    "{$DOCS_HOST}: the zones are not the ruled ones",
-  ],
-  [
-    "a docs site with an upstream",
-    "dev",
-    (c) => void docsHandlers(c).push(proxy(c, APP_DEV)),
-    "{$DOCS_HOST}: the route is not the zone then the files",
-  ],
-  [
-    "a second docs route",
-    "dev",
-    (c) => void inner(c, DOCS).push({ handle: [{ handler: "static_response", status_code: 200 }] }),
-    "{$DOCS_HOST}: the route is not the zone then the files",
-  ],
-  [
-    "the docs policy on the app site",
-    "dev",
-    (c) => void site(c, APP_DEV).unshift(copy(site(c, DOCS)[2] as Json)),
-    "{$APP_HOST}: changes a response header outside the ruled snippets",
-  ],
-  [
-    "the docs file server on the app site",
-    "dev",
-    (c) => void inner(c, APP_DEV).unshift({ handle: [copy(docsHandlers(c)[1] as Json)] }),
-    "serves files outside pds-fonts",
-  ],
-  [
-    "the docs host on a local edge",
-    "local",
-    (c) => void Object.assign(siteRoute(c, APP_LOCAL), { match: [{ host: ["docs.unset.sh"] }] }),
-    "the public server holds a site other than the env's own",
-  ],
-];
-
 const REDS: readonly Red[] = [
   ...REVIEW,
   ...SHAPE,
@@ -1281,7 +1201,6 @@ const REDS: readonly Red[] = [
   ...FONTS,
   ...TOO_MANY_TRIES,
   ...STRAY,
-  ...DOCS_REDS,
 ];
 const changed = ([, mode, change]: Red): string[] => {
   const config = adapted(mode);
@@ -1305,8 +1224,7 @@ describe("edge rules on the adapted config (P1.39b)", () => {
         String(page(adapted(mode), String(a(o(a(o(route).match)[0]).host)[0])).body),
       ),
     );
-    // One site under prod, two under local, three under dev (the docs site, P1.21w).
-    expect(bodies.length).toBe(6);
+    expect(bodies.length).toBe(5);
     expect(new Set(bodies).size).toBe(1);
     const words = String(bodies[0])
       .replace(/<style>[^<]*<\/style>/, "")
@@ -1381,39 +1299,6 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     // font-src, an appended directive, a looser search, another content type, a missing condition, an append that is
     // not deferred and a wider file path each fail.
     for (const red of FONT_POLICY) expect(changed(red), red[0]).toContain(red[3]);
-  });
-
-  test("rules_fail_a_wider_docs_policy", () => {
-    // P1.21w (ADR 0075): the docs site's CSP is exactly the ruled one, so inline script or style, eval, another
-    // origin, a framing parent or a dropped directive each fail.
-    const wider = [
-      "'unsafe-inline'",
-      "'unsafe-eval'",
-      "'wasm-unsafe-eval'",
-      "https:",
-      "blob:",
-      "'strict-dynamic'",
-    ].flatMap((token) => [
-      DOCS_CSP.replace("script-src 'self'", `script-src 'self' ${token}`),
-      DOCS_CSP.replace("style-src 'self'", `style-src 'self' ${token}`),
-    ]);
-    const policies = [
-      ...wider,
-      DOCS_CSP.replace("frame-ancestors 'none'", "frame-ancestors *"),
-      DOCS_CSP.replace("; base-uri 'none'", ""),
-      DOCS_CSP.replace("default-src 'none'", "default-src 'self'"),
-      `${DOCS_CSP}; worker-src blob:`,
-    ];
-    for (const policy of policies) {
-      const config = adapted("dev");
-      const csp = site(config, DOCS)
-        .map(o)
-        .find((each) => JSON.stringify(each).includes("script-src")) as Obj;
-      o(o(csp.response).set)["Content-Security-Policy"] = [policy];
-      expect(adaptedProblems(config, "dev", ENVS.dev), policy).toContain(
-        "{$DOCS_HOST}: the site's headers are not the ruled ones",
-      );
-    }
   });
 
   test("rules_reds_are_named_once", () => {

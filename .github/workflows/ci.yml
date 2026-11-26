@@ -206,11 +206,10 @@ jobs:
           path: sbom-*.cdx.json
           if-no-files-found: error
 
-  # P0.09: build the Hugo docs site. No deploy. Hugo runs as the runner's own
-  # user, the command docs/human/runbooks/docs-site.md gives for staging (ADR
-  # 0075): public/ is kept in git for the edge's bind, and Hugo sets the
-  # times of a folder it writes into, which only its owner may do. The image
-  # sets HUGO_CACHEDIR=/cache, which only its own user may write, so the
+  # P0.09: build the Hugo docs site. No deploy here: unset-sh/docs publishes
+  # it with this same command (deployment/docs-repo/site.yml, ADR 0111). Hugo
+  # runs as the runner's own user, so it owns the checkout it writes into. The
+  # image sets HUGO_CACHEDIR=/cache, which only its own user may write, so the
   # cache moves to /tmp (gohugo.io/configuration/all/#cachedir); HOME=/tmp
   # too. Output is world-readable (umask 0022).
   docs-site:

@@ -144,9 +144,9 @@ services:
 
   # The edge (P1.28 image). Under dev it publishes nothing: Newt alone reaches it, on newt_edge at its fixed address
   # (ADR 0030 Decision 2, ADR 0031 Decision 2), and compose.local.yaml keeps the loopback publish. Its sites are the
-  # repository's deployment/edge/dev/app.caddy, dev/pds.caddy and dev/docs.caddy, each mounted read-only where the
-  # image imports them, as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the
-  # image seeds as caddy's, 0700 (P1.27o).
+  # repository's deployment/edge/dev/app.caddy and dev/pds.caddy, each mounted read-only where the image imports them,
+  # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
+  # 0700 (P1.27o).
   edge:
     build:
       context: ./edge
@@ -158,17 +158,13 @@ services:
     security_opt: [no-new-privileges:true]
     tmpfs:
       - /tmp:uid=65532,gid=65532,mode=1777
-    # The three dev sites and the dev (tls) over the shipped one, four read-only file binds (P1.36c; ADR 0032 Decisions
-    # 1 and 3; P1.21w): https with one self-signed leaf for every staging name, read from the edge's own two secrets;
-    # the app site's name and upstream and the docs site's name are the ruled values (deployment/edge/adapted-rules.ts
-    # DEV_APP, DEV_DOCS). The docs site serves the built docs/site/public folder, one read-only folder bind that the
-    # publish step fills (docs/human/runbooks/docs-site.md; ADR 0075).
+    # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
+    # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
+    # site's name and upstream are the ruled values (deployment/edge/adapted-rules.ts DEV_APP).
     volumes:
       - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
-      - ./edge/dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro
       - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
-      - ../docs/site/public:/srv/docs:ro
       - edgedata:/data
       - edgeconfig:/config
     secrets: [dev_tls_cert, dev_tls_key, pds_web_key]
@@ -178,7 +174,6 @@ services:
       ACME_EMAIL: ${EDGE_ACME_EMAIL}
       APP_HOST: ${APP_HOST}
       APP_UPSTREAM: web:8080
-      DOCS_HOST: docs.unset.sh
     depends_on:
       pds:
         condition: service_started

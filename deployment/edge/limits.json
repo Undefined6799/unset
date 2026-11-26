@@ -80,11 +80,5 @@
       "events": 1200,
       "window": "5m"
     }
-  },
-  "docsRateLimitZones": {
-    "docs_global": {
-      "events": 6000,
-      "window": "5m"
-    }
   }
 }

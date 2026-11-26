@@ -131,8 +131,6 @@ const NEWT_SERVICE = `  newt:
       LOG_LEVEL: WARN
     networks: [tunnel]
 `;
-/** The built docs the dev edge serves (P1.21w; ADR 0075): the checkout's docs/site/public, read-only. */
-const DOCS_MOUNT = "../docs/site/public:/srv/docs:ro";
 /**
  * The dev stack (P1.38e; ADR 0032): the edge runs the lock's image with the dev sites and the dev (tls) over the
  * shipped one, reads the self-signed leaf's two secrets, publishes nothing, and has the dev app site's two keys;
@@ -144,15 +142,12 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
     "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n",
     "      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n" +
       "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n" +
-      "      - ./edge/dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro\n" +
       "      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n" +
-      `      - ${DOCS_MOUNT}\n` +
       "    secrets: [dev_tls_cert, dev_tls_key]\n",
   )
   .replace(
     "      ACME_EMAIL: edge@example.test\n",
-    "      ACME_EMAIL: edge@example.test\n      APP_HOST: staging.unset.sh\n      APP_UPSTREAM: web:8080\n" +
-      "      DOCS_HOST: docs.unset.sh\n",
+    "      ACME_EMAIL: edge@example.test\n      APP_HOST: staging.unset.sh\n      APP_UPSTREAM: web:8080\n",
   )
   .replace(
     "    file: ../../unset-dev-secrets/db_password\n",
@@ -352,12 +347,6 @@ function stack({
     symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
   }
   for (const [name, text] of Object.entries(sites ?? {})) writeFileSync(join(edge, "sites/enabled", name), text);
-  // The built docs folder a dev edge binds (P1.21w), as a fresh checkout has it: kept, with only its .gitkeep.
-  if (compose.includes(DOCS_MOUNT)) {
-    for (const dir of ["docs", "docs/site", "docs/site/public"]) mkdirSync(join(root, dir), { mode: 0o755 });
-    for (const dir of ["docs", "docs/site", "docs/site/public"]) chmodSync(join(root, dir), 0o755);
-    writeFileSync(join(root, "docs/site/public/.gitkeep"), "");
-  }
   for (const env of ["dev", "prod"]) {
     if (networks === null) continue;
     const table = typeof networks === "string" ? networks : JSON.stringify(networks);
@@ -5907,7 +5896,7 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
     for (const value of Object.values(VALUES)) expect(adapt?.some((arg) => arg.includes(value))).toBe(false);
   });
 
-  test("c18_dev_mounts_its_four_files_and_names_six_values", async () => {
+  test("c18_dev_mounts_its_three_files_and_names_five_values", async () => {
     const { run, calls } = edgeRun(() => null);
     const result = await check({ compose: DEV, pdsEnv: DEV_ENV }, "dev", { run });
     expect(result.lines).toContain("PASS C18 ok");
@@ -5916,33 +5905,10 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
     expect(adapt.filter((arg) => arg.includes(":/etc/caddy/")).map((arg) => arg.replace(/^.*\/edge\//, ""))).toEqual([
       "dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro",
       "dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro",
-      "dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro",
       "dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro",
     ]);
-    // The built docs are files to serve, not config: caddy adapt never sees them (P1.21w).
-    expect(adapt.some((arg) => arg.includes("/srv/docs"))).toBe(false);
     expect(adapt.filter((_arg, at) => adapt[at - 1] === "-e")).toEqual(
-      expect.arrayContaining(["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM", "DOCS_HOST"]),
-    );
-  });
-
-  test("c18_dev_docs_mount_is_the_checkouts_built_docs_read_only", async () => {
-    const { run } = edgeRun(() => null);
-    const c18 = async (edit: (text: string) => string) =>
-      (await check({ compose: edit(DEV), pdsEnv: DEV_ENV }, "dev", { run })).lines.find((line) =>
-        line.startsWith("FAIL C18"),
-      );
-    expect(await c18((t) => t.replace(`      - ${DOCS_MOUNT}\n`, ""))).toBe(
-      "FAIL C18 the built docs are not mounted at /srv/docs",
-    );
-    expect(await c18((t) => t.replace(DOCS_MOUNT, DOCS_MOUNT.replace(":ro", "")))).toBe(
-      "FAIL C18 /srv/docs is not mounted read-only",
-    );
-    expect(await c18((t) => t.replace(DOCS_MOUNT, "./edge/dev:/srv/docs:ro"))).toBe(
-      "FAIL C18 /srv/docs is not mounted from docs/site/public",
-    );
-    expect(await c18((t) => t.replace(DOCS_MOUNT, `${DOCS_MOUNT}\n      - ${DOCS_MOUNT}`))).toBe(
-      "FAIL C18 the edge mounts /srv/docs more than once",
+      expect.arrayContaining(["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM"]),
     );
   });
 

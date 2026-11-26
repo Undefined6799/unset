@@ -38,57 +38,14 @@ Expect `unset-sh.github.io.`, HTTPS `200` without bypassing certificate verifica
 `https://docs.unset.sh/`. Open the first real source section and the organisation map; verify that app pages under
 `/unset/` are absent. The site remains out of search engines until Alex says otherwise.
 
-The staging-edge removal is separate ([app PR #1985](https://github.com/Undefined6799/unset/pull/1985)). The legacy
-procedures below apply only while the old edge still serves the domain. Do not use them to republish the app after
-the organisation cutover or reverse its DNS change.
+The staging edge no longer serves the site (ADR 0111 Decision 6): it serves only the app and the PDS. Remove the
+Pangolin `docs.unset.sh` resource once DNS points at Pages.
 
-## The staging edge, until DNS moves
+## The staging edge's leaf
 
-The staging edge serves the built docs site at `https://docs.unset.sh` (ADR 0075). It reads the files from the
-checkout's `docs/site/public` folder, mounted read-only at `/srv/docs` (`deployment/compose.dev.yaml`). Publishing is
-a manual build on the staging host. A new build is live as soon as it finishes: the edge needs no restart.
-
-## Once: DNS and Pangolin (staging edge)
-
-1. **DNS.** Add a record for `docs.unset.sh` of the same type and value as the one `staging.unset.sh` has, so it
-   points at Pangolin. Pangolin gets its own Let's Encrypt certificate for it; the CAA records already allow
-   `letsencrypt.org`.
-2. **Pangolin.** Add a resource `docs.unset.sh` on the staging site, set up like the two staging resources
-   (`docs/human/runbooks/dev-stack-secrets.md`, "Newt's env file"): one target, `https` to `10.250.37.3` port 443,
-   certificate check off for the target, **TLS Server Name** `docs.unset.sh`. Turn the resource's login off: the docs
-   are public, in the repository already. Pangolin sends no SNI to an IP target without the TLS Server Name, and the
-   edge refuses a handshake without one (ADR 0032 Decision 5).
-3. **The dev leaf.** Remake the edge's self-signed leaf with `docs.unset.sh` as its third name, as
-   `dev-stack-secrets.md` ("The dev edge's self-signed leaf") now gives it, before the deploy below. Caddy asks a public
-   CA for a certificate for any site name the loaded leaf does not cover (Caddy v2.11.9
-   `modules/caddyhttp/autohttps.go:200-207`), which the staging edge must never do (ADR 0032 Decision 1).
-4. Deploy the stack from a checkout that has this change (the edge gains the docs site and the folder bind), then
-   publish once, below.
-
-## Each time: publish (staging edge)
-
-From the repository root on the staging host, after `git pull`:
-
-```sh
-git clean -fdX docs/site/public
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e HUGO_CACHEDIR=/tmp/hugo_cache --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.io/gohugoio/hugo:v0.168.0@sha256:1fb8fe7f417abd5802d86747d297728aa48078d763159e7dff6559fe3f8bb8e7 build --gc --minify --panicOnWarning
-```
-
-The first line empties the build folder of everything git ignores, so a page removed from the docs does not linger;
-it keeps `.gitkeep`, which the edge's bind needs (C18). The second is the pinned build from `docs/site/README.md`,
-run as your own user so the files belong to the checkout's owner (C9 judges the bind's owner and modes), with home and
-Hugo's cache (`HUGO_CACHEDIR`, which the image sets to a folder only its own user may write) in the container's
-`/tmp`, where Hugo downloads the theme module. The site is down for the few
-seconds between the two lines.
-
-CI's `docs-site` job runs the same build the same way on every pull request.
-
-## Check (staging edge)
-
-```sh
-curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://docs.unset.sh/
-curl -sSI --max-time 10 https://docs.unset.sh/ | grep -i '^content-security-policy'
-```
-
-The first prints `200`. The second prints the docs site's policy, which starts `default-src 'none'; script-src 'self'`.
-A `404` on every page means the folder is empty: publish again.
+The staging edge's self-signed leaf used to name `docs.unset.sh` too. The after-deploy check in
+[dev-stack-secrets.md](dev-stack-secrets.md) now expects exactly the two staging names, so on the first staging
+deploy after the docs site left the edge, make the leaf again with that runbook's commands ("The dev edge's
+self-signed leaf") before running the check. A leaf that still names `docs.unset.sh` fails the check with
+`names are not exactly the two staging names`. The checkout's old `docs/site/public` build can be deleted
+(`rm -rf docs/site/public`): nothing reads it any more.
