@@ -34,7 +34,7 @@ Rules that refuse an edge the row would otherwise allow:
 | `infra-shared-via-index` | A module under `shared/<name>/` is reached through its `index.ts`. A `.css` file is the exception this rule allows. |
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported by tests and `interfaces/*/compose.ts`. An app does not import one. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. The Vite config row above is the exception the cruiser states. |
-| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only on the adapter path that list names. The `apps/` entries name the path `apps/chat/matrix/` for `matrix-js-sdk`, and the path `apps/web/src/editor/` for `@blocknote/[^/]+`, `prosemirror-[^/]+` and `@tiptap/[^/]+`. Neither of those folders is on this tree. |
+| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only on the adapter path that list names. The `apps/` entries name `apps/chat/matrix/` for `matrix-js-sdk`, and `apps/web/lib/editor/` for `@milkdown/[^/]*`, `prosemirror-[^/]*`, `@codemirror/[^/]*` and `@lezer/[^/]*`. `apps/chat/matrix/` is not on this tree. `apps/web/lib/editor/` is on this tree. |
 | `web-not-admin` | `apps/web` imports nothing whose path is `admin/…` or contains `/admin/`. |
 
 ## Entry points
