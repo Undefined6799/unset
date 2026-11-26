@@ -63,11 +63,15 @@ let generation = $state(0);
 /**
  * The words each in-place editor holds, as it last reported them; and a count per card that remounts its editor when
  * the stored words change under it (a save from the card's own form), so it shows them. A Save from the bar leaves an
- * editor as it is: it already holds what was written, or newer words.
+ * editor as it is: it already holds what was written, or newer words. Its refresh lands before `edits` is settled on
+ * it (the effect runs inside refreshAll), so until then the stored words are not compared: read against the old
+ * edits, words put back meanwhile looked changed under the editor, and it was drawn again twice, losing the caret and
+ * any words still waiting for their frame.
  */
 const held = new Map<string, string>();
 let remounts: ReadonlyMap<string, number> = $state(new Map());
 $effect(() => {
+  if (saving) return;
   for (const card of data.cards) {
     if (card.content.kind !== "readme") continue;
     const want = textOf(card);
@@ -175,6 +179,9 @@ async function save(pressed: MouseEvent) {
   } catch {
     // Not sent, or no answer: nothing is known to be written, so everything stays unsaved.
   }
+  // Words typed while the Save was on its way reach `edits` before it settles, on the cards as they were: the editor
+  // reports once a frame, and WebKit may draw none before the answer, so a late report cleared the Save's answer.
+  for (const flush of flushes) flush();
   // The cards as now stored, with the versions just written, before reading what is left: the editors stay open while
   // a Save is on its way, and words typed meanwhile stay unsaved on the new version (afterSave).
   if (answer.kind === "elsewhere") {
