@@ -9,11 +9,11 @@ Routes and limits are on [Endpoints](/endpoints/web/). The request gate is on [S
 
 ## Owns
 
-Public pages, sign-in, the signed-in member's page, and the adapters those routes call. `interfaces/web/src/lib/server/compose.ts` is the only file here that builds adapters. `startServices` runs from the SvelteKit `init` hook, before `server.ts` listens. It wires the `web` pools, the sealer, net-guard, the identity network, the OAuth client, the session store and the account repository.
+The pages under `interfaces/web/src/routes/`, and the adapters those routes call. `interfaces/web/src/lib/server/compose.ts` is the only file here that builds adapters. `startServices` runs from the SvelteKit `init` hook, before `server.ts` listens. It wires the `web` pools, the sealer, net-guard, the identity network, the OAuth client, the session store, the account repository and the other stores the routes call.
 
-`interfaces/web/server.ts` is the adapter-node custom server. Every response, files included, gets the host check, the security headers from `shared/http`, one log line, listen and the drain. Settings load first and exit 78 when invalid.
+`interfaces/web/server.ts` is the adapter-node custom server. Every response gets the host check, files included, except a request for `/health`. Every response gets the security headers from `shared/http` and one log line. The process owns listen and the drain. Settings load first and exit 78 when invalid.
 
-`interfaces/web/src/hooks.server.ts` is the request gate. Its header lists the order: the route's policy (none is a refusal), test routes, form-only bodies, the body size, the client address and its limit, the session and the member limit, the route under its deadline, then the group's CSP. SvelteKit's Origin check runs on form posts before this hook. Any other body is 415. `tests/integration/web/csrf-coverage.test.ts` covers that.
+`interfaces/web/src/hooks.server.ts` is the request gate. Its order: the route's policy (none is a refusal), test routes, form-only bodies, the body size, the client address and its limit, then, under the route's deadline, the session, the member's limit and the route. Last is the response's CSP: SvelteKit's own policy, narrowed, on a document it drew with its client, and the group's fixed policy on everything else. SvelteKit's Origin check runs on form posts before this hook. Any other body is 415. `tests/integration/web/csrf-coverage.test.ts` covers that.
 
 | Path | What it holds |
 | --- | --- |
@@ -22,7 +22,7 @@ Public pages, sign-in, the signed-in member's page, and the adapters those route
 | `interfaces/web/src/lib/server/app-gate.ts` | After the session: onboarding, then a confirmed email. |
 | `interfaces/web/src/lib/server/session.ts` | Cookie `__Host-sid`. |
 | `interfaces/web/src/lib/server/limits.ts` | Rate-limit names. Which route uses which is on Endpoints. |
-| `interfaces/web/src/lib/server/config.ts` | Typed settings for this process. |
+| `interfaces/web/src/lib/server/config.ts` | Typed settings for this process, including `SESSION_IDLE_S`, `SESSION_ABSOLUTE_S` and `SESSION_TOUCH_INTERVAL_S`. |
 | `interfaces/web/src/routes/` | One folder per route, each with a `policy.ts`. |
 
 Screens are [web](../../apps/web/). A server file may import a domain or infrastructure. A `.svelte` file or a universal `+page.ts` may not (`svelte-screens-no-core`). A route does not import `infrastructure/postgres` (`web-routes-no-postgres`). `GET /health` is `interfaces/web/src/routes/health/` (`probe: true`); the body is `shared/http/health.ts`.
