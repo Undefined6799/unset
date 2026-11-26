@@ -1556,6 +1556,12 @@ Where: a migration for the list and its key; `interfaces/indexer` (adds names); 
 form (check them)
 Size: ~120 source lines, ~200 test lines
 
+Book edit 2026-11-23-handle-hosts-now (ADR 0113, Proposed): there is no DNS writer. The second check, written below
+as "the ADR 0063 writer refuses to write a record", moves to where the answer is given: P3.13's handle-host site
+refuses a burned name before the PDS is asked (ADR 0113 decision 6). The edge has no database access today, so how
+it learns the list is designed here first, and this step is rewritten and reviewed before it is built. It then waits
+on P3.13, not on a writer step.
+
 Goal: a name under our handle domain that a member ever held is never issued again (ADR 0067 decision 6).
 
 Inputs: a hosted name the first time it verifies for a DID (P3.08); the account's `deleted` event or erasure; a
@@ -1915,6 +1921,17 @@ addresses, however typed); http stays. All tightenings, so nothing is needed fro
 Tags: none            Depends on: P3.12            Plan: §5.4 "Handle hosts", §5.2 "Rules for the handle domain", §11 Q1
 Where: `deployment/caddy/` (handle-domain site block), `tests/integration/deployment/handle-host.test.ts`
 Size: ~40 lines of edge config, ~150 test lines
+
+Book edit 2026-11-23-handle-hosts-now (ADR 0113, Proposed): this step is how every hosted handle resolves, on the
+development system too, so it is built now and not at the end of Phase 3; ADR 0063's DNS writer is not built. As the
+code stands today the paths are `deployment/edge/sites/` (the site, with its name from a new edge env name for the
+handle domain, held in `adapted-rules.ts` and `adapted.ts` like the others) and `deployment/edge/dev/` (the dev
+variant: bound to the newt_edge address, serving the dev leaf, one more read-only file mount under C18), with the
+adapted configs regenerated and the tests beside `tests/integration/deployment/edge/`. On the development system
+Pangolin reaches the site through one wildcard resource, public like the other staging names (ADR 0113 decision 3;
+ADR 0031), so the site itself is the only gate: the well-known path to the PDS, the redirect, and nothing else. The
+step carries a Threats section (ADR 0113, Compliance) and its denial tests. Owner steps, not this step's: the wildcard and
+CAA records, the Pangolin edition, key and resource, the certificate token, and the dev leaf's new name.
 
 Goal: make `alice.<handle domain>/` a permanent redirect to `/@alice` and pass
 `alice.<handle domain>/.well-known/atproto-did` to the PDS, with a 503 (never a cached 404) on outage.
