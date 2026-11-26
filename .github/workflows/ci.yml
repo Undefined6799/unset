@@ -92,7 +92,32 @@ jobs:
       # registry any edge uses, workspace edges included, but never verifies or downloads a workspace. .npmrc
       # stays fail-closed for every install, and the dependency guard (scripts/guards/dependencies.ts) keeps every
       # @unset/* lockfile entry a plain workspace link. No other job may pass it (audit_override_only_in_audit_job).
-      - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/
+      #
+      # P0.07p: the audit carries the attestation documents it verified from run to run, and nothing else. The
+      # registry's CDN can hold a wrong stored answer ("OK") for one package's document for a long time, npm does not
+      # retry it, and nothing a client sends gets past it, so a document that verified once is read from the store
+      # (the registry serves it as cacheable for a year). Every run still asks the registry for every packument, the
+      # signing keys and Sigstore's trust root, and still verifies every signature and every attestation. The store
+      # is pruned to attestation documents before the audit reads it and before the job saves it, because npm would
+      # answer from a kept packument when the registry cannot be reached (scripts/ci/keep-attestation-documents.ts).
+      # A failed job saves nothing. No step here may be skipped or allowed to fail, and no other job uses the store
+      # (attestation_store_is_pruned_around_the_audit_and_used_nowhere_else).
+      - name: Restore the attestation documents earlier runs verified (P0.07p)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/npm-audit-signatures/_cacache
+          key: audit-attestations-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: audit-attestations-${{ runner.os }}-
+      - name: Drop whatever in the store is not an attestation document (P0.07p)
+        run: node scripts/ci/keep-attestation-documents.ts "$HOME/.cache/npm-audit-signatures"
+      - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/ --cache="$HOME/.cache/npm-audit-signatures"
+      # Counts npm's own log lines: "(cache hit)" is a document read from the store, "(cache miss)" one the registry
+      # was asked for. It decides nothing.
+      - name: Show how the attestation documents were read (P0.07p)
+        if: ${{ !cancelled() }}
+        run: grep -ho '/attestations/.* (cache [a-z]*)$' "$HOME"/.cache/npm-audit-signatures/_logs/*.log | grep -o '(cache [a-z]*)$' | sort | uniq -c
+      - name: Leave only attestation documents for later runs (P0.07p)
+        run: node scripts/ci/keep-attestation-documents.ts "$HOME/.cache/npm-audit-signatures"
 
   secrets:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false

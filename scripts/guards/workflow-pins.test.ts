@@ -513,6 +513,12 @@ describe("signing jobs (P1.27s)", () => {
   });
 });
 
+const AUDIT_CACHE = '"$HOME/.cache/npm-audit-signatures"';
+const SIGNATURE_AUDIT = `npm audit signatures --@unset:registry=https://registry.npmjs.org/ --cache=${AUDIT_CACHE}`;
+const KEEP_ATTESTATIONS = `node scripts/ci/keep-attestation-documents.ts ${AUDIT_CACHE}`;
+const SHOW_ATTESTATION_READS =
+  "grep -ho '/attestations/.* (cache [a-z]*)$' \"$HOME\"/.cache/npm-audit-signatures/_logs/*.log | grep -o '(cache [a-z]*)$' | sort | uniq -c";
+
 describe("audit scope override", () => {
   // Architecture ruling 2026-10-05 00:00Z (P0.07, P0-A5): only the audit job's read-only `npm audit signatures`
   // points the @unset scope at the public registry, for its signing-key fetch; every install stays fail-closed.
@@ -521,8 +527,38 @@ describe("audit scope override", () => {
     const hits = lines.flatMap((line, i) => (line.includes("@unset:registry=") ? [i] : []));
     expect(hits).toHaveLength(1);
     const at = hits[0] ?? -1;
-    expect(lines[at]).toMatch(/^ {6}- run: npm audit signatures --@unset:registry=https:\/\/registry\.npmjs\.org\/$/);
+    expect(lines[at]).toBe(`      - run: ${SIGNATURE_AUDIT}`);
     expect(lines.slice(0, at).findLast((line) => /^ {2}[\w-]+:$/.test(line))).toBe("  audit:");
+  });
+
+  // P0.07p: the audit job carries verified attestation documents between runs, and nothing else. The store is
+  // pruned before the audit reads it and before the job saves it, no step may be skipped or allowed to fail, and
+  // no other job or workflow touches the store.
+  test("attestation_store_is_pruned_around_the_audit_and_used_nowhere_else", () => {
+    const job = ci.slice(ci.indexOf("\n  audit:\n"), ci.indexOf("\n  secrets:\n"));
+    const steps = job.slice(job.indexOf("      - run: node scripts/ci/npm-audit.ts\n"));
+    const uncommented = steps.split("\n").filter((line) => !line.trimStart().startsWith("#") && line !== "");
+    expect(uncommented).toEqual([
+      "      - run: node scripts/ci/npm-audit.ts",
+      "      - name: Restore the attestation documents earlier runs verified (P0.07p)",
+      "        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0",
+      "        with:",
+      "          path: ~/.cache/npm-audit-signatures/_cacache",
+      "          key: audit-attestations-${{ runner.os }}-${{ hashFiles('package-lock.json') }}",
+      "          restore-keys: audit-attestations-${{ runner.os }}-",
+      "      - name: Drop whatever in the store is not an attestation document (P0.07p)",
+      `        run: ${KEEP_ATTESTATIONS}`,
+      `      - run: ${SIGNATURE_AUDIT}`,
+      "      - name: Show how the attestation documents were read (P0.07p)",
+      "        if: ${{ !cancelled() }}",
+      `        run: ${SHOW_ATTESTATION_READS}`,
+      "      - name: Leave only attestation documents for later runs (P0.07p)",
+      `        run: ${KEEP_ATTESTATIONS}`,
+    ]);
+    for (const file of readdirSync(WORKFLOWS)) {
+      const elsewhere = file === "ci.yml" ? ci.replace(job, "") : readFileSync(join(WORKFLOWS, file), "utf8");
+      expect(elsewhere, file).not.toMatch(/npm-audit-signatures|audit-attestations|keep-attestation-documents/);
+    }
   });
 });
 
