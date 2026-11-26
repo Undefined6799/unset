@@ -33,6 +33,11 @@ on it, so a change is close to permanent.
 - `src/limits.ts`: the limits the UI and the domain show; a test holds them equal to the schemas.
 - `src/scope.ts`: the OAuth scope string, and the expanded fallback for a PDS without permission sets.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
+- `public-repo/` and `scripts/ci/lexicons-export.ts`: the file tree of the public copy,
+  github.com/unset-sh/lexicons (ADR 0089). `.github/workflows/lexicons-mirror.yml` pushes it on a change to main;
+  nothing is edited there or read back. The public `README.md` must name every lexicon and say draft while
+  `published.lock.json` is `{}` (`lexicons-export.test.ts`).
+  The key and how a public contribution comes across: `docs/human/runbooks/lexicons-mirror-key.md`.
 - `scripts/breaking-check.ts`: refuses any changed, added or dropped size or length limit
   (atproto.com/specs/lexicon, "Lexicon Evolution"; widening was allowed until P1.31j), a lost or gained enum or
   `accept` value, a union opened or closed, or a closed union's new ref (P1.31k), or a changed `default` (an absent
