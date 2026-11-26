@@ -350,6 +350,7 @@ beforeAll(async () => {
       INVITE_REQUEST_SMTP_URL_FILE: file("smtp", ["smtps://user", "pass@localhost:1"].join(":")),
       INVITE_REQUEST_TO_FILE: file("to", "owner@unset.example"),
       INVITE_REQUEST_FROM: "noreply@unset.example",
+      INVITE_REQUEST_OWNER_DID: `did:plc:${"o".repeat(24)}`,
     }),
   ]);
 }, 120_000);

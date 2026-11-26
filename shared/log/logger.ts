@@ -100,9 +100,10 @@ const EVENTS = [
   "invite.unseal_failed",
   "invite.store_failed",
   // P2.10r, invite requests (ADR 0080): one received (`kind` "first", "repeat" or "trap", the hidden field filled),
-  // and the owner's mail that did not go. Never the address.
+  // the owner's mail that did not go, and its inbox entry that did not go either (P2.10s). Never the address.
   "invite.request_received",
   "invite.request_mail_failed",
+  "invite.request_notice_failed",
   // P2.27, notifications: the bell's or the page's read failed, so it says so and the page renders. `kind` is the class
   // name. No DID and no count.
   "notifications.read_failed",

@@ -3338,7 +3338,8 @@ Goal: a visitor with no invite leaves one email address and the two sign-up tick
 Not in this step: the "Sign up" button on ADR 0078's limited-page card (built as P2.10t); the compose
   mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
 Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
-  through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
+  through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4). Built as
+  P2.10s.
 
 Threats:
 - The form mails a third party (spam relay). Answered: mail goes only to `INVITE_REQUEST_TO`; the typed address is
@@ -3358,6 +3359,28 @@ Threats:
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 
+### P2.10s — Tell the owner when invite mails fail
+Tags: [SEC]            Depends on: P2.10r, P2.27            Plan: §5.3 "Login and signup"; ADR 0080 point 4, ADR 0079
+Asked: the P2.10r follow-up ruled 2026-11-20; plan agreed 2026-11-21 (no new ADR: one more reason through the one send
+  call and the one reason table).
+Where: `interfaces/web/src/routes/request-invite/+page.server.ts` (after a failed mail),
+  `interfaces/web/src/lib/server/notification-sources.ts` `sendInviteMailFailed`, reason `invite_mail_failed` in
+  `domains/notifications` `REASONS` and `apps/web/lib/notifications/reasons.ts`, migration 0044 (the reason CHECK),
+  config `INVITE_REQUEST_OWNER_DID` (required when `INVITE_REQUESTS=on`).
+Goal: a failed invite-request mail puts one entry a UTC day (its dedupe key) in the owner's inbox, linking to `/invite`;
+  it names no visitor. The visitor still reads "your request is in".
+
+Threats:
+- The entry leaks a visitor's address. Answered: it has no topic, and its dedupe key is only the day
+  (`invite_request.mail_fails`).
+- Many failures flood the owner's inbox. Answered: one entry a day, however many fail (`invite_request.mail_fails`).
+- A dismissed entry comes back the same day (dismissing deletes the row, so the dedupe key no longer holds; Codex
+  on #1894). Answered: web remembers the day it sent one; accepted: a restart may send it once more that day
+  (`invite_request.mail_fails`).
+- The entry's insert fails too. Accepted: it is logged (`invite.request_notice_failed`), and nothing more; the
+  visitor was answered before the mail was tried.
+
+Done when the red is shown and check is green.
 
 ### P2.10t — Offer Sign up on the limited page
 Tags: —            Depends on: P2.10r, P1.22a            Plan: §5.3 "Login and signup"; ADR 0078, ADR 0080
@@ -3368,6 +3391,20 @@ Goal: a visitor on a page shown to signed-in members only sees "Sign up" beside 
   offers neither, since joining would not show it.
 Also carries the acceptance records of ADR 0080 and ADR 0078.
 Done when `signed_in_only_offers_a_visitor_sign_up_when_invite_requests_are_on` was shown red, and check is green.
+### P2.10u — Invite requests on in staging: mounts, env, C9 names a missing file
+Tags: [SEC]            Depends on: P2.10r            Plan: §5.3 "Login and signup"; ADR 0080
+Where: `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` (web's env and two secret mounts),
+  `deployment/compose.dev.test.ts`, `deployment/compose.local.test.ts`, `deployment/web-config.test.ts`,
+  `docs/human/runbooks/dev-stack-secrets.md`.
+Goal: the staging stacks set `INVITE_REQUESTS=on` and mount `web_invite_request_smtp` and `web_invite_request_to`
+  (0400, uid 65532); the local stack stays off. Alex creates the two files by hand before the deploy.
+Threats:
+- The stack boots half-on (page on, mail unconfigured). Answered: C9 fails the preflight and names the file while
+  either is missing (`c9_fails_while_an_invite_request_file_is_missing`); web refuses to boot on a bad value (P2.10r).
+- Another service reads the provider key. Answered: only web mounts the files, owned by web's uid
+  (`SECRET_OWNERS`, `invite_requests_are_on`).
+- The local stack mails anyone. Answered: it stays off and mounts neither (`invite_requests_are_off`).
+
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19
 Where: `domains/identity/identity-seam/{mint.ts, module-accounts.ts, verify.ts}` (`verify.ts` is the verifier: imports only

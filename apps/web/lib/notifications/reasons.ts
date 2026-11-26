@@ -38,6 +38,15 @@ export const REASON_SCREENS = {
     icon: "info",
     href: "/legal/privacy",
   },
+  invite_mail_failed: {
+    title: "An invite request could not be mailed to you",
+    hint: "A visitor asked for an invite and the mail failed. Check the mail settings.",
+    body: "A visitor asked for an invite, but the mail to you could not be sent, and their address was not kept. Check the invite-request mail settings on the server; this shows at most once a day.",
+    kind: "Invites",
+    action: "Open invites",
+    icon: "warning",
+    href: "/invite",
+  },
 } as const satisfies Record<string, ReasonScreen>;
 
 /** A reason's row, or none for one this build does not know (a row sent by a newer build mid-deploy is not shown). */

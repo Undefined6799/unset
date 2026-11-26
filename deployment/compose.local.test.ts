@@ -67,7 +67,11 @@ const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
 };
 const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
 /** The dev edge's own leaf (P1.36c; ADR 0032), which the local file must leave out: local reads the dev root's leaf. */
-const DEV_SECRETS: Record<string, string[]> = { edge: ["dev_tls_cert", "dev_tls_key"] };
+const DEV_SECRETS: Record<string, string[]> = {
+  edge: ["dev_tls_cert", "dev_tls_key"],
+  // Invite requests (P2.10u; ADR 0080): staging mails the owner; the local stack sends no mail (P1.36g).
+  web: ["web_invite_request_smtp", "web_invite_request_to"],
+};
 /**
  * web's legal contacts (P2.15): dev carries Alex's staging values (2026-10-20T23:09:25Z), any literal; local keeps each
  * one's `[to fill: KEY]` token, so a throwaway stack never names a real contact.
@@ -80,6 +84,13 @@ const DEV_ONLY: Record<string, string[]> = {
   pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"],
   // The docs site is served by the dev stack alone (P1.21w; ADR 0075).
   edge: ["DOCS_HOST"],
+  web: [
+    "INVITE_REQUESTS",
+    "INVITE_REQUEST_SMTP_URL_FILE",
+    "INVITE_REQUEST_TO_FILE",
+    "INVITE_REQUEST_FROM",
+    "INVITE_REQUEST_OWNER_DID",
+  ],
 };
 /**
  * The keys only the local file sets, by service, with their one value: web's internal host for net-guard, which the

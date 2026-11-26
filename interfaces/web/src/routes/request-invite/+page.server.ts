@@ -2,13 +2,14 @@
 // with it, then sends an invite link from their own mailbox. The address is parsed once (domains/identity); a repeat
 // within 30 days, a filled trap field and a first ask all read the same, so the page tells nobody whether an address
 // asked before, not even by how long the answer takes: the visitor is answered at once in every case and the mail is
-// sent after, under its own deadline. Mail goes only to the owner. The gate has checked the Origin, the body size and
+// sent after, under its own deadline. Mail goes only to the owner; a failed mail is an entry in their inbox. The gate has checked the Origin, the body size and
 // the limit.
 import { type Actions, redirect, type ServerLoad } from "@sveltejs/kit";
-import { parseRequesterEmail, requestInvite } from "@unset/domains-identity";
+import { type Did, parseRequesterEmail, requestInvite } from "@unset/domains-identity";
 import { withErrorParam } from "@unset/shared-errors";
 import { services } from "../../lib/server/compose.ts";
 import { notifyOwner } from "../../lib/server/invite-requests.ts";
+import { sendInviteMailFailed } from "../../lib/server/notification-sources.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { single } from "../../lib/server/sign-in.ts";
 import type { ShellData } from "../../lib/shell.ts";
@@ -16,6 +17,22 @@ import type { ShellData } from "../../lib/shell.ts";
 const PAGE = "/request-invite";
 /** The send's own deadline, apart from the request's: the answer never waits for it (ADR 0080 point 4). */
 const MAIL_DEADLINE_MS = 20_000;
+/** The owner's inbox entry after a failed mail: one statement on web's pool. */
+const NOTICE_DEADLINE_MS = 5000;
+
+/**
+ * A failed mail: logged, and put in the owner's inbox (P2.10s), so the owner learns of it without reading the logs.
+ * The entry failing too is logged and nothing more: the visitor was answered long ago.
+ */
+async function mailFailed(owner: Did): Promise<void> {
+  const { log } = services();
+  log.error("invite.request_mail_failed", {});
+  try {
+    await sendInviteMailFailed(owner, new Date(), AbortSignal.timeout(NOTICE_DEADLINE_MS));
+  } catch {
+    log.error("invite.request_notice_failed", {});
+  }
+}
 
 /** The core shell, as the legal pages have, so a visitor keeps the app's navigation (staging test 2026-11-21, u7). */
 const SHELL: ShellData = { kind: "core", noindex: true };
@@ -72,9 +89,10 @@ export const actions: Actions = {
         email,
       ).then(
         (outcome) => {
-          if (outcome === "failed") log.error("invite.request_mail_failed", {});
+          if (outcome !== "failed") return undefined;
+          return mailFailed(requests.owner);
         },
-        () => log.error("invite.request_mail_failed", {}),
+        () => mailFailed(requests.owner),
       ),
     );
     log.info("invite.request_received", { kind: first ? "first" : "repeat" });

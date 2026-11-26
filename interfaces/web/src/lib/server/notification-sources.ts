@@ -46,6 +46,33 @@ export async function dismissed(did: Did, entries: readonly Entry[], deadline: A
   }
 }
 
+/** The UTC day web last put an invite-mail notice in the owner's inbox; this process only. */
+let inviteNoticeDay = "";
+
+/**
+ * An invite request whose mail to the owner failed (P2.10s; ADR 0080 point 4): one entry a UTC day in the owner's
+ * inbox, however many fail, so they know to check the mail settings. It names no visitor: the address is forgotten.
+ * The dedupe key holds only while the entry exists, and dismissing deletes it (P2.27b), so web also remembers the day
+ * it sent one, decided before the first await: a dismissed notice stays gone until the next UTC day or a restart.
+ * A failed insert forgets the day, so the next failure tries again.
+ */
+export async function sendInviteMailFailed(owner: Did, now: Date, deadline: AbortSignal): Promise<void> {
+  const day = now.toISOString().slice(0, 10);
+  if (day === inviteNoticeDay) return;
+  inviteNoticeDay = day;
+  try {
+    const sent = await services().notifications.send(
+      owner,
+      { reason: "invite_mail_failed", dedupeKey: `invite_mail_failed:${day}` },
+      deadline,
+    );
+    if (!sent.ok) throw new Error(sent.error);
+  } catch (error) {
+    inviteNoticeDay = "";
+    throw error;
+  }
+}
+
 /** Dismissing the banner says the member has seen the change, so its entry goes too. */
 export function withdrawPrivacyNotice(did: Did, version: string, deadline: AbortSignal): Promise<void> {
   return services().notifications.withdraw(did, noticeKey(version), deadline);
