@@ -2,7 +2,7 @@
   "node": {
     "ref": "docker.io/library/node",
     "tag": "26-trixie-slim",
-    "digest": "sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
+    "digest": "sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": true,
@@ -28,7 +28,7 @@
   "postgres": {
     "ref": "docker.io/library/postgres",
     "tag": "18-trixie",
-    "digest": "sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
+    "digest": "sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false,
@@ -81,7 +81,7 @@
   "python3-debian13": {
     "ref": "gcr.io/distroless/python3-debian13",
     "tag": "nonroot",
-    "digest": "sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71",
+    "digest": "sha256:e36c26ad81ef8c9da7605d717a22160193ab66cfbc55bd5977f429f01f6ead99",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false

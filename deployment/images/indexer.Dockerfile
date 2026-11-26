@@ -6,12 +6,12 @@
 # upgrade below, as in the other Node images.
 # node-app.test.ts indexer_image_copies_every_workspace_the_process_reaches fails when a workspace is missing.
 
-FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS deps
+FROM ghcr.io/undefined6799/mirror/node@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS deps
 WORKDIR /app
 COPY . .
 RUN npm ci --ignore-scripts --omit=dev
 
-FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
+FROM ghcr.io/undefined6799/mirror/node@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production

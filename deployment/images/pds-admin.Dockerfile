@@ -6,7 +6,7 @@
 # that link, its folder and the service, nothing else. Node runs the TypeScript sources directly, so there is no build
 # stage; the runtime stage installs no OS packages but the zlib upgrade below.
 
-FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS deps
+FROM ghcr.io/undefined6799/mirror/node@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS deps
 WORKDIR /app
 COPY . .
 RUN npm ci --ignore-scripts --omit=dev
@@ -18,7 +18,7 @@ RUN find node_modules -mindepth 1 -maxdepth 1 ! -name @unset -exec rm -r {} + \
 # source 0755 whatever its source mode or --chmod said (#1720), while an entry inside the source takes --chmod.
 RUN mkdir -p -m 0700 /stage/state
 
-FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
+FROM ghcr.io/undefined6799/mirror/node@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production
