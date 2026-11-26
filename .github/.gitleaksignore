@@ -1,0 +1,18 @@
+# Findings the secrets job accepts, one gitleaks fingerprint per line (P0.07o; Alex, 2026-11-23 02:11Z). Read only by
+# the two history scans in .github/workflows/ci.yml, which name this file with --gitleaks-ignore-path.
+#
+# Every entry is `commit:file:rule:line` and names a test file. It hides that one finding in that one commit and
+# nothing else: the same line in another commit, or in the working tree, still fails (gitleaks v8.30.1
+# detect/detect.go, AddFinding; proven on the pinned image by commit_fingerprint_hides_one_commit_only in
+# scripts/ci/secrets-fixtures.ts). A `file:rule:line` entry would hide its line in every commit and is refused by
+# scripts/ci/secrets-fixtures.test.ts. Another entry loosens secret scanning and needs Alex's typed line (ADR 0059).
+#
+# The four below are one made-up value: the `sender_key` field of a fake Megolm event in the chat tests, which is
+# the base64 of a plain label and no key. They sit on draft chat branches and never reached main, whose own history
+# and working tree scan clean (2026-11-23). A push to main scans every branch, so they kept `secrets` red there, and
+# changing the line in a later commit does not clear a finding in an older one. Remove an entry once no branch on
+# origin holds its commit.
+74946ed0cea7c069f7d53a1dbe0ff2de9c307af3:tests/integration/matrix/synapse-module/relations.test.ts:generic-api-key:32
+b04c6d29a18002cf68d0ff9fc81a6131c00c949b:tests/integration/matrix/synapse-module/encrypted-only.test.ts:generic-api-key:44
+fded58e5566b753e11413b101f9ace17f4ae27af:tests/integration/matrix/synapse-module/retention.test.ts:generic-api-key:24
+fded58e5566b753e11413b101f9ace17f4ae27af:tests/integration/matrix/synapse-module/room-policy.test.ts:generic-api-key:40

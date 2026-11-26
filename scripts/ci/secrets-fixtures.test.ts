@@ -1,5 +1,7 @@
-// The secrets job's shape and the one public-key exception (P0.07a). The gitleaks runs themselves happen in the CI
-// `secrets` job (scripts/ci/secrets-fixtures.ts); this file checks what can be checked without gitleaks.
+// The secrets job's shape, the one public-key exception (P0.07a) and the accepted findings (P0.07o). The gitleaks runs
+// themselves happen in the CI `secrets` job (scripts/ci/secrets-fixtures.ts); this file checks what can be checked
+// without gitleaks.
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -75,6 +77,7 @@ describe("secrets job scope", () => {
       "private_multibase_still_fails",
       "api_key_beside_public_key_fails",
       "wrong_length_zq3s_fails",
+      "commit_fingerprint_hides_one_commit_only",
     ])
       expect(names).toContain(name);
   });
@@ -121,5 +124,41 @@ describe("public-key exception", () => {
       }
       expect(allowed(keys.apiKey(label))).toBe(false);
     }
+  });
+});
+
+// P0.07o (Alex 2026-11-23 02:11Z): findings proven false and already pushed are accepted one by one, by the
+// fingerprint gitleaks gives them. gitleaks v8.30.1 detect/detect.go (AddFinding) skips a finding whose
+// `commit:file:rule:line` is listed, and also one whose `file:rule:line` is listed, in every commit and in the working
+// tree; so each entry here names its commit.
+describe("accepted findings", () => {
+  const IGNORE = ".github/.gitleaksignore";
+  const FLAG = `--gitleaks-ignore-path ${IGNORE}`;
+  /** The entries gitleaks reads: every line that is neither blank nor a comment (detect/detect.go AddGitleaksIgnore). */
+  const entries = (): string[] =>
+    readFileSync(join(ROOT, IGNORE), "utf8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "" && !line.startsWith("#"));
+
+  test("ignore_entries_name_one_commit_and_a_test_file", () => {
+    for (const entry of entries()) expect(entry).toMatch(/^[0-9a-f]{40}:[^:]+\.test\.ts:[a-z0-9-]+:[1-9]\d*$/);
+    expect(new Set(entries()).size).toBe(entries().length);
+    // The four fake Megolm sender_key lines on the draft chat branches. One more entry is a loosening of secret
+    // scanning (ADR 0059: Alex's typed line), and changes this number with it.
+    expect(entries()).toHaveLength(4);
+  });
+
+  test("history_scans_read_the_ignore_file", () => {
+    for (const name of ["Scan this pull request's commits", "Scan full history"]) expect(step(name)).toContain(FLAG);
+    // The working tree has no commit, so only a `file:rule:line` entry could apply there, and none is allowed.
+    expect(step("Scan working tree")).not.toContain("gitleaks-ignore");
+  });
+
+  test("gitleaks_finds_no_ignore_file_by_itself", () => {
+    // gitleaks v8.30.1 cmd/root.go also reads `.gitleaksignore` in the scanned folder without being asked, which
+    // would reach the working-tree scan and the hook. The one file is the one the history scans name.
+    const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0");
+    expect(tracked.filter((file) => file.split("/").pop() === ".gitleaksignore")).toEqual([IGNORE]);
   });
 });
