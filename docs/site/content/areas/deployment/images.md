@@ -19,7 +19,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 `deployment/images/kinds.json` maps a base name to the image kind the image tests iterate: `node` → `node`, `caddy` → `edge`, `postgres` → `postgres`.
 
-`deployment/images/vendor.ts` exports `VENDOR_IMAGES`: `ghcr.io/bluesky-social/pds` and `docker.io/fosrl/newt`. It also exports `VENDOR_BASES`: `docker.io/chrislusf/seaweedfs`, a runtime base only and never a member of `VENDOR_IMAGES` ([ADR 0041](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0041-object-store.md)). It imports nothing. The preflight repeats `VENDOR_IMAGES` in `deployment/preflight/checks/images.ts` because it may not import this file. `deployment/compose.dev.test.ts` holds the two equal.
+`deployment/images/vendor.ts` exports `VENDOR_IMAGES`: `ghcr.io/bluesky-social/pds`, `docker.io/fosrl/newt` and `ghcr.io/element-hq/matrix-authentication-service`. It also exports `VENDOR_BASES`: `docker.io/chrislusf/seaweedfs` ([ADR 0041](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0041-object-store.md)) and `gcr.io/distroless/python3-debian13` ([ADR 0092](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0092-synapse-runs-on-distroless-python.md)). Both are runtime bases only and neither is a member of `VENDOR_IMAGES`. It imports nothing. The preflight repeats `VENDOR_IMAGES` in `deployment/preflight/checks/images.ts` because it may not import this file. `deployment/compose.dev.test.ts` holds the two equal.
 
 `deployment/images/bases.lock.json` pins the bases by digest:
 
@@ -33,10 +33,13 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | `newt` | `docker.io/fosrl/newt` | `1.20.0` | runtime |
 | `seaweedfs` | `docker.io/chrislusf/seaweedfs` | `4.53` | runtime |
 | `seaweedfs-next` | `docker.io/chrislusf/seaweedfs` | `4.54` | runtime |
+| `python` | `docker.io/library/python` | `3.13-slim-trixie` | build |
+| `python3-debian13` | `gcr.io/distroless/python3-debian13` | `nonroot` | runtime |
+| `mas` | `ghcr.io/element-hq/matrix-authentication-service` | `1.29.0` | runtime |
 
 `seaweedfs-next` exists only while the objects image moves to 4.54. It lets `mirror.yml` copy 4.54 to the mirror before `objects.Dockerfile` names it. The re-pin that switches the `FROM` removes it.
 
-`deployment/mirror.list.json` lists the same seven sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>` (`seaweedfs` is `ghcr.io/undefined6799/mirror/seaweedfs`).
+`deployment/mirror.list.json` lists the same eleven sources as the table. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>` (`seaweedfs` is `ghcr.io/undefined6799/mirror/seaweedfs`; `mas` is `ghcr.io/undefined6799/mirror/matrix-authentication-service`).
 
 `deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock. While `recipeContract` returns a lock, both tests leave `pds/pds.Dockerfile` out of that set. The load runs `recipeContract` through `execFileSync`. A missing or malformed member throws. Every other Dockerfile stays in the set.
 
