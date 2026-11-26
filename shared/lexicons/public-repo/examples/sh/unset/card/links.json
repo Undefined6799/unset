@@ -1,0 +1,15 @@
+{
+  "$type": "sh.unset.card",
+  "content": {
+    "$type": "sh.unset.block.links",
+    "title": "Elsewhere",
+    "layout": "list",
+    "items": [
+      { "uri": "https://example.com/portfolio", "label": "Portfolio", "description": "Selected work since 2019" },
+      { "uri": "https://example.org/sam", "label": "Notes" },
+      { "uri": "https://example.net/@sam" }
+    ]
+  },
+  "width": "half",
+  "createdAt": "2026-11-21T15:06:00.000Z"
+}

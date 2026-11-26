@@ -1,0 +1,18 @@
+{
+  "$type": "sh.unset.profile",
+  "displayName": "Sam Rivera",
+  "headline": "Product designer. Maps, type and small tools.",
+  "avatar": {
+    "$type": "blob",
+    "ref": {
+      "$link": "bafkreibqgoyh5cc2beaorwif4zpknewf7hxrtcorp66hrsaw6iceciiwfm"
+    },
+    "mimeType": "image/jpeg",
+    "size": 184223
+  },
+  "avatarShape": "rounded-square",
+  "location": "Lisbon",
+  "website": "https://example.com",
+  "listed": true,
+  "createdAt": "2026-11-21T15:04:05.000Z"
+}

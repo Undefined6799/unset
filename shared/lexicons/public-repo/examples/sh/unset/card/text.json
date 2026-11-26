@@ -1,0 +1,10 @@
+{
+  "$type": "sh.unset.card",
+  "content": {
+    "$type": "sh.unset.block.text",
+    "text": "## About\n\nI design maps and the tools around them. Before that I set type for a small press.\n\n- Open to freelance work from March\n- Talks and workshops on request\n\nRead more on [my site](https://example.com/about)."
+  },
+  "width": "full",
+  "surface": "plain",
+  "createdAt": "2026-11-21T15:05:00.000Z"
+}
