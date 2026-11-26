@@ -243,9 +243,24 @@ services:
       SUPPORT_EMAIL: support@staging.unset.sh
       SECURITY_CONTACT: privacy-page
       SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
+      # Invite requests (P2.10u; ADR 0080): on, so a visitor may ask for an invite and web mails the owner. A literal, so
+      # turning it off or on is a reviewed change. The two files are Alex's (runbook dev-stack-secrets.md "Invite
+      # requests' two files"); C9 fails the preflight while either is missing, and web refuses to boot on a bad one.
+      INVITE_REQUESTS: "on"
+      INVITE_REQUEST_SMTP_URL_FILE: /run/secrets/web_invite_request_smtp
+      INVITE_REQUEST_TO_FILE: /run/secrets/web_invite_request_to
+      INVITE_REQUEST_FROM: noreply@staging.unset.sh
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
+    secrets:
+      - pg_web_password
+      - web_seal_keyring
+      - web_oauth_client_keys
+      - web_pds_admin_key
+      - pds_web_key
+      - objects_web
+      - web_invite_request_smtp
+      - web_invite_request_to
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -392,3 +407,9 @@ secrets:
   # Web's secret key for its identity in objects_s3 (P2.21a): 64 hex characters; read by web (uid 65532) only.
   objects_web:
     file: ../../unset-dev-secrets/objects_web
+  # Invite requests (P2.10u; ADR 0080): the SMTP URL with web's own sending key, and the owner's address; read by
+  # web (uid 65532) only.
+  web_invite_request_smtp:
+    file: ../../unset-dev-secrets/web_invite_request_smtp
+  web_invite_request_to:
+    file: ../../unset-dev-secrets/web_invite_request_to
