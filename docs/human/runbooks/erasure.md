@@ -54,9 +54,11 @@ What it does not remove, and who does:
   orphan, not only the DID just erased. A key that is not that shape is left. `sweepAllowed`
   (`domains/content/images/library.ts`) lets one run delete at most the greater of 500 and a tenth of the live
   `app.image` rows, rounded down. More orphans make it throw and delete none of them. The failure is logged as job
-  `sweep.image_orphan` with the error's class name only, and the next hour tries the same set again. There is no
-  hand step that deletes `drafts/<did>/`. What a delete leaves in the filer and on disk is in the object-store
-  runbook.
+  `sweep.image_orphan` with the error's class name only, and the next hour tries the same set again. That sweep
+  is not the hand step. On the SeaweedFS dev, local and staging stacks, step 7 follows the object-store runbook
+  (`docs/human/runbooks/object-store.md`): delete the member's folders, including `drafts/<did>`, then purge the
+  filer's metadata log and force the vacuum. A delete only tombstones the bytes until that vacuum (ADR 0041
+  Decision 7; `objects_erase_removes_bytes` in `deployment/images/objects-erasure.image.test.ts`).
 - **Legal holds.** None. The migrations through `0043_app_notification_seen_at.sql` define no hold table, and the
   function does not skip a row for one. Every accepted reason, including `legal_hold_closed`, runs the same deletes
   and records outcome `erased`.
@@ -95,15 +97,19 @@ and the coverage test, which run before merge.
    (it writes a second audit record).
 6. Delete the account in the PDS. Do this after step 5, so a session cannot recreate rows in between; if the person
    signs in again before the PDS account is gone, or was part-way through a sign-in, run step 5 again.
-7. If the handle is one of ours (under `unset.name`, or `staging.unset.name` on staging), an owner logged in to deSEC
+7. On a SeaweedFS dev, local or staging stack, follow the object-store runbook
+   (`docs/human/runbooks/object-store.md`) for this batch. Delete the member's folders, including `drafts/<did>`,
+   then purge the filer's metadata log and force the vacuum. Do it even when the orphan sweep has already run or
+   has refused: that sweep only tombstones image-shaped folders, and the bytes stay in the volume until the vacuum.
+8. If the handle is one of ours (under `unset.name`, or `staging.unset.name` on staging), an owner logged in to deSEC
    removes its `_atproto.<name>` TXT record by hand, until the ADR 0063 writer does it (ADR 0067). Resolvers may
    serve the old record until its TTL runs out; the indexer's check on our PDS covers that time. Do the same when an
    account is taken down; write it again if the takedown is reversed. Do not tombstone the DID unless the person
    explicitly asked for their identity to be ended (ADR 0067 decision 4).
-8. Add the name, lower-cased, to the burned-name file: a file of its own outside the repository, holding bare names
+9. Add the name, lower-cased, to the burned-name file: a file of its own outside the repository, holding bare names
    only, with no DID, no date and no link to the privacy request records, until P3.08n builds the list. Before
    writing any new TXT record by hand, check the name is not there: a used name is never issued again.
-9. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
+10. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
    repository, in a PR or in a log. Close `psql` when done.
 
 ## If it fails
