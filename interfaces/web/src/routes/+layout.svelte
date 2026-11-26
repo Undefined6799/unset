@@ -13,6 +13,7 @@ import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
 import DismissAll from "@unset/apps-web/lib/components/notifications/dismiss-all.svelte";
 import NotificationList from "@unset/apps-web/lib/components/notifications/notification-list.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
+import { Badge } from "@unset/apps-web/lib/components/ui/badge";
 import { Button, buttonVariants } from "@unset/apps-web/lib/components/ui/button";
 import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
 import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
@@ -275,6 +276,7 @@ function takeOver(loaded: Stock): void {
 $effect(() => {
   if (!stockOpen[ACTIONS]) return;
   for (const button of PANEL_BUTTONS) stockOpen[button.id] = false;
+  if (chat !== undefined) stockOpen[SEARCH] = false;
 });
 // The header draws other buttons on the other side of 640px (Tailwind's sm), so a stock control left open across that
 // line loses the button it sits under: a phone turned on its side. The library then hides the control (bits-ui
@@ -327,17 +329,207 @@ const markInBackground: SubmitFunction =
   async ({ result }) => {
     if (result.type !== "redirect") seenUpTo = undefined;
   };
+// The chat icon (build step 10; ADR 0094 decision 5; Alex: no dock on a phone): for a member, Messages is a plain link to the chat page on
+// its own origin, with the number of chats with new messages, on every width (no dock); a visitor keeps the panel.
+const chat = $derived(data.chat);
+// The chat box (ADR 0115; Alex 2026-11-23, "what I want to see is chat inside unset.sh"): on a wider screen the icon
+// and a profile's Message link open the chat page in a frame on unset.cc's origin, here in the corner, instead of
+// leaving; a phone keeps the plain link (Alex: no dock on a phone). The frame is made at the first open, so a page
+// that never opens it runs no chat; it stays, hidden, while the member moves between pages. To sign in, the shell
+// only points the frame at web's GET /chat/sign-in with the box's one-time value: the request is this origin's, so the
+// session goes with it, and the ticket reaches the box by the redirect, never this script (chat box review D1; apps/chat
+// core/dock.ts has the whole exchange). Each message is taken
+// only from the frame's own window and origin (HTML web messaging: check source and origin). The icon's number is
+// read again every half minute while the box is not open (GET /chat/count), and from the box once it runs.
+const DOCK = "unset.dock.";
+const WIDE = "(min-width: 40rem)";
+const COUNT_EVERY_MS = 30_000;
+const chatOrigin = $derived(chat === undefined ? "" : new URL(chat.href).origin);
+let dockMade = $state(false);
+let dockShown = $state(false);
+let dockFrame: HTMLIFrameElement | undefined = $state();
+/** What the box shows (apps/chat core/dock.ts DockMode): the list under the icon, a chat or its avatar at the corner. */
+type DockMode = "list" | "conversation" | "bubble";
+let dockMode: DockMode = $state("list");
+const DOCK_PLACE: Record<DockMode, string> = {
+  list: "top-20 h-[min(32rem,calc(100dvh-6rem))] w-96 rounded-lg border",
+  conversation: "bottom-4 h-[min(36rem,calc(100dvh-6rem))] w-96 rounded-lg border",
+  bubble: "bottom-4 size-14 rounded-full",
+};
+let liveUnread: number | undefined = $state();
+/**
+ * Whether the box sends the count: from its first count on. A box that never gets that far (chat open in another tab,
+ * or a failed sign-in) leaves the poll running, so the icon's number stays current (Codex review on cdb237c1).
+ */
+let dockCounting = false;
+const unread = $derived(liveUnread ?? chat?.unread ?? 0);
+/** A Message link's DID, sent with the hello when the box's page loads. */
+let dockAsk: string | undefined;
+
+/**
+ * Whether the frame holds the box's page on the chat origin: from its load event (which follows the hop's redirects)
+ * until the shell sends it on another hop. Before that the frame is about:blank or the hop on unset.sh, and a message
+ * to the chat origin would only be dropped with a console warning (HTML "Cross-document messaging", postMessage
+ * step 8, https://html.spec.whatwg.org/multipage/web-messaging.html, read 2026-11-23; Alex's staging list item 6).
+ */
+let dockGreeted = false;
+/** The chat icon was pressed before the box's page loaded: show the list once it has. */
+let dockAskList = false;
+
+function toDock(data: Record<string, unknown>) {
+  if (dockGreeted) dockFrame?.contentWindow?.postMessage(data, chatOrigin);
+}
+
+/** Open the box (and the conversation with `did`); false on a phone or with no chat, where the link is followed. */
+function openDock(did?: string): boolean {
+  if (chat === undefined || !window.matchMedia(WIDE).matches) return false;
+  dockMade = true;
+  dockShown = true;
+  if (did !== undefined) {
+    if (dockFrame?.contentWindow) toDock({ type: `${DOCK}open`, did });
+    dockAsk = did;
+  }
+  return true;
+}
+
+/**
+ * The chat icon (the mock-up's "Later: the menu and chat box"): it shows the list under it; pressed again it goes back
+ * to the chat (or its avatar) the list covered, or closes. The box decides which, as it knows what it covered.
+ */
+function chatClick(event: MouseEvent) {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (!dockMade || !dockShown) {
+    if (!openDock()) return;
+    event.preventDefault();
+    if (dockGreeted) toDock({ type: `${DOCK}list` });
+    else dockAskList = true;
+    return;
+  }
+  event.preventDefault();
+  toDock({ type: dockMode === "list" ? `${DOCK}back` : `${DOCK}list` });
+}
+
+/** A click on a profile's Message link (`<door>/dm/<did>`, apps/web profile-header.svelte) opens it in the box. */
+function messageLinkClick(event: MouseEvent) {
+  if (chat === undefined || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    return;
+  const link = (event.target as Element | null)?.closest?.("a[href]");
+  if (!(link instanceof HTMLAnchorElement)) return;
+  const url = new URL(link.href);
+  if (url.origin !== chatOrigin || !url.pathname.startsWith("/dm/")) return;
+  if (openDock(decodeURIComponent(url.pathname.slice("/dm/".length)))) event.preventDefault();
+}
+
+/**
+ * Log out with a box running (chat box review D3): the box logs out in its own storage first (its backup catches up,
+ * its device ends, its stores go), since the chat page's own Log out runs on unset.cc's top level, which cannot reach
+ * the box's partition. Then the form is posted as usual; web's queued end is the fallback if the box does not answer.
+ */
+let loggingOut: (() => void) | undefined;
+const DOCK_LOG_OUT_MS = 20_000;
+function logOutDock(event: SubmitEvent) {
+  const form = event.currentTarget as HTMLFormElement;
+  if (dockFrame?.contentWindow == null || !dockGreeted) return;
+  // A second Log out while the box is still backing up waits with the first; posting now would unload the box.
+  event.preventDefault();
+  if (loggingOut !== undefined) return;
+  const done = () => form.submit();
+  const timer = window.setTimeout(done, DOCK_LOG_OUT_MS);
+  loggingOut = () => {
+    window.clearTimeout(timer);
+    done();
+  };
+  toDock({ type: `${DOCK}log_out` });
+}
+
+/** The box's page has loaded (again, after a renewal): say hello first, so the box learns this origin from us. */
+function dockLoaded() {
+  dockGreeted = true;
+  // A new page in the box is a new client: the poll keeps the count until it reports one (a renewal replaces the
+  // page without count_stopped, apps/chat/boot.ts renew).
+  dockCounting = false;
+  toDock({ type: `${DOCK}hello` });
+  toDock({ type: `${DOCK}theme`, theme: current });
+  toDock({ type: `${DOCK}shown`, shown: dockShown });
+  if (dockAsk !== undefined) toDock({ type: `${DOCK}open`, did: dockAsk });
+  else if (dockAskList) toDock({ type: `${DOCK}list` });
+  dockAskList = false;
+}
+
+// Hiding the box leaves its page "visible" to itself, so it is told, and sends read receipts only while open
+// (apps/chat core/dock.ts boxVisibility).
+$effect(() => {
+  toDock({ type: `${DOCK}shown`, shown: dockShown });
+});
+
+// The light / dark / device switch is one setting everywhere (Alex 2026-11-23): the box follows each change.
+$effect(() => {
+  toDock({ type: `${DOCK}theme`, theme: current });
+});
+
+function dockMessage(event: MessageEvent) {
+  if (dockFrame?.contentWindow == null || event.source !== dockFrame.contentWindow || event.origin !== chatOrigin)
+    return;
+  const message = event.data as { type?: unknown; state?: unknown; unread?: unknown; mode?: unknown } | null;
+  if (typeof message !== "object" || message === null) return;
+  if (message.type === `${DOCK}sign_in` && typeof message.state === "string") {
+    // web checks the value's form; the frame comes back on the box's page, which says hello again.
+    dockGreeted = false;
+    dockFrame.src = `/chat/sign-in?${new URLSearchParams({ state: message.state, dock: "" })}`;
+  } else if (
+    message.type === `${DOCK}count` &&
+    typeof message.unread === "number" &&
+    Number.isSafeInteger(message.unread)
+  ) {
+    dockCounting = true;
+    liveUnread = Math.max(0, message.unread);
+  } else if (message.type === `${DOCK}count_stopped`) {
+    // The box's client ended (chat taken over by another tab, signed out, failed): the poll takes the count back.
+    dockCounting = false;
+  } else if (message.type === `${DOCK}close`) {
+    dockShown = false;
+  } else if (message.type === `${DOCK}layout` && typeof message.mode === "string" && message.mode in DOCK_PLACE) {
+    dockMode = message.mode as DockMode;
+  } else if (message.type === `${DOCK}logged_out`) {
+    loggingOut?.();
+  }
+}
+
+$effect(() => {
+  if (chat === undefined) return;
+  const timer = window.setInterval(async () => {
+    if (document.visibilityState !== "visible" || dockCounting) return;
+    try {
+      const response = await fetch("/chat/count", { cache: "no-store", redirect: "error" });
+      const body = (await response.json()) as { unread?: unknown };
+      if (response.ok && typeof body.unread === "number" && Number.isSafeInteger(body.unread)) liveUnread = body.unread;
+    } catch {
+      // The number stays as it was; the next page load reads it again.
+    }
+  }, COUNT_EVERY_MS);
+  return () => window.clearInterval(timer);
+});
+const panelButtons = $derived(chat === undefined ? PANEL_BUTTONS : PANEL_BUTTONS.filter((b) => b.id !== MESSAGES));
 // The count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
-// drawn as a small badge.
+// drawn as shadcn's stock Badge, made small and pinned to the button's corner.
 const badge =
-  "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.6875rem] leading-4.5 font-semibold text-primary-foreground";
+  "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 px-1 py-0 text-[0.6875rem] leading-4 font-semibold";
 // Create's one row that runs today: the member's own page with the Add card picker open; a visitor signs in first.
 const addCardHref = $derived(account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`);
 const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
 // More actions' rows for Messages and the bell. The bell's row carries the count, and is the link to the page where
-// the bell does not open a panel (bellOpens).
-const actionRows = $derived(
-  PANEL_BUTTONS.map((button) => {
+// the bell does not open a panel (bellOpens). With chat on, Messages is the top bar's link and Search takes its row, so
+// the bar fits 320px; the row opens the stock Search panel under More actions' button, as the others do.
+const searchRow = {
+  label: T.search,
+  icon: "search",
+  onSelect: () => {
+    chosen = SEARCH;
+  },
+} as const;
+const actionRows = $derived([
+  ...(chat === undefined ? [] : [searchRow]),
+  ...panelButtons.map((button) => {
     const row = { label: button.label, icon: button.icon };
     const choose = () => {
       chosen = button.id;
@@ -346,10 +538,12 @@ const actionRows = $derived(
     const count = waiting > 0 ? { badge: N.badge(waiting), name: N.bell(waiting) } : undefined;
     return bellOpens ? { ...row, count, onSelect: choose } : { ...row, count, href: "/notifications" };
   }),
-);
+]);
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(({ type }) => {
+  // A page load read the icon's number afresh; the box, once running, keeps telling its own.
+  if (!dockCounting) liveUnread = undefined;
   // Not when the client starts over the server's page: a menu opened before that is kept, and carried over (takeOver).
   if (type === "enter") return;
   for (const id of STOCK_MENUS) stockOpen[id] = false;
@@ -384,7 +578,7 @@ const row =
   "flex items-center gap-3 rounded-md px-3 py-2 text-foreground no-underline hover:bg-muted aria-[current=page]:bg-muted aria-[current=page]:font-medium";
 </script>
 
-<svelte:window onpageshow={restoreSaved} />
+<svelte:window onpageshow={restoreSaved} onmessage={dockMessage} onclickcapture={messageLinkClick} />
 
 <svelte:head>
   <!-- As the Hono head had them (apps/web/src/shell/head.tsx): both fonts preloaded, in anonymous CORS mode because a
@@ -475,7 +669,7 @@ const row =
 {#snippet moreActions()}
   <!-- What the More actions button shows: the bell's count is in its name and on its corner. -->
   <Icon name="more" size={20} label={waiting > 0 ? `${T.moreActions}, ${N.bell(waiting)}` : T.moreActions} />
-  {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+  {#if waiting > 0}<Badge aria-hidden="true" class={badge}>{N.badge(waiting)}</Badge>{/if}
 {/snippet}
 {#snippet panelBody(button: (typeof PANEL_BUTTONS)[number])}
   <!-- What a header panel holds under its title, in the native popover and in the stock one alike. -->
@@ -565,20 +759,25 @@ const row =
       </button>
       <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
         <!-- On a phone a disabled icon says nothing to a finger, so it opens a panel that says search is coming
-             (staging walkthrough 2026-11-19), as Messages and Notifications do. -->
+             (staging walkthrough 2026-11-19), as Messages and Notifications do. A member's phone has the chat link
+             instead, which works today, and finds this panel under More actions, so the bar fits 320px: its button is
+             then not drawn, and the panel sits under More actions' button (header-panel.svelte anchor). -->
         {#if stock !== undefined}
           <stock.HeaderPanel
             bind:open={stockOpen[SEARCH]}
             bind:button={stockButton[SEARCH]}
             title={T.search}
             closeLabel="{T.close} {T.search}"
-            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} sm:hidden"
+            triggerClass="{buttonVariants({ variant: 'outline', size: 'icon-sm' })} {control} {chat === undefined
+              ? 'sm:hidden'
+              : 'hidden'}"
+            anchor={chat === undefined ? null : stockButton[ACTIONS]}
             class="w-[calc(100vw-1rem)]"
           >
             {#snippet trigger()}<Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />{/snippet}
             <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
           </stock.HeaderPanel>
-        {:else}
+        {:else if chat === undefined}
           <Button
             variant="outline"
             size="icon-sm"
@@ -614,7 +813,20 @@ const row =
             <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
           </Button>
         {/if}
-        {#each PANEL_BUTTONS as button (button.id)}
+        {#if chat !== undefined}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            href={chat.href}
+            class="{control} relative"
+            onclick={chatClick}
+            aria-expanded={dockMade ? dockShown : undefined}
+          >
+            <Icon name="comment" size={20} label={T.chat(unread)} />
+            {#if unread > 0}<Badge aria-hidden="true" class={badge}>{N.badge(unread)}</Badge>{/if}
+          </Button>
+        {/if}
+        {#each panelButtons as button (button.id)}
           {#if stock !== undefined && (button.id !== NOTIFICATIONS || bellOpens)}
             <stock.HeaderPanel
               bind:open={stockOpen[button.id]}
@@ -627,7 +839,7 @@ const row =
             >
               {#snippet trigger()}
                 <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(waiting) : button.label} />
-                {#if button.id === NOTIFICATIONS && waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+                {#if button.id === NOTIFICATIONS && waiting > 0}<Badge aria-hidden="true" class={badge}>{N.badge(waiting)}</Badge>{/if}
               {/snippet}
               {@render panelBody(button)}
             </stock.HeaderPanel>
@@ -636,7 +848,7 @@ const row =
                  marks it seen, until the stock panel is ready to open. -->
             <Button variant="outline" size="icon-sm" href="/notifications" class="{control} relative max-sm:hidden">
               <Icon name={button.icon} size={20} label={N.bell(waiting)} />
-              {#if waiting > 0}<span aria-hidden="true" class={badge}>{N.badge(waiting)}</span>{/if}
+              {#if waiting > 0}<Badge aria-hidden="true" class={badge}>{N.badge(waiting)}</Badge>{/if}
             </Button>
           {:else}
             <Button
@@ -779,7 +991,7 @@ const row =
         </li>
       </ul>
     </section>
-    {#each PANEL_BUTTONS.filter((b) => b.id !== NOTIFICATIONS) as button (button.id)}
+    {#each panelButtons.filter((b) => b.id !== NOTIFICATIONS) as button (button.id)}
       <section
         id={button.id}
         popover="auto"
@@ -791,7 +1003,8 @@ const row =
         {@render panelBody(button)}
       </section>
     {/each}
-    <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
+    <!-- With chat on, a member's phone reaches search from More actions, which opens this native panel. -->
+    <section id={SEARCH} popover="auto" ontoggle={backToActions} aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
       {@render panelTitle(SEARCH, T.search, true)}
       <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
     </section>
@@ -804,7 +1017,14 @@ const row =
             <Icon name="add" size={20} /><span>{T.create}</span>
           </button>
         </li>
-        {#each PANEL_BUTTONS as button (button.id)}
+        {#if chat !== undefined}
+          <li>
+            <button type="button" popovertarget={SEARCH} popovertargetaction="show" class="{row} w-full">
+              <Icon name="search" size={20} /><span>{T.search}</span>
+            </button>
+          </li>
+        {/if}
+        {#each panelButtons as button (button.id)}
           <li>
             {#if button.id === NOTIFICATIONS}
               <a href="/notifications" class="{row} w-full">
@@ -825,7 +1045,8 @@ const row =
   {/if}
   {#if account !== undefined && stock !== undefined}
     <!-- What the stock account menu's rows post (chooseTheme, SIGN_OUT): the same two forms, not shown. -->
-    <form id={SIGN_OUT} method="post" action="/logout" hidden></form>
+    <!-- Its Sign out is a submit button of this form, so the chat box backs up and ends first here too (logOutDock). -->
+    <form id={SIGN_OUT} method="post" action="/logout" hidden onsubmit={logOutDock}></form>
     {#if prefs !== undefined}<div hidden bind:this={themeButtons}>{@render themePicker()}</div>{/if}
   {:else if account !== undefined}
     <section id={ACCOUNT} popover="auto" aria-labelledby="{ACCOUNT}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
@@ -855,7 +1076,7 @@ const row =
           {@render themePicker()}
         </div>
       {/if}
-      <form method="post" action="/logout" class="mt-1 border-t pt-1">
+      <form method="post" action="/logout" class="mt-1 border-t pt-1" onsubmit={logOutDock}>
         <Button type="submit" variant="ghost" class="h-auto w-full justify-start gap-3 px-3 py-2 font-normal">
           <Icon name="signout" size={20} /><span>{T.signOut}</span>
         </Button>
@@ -864,6 +1085,25 @@ const row =
   {/if}
   <main id="main" tabindex="-1" class="mx-auto w-full flex-1 py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
   </div>
+  {#if dockMade && chat !== undefined}
+    <!-- The chat box (ADR 0115): sandboxed, so it can never navigate this page; it may open the full chat in a new tab. -->
+    <div
+      class="fixed right-4 z-50 overflow-hidden bg-background shadow-lg {DOCK_PLACE[dockMode]}"
+      hidden={!dockShown}
+      data-dock
+    >
+      <iframe
+        bind:this={dockFrame}
+        onload={dockLoaded}
+        data-mode={dockMode}
+        src="{chatOrigin}/?dock"
+        title={T.chat(0)}
+        class="size-full"
+        referrerpolicy="no-referrer"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
+      ></iframe>
+    </div>
+  {/if}
   <!-- Below the first screen on every page, short ones too: the header and main fill the viewport (Alex, 2026-11-18). -->
   <footer class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t px-5.5 py-6 text-sm text-muted-foreground max-sm:px-4">
     <p>{T.note}</p>

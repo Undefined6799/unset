@@ -1,4 +1,4 @@
-// P1.11t, P1.12t: the integration setup's TE-2 conditions. A test file gets the process roles (web, api, indexer, retention),
+// P1.11t, P1.12t: the integration setup's TE-2 conditions. A test file gets the process roles (web, api, indexer, retention, chat_auth),
 // never migrator or the superuser, and its own database; a setup that fails after starting the container leaves no
 // container behind.
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -54,7 +54,7 @@ describe("integration postgres setup", () => {
   test("test_files_connect_as_process_role", async () => {
     // Ruling 2026-10-06 03:15Z (a): what a test file receives names only the process roles, and each connects as itself.
     expect(Object.keys(provided).sort()).toEqual(["databases", "host", "port", "roles"]);
-    expect(Object.keys(provided.roles).sort()).toEqual(["api", "indexer", "retention", "web"]);
+    expect(Object.keys(provided.roles).sort()).toEqual(["api", "chat_auth", "indexer", "retention", "web"]);
     for (const [name, role] of Object.entries(provided.roles)) {
       const row = await asRole(
         role,

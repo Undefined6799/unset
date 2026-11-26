@@ -245,6 +245,7 @@ async function startOn(
   };
   // web's key for pds-admin (P2.10): a fresh Ed25519 pair; a test that plays pds-admin passes PDS_ADMIN_URL.
   const adminKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string;
+  const chatAdminKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string;
   // This child's own commit, so the readiness probe knows its answer from another process's on the same port.
   const commit = env.UNSET_COMMIT ?? randomBytes(20).toString("hex");
   const objects = await startStandInObjects();
@@ -287,6 +288,13 @@ async function startOn(
       PDS_ADMIN_WEB_KEY_FILE: secret("web_pds_admin_key", adminKey),
       PDS_WEB_KEY_FILE: secret("pds_web_key", randomBytes(32).toString("hex")),
       PDS_ADMIN_WEB_KID: "web-test",
+      // Build step 5: chat-admin's origin and web's key there; nothing answers, so queued accounts wait.
+      CHAT_ADMIN_URL: "http://chat-admin.test:8080",
+      CHAT_ADMIN_WEB_KEY_FILE: secret("web_chat_admin_key", chatAdminKey),
+      CHAT_ADMIN_WEB_KID: "web-test",
+      CHAT_DOOR_ORIGIN: "https://staging.unset.cc",
+      // Build step 10: the door's count port; nothing answers, so a member's chat icon shows no number.
+      CHAT_COUNT_URL: "http://chat-count.test:8081",
       PDS_DID: `did:web:${PDS_HOST}`,
       // P2.21a: the draft image store, an empty stand-in bucket (P2.19b: the orphan sweep lists it at boot).
       OBJECT_STORE_URL: objects.url,

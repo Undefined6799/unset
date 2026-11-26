@@ -18,8 +18,14 @@ const ICONOIR_VERSION = "7.12.1";
 /** ADR 0087: the one second icon source, Lucide at this version, its files pinned in icons.json's `lucide`. */
 const ICON_LUCIDE = `${UI}/icons/lucide`;
 const LUCIDE_VERSION = "1.72.0";
-/** The only file that draws an inline <svg>: the Svelte Icon (P1.20c), from the icons.json data. */
-export const INLINE_SVG_FILES: readonly string[] = ["apps/web/lib/components/icon/icon.svelte"];
+/**
+ * The only files that draw an inline <svg>: the Svelte Icon (P1.20c), from the icons.json data, and the chat page's
+ * byte-identical copy of it (P6.10; apps/chat/lib/components/stock.test.ts holds the two the same).
+ */
+export const INLINE_SVG_FILES: readonly string[] = [
+  "apps/web/lib/components/icon/icon.svelte",
+  "apps/chat/lib/components/icon/icon.svelte",
+];
 /**
  * Icon packages, by name or prefix, as the step lists them, plus the @lucide scope shadcn-svelte imports (P1.20c);
  * the copied data under shared/ui/icons is files.

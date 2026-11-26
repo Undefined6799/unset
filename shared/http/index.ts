@@ -1,9 +1,10 @@
 // The server kit (plan §5.1). P1.04k: the config fragment (its Hono server, routes and error pages went with
 // P1.20k). P1.09: the return-path validator, the only way a redirect target is chosen from input. P1.06: the
-// rate-limit primitive.
+// rate-limit primitive. P6.03: the CSRF gate, back for the door.
 
 export type { ClientIp } from "./clientIp.ts";
 export { type HttpKitConfig, hostAllowed, httpKitConfig } from "./config.ts";
+export { type CsrfDecision, type CsrfReason, createCsrfGate } from "./csrf.ts";
 export { type HeaderSet, SECURITY_HEADERS } from "./headers.ts";
 export { createHealth, type HealthState, type Readiness } from "./health.ts";
 export { definePolicies, type Policy, type PolicyEntry, type PolicyName, type PolicyTable } from "./limits/policy.ts";

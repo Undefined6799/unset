@@ -57,6 +57,7 @@ export const AVATAR_EDIT = {
 export const PROFILE_HEADER = {
   edit: "Edit profile",
   viewPublic: "View as public",
+  message: "Message",
   /** The avatar's name: it opens the details, so it says so. */
   open: (name: string) => `About ${name}`,
   title: "About",

@@ -19,6 +19,9 @@
       "path": "../../domains/identity"
     },
     {
+      "path": "../../domains/messaging"
+    },
+    {
       "path": "../../domains/notifications"
     },
     {
@@ -32,6 +35,9 @@
     },
     {
       "path": "../../infrastructure/image"
+    },
+    {
+      "path": "../../infrastructure/matrix"
     },
     {
       "path": "../../infrastructure/net-guard"

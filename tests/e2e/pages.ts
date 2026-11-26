@@ -136,6 +136,8 @@ export const originOf = (page: PageFixture): string => (page.member === undefine
  */
 export const NOT_DOCUMENTS: readonly { readonly route: string; readonly reason: string }[] = [
   { route: "/login/continue", reason: "sign-in handoff, covered by the web integration tests" },
+  { route: "/logout/chat", reason: "Log out's handoff to the chat page, covered by the web integration tests" },
+  { route: "/logout/done", reason: "the same-site step back from the chat page; web integration and chat e2e tests" },
   { route: "/privacy-notice/seen", reason: "the banner's dismiss answer; tested in the web integration tests" },
   { route: "/prefs/theme", reason: "the no-script theme form's answer; the footer form is tested in nojs.spec.ts" },
 ];

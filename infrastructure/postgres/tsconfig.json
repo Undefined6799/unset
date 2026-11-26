@@ -5,6 +5,7 @@
   "references": [
     { "path": "../../domains/content" },
     { "path": "../../domains/identity" },
+    { "path": "../../domains/messaging" },
     { "path": "../../domains/notifications" },
     { "path": "../../domains/profile" },
     { "path": "../net-guard" },

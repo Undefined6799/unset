@@ -35,3 +35,25 @@ describe.each(["compose.local.yaml", "compose.dev.source.yaml"])("%s", (file) =>
     expect(pool).toBeLessThanOrEqual(Math.floor(indexerLimit() / replicas));
   });
 });
+
+// chat-auth (the door) runs the same boot check (interfaces/chat-auth/compose.ts) against chat_auth's limit, set by
+// migration 0045; staging's first start exited 78 on a pool of 5 against 10 / 3 (Alex, 2026-11-23).
+const DOOR_ROLE = join(DEPLOYMENT, "../infrastructure/postgres/migrations/0045_door_browser.sql");
+
+function doorLimit(): number {
+  const row = /ALTER ROLE chat_auth LOGIN CONNECTION LIMIT (\d+);/.exec(readFileSync(DOOR_ROLE, "utf8"));
+  if (row?.[1] === undefined) throw new Error("no chat_auth limit in 0045_door_browser.sql");
+  return Number(row[1]);
+}
+
+describe("compose.dev.source.yaml chat-auth", () => {
+  test("door_pool_fits_its_role_connection_limit", () => {
+    const file = "compose.dev.source.yaml";
+    const compose = parseCompose(readFileSync(join(DEPLOYMENT, file), "utf8"), file);
+    const env = new Map(compose.services.find((s) => s.name === "chat-auth")?.environment);
+    const pool = literal(env, "PG_POOL_MAX");
+    expect(pool).toBeDefined();
+    const replicas = literal(env, "PG_MAX_REPLICAS") ?? DEFAULT_REPLICAS;
+    expect(pool).toBeLessThanOrEqual(Math.floor(doorLimit() / replicas));
+  });
+});

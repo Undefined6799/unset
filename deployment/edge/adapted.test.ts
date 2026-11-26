@@ -18,6 +18,9 @@ const REAL = {
   APP_HOST: "staging.unset.sh",
   APP_UPSTREAM: "web:8080",
   DOCS_HOST: "docs.unset.sh",
+  CHAT_HOST: "staging.unset.cc",
+  CHAT_UPSTREAM: "10.250.38.43:8090",
+  MATRIX_UPSTREAM: "10.250.38.51:8008",
 } as const;
 /** What Caddy adapts for `env`'s values: the reviewed text with each sentinel replaced, as a plain text replace. */
 const adaptedFor = (name: AdaptedEnvName, env: Readonly<Record<EnvName, string>>): Json =>
@@ -55,7 +58,14 @@ describe("reviewed adapted configs (P1.39a)", () => {
       }
     }
     // No config file holds a sentinel, so every one in an adapted file came from a `{$NAME}` placeholder.
-    const sources = ["Caddyfile", "sites/pds.caddy", "dev/app.caddy", "dev/pds.caddy", "dev/tls.caddy"]
+    const sources = [
+      "Caddyfile",
+      "sites/pds.caddy",
+      "dev/app.caddy",
+      "dev/pds.caddy",
+      "dev/chat.caddy",
+      "dev/tls.caddy",
+    ]
       .concat(["local/app.caddy", "local/tls.caddy"])
       .concat(readdirSync(join(EDGE, "snippets")).map((file) => `snippets/${file}`));
     for (const file of sources) {

@@ -10,10 +10,10 @@ import {
   actionsRow,
   BELL_PANEL,
   CREATE_MENU,
-  MESSAGES_PANEL,
   menuButton,
   openAccountMenu,
   openMenu,
+  SEARCH_PANEL,
   stockMenu,
   stockPanel,
 } from "./navbar.ts";
@@ -95,8 +95,9 @@ test.describe("phone", () => {
   // Outside audit of staging, 2026-11-19: More actions, then one of its panels, then Escape left More actions open
   // with focus on the page, so the next Tab went behind the menu. With the stock controls (book P1.22m) a row closes
   // More actions and opens its panel, and Escape gives focus back to More actions' button. Create's rows are in More
-  // actions itself (navbar-actions.spec.ts).
-  for (const which of [MESSAGES_PANEL, BELL_PANEL]) {
+  // actions itself (navbar-actions.spec.ts). Build step 10: for a member Messages is a link in the top bar (below), not
+  // a row here, and Search is.
+  for (const which of [SEARCH_PANEL, BELL_PANEL]) {
     test(`escape_from_${which.title.toLowerCase()}_returns_focus_to_more_actions`, async ({ page }) => {
       expect((await openPage(page, SETTINGS))?.status()).toBe(200);
       await page.waitForLoadState("networkidle");
@@ -109,6 +110,33 @@ test.describe("phone", () => {
       await expect(menuButton(page, ACTIONS_MENU)).toBeFocused();
     });
   }
+});
+
+// Build step 10 (Alex: no dock on a phone): on a phone too, a member's Messages is the top bar's link to the chat
+// page, and More actions no longer lists it. Nothing answers the count here, so the icon shows with no number.
+test.describe("phone chat icon", () => {
+  test.use(phone({ width: 320, height: 640 }));
+
+  test("the_chat_icon_is_a_link_in_the_top_bar_on_a_phone", async ({ page }) => {
+    expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    const chat = page.locator("header").getByRole("link", { name: "Messages", exact: true });
+    await expect(chat).toBeVisible();
+    await expect(chat).toHaveAttribute("href", "https://staging.unset.cc/");
+    // The extra icon fits the narrowest screen: nothing scrolls sideways.
+    const width = await page.locator("html").evaluate((element: { scrollWidth: number }) => element.scrollWidth);
+    expect(width).toBeLessThanOrEqual(320);
+    await page.waitForLoadState("networkidle");
+    const actions = await openMenu(page, ACTIONS_MENU);
+    await expect(actionsRow(actions, "Messages")).toHaveCount(0);
+    // Search, still coming, moves from the bar into More actions for a member, so the bar fits 320px. Its panel sits
+    // under More actions' button, inside the screen.
+    await actionsRow(actions, "Search unset.sh").tap();
+    const search = stockPanel(page, SEARCH_PANEL);
+    await expect(search).toContainText("Search is coming soon.");
+    const box = await search.boundingBox();
+    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+  });
 });
 
 // P1.20k: home reads the member's session, so its header has their account menu, not Sign in.

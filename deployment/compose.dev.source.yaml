@@ -47,8 +47,8 @@ services:
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     environment:
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
-    secrets: [pg_superuser_password, pg_migrator_password, pg_tap_password]
-    networks: [db]
+    secrets: [pg_superuser_password, pg_migrator_password, pg_tap_password, pg_synapse_password, pg_mas_password]
+    networks: [db, chat_db, chat_synapse_db]
     mem_limit: 1g
     cpus: 1
     pids_limit: 256
@@ -76,7 +76,7 @@ services:
     # The migrator's own password and the role passwords syncRolePasswords sets (infrastructure/postgres/roles.json
     # passwordFrom), nothing else. Its copy of the migrator password is its own file: each mounted secret is owned by
     # the one uid that reads it, and postgres (999) reads the bootstrap copy (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password]
+    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password, pg_chat_auth_password]
     depends_on:
       postgres:
         condition: service_healthy
@@ -169,6 +169,10 @@ services:
       - ./edge/dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro
       - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
       - ../docs/site/public:/srv/docs:ro
+      # The chat site, this stack's alone (P6.02; ADR 0093 decision 6, ADR 0099): staging.unset.cc behind the same
+      # Pangolin login, its Matrix client API to Synapse's client listener and the door's routes to the door, each at
+      # the fixed address the edge reaches on chat_edge_synapse and chat_edge (deployment/edge/dev/chat.caddy).
+      - ./edge/dev/chat.caddy:/etc/caddy/sites/enabled/chat.caddy:ro
       - edgedata:/data
       - edgeconfig:/config
     secrets: [dev_tls_cert, dev_tls_key, pds_web_key]
@@ -179,6 +183,9 @@ services:
       APP_HOST: ${APP_HOST}
       APP_UPSTREAM: web:8080
       DOCS_HOST: docs.unset.sh
+      CHAT_HOST: staging.unset.cc
+      CHAT_UPSTREAM: 10.250.38.43:8090
+      MATRIX_UPSTREAM: 10.250.38.51:8008
     depends_on:
       pds:
         condition: service_started
@@ -189,6 +196,10 @@ services:
       app:
       newt_edge:
         ipv4_address: 10.250.37.3
+      chat_edge:
+        ipv4_address: 10.250.38.42
+      chat_edge_synapse:
+        ipv4_address: 10.250.38.50
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 128
@@ -240,6 +251,16 @@ services:
       PDS_WEB_KEY_FILE: /run/secrets/pds_web_key
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
+      # Chat accounts (build step 5; ADR 0093): chat-admin's internal origin and web's Ed25519 key for it, with
+      # that key's id in chat-admin's key file. No chat-admin runs in this stack yet, so queued accounts wait.
+      CHAT_ADMIN_URL: http://chat-admin:8080
+      CHAT_ADMIN_WEB_KEY_FILE: /run/secrets/web_chat_admin_key
+      CHAT_ADMIN_WEB_KID: web-chat
+      # The door the unset.cc sign-in hop returns to (ADR 0025: staging.unset.cc is the staging chat site).
+      CHAT_DOOR_ORIGIN: https://staging.unset.cc
+      # The door's internal count port (ADR 0101 decision 2), read for the chat icon's number: its fixed address on
+      # chat_count, which the door's count listener alone binds. Where no door runs, the icon shows with no number.
+      CHAT_COUNT_URL: http://10.250.38.19:8091
       # The draft image store (P2.21a; ADR 0070): web writes members' drafts under unset-private/drafts/ as its
       # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
       # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.
@@ -261,11 +282,23 @@ services:
       SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
+    secrets:
+      [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, web_chat_admin_key, pds_web_key,
+       objects_web]
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db, app, web_egress, pds_admin, objects_web, review_web]
+    networks:
+      db:
+      app:
+      web_egress:
+      pds_admin:
+      objects_web:
+      review_web:
+      chat_count:
+        ipv4_address: 10.250.38.20
+      chat_admin:
+        ipv4_address: 10.250.38.28
     mem_limit: 1g
     cpus: 1
     pids_limit: 128
@@ -432,6 +465,180 @@ services:
     pids_limit: 64
     restart: unless-stopped
 
+  # The chat servers and processes (P6.02 part 4; ADRs 0093, 0098, 0101, 0102): Synapse built from our own image, MAS
+  # as shipped from its mirror by digest, chat-admin and the door built from the checkout. Staging only: ADR 0098
+  # Decision 2 gives local no chat server until its name is ruled, and none of the four has a locked image, so they
+  # join neither compose.local.yaml nor compose.dev.yaml (local-only.ts CHAT_SERVICES). No chat network reaches the
+  # outside, and each listener binds its process's fixed address on one network (preflight C36): MAS 10.250.38.3 on
+  # chat_mas and .11 on chat_admin_mas, the door's count port .19 on chat_count, chat-admin .27 on chat_admin and the
+  # door's public port .43 on chat_edge. The config files are deployment/chat/dev/, read-only, and every secret is a
+  # file under /run/secrets (docs/human/runbooks/chat-servers.md).
+  #
+  # Synapse (ADR 0098 Decision 1): `synapse.app.homeserver -c /config/homeserver.yaml` as 991, no variable at all
+  # (C36). Postgres on chat_synapse_db, MAS on chat_mas, the edge on chat_edge_synapse, the door's count port on
+  # chat_count, chat-admin's room sweep on chat_admin_synapse (ADR 0102 Decision 8); its media on its own volume.
+  synapse:
+    build:
+      context: ..
+      dockerfile: deployment/images/synapse.Dockerfile
+    user: "991:991"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=991,gid=991,mode=1777
+    volumes:
+      - ./chat/dev/homeserver.yaml:/config/homeserver.yaml:ro
+      - ./chat/dev/log.yaml:/config/log.yaml:ro
+      - synapsemedia:/data/media
+    secrets:
+      [synapse_pgpass, synapse_signing_key, synapse_macaroon_secret_key, synapse_form_secret, synapse_mas_secret]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      chat_synapse_db:
+      chat_mas:
+        ipv4_address: 10.250.38.2
+      chat_count:
+        ipv4_address: 10.250.38.21
+      chat_edge_synapse:
+        ipv4_address: 10.250.38.51
+      chat_admin_synapse:
+        ipv4_address: 10.250.38.35
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  # MAS 1.29.0 as shipped (ADR 0098 Decision 1), distroless, as its nonroot 65532. It runs the server with no
+  # subcommand and reads only MAS_CONFIG (C36). No route from the edge: Synapse and chat-admin are its only callers.
+  mas:
+    image: ghcr.io/undefined6799/mirror/matrix-authentication-service@sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    volumes:
+      - ./chat/dev/mas.yaml:/config/mas.yaml:ro
+    environment:
+      MAS_CONFIG: /config/mas.yaml
+    secrets:
+      [mas_pg_password, mas_synapse_secret, mas_chat_admin_client_secret, mas_encryption, mas_signing_key]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      chat_db:
+      chat_mas:
+        ipv4_address: 10.250.38.3
+      chat_admin_mas:
+        ipv4_address: 10.250.38.11
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+
+  # chat-admin (ADR 0093 decision 5; ADR 0102): the one holder of MAS's admin client secret. web and the door reach it on
+  # chat_admin, where it binds .27 alone; it reaches MAS's admin listener on chat_admin_mas and Synapse's client API on
+  # chat_admin_synapse, and nothing else. Its replay guard and quota chains live on chatadmindata, which takes the
+  # image's 0700 65532 state folder. The client id is mas.yaml's, not a secret.
+  chat-admin:
+    build:
+      context: ..
+      dockerfile: deployment/images/chat-admin.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    volumes:
+      - chatadmindata:/app/state
+    environment:
+      CHAT_ADMIN_ENV: dev
+      MAS_ADMIN_URL: http://mas:8081
+      MAS_TOKEN_URL: http://mas:8081
+      SYNAPSE_ADMIN_URL: http://synapse:8008
+      MAS_CLIENT_ID: 01M7XSE66CYPNSDBAK0KZR45NM
+      STATE_DIR: /app/state
+      PORT: "8080"
+      LISTEN_ADDRESS: 10.250.38.27
+      NODE_OPTIONS: --max-old-space-size=96
+    secrets: [chat_admin_client_secret, chat_admin_keys]
+    depends_on:
+      mas:
+        condition: service_started
+    networks:
+      chat_admin:
+        ipv4_address: 10.250.38.27
+      chat_admin_mas:
+        ipv4_address: 10.250.38.10
+      chat_admin_synapse:
+        ipv4_address: 10.250.38.34
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 32
+    restart: unless-stopped
+
+  # The door on staging.unset.cc (ADR 0093 decision 4, ADR 0099, ADR 0101): the public listener binds .43 on chat_edge,
+  # which it shares with the edge alone; the count port binds .19 on chat_count, which only Synapse and web share, and
+  # is the address Synapse's ip_range_whitelist holds. Postgres as chat_auth on db; chat-admin on chat_admin, through
+  # net-guard. Only the edge sends it HTTP, and its site drops the client's address, as web's does.
+  chat-auth:
+    build:
+      context: ..
+      dockerfile: deployment/images/chat-auth.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: chat-auth
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8090"
+      LISTEN_ADDRESS: 10.250.38.43
+      PUBLIC_ORIGIN: https://staging.unset.cc
+      HTTP_ALLOWED_HOSTS: staging.unset.cc
+      TRUSTED_PROXY_MODE: socket
+      WEB_ORIGIN: ${WEB_PUBLIC_ORIGIN}
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: chat_auth
+      PG_PASSWORD_FILE: /run/secrets/pg_chat_auth_password
+      PG_SSLMODE: disable
+      PG_POOL_MAX: "3"
+      SEAL_KEYRING_FILE: /run/secrets/chat_auth_seal_keyring
+      CHAT_ADMIN_URL: http://chat-admin:8080
+      CHAT_ADMIN_DOOR_KEY_FILE: /run/secrets/chat_auth_chat_admin_key
+      CHAT_ADMIN_DOOR_KID: door-chat
+      CHAT_SERVER_NAME: staging.unset.cc
+      COUNT_LISTEN_PORT: "8091"
+      COUNT_LISTEN_ADDRESS: 10.250.38.19
+      COUNT_ORIGIN: http://10.250.38.19:8091
+      NODE_OPTIONS: --max-old-space-size=192
+    secrets: [pg_chat_auth_password, chat_auth_seal_keyring, chat_auth_chat_admin_key]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      db:
+      chat_edge:
+        ipv4_address: 10.250.38.43
+      chat_count:
+        ipv4_address: 10.250.38.19
+      chat_admin:
+        ipv4_address: 10.250.38.29
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+
 networks:
   db:
     internal: true
@@ -484,6 +691,56 @@ networks:
   review_web:
     internal: true
 
+  # The chat networks (P6.02 part 4; ADR 0098 Decision 4, ADR 0101, ADR 0102 Decision 8): all internal, each a fixed
+  # /29 where a listener binds an address on it, each shared by exactly the processes named (preflight C36).
+  # MAS's database: Postgres and MAS only. Synapse has its own, so the name mas resolves to one address for Synapse.
+  chat_db:
+    internal: true
+  # Synapse's database: Postgres and Synapse only.
+  chat_synapse_db:
+    internal: true
+  # Synapse to MAS's discovery, oauth and health listener at .3, and MAS to Synapse's client listener at .2.
+  chat_mas:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.0/29
+  # chat-admin to MAS's oauth and admin API listener at .11.
+  chat_admin_mas:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.8/29
+  # Synapse's pushes and web's reads to the door's count port at .19, and nothing else (ADR 0101 decision 2).
+  chat_count:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.16/29
+  # web and the door to chat-admin at .27.
+  chat_admin:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.24/29
+  # chat-admin's room sweep to Synapse's client API (ADR 0102 Decision 8); Synapse holds .35 here.
+  chat_admin_synapse:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.32/29
+  # The edge to the door's public port at .43.
+  chat_edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.40/29
+  # The edge to Synapse's client listener at .51, for the chat site's /_matrix/client/ (ADR 0093 decision 6).
+  chat_edge_synapse:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.38.48/29
 volumes:
   pgdata:
   pdsdata:
@@ -491,6 +748,8 @@ volumes:
   edgeconfig:
   objectsdata:
   pdsadmindata:
+  synapsemedia:
+  chatadmindata:
 
 secrets:
   pg_superuser_password:
@@ -507,12 +766,18 @@ secrets:
     file: ../../unset-dev-secrets/pg_api_password
   pg_indexer_password:
     file: ../../unset-dev-secrets/pg_indexer_password
+  # The door's chat_auth role password (migration 0045), which migrate sets from it like the others (roles.json).
+  pg_chat_auth_password:
+    file: ../../unset-dev-secrets/pg_chat_auth_password
   web_seal_keyring:
     file: ../../unset-dev-secrets/web_seal_keyring
   web_oauth_client_keys:
     file: ../../unset-dev-secrets/web_oauth_client_keys
   web_pds_admin_key:
     file: ../../unset-dev-secrets/web_pds_admin_key
+  # web's chat-admin signing key (build step 5), Ed25519 PKCS#8 PEM, separate from its pds-admin key.
+  web_chat_admin_key:
+    file: ../../unset-dev-secrets/web_chat_admin_key
   # Web's mark on its own calls to our PDS (P1.21j; Proposed ADR 0071): 64 hex characters; web sends it, the edge
   # compares it to give web's calls their own zones.
   pds_web_key:
@@ -537,3 +802,36 @@ secrets:
     file: ../../unset-dev-secrets/pds_admin_keys
   pds_admin_log_key:
     file: ../../unset-dev-secrets/pds_admin_log_key
+  # The chat secrets (docs/human/runbooks/chat-servers.md): each file owned by the one uid that reads it.
+  pg_synapse_password:
+    file: ../../unset-dev-secrets/pg_synapse_password
+  pg_mas_password:
+    file: ../../unset-dev-secrets/pg_mas_password
+  synapse_pgpass:
+    file: ../../unset-dev-secrets/synapse_pgpass
+  synapse_signing_key:
+    file: ../../unset-dev-secrets/synapse_signing_key
+  synapse_macaroon_secret_key:
+    file: ../../unset-dev-secrets/synapse_macaroon_secret_key
+  synapse_form_secret:
+    file: ../../unset-dev-secrets/synapse_form_secret
+  synapse_mas_secret:
+    file: ../../unset-dev-secrets/synapse_mas_secret
+  mas_pg_password:
+    file: ../../unset-dev-secrets/mas_pg_password
+  mas_synapse_secret:
+    file: ../../unset-dev-secrets/mas_synapse_secret
+  mas_chat_admin_client_secret:
+    file: ../../unset-dev-secrets/mas_chat_admin_client_secret
+  mas_encryption:
+    file: ../../unset-dev-secrets/mas_encryption
+  mas_signing_key:
+    file: ../../unset-dev-secrets/mas_signing_key
+  chat_admin_client_secret:
+    file: ../../unset-dev-secrets/chat_admin_client_secret
+  chat_admin_keys:
+    file: ../../unset-dev-secrets/chat_admin_keys
+  chat_auth_seal_keyring:
+    file: ../../unset-dev-secrets/chat_auth_seal_keyring
+  chat_auth_chat_admin_key:
+    file: ../../unset-dev-secrets/chat_auth_chat_admin_key

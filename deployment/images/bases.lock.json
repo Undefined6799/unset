@@ -76,7 +76,7 @@
     "digest": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
     "source": "upstream",
     "stage": "build",
-    "buildStage": false
+    "buildStage": true
   },
   "python3-debian13": {
     "ref": "gcr.io/distroless/python3-debian13",

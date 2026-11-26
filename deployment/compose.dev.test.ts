@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import { DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/adapted-rules.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
+import { c36 } from "./preflight/checks/chat.ts";
 import { c18, edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import {
@@ -30,6 +31,7 @@ import {
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
+import { CHAT_SERVICES } from "./preflight/local-only.ts";
 import { SecretMap } from "./preflight/secret-map.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -171,6 +173,15 @@ describe("compose.dev.yaml (P1.29)", () => {
     const devImages = new Map(dev().services.map((s) => [s.name, s.image]));
     for (const file of files.filter((f) => f !== FILE)) {
       for (const s of parseCompose(read(file), file).services) {
+        if (file === SOURCE && s.build === null && CHAT_SERVICES.has(s.name)) {
+          // MAS (P6.02 part 4; ADR 0098 Decision 1): the mirror's copy of its run-only base entry, by that digest.
+          const mas = readLock().mas;
+          expect(runOnly.has(`${mas?.ref}:${mas?.tag}@${mas?.digest}`), `${file} ${s.name}`).toBe(true);
+          expect(s.image, `${file} ${s.name}`).toBe(
+            `ghcr.io/undefined6799/mirror/matrix-authentication-service@${mas?.digest}`,
+          );
+          continue;
+        }
         if (file === SOURCE && s.build === null) {
           expect(s.image, `${file} ${s.name}`).toBe(devImages.get(s.name));
           continue;
@@ -198,17 +209,17 @@ describe("compose.dev.yaml (P1.29)", () => {
 
   test("compose_dev_images_by_digest", () => {
     // P2.26b: the dev stack builds nothing; each service runs exactly the deploy lock's entry of its name, by digest,
-    // and the lock names nothing the stack does not run.
+    // and the lock names nothing a dev stack does not run. The source stack's one chat service run as shipped, MAS
+    // (ADR 0098 Decision 1), is locked too, as C2 admits it under --source only by a deploy-lock digest.
     const deploy = readDeployLock();
-    for (const s of dev().services) {
+    const runAsShipped = parseCompose(read(SOURCE_FILE), SOURCE_FILE).services.filter(
+      (s) => CHAT_SERVICES.has(s.name) && s.build === null,
+    );
+    for (const s of [...dev().services, ...runAsShipped]) {
       expect([s.build, s.image], s.name).toEqual([null, deploy[s.name]?.ref]);
       expect(s.image, s.name).toMatch(/^ghcr\.io\/undefined6799\/(?:unset|mirror)\/[a-z0-9-]+@sha256:[0-9a-f]{64}$/);
     }
-    expect(Object.keys(deploy).sort()).toEqual(
-      dev()
-        .services.map((s) => s.name)
-        .sort(),
-    );
+    expect(Object.keys(deploy).sort()).toEqual([...dev().services, ...runAsShipped].map((s) => s.name).sort());
     // A mirror entry keeps its upstream digest (mirror.yml copies by digest) and names the base lock's upstream image.
     const bases = new Set(Object.values(readLock()).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
     for (const [name, entry] of Object.entries(deploy).filter(([, e]) => e.origin === "upstream")) {
@@ -400,7 +411,8 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(limitsDrift(table, dev()), FILE).toEqual([]);
     expect(limitsDrift(table, local()), LOCAL).toEqual([]);
     expect(limitsDrift(table, parseCompose(read(SOURCE_FILE), SOURCE_FILE)), SOURCE_FILE).toEqual([]);
-    const services = new Set([...dev().services, ...local().services].map((s) => s.name));
+    const source = parseCompose(read(SOURCE_FILE), SOURCE_FILE);
+    const services = new Set([...dev().services, ...local().services, ...source.services].map((s) => s.name));
     expect(Object.keys(table).filter((name) => !services.has(name))).toEqual([]);
   });
 
@@ -774,6 +786,12 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress", "objects_pds"]);
     expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress", "objects_web"]);
     expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
+    // The source stack too (C17's devTunnelProblems reads it under --source): chat-auth reaches chat-admin by net-guard's
+    // internal chatAdmin policy, whose exact origin needs no internal host.
+    const named = parseCompose(read(SOURCE_FILE), SOURCE_FILE).services.filter((s) =>
+      s.environment.some(([key]) => key === "NETGUARD_INTERNAL_HOSTS"),
+    );
+    expect(named.map((s) => s.name)).toEqual([]);
   });
 
   test("no_dev_service_trusts_a_dev_root", () => {
@@ -943,9 +961,11 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     pg_web_password: 65532,
     pg_api_password: 65532,
     pg_indexer_password: 65532,
+    pg_chat_auth_password: 65532,
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
     web_pds_admin_key: 65532,
+    web_chat_admin_key: 65532,
     pds_web_key: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
@@ -1040,10 +1060,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     // PDS is known by the base lock's image and the edge by its Dockerfile (P1.35o, architecture 03:05Z F3).
     expect(pdsNeighbours(devInputs())).toEqual([]);
     const webOnEdge = (text: string) =>
-      text.replace(
-        "    networks: [db, app, web_egress, objects_web]\n",
-        "    networks: [db, app, web_egress, objects_web, edge]\n",
-      );
+      text.replace("      objects_web:\n    mem_limit: 1g\n", "      objects_web:\n      edge:\n    mem_limit: 1g\n");
     expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
@@ -1058,10 +1075,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect(inputs.compose.services.find((s) => s.name === "pds")?.build).not.toBeNull();
     expect(pdsNeighbours(inputs)).toEqual([]);
     const webOnEdge = (text: string) =>
-      text.replace(
-        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web]\n",
-        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, edge]\n",
-      );
+      text.replace("        ipv4_address: 10.250.38.28\n", "        ipv4_address: 10.250.38.28\n      edge:\n");
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
     expect(pdsNeighbours(sourceInputs((text) => webOnEdge(renamed(text))))).toEqual([
@@ -1108,9 +1122,20 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect((await c32.run(devInputs(token), signal)).pass).toBe(false);
   });
 
+  test("c36_passes_on_the_source_stack", async () => {
+    // P6.02 part 4: staging's chat services read their reviewed files and bind their listeners on their one network
+    // each (C36); with the count listener unbound the stack never starts.
+    const signal = new AbortController().signal;
+    expect(await c36.run(sourceInputs(), signal)).toEqual({ pass: true, reason: "ok" });
+    const unbound = (text: string) => text.replace("      COUNT_LISTEN_ADDRESS: 10.250.38.19\n", "");
+    expect((await c36.run(sourceInputs(unbound), signal)).reason).toBe(
+      "chat-auth's COUNT_LISTEN_ADDRESS is not its reviewed address",
+    );
+  });
+
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 15 mounted secrets" },
+      { pass: true, reason: "3 files, 17 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

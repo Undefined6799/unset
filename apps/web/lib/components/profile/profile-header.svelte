@@ -38,6 +38,7 @@ let {
   location = "",
   website = null,
   contact = null,
+  message = null,
   shape = "round",
   edit,
   notes,
@@ -60,6 +61,11 @@ let {
   website?: { readonly href: string; readonly text: string } | null;
   /** The page's contact action (lib/profile/view.ts contactAction), already through safeHref. */
   contact?: { readonly href: string; readonly label: string } | null;
+  /**
+   * The public page's Message link (build step 10; ADR 0094 decision 6): the chat page's `/dm/<did>`, the same for every
+   * visitor, so it says nothing about the member's chat account; the chat page finds the chat after sign-in.
+   */
+  message?: string | null;
   shape?: AvatarShape;
   /**
    * The owner's page: the pen beside the name goes to `href`, Shape opens the avatar's editor, and View as public goes
@@ -140,6 +146,11 @@ const term = "font-mono text-xs leading-[22px] tracking-wider text-muted-foregro
       {/if}
     </div>
   </div>
+  {#if message !== null}
+    <Button href={message} variant="outline" size="sm" class="shrink-0 pointer-coarse:min-h-11">
+      <Icon name="comment" size={16} />{PROFILE_HEADER.message}
+    </Button>
+  {/if}
 </header>
 
 <section

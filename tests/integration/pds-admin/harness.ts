@@ -5,9 +5,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net"; // guard-allow: egress test fake, a type only
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type AdminPayload, signEnvelope } from "@unset/shared-admin-envelope";
+import { type AdminPayload, openJtiStore, signEnvelope } from "@unset/shared-admin-envelope";
 import type { ServiceKey } from "../../../interfaces/pds-admin/envelope.ts";
-import { openJtiStore } from "../../../interfaces/pds-admin/jti.ts";
 import { openRequestLog } from "../../../interfaces/pds-admin/log.ts";
 import { createPds } from "../../../interfaces/pds-admin/pds.ts";
 import { createHandler, type HandlerDeps } from "../../../interfaces/pds-admin/server.ts";

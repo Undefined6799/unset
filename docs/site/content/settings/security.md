@@ -34,6 +34,7 @@ Fixed in config: `deployment/edge/snippets/security-headers.caddy`.
 | `security-headers` | `Via` | removed |  |
 | `strict-csp` | `Content-Security-Policy` | set | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
 | `noindex` | `X-Robots-Tag` | set | `noindex, nofollow` |
+| `strict-csp-default` | `Content-Security-Policy` | set if absent | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
 
 ## Web headers on every response
 

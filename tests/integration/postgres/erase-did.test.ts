@@ -55,7 +55,11 @@ function seedApp(did: string, fill: string): void {
        VALUES ('at://${did}/sh.unset.card/3kaaaaaaaaaaa', '${did}', '3kcommit2aaaa');
      INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());
      INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');
-     INSERT INTO app.sign_in (did) VALUES ('${did}');`,
+     INSERT INTO app.sign_in (did) VALUES ('${did}');
+     INSERT INTO app.chat_account (did, chat_user) VALUES ('${did}', 'u${fill.slice(1).repeat(20)}');
+     INSERT INTO door.browser (id, browser_hash, did, chat_user, web_session, device_id, lock_key)
+       VALUES (repeat('${fill}', 16)::uuid, ${id}, '${did}', 'u${fill.slice(1).repeat(20)}', repeat('s', 43),
+               'DEVICE0000', 's1.k1.made-up');`,
   );
 }
 
@@ -200,6 +204,8 @@ describe("core.erase_did", () => {
       "app.notification": 1,
       "app.image_record": 1,
       "app.sign_in": 1,
+      "app.chat_account": 1,
+      "door.browser": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -207,6 +213,11 @@ describe("core.erase_did", () => {
     expect(result.counts["audit.event_body"]).toBeGreaterThanOrEqual(1);
     for (const [column, count] of Object.entries(await naming(X))) expect(count, column).toBe(0);
     expect(await naming(Y)).toEqual(before);
+  });
+
+  test("the_chat_user_waits_for_deactivation_without_the_person", () => {
+    // ADR 0096 decision 3: the MAS account is deactivated by its chat user, which outlives the mapping with no DID.
+    expect(lines("SELECT chat_user FROM app.chat_erasure")).toEqual([`u${"a".repeat(20)}`]);
   });
 
   test("the_moderation_lane_keeps_its_rows", () => {
@@ -242,11 +253,38 @@ describe("core.erase_did", () => {
       "app.notification": 0,
       "app.image_record": 0,
       "app.sign_in": 0,
+      "app.chat_account": 0,
+      "door.browser": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,
       "mod.account_state": 0,
     });
+  });
+
+  test("a_browser_entry_after_erasure_is_refused", () => {
+    // Codex review on ad2dbf0e (migration 0057): a first sign-in whose device was minted before the erasure committed
+    // must not write the erased person's DID and lock key back. A member who signs up again gets a new chat user, and
+    // that entry is taken.
+    const add = (user: string, fill: string) =>
+      lines(
+        `INSERT INTO door.browser (id, browser_hash, did, chat_user, web_session, device_id, lock_key)
+           VALUES (repeat('${fill}', 32)::uuid, decode(repeat('${fill}', 64), 'hex'), '${X}', '${user}',
+                   repeat('s', 43), 'DEVICE0009', 's1.k1.made-up')
+           RETURNING 1`,
+      ).filter((line) => line === "1").length;
+    expect(add(`u${"a".repeat(20)}`, "e")).toBe(0);
+    postgres.sql(
+      "unset",
+      `INSERT INTO app.account (did, first_seen_at, privacy_notice_seen_version) VALUES ('${X}', now(), '2026-11-19');
+       INSERT INTO app.chat_account (did, chat_user) VALUES ('${X}', 'u${"q".repeat(20)}');`,
+    );
+    expect(add(`u${"q".repeat(20)}`, "f")).toBe(1);
+    postgres.sql(
+      "unset",
+      `DELETE FROM door.browser WHERE did = '${X}'; DELETE FROM app.chat_account WHERE did = '${X}';
+       DELETE FROM app.account WHERE did = '${X}';`,
+    );
   });
 
   test("the_tombstone_marks_only_the_erased_person", async () => {

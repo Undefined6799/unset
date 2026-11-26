@@ -55,7 +55,7 @@ export const c2: Check = {
 /**
  * deployment/images/vendor.ts's VENDOR_IMAGES, which the preflight may not import (dependency-cruiser row
  * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z), Newt (ADR 0030 Decision 2,
- * P1.37v) and MAS (P6.02). compose.dev.test.ts preflight_vendor_images_match keeps the two equal.
+ * P1.37v) and MAS (ADR 0098 Decision 1, P6.02). compose.dev.test.ts preflight_vendor_images_match keeps the two equal.
  */
 export const VENDOR_IMAGES: ReadonlySet<string> = new Set([
   "ghcr.io/bluesky-social/pds",

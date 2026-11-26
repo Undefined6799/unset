@@ -193,6 +193,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C33",
   "C34",
   "C35",
+  "C36",
 ]);
 
 type Stack = {
@@ -5923,6 +5924,53 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
     expect(adapt.some((arg) => arg.includes("/srv/docs"))).toBe(false);
     expect(adapt.filter((_arg, at) => adapt[at - 1] === "-e")).toEqual(
       expect.arrayContaining(["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM", "DOCS_HOST"]),
+    );
+  });
+
+  // The source stack's edge (P6.02; compose.dev.source.yaml): the chat site beside the three, its three values, and
+  // the two chat networks its upstreams sit on (ADR 0093 decision 6).
+  const CHAT_SITE = "      - ./edge/dev/chat.caddy:/etc/caddy/sites/enabled/chat.caddy:ro\n";
+  const DEV_CHAT = DEV.replace(`      - ${DOCS_MOUNT}\n`, `$&${CHAT_SITE}`)
+    .replace(
+      "      DOCS_HOST: docs.unset.sh\n",
+      "$&      CHAT_HOST: staging.unset.cc\n      CHAT_UPSTREAM: 10.250.38.43:8090\n" +
+        "      MATRIX_UPSTREAM: 10.250.38.51:8008\n    networks: [chat_edge, chat_edge_synapse]\n",
+    )
+    .replace("networks:\n  back: {}\n", "$&  chat_edge: {}\n  chat_edge_synapse: {}\n");
+
+  test("c18_dev_source_mounts_the_chat_site_and_names_its_three_values", async () => {
+    const { run, calls } = edgeRun(() => null);
+    const result = await check({ compose: DEV_CHAT, pdsEnv: DEV_ENV }, "dev", { run });
+    expect(result.lines).toContain("PASS C18 ok");
+    const adapt = edgeCalls(calls).find(([, verb]) => verb === "run") ?? [];
+    expect(adapt.filter((arg) => arg.includes(":/etc/caddy/")).map((arg) => arg.replace(/^.*\/edge\//, ""))).toEqual([
+      "dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro",
+      "dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro",
+      "dev/docs.caddy:/etc/caddy/sites/enabled/docs.caddy:ro",
+      "dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro",
+      "dev/chat.caddy:/etc/caddy/sites/enabled/chat.caddy:ro",
+    ]);
+    expect(adapt.filter((_arg, at) => adapt[at - 1] === "-e")).toEqual(
+      expect.arrayContaining(["CHAT_HOST", "CHAT_UPSTREAM", "MATRIX_UPSTREAM"]),
+    );
+  });
+
+  test("c18_dev_chat_site_needs_its_networks_and_its_values", async () => {
+    const { run } = edgeRun(() => null);
+    const c18 = async (compose: string) =>
+      (await check({ compose, pdsEnv: DEV_ENV }, "dev", { run })).lines.find((line) => line.startsWith("FAIL C18"));
+    // The image stack's edge is on no chat network, so its chat upstreams would be dialled through its outside one.
+    expect(await c18(DEV_CHAT.replace("    networks: [chat_edge, chat_edge_synapse]\n", ""))).toBe(
+      "FAIL C18 the chat site is mounted on an edge outside chat_edge and chat_edge_synapse",
+    );
+    expect(await c18(DEV_CHAT.replace("[chat_edge, chat_edge_synapse]", "[chat_edge]"))).toBe(
+      "FAIL C18 the chat site is mounted on an edge outside chat_edge and chat_edge_synapse",
+    );
+    // The values without the site, or the site without them, is not the reviewed config.
+    expect(await c18(DEV_CHAT.replace(CHAT_SITE, ""))).toBeDefined();
+    expect(await c18(DEV_CHAT.replace("      CHAT_HOST: staging.unset.cc\n", ""))).toBeDefined();
+    expect(await c18(DEV_CHAT.replace("10.250.38.43:8090", "chat-auth:8090"))).toBe(
+      "FAIL C18 {$CHAT_UPSTREAM} is not the dev chat site's ruled value",
     );
   });
 

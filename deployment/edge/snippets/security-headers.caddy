@@ -19,3 +19,10 @@
 (noindex) {
 	header X-Robots-Tag "noindex, nofollow"
 }
+
+# The strict policy for a response that sets none of its own (P6.02, the chat site): Caddy's `?` sets it only when the
+# header is absent at write time, so an upstream's own policy stands (Caddy v2.11.9 caddyfile/directives/header.md,
+# the `?` prefix; modules/caddyhttp/headers/caddyfile.go).
+(strict-csp-default) {
+	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+}

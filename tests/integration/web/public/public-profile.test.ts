@@ -381,7 +381,9 @@ const scriptPolicy = (startUpHash: string): string =>
   "style-src https://unset.test/_app/; style-src-attr 'unsafe-hashes' " +
   "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +
   "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; " +
-  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard";
+  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard; " +
+  // The chat box (ADR 0115) goes with every page that runs the client: the door's origin and web's chat sign-in.
+  "frame-src https://staging.unset.cc https://unset.test/chat/sign-in";
 /** The public group's fixed policy (csp.test.ts zero_script_groups_pinned): no script can run under it. */
 const FIXED_POLICY =
   "default-src 'none'; img-src https://unset.test/_app/; style-src https://unset.test/_app/; " +
@@ -463,6 +465,16 @@ describe("public profile", () => {
     const html = await (await get("/@alice.unset.org")).text();
     expect(html).toContain("Card of Alice");
     expect(html).toContain('data-surface="plain"');
+  });
+
+  test("message_link_goes_to_the_door_by_did: the same link for every visitor, naming no chat account", async () => {
+    // Build step 10 (ADR 0094 decision 6, ADR 0101 decision 3): the door finds the chat ID only for a signed-in browser.
+    const html = await (await get(`/@${SHOWN}`)).text();
+    const links = [...html.matchAll(/href="(https:\/\/staging\.unset\.cc\/[^"]*)"(.*?)<\/a>/gs)];
+    expect(links.map(([, href]) => href)).toEqual([`https://staging.unset.cc/dm/${SHOWN}`]);
+    expect(links[0]?.[2]).toContain("Message");
+    const alice = await (await get("/@alice.unset.org")).text();
+    expect(alice).toContain(`href="https://staging.unset.cc/dm/${NAMED}"`);
   });
 
   test("canonical_redirects_to_the_verified_handle", async () => {
@@ -735,6 +747,7 @@ const WHOLE_PAGE_FIELDS = [
   "headline",
   "letter",
   "location",
+  "message",
   "meta.description",
   "meta.title",
   "meta.url",
@@ -760,10 +773,12 @@ const LIMITED_FIELDS = [
   "shell.wide",
 ];
 
-/** The root layout's data for a member: their own account link, their theme and their bell. */
+/** The root layout's data for a member: their own account link, their theme, their bell and their chat icon. */
 const MEMBER_SHELL_FIELDS = [
   "account.path",
   "appOpen",
+  "chat.href",
+  "chat.unread",
   "notifications.count",
   "notifications.entries",
   "notifications.more",

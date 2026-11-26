@@ -12,13 +12,18 @@ const ok = (stdout: string): Answer => ({ code: 0, stdout, stderr: "" });
 /** The image id the double prints for a build of the edge. */
 export const BUILT_EDGE_ID = `sha256:${"0".repeat(64)}`;
 
-/** The env whose reviewed config a run's binds belong to: the dev or local files when one is mounted, else prod. */
-const envOf = (args: readonly string[]): "dev" | "local" | "prod" =>
-  args.some((arg) => arg.includes("/edge/dev/"))
-    ? "dev"
-    : args.some((arg) => arg.includes("/edge/local/"))
-      ? "local"
-      : "prod";
+/**
+ * The env whose reviewed config a run's binds belong to: the dev files, with the chat site's (P6.02) or without, or the
+ * local files when one is mounted, else prod.
+ */
+const envOf = (args: readonly string[]): "dev" | "dev-chat" | "local" | "prod" =>
+  args.some((arg) => arg.includes("/edge/dev/chat.caddy"))
+    ? "dev-chat"
+    : args.some((arg) => arg.includes("/edge/dev/"))
+      ? "dev"
+      : args.some((arg) => arg.includes("/edge/local/"))
+        ? "local"
+        : "prod";
 
 /**
  * The answer to one of C18's docker calls (`pull`, `build`, or `run ... caddy adapt`), or null for any other call.

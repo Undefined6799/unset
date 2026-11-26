@@ -30,6 +30,10 @@ const FORM_TYPES = new Set(["application/x-www-form-urlencoded", "multipart/form
 const UNTRUSTED_PEER_LOG_MS = 60_000;
 
 const ZERO_SCRIPT = zeroScriptCsp(config.PUBLIC_ORIGIN);
+// What an app page may frame (ADR 0115): the chat box on the door's origin, and this origin's chat sign-in, which the
+// shell points the box's frame at so the ticket goes to the box by the redirect (chat-sign-in.ts DOOR_DOCK_PATH). A
+// redirect's target is checked against frame-src without its path (CSP3 "paths and redirects").
+const chatFrames = `${config.CHAT_DOOR_ORIGIN} ${config.PUBLIC_ORIGIN}/chat/sign-in`;
 
 let untrustedLoggedAt = Number.NEGATIVE_INFINITY;
 const clientIpOf = createClientIpResolver(config, () => {
@@ -313,7 +317,9 @@ function withGroupHeaders(
  * SvelteKit's own policy for a page that runs its client, narrowed to our paths. Under `vite dev` Vite serves files
  * from other paths, so 'self' stays (ADR 0054 decision 5).
  */
-const kitPolicy = (kit: string): string => (dev ? kit : narrowed(kit, config.PUBLIC_ORIGIN));
+// The chat box's frames go with every page that runs script (ADR 0115): the app pages, and each public page ADR 0114
+// switches on.
+const kitPolicy = (kit: string): string => (dev ? kit : narrowed(kit, config.PUBLIC_ORIGIN, chatFrames));
 
 /**
  * An error a route did not answer itself. SvelteKit's own (a 404, a bad request) is shown by its code with nothing

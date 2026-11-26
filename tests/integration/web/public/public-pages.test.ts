@@ -621,6 +621,8 @@ describe("error pages", () => {
       signedIn: true,
       appOpen: true,
       theme: "dark",
+      // The chat icon: the chat page's address and the member's own unread count, nothing of the address.
+      chat: { href: "https://staging.unset.cc/", unread: 0 },
     });
     expect(shell.account).toMatchObject({ path: `/${did}` });
     expect(startUpScript(member, "member")).not.toContain("nowhere");

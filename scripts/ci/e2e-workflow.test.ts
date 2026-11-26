@@ -387,3 +387,82 @@ describe("browser server image (P0.07n)", () => {
     expect(run("")).not.toBe(0);
   });
 });
+
+// P6.02: the chat specs skip without CHAT_E2E_*, and assert-tests-ran refuses a skip with no allowance, so the chromium
+// leg starts a real Synapse and MAS (tests/e2e/fixtures/chat-servers-up.ts) and exports the variables it writes before
+// Playwright runs. The step runs here as Actions runs it (`bash -e`) with stand-ins for node and npx.
+describe("chat servers (P6.02)", () => {
+  const step = (wf.jobs.browser?.steps ?? []).find((s) => s.run?.includes("npx playwright test"));
+  const VARS = ["SYNAPSE_URL", "MAS_URL", "MAS_ADMIN_URL", "MAS_CLIENT_ID", "MAS_CLIENT_SECRET_FILE"].map(
+    (name) => `CHAT_E2E_${name}`,
+  );
+
+  function runStep(project: string, starter: "ready" | "fails") {
+    const root = mkdtempSync(join(tmpdir(), "e2e-chat-"));
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    const log = join(root, "calls");
+    writeFileSync(log, "");
+    const env = VARS.map((name) => `${name}=v-${name}`).join("\\n");
+    const stub = (name: string, body: string) =>
+      writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+    stub(
+      "node",
+      [
+        `echo "node $*" >> "${log}"`,
+        'case "$1" in',
+        `  *chat-servers-up.ts) [ "${starter}" = ready ] || exit 1; printf '${env}\\n' > "$2"; exec sleep 30 ;;`,
+        '  *servers.ts) [ "$2" = wait ] && exit 0; exec sleep 30 ;;',
+        "esac",
+      ].join("\n"),
+    );
+    stub("npx", `env | grep '^CHAT_E2E_' | sort >> "${log}"; echo "npx $*" >> "${log}"`);
+    const status = spawnSync("bash", ["-e", "-c", step?.run ?? ""], {
+      cwd: root,
+      env: { PATH: `${bin}:${process.env.PATH}`, PROJECT: project, RUNNER_TEMP: root, BROWSER_PORT: "1" },
+      stdio: "ignore",
+      timeout: 30_000,
+    }).status;
+    const calls = readFileSync(log, "utf8").trim().split("\n");
+    rmSync(root, { recursive: true });
+    return { status, calls };
+  }
+
+  test("chromium_starts_the_chat_servers_and_playwright_sees_every_variable", () => {
+    const { status, calls } = runStep("chromium", "ready");
+    expect(status).toBe(0);
+    expect(calls.some((call) => /^node tests\/e2e\/fixtures\/chat-servers-up\.ts .+chat-e2e\.env$/.test(call))).toBe(
+      true,
+    );
+    const npx = calls.findIndex((call) => call.startsWith("npx playwright test"));
+    expect(calls.slice(0, npx).filter((call) => call.startsWith("CHAT_E2E_"))).toEqual(
+      [...VARS].sort().map((name) => `${name}=v-${name}`),
+    );
+  }, 40_000);
+
+  test("a_chat_server_start_that_fails_stops_the_leg_before_playwright", () => {
+    const { status, calls } = runStep("chromium", "fails");
+    expect(status).not.toBe(0);
+    expect(calls.some((call) => call.startsWith("npx "))).toBe(false);
+  }, 40_000);
+
+  test("the_other_browsers_start_no_chat_servers", () => {
+    for (const project of ["firefox", "webkit"]) {
+      const { status, calls } = runStep(project, "ready");
+      expect(status, project).toBe(0);
+      expect(
+        calls.some((call) => call.includes("chat-servers-up")),
+        project,
+      ).toBe(false);
+      expect(
+        calls.some((call) => call.startsWith("CHAT_E2E_")),
+        project,
+      ).toBe(false);
+    }
+  }, 40_000);
+
+  test("the_chat_servers_log_is_kept", () => {
+    const upload = (wf.jobs.browser?.steps ?? []).find((s) => s.uses?.startsWith("actions/upload-artifact@"));
+    expect(upload?.with?.path).toContain("e2e-chat-servers.log");
+  });
+});

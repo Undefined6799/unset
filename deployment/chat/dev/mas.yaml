@@ -1,0 +1,62 @@
+# MAS 1.29.0 for the staging chat server (P6.02; ADR 0098; build plan step 1). Every key and value here is read by
+# preflight C36 (deployment/preflight/checks/chat.ts), which refuses a wrong value and any key it does not list, so
+# no login page, upstream provider, email or experimental switch rides in. Secrets are paths under /run/secrets.
+# Reference: github.com/element-hq/matrix-authentication-service/blob/v1.29.0/docs/reference/configuration.md and
+# docs/config.schema.json (read 2026-11-21).
+http:
+  # MAS has no public address: nobody logs in through it. Its base is the name Synapse reaches it by.
+  public_base: http://mas:8080/
+  # The default trusts every private range to set X-Forwarded-For; nothing may.
+  trusted_proxies: []
+  # Two internal listeners, each bound to MAS's address on one network only (ADR 0098), so the admin API is not
+  # reachable from Synapse's network. human, graphql, assets and compat are mounted nowhere.
+  listeners:
+    # For Synapse: discovery and oauth, which Synapse's MAS endpoint must have (Synapse config_documentation.md:691).
+    - name: synapse
+      resources:
+        - name: discovery
+        - name: oauth
+        - name: health
+      binds:
+        - address: "10.250.38.3:8080"
+    # For chat-admin: the admin API, and oauth for the client-credentials token it calls with (docs/topics/admin-api.md).
+    - name: chat-admin
+      resources:
+        - name: oauth
+        - name: adminapi
+      binds:
+        - address: "10.250.38.11:8081"
+# Its own database and role; the password from a file (crates/config/src/sections/database.rs, password_file).
+database:
+  host: postgres
+  port: 5432
+  username: mas
+  database: mas
+  password_file: /run/secrets/mas_pg_password
+  ssl_mode: disable
+matrix:
+  kind: synapse
+  homeserver: staging.unset.cc
+  endpoint: http://synapse:8008/
+  secret_file: /run/secrets/mas_synapse_secret
+# No login pages: no passwords and no upstream_oauth2 section.
+passwords:
+  enabled: false
+account:
+  displayname_change_allowed: false
+  account_deactivation_allowed: false
+  password_registration_enabled: false
+  email_change_allowed: false
+# chat-admin's credential, the only client, and the only admin client.
+clients:
+  - client_id: 01M7XSE66CYPNSDBAK0KZR45NM
+    client_auth_method: client_secret_basic
+    client_secret_file: /run/secrets/mas_chat_admin_client_secret
+policy:
+  data:
+    admin_clients: [01M7XSE66CYPNSDBAK0KZR45NM]
+# One RSA signing key ("At least one RSA key must be configured") and the encryption key, both from files.
+secrets:
+  encryption_file: /run/secrets/mas_encryption
+  keys:
+    - key_file: /run/secrets/mas_signing_key

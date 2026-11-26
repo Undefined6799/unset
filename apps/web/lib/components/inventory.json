@@ -52,6 +52,18 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
+    "badge": {
+      "badge.svelte": {
+        "sha256": "1f6bdb721d559e445a48041fde6afe394b6e44adadcd612dff706b9038d2bcef",
+        "registrySha256": "f4b320ce68d01279f43c72eb27ef73cf0a536fc9ae315c7f1009425a780bcce6",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "index.ts": {
+        "sha256": "9089779c564afa9ac17e196c5654bc5ca790a29d0d8ffd727c7293d3391faadb",
+        "registrySha256": "1dc9eba432869188db370b8e984ca8ff97430c609746a8274a0edecc0d55b765",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
     "button": {
       "button.svelte": {
         "sha256": "77cec1004d4c5b41e947029f8533db673ab7478d4a810cb697dfa479a5ea2be4",
@@ -103,6 +115,18 @@
       "index.ts": {
         "sha256": "3fed3e524cd9edd61dce030ed434715c4714ea09dd74086955990a80323aacbc",
         "registrySha256": "218019c78c8be52b5add8267a758f2d2c685e036e35d6bbcee147333e6534db8",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
+    "checkbox": {
+      "checkbox.svelte": {
+        "sha256": "00d655082458f50290c893f06db89af8dfc9610b09bd8a71fe75af4da5452e08",
+        "registrySha256": "583f00017e06117e4478eb1fcd0b2c5a149eb77ec028f382c78a74101a24fbe2",
+        "change": "Lucide check and minus swapped for our Icon done and remove, Iconoir check and minus (ADR 0055 point 4; decision 33). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "index.ts": {
+        "sha256": "6ebbd361c8c128576a8c6a8ef75b898a7dfe841e45ada987df0be0ea9d469de3",
+        "registrySha256": "39b322ab4a26c63f60c64588ff4b18552c8b596e8472b9261fb68429b8cff1d6",
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },

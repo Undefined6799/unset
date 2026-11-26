@@ -9,8 +9,12 @@ const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "egress";
 const EXEMPT_PREFIX = "infrastructure/net-guard/";
 
-/** pds-admin calls the one internal origin PDS_INTERNAL_URL from this file only (P2.09, phase-2 E10). */
-export const EGRESS_FILE_EXEMPTIONS: readonly string[] = ["interfaces/pds-admin/pds.ts"];
+/** pds-admin calls the one internal origin PDS_INTERNAL_URL from this file only (P2.09, phase-2 E10); chat-admin opens
+ * every connection from this file only (ADR 0093 Compliance; ADR 0102). */
+export const EGRESS_FILE_EXEMPTIONS: readonly string[] = [
+  "interfaces/pds-admin/pds.ts",
+  "interfaces/chat-admin/outbound.ts",
+];
 
 // fetch( whose first argument is not a plain string literal on the same line (template literals count as dynamic).
 // A method such as cache.fetch( is not the global; globalThis.fetch( and friends are.

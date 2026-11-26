@@ -139,6 +139,7 @@ export function generate() {
     web: password(),
     api: password(),
     indexer: password(),
+    chatAuth: password(),
     keyring: JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }),
     oauthKeys: JSON.stringify([{ ...oauth, kid: "web-ci", alg: "ES256" }]),
     jwtSecret: randomBytes(32).toString("hex"),
@@ -212,6 +213,8 @@ function folders(): void {
   secret(65532, "pg_web_password", v.web);
   secret(65532, "pg_api_password", v.api);
   secret(65532, "pg_indexer_password", v.indexer);
+  // The door's role password (roles.json): migrate sets it in every stack, though no door runs locally.
+  secret(65532, "pg_chat_auth_password", v.chatAuth);
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
   const webStoreSecret = randomBytes(32).toString("hex");
@@ -222,6 +225,8 @@ function folders(): void {
   secret(65532, "pds_admin_keys", v.pdsAdminKeys);
   secret(65532, "pds_admin_log_key", v.pdsAdminLogKey);
   secret(65532, "web_pds_admin_key", v.webPdsAdminKey);
+  // Build step 5: web's chat-admin key; no chat-admin runs in the local stack yet, so only its form matters.
+  secret(65532, "web_chat_admin_key", webAdminPair().webPdsAdminKey);
   // Web's mark on its PDS calls (P1.21j); the edge and web both read it, as 65532.
   secret(65532, "pds_web_key", randomBytes(32).toString("hex"));
   writeFileSync(at("unset-dev-ca/root.key"), v.rootKey, { mode: 0o400 });

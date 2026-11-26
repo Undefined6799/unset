@@ -1,6 +1,6 @@
 // The root layout's load (P1.20d): the `?error=` code a redirect carried, only when it is a catalog code
 // (readErrorParam), so no request text reaches the page, and the server load's session flag and theme form (P1.20k)
-// and the changed privacy notice banner (P2.12b), the bell's notifications (P2.27), and whether listing is off on the whole site (P1.21b).
+// and the changed privacy notice banner (P2.12b), the bell's notifications (P2.27), the chat icon (build step 10), and whether listing is off on the whole site (P1.21b).
 // Every page says in its own +page.ts whether it runs SvelteKit's client (`csr`; book P1.22j), so the default here
 // decides one thing only, the error page: for a failed load and for a path no route matches SvelteKit takes `csr` from
 // the layouts alone (kit 3.2.0 src/runtime/server/page/index.js:272-291, page/respond_with_error.js:44-46). It runs
@@ -11,7 +11,7 @@ import type { Load } from "@sveltejs/kit";
 import type { BellView } from "@unset/apps-web/lib/notifications/view.ts";
 import { readErrorParam } from "@unset/shared-errors";
 import { signInHref, themeReturn } from "../lib/return-paths.ts";
-import type { ShellData, ThemeChoice } from "../lib/shell.ts";
+import type { ChatIcon, ShellData, ThemeChoice } from "../lib/shell.ts";
 
 export const csr = true;
 
@@ -23,6 +23,7 @@ export const load: Load = ({ url, data }) => {
     theme?: ThemeChoice | null;
     privacyNotice?: string | null;
     notifications?: BellView;
+    chat?: ChatIcon;
     siteNoindex?: boolean;
   } | null;
   return {
@@ -36,6 +37,8 @@ export const load: Load = ({ url, data }) => {
     // The bell's count and, where the client runs, the entries its panel draws (P2.27; book P1.22g); undefined for a
     // visitor.
     notifications: server?.notifications,
+    // The chat icon's link and number (build step 10); undefined for a visitor.
+    chat: server?.chat,
     // The shell's Sign in link, back to this page (lib/return-paths.ts says why it is worked out here).
     signInHref: signInHref(url.pathname),
     // Search and AI listing off on the whole site (P1.21b); without the server's word, noindex.

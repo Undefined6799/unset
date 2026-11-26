@@ -28,6 +28,7 @@ import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { chatAccountsOf } from "../../support/chat-accounts.ts";
 import {
   buildOnce,
   ORIGIN,
@@ -55,7 +56,9 @@ const appPolicy = (scripts: string): string =>
   `object-src 'none'; script-src ${scripts}; style-src ${BUILD}; style-src-attr 'unsafe-hashes' ` +
   "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +
   "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; " +
-  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard";
+  "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard; " +
+  // The chat box (ADR 0115) goes with every page that runs the client: the door's origin and web's chat sign-in.
+  `frame-src https://staging.unset.cc ${ORIGIN}/chat/sign-in`;
 
 const POLICIES = {
   /** A document that runs SvelteKit's client: our build's files and the one start-up script, by its hash. */
@@ -143,6 +146,9 @@ const ROUTES: Readonly<Record<string, Row>> = {
   "/oauth/callback": { get: SENT_ON },
   "/logout": { get: "405 no content type: static" },
   "/logout/everywhere": { get: "405 no content type: static" },
+  // Chat's sign-out hops (ADR 0095 decision 5): with no ticket from POST /logout, the first sends on to /signed-out.
+  "/logout/chat": { get: SENT_ON, data: APP_DATA, client: false },
+  "/logout/done": { get: "200 page: plain", data: APP_DATA, client: false },
 
   // Onboarding. /welcome only ever sends a member to their step and has no page of its own to draw; a visitor may
   // read the under-age notice.
@@ -177,6 +183,10 @@ const ROUTES: Readonly<Record<string, Row>> = {
   },
   "/profile": { get: { visitor: TO_SIGN_IN, member: "404 error page: script" }, data: APP_DATA },
   "/settings/search-and-ai": { get: { visitor: TO_SIGN_IN, member: "404 error page: script" }, data: APP_DATA },
+
+  // Chat (ADR 0093, ADR 0115): the hop that signs a member in to the chat page, and the chat icon's number.
+  "/chat/sign-in": { get: SENT_ON },
+  "/chat/count": { get: { visitor: TO_SIGN_IN, member: "200 application/json: static" } },
 
   // Files and documents for machines.
   "/[x+2e]well-known/security.txt": { at: "/.well-known/security.txt", get: "200 text/plain: static" },
@@ -333,6 +343,7 @@ const accounts = createAccountRepository(pool, {
   recordUnderageBlock: async () => {
     throw new Error("this file blocks nobody");
   },
+  chatAccounts: chatAccountsOf(pool),
 });
 // The server unseals the member's grant to read their PDS, so the test and the server use one keyring, handed over by
 // file, as query-budget.test.ts does.

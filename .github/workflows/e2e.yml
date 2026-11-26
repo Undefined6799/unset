@@ -86,7 +86,8 @@ jobs:
     name: browser ${{ matrix.project }} shard ${{ matrix.shard }}
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # P6.02: 45, not 30, for the chromium leg's Synapse build and the chat specs against the real servers.
+    timeout-minutes: 45
     permissions:
       contents: read
     # fail-fast off, so one browser does not hide another (workflow-syntax, jobs.<job_id>.strategy.fail-fast).
@@ -135,17 +136,40 @@ jobs:
           done
           docker logs browsers
           exit 1
+      # P6.02: the chromium leg also starts a real Synapse and MAS with our settings (tests/e2e/fixtures/chat-servers-up.ts:
+      # our Synapse image built from deployment/images/synapse.Dockerfile, MAS from our mirror by the locked digest, the
+      # stack's config, networks and hardening) and exports the CHAT_E2E_* variables it writes, so
+      # chat-two-browsers.chromium.spec.ts runs instead of skipping. It is waited for after the web servers, at most 20
+      # minutes, and a start that fails ends the step with its log.
       - name: Run Playwright
         run: |
+          chat_env="$RUNNER_TEMP/chat-e2e.env"
+          chat_pid=
+          if [ "$PROJECT" = chromium ]; then
+            node tests/e2e/fixtures/chat-servers-up.ts "$chat_env" > e2e-chat-servers.log 2>&1 &
+            chat_pid=$!
+          fi
           node tests/e2e/fixtures/servers.ts prod > e2e-prod.log 2>&1 &
           prod_pid=$!
           node tests/e2e/fixtures/servers.ts test > e2e-test.log 2>&1 &
           test_pid=$!
           cleanup() {
-            kill "$prod_pid" "$test_pid" || true
+            kill "$prod_pid" "$test_pid" ${chat_pid:+"$chat_pid"} || true
+            if [ -n "$chat_pid" ]; then wait "$chat_pid" || true; fi
           }
           trap cleanup EXIT
           node tests/e2e/fixtures/servers.ts wait
+          if [ -n "$chat_pid" ]; then
+            for _ in $(seq 600); do
+              if [ -f "$chat_env" ] || ! kill -0 "$chat_pid" 2> /dev/null; then break; fi
+              sleep 2
+            done
+            if [ ! -f "$chat_env" ]; then
+              tail -n 200 e2e-chat-servers.log
+              exit 1
+            fi
+            while IFS= read -r line; do export "${line?}"; done < "$chat_env"
+          fi
           PW_TEST_CONNECT_WS_ENDPOINT="ws://127.0.0.1:$BROWSER_PORT/" npx playwright test --config tests/e2e/playwright.config.ts --project "$PROJECT" --shard "$SHARD/$E2E_SHARDS"
       - name: Keep the browser server's log (P0.07n)
         if: ${{ !cancelled() }}
@@ -163,6 +187,7 @@ jobs:
             e2e-prod.log
             e2e-test.log
             e2e-browsers.log
+            e2e-chat-servers.log
 
   a11y:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false

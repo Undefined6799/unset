@@ -3,10 +3,10 @@
 // refuses (P2.09e), opens the state files and returns the request handler.
 import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
 import { join } from "node:path";
+import { openJtiStore, resolvesInternal } from "@unset/shared-admin-envelope";
 import { BootError, type Config } from "./config.ts";
-import { openJtiStore } from "./jti.ts";
 import { openRequestLog, type RequestLog } from "./log.ts";
-import { createPds, type Pds, probePassword, resolvesInternal, watchPassword } from "./pds.ts";
+import { createPds, type Pds, probePassword, watchPassword } from "./pds.ts";
 import { createHandler } from "./server.ts";
 
 export type Composed = {

@@ -26,6 +26,9 @@ export const ENV_NAMES = {
   APP_HOST: HOST,
   APP_UPSTREAM: UPSTREAM_SHAPE,
   DOCS_HOST: HOST,
+  CHAT_HOST: HOST,
+  CHAT_UPSTREAM: UPSTREAM_SHAPE,
+  MATRIX_UPSTREAM: UPSTREAM_SHAPE,
 } as const;
 export type EnvName = keyof typeof ENV_NAMES;
 /** The values a config was adapted with; a name the env does not set is absent. */
@@ -39,6 +42,23 @@ export const LOCAL_TLS = ["/run/secrets/local_tls_cert", "/run/secrets/local_tls
 export const DEV_APP = { APP_HOST: "staging.unset.sh", APP_UPSTREAM: "web:8080" } as const;
 /** The dev stack's docs site, exactly (P1.21w; ADR 0075): files from DOCS_ROOT, no upstream. */
 export const DEV_DOCS = { DOCS_HOST: "docs.unset.sh" } as const;
+/**
+ * The dev stack's chat site, exactly (P6.02; ADR 0025's chat name; ADR 0093 decision 6): the door's public listener
+ * on chat_edge and Synapse's client listener on chat_edge_synapse, each the fixed address compose.dev.yaml gives it.
+ */
+export const DEV_CHAT = {
+  CHAT_HOST: "staging.unset.cc",
+  CHAT_UPSTREAM: "10.250.38.43:8090",
+  MATRIX_UPSTREAM: "10.250.38.51:8008",
+} as const;
+/**
+ * The chat site's two upstream paths (dev/chat.caddy), each matched on the decoded path before Caddy cleans it. The
+ * Matrix client API: one or more segments under /_matrix/client, none empty and none only dots, and an optional
+ * trailing slash (an empty state key). The door's routes: exactly those interfaces/chat-auth serves but /health, with
+ * /welcome, /welcome/done (#1939) and /sign-out/return, /sign-out/redeem, /sign-out/done (#1950).
+ */
+export const CHAT_MATRIX_PATH = String.raw`^/_matrix/client(?:/[^/]*[^/.][^/]*)+/?$`;
+export const CHAT_DOOR_PATH = String.raw`^/(?:sign-in(?:/return|/redeem)?|sign-out(?:/return|/redeem|/done)?|welcome(?:/done)?|setup/(?:claim|release)|push/key|chat-id|chat-name|assets/[\w-][\w.-]*|dm/did:[a-z0-9]+:[\w.:-]+)?$`;
 /** Where the dev edge reads the built docs (compose.dev.yaml's one folder bind). */
 export const DOCS_ROOT = "/srv/docs";
 /** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */
@@ -61,7 +81,7 @@ const same = (a: Json | undefined, b: Json | undefined): boolean => canonical(a)
 /** The modules, matchers and keys our config adapts to; anything else fails (the reader's DIRECTIVES, as Caddy names them). */
 const HANDLER_KEYS: Readonly<Record<string, readonly string[]>> = {
   subroute: ["routes"],
-  headers: ["response"],
+  headers: ["response", "request"],
   rate_limit: ["rate_limits", "disable_metrics"],
   static_response: ["status_code", "close"],
   reverse_proxy: ["headers", "transport", "upstreams"],
@@ -373,8 +393,8 @@ const STYLE_TEXT = /^[a-z0-9 #:;,.()%{}-]*$/;
 const STYLE_BLOCK = /^[a-z-]+:[^{}]*$/;
 const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
 
-type Host = "PDS_HOST" | "APP_HOST" | "DOCS_HOST";
-/** The sites that proxy, by their upstream's name; the docs site serves files and has none. */
+type Host = "PDS_HOST" | "APP_HOST" | "DOCS_HOST" | "CHAT_HOST";
+/** The sites that proxy to one upstream, by its name; the docs site has none, the chat site two of its own. */
 type ProxiedHost = "PDS_HOST" | "APP_HOST";
 const UPSTREAM = { PDS_HOST: "PDS_UPSTREAM", APP_HOST: "APP_UPSTREAM" } as const;
 /**
@@ -386,7 +406,13 @@ const HOSTS: Readonly<Record<EdgeMode, readonly Host[]>> = {
   local: ["APP_HOST", "PDS_HOST"],
   dev: ["APP_HOST", "PDS_HOST", "DOCS_HOST"],
 };
-const hostsOf = (mode: EdgeMode): readonly Host[] => HOSTS[mode];
+/**
+ * The env's sites: HOSTS, and under dev the chat site too when the env names its host (P6.02). The chat servers run on
+ * the source stack alone (deployment/preflight/local-only.ts CHAT_SERVICES), so only that stack's edge sets CHAT_HOST
+ * and mounts dev/chat.caddy; a site with no host set, or a host set with no site, still fails as any other mismatch.
+ */
+const hostsOf = (mode: EdgeMode, env: AdaptedEnv): readonly Host[] =>
+  mode === "dev" && env.CHAT_HOST !== undefined ? [...HOSTS.dev, "CHAT_HOST"] : HOSTS[mode];
 
 /** Every handler at or below `handlers`, in the order Caddy runs them. */
 function handlersIn(handlers: Json[]): Obj[] {
@@ -429,11 +455,11 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
   if (loopback.length !== 1) found.push("not exactly one health site on loopback");
   const [server, ...others] = open;
   if (server === undefined || others.length > 0) return [...found, "not exactly one public server"];
-  const hosts = hostsOf(mode).map((host) => env[host] as string);
+  const hosts = hostsOf(mode, env).map((host) => env[host] as string);
   found.push(...serverProblems(server, mode, env), ...logProblems(top, server, hosts));
   found.push(...errorProblems(server, mode, env));
   found.push(...tlsProblems(top, server, mode, env));
-  for (const host of hostsOf(mode)) {
+  for (const host of hostsOf(mode, env)) {
     const route = siteRoute(server, env[host] as string);
     found.push(...(route === null ? [`{$${host}}: no site`] : siteProblems(route, host, mode, env)));
   }
@@ -445,10 +471,16 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
  * Exported so the preflight judges the values before it hands them to a container (P1.39e).
  */
 export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
-  const needed: EnvName[] = hostsOf(mode).flatMap((host) => (host === "DOCS_HOST" ? [host] : [host, UPSTREAM[host]]));
+  const needed: EnvName[] = hostsOf(mode, env).flatMap((host): EnvName[] =>
+    host === "DOCS_HOST"
+      ? [host]
+      : host === "CHAT_HOST"
+        ? [host, "CHAT_UPSTREAM", "MATRIX_UPSTREAM"]
+        : [host, UPSTREAM[host]],
+  );
   if (mode === "shipped") needed.push("ACME_EMAIL");
   const found = needed.filter((name) => !ENV_NAMES[name].test(env[name] ?? "")).map((name) => `{$${name}} is not set`);
-  for (const host of ["PDS_HOST", "APP_HOST", "DOCS_HOST"] as const) {
+  for (const host of ["PDS_HOST", "APP_HOST", "DOCS_HOST", "CHAT_HOST"] as const) {
     if (env[host] !== undefined && env[host] !== env[host].toLowerCase()) found.push(`{$${host}} is not lower case`);
   }
   if (mode !== "shipped") {
@@ -460,6 +492,13 @@ export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
       if (env[name] !== DEV_APP[name]) found.push(`{$${name}} is not the dev app site's ruled value`);
     }
     if (env.DOCS_HOST !== DEV_DOCS.DOCS_HOST) found.push("{$DOCS_HOST} is not the dev docs site's ruled value");
+  }
+  // The chat site's three values go together, only under dev, and only as ruled (P6.02).
+  const chat = (["CHAT_HOST", "CHAT_UPSTREAM", "MATRIX_UPSTREAM"] as const).filter((name) => env[name] !== undefined);
+  if (chat.length > 0 && chat.length < 3) found.push("{$CHAT_HOST} and its two upstreams are not set together");
+  for (const name of chat) {
+    if (mode !== "dev") found.push(`{$${name}} is set outside dev`);
+    else if (env[name] !== DEV_CHAT[name]) found.push(`{$${name}} is not the dev chat site's ruled value`);
   }
   return found;
 }
@@ -539,7 +578,7 @@ function serverProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] 
   const health = obj(HEALTH_SERVER);
   if (TIMEOUTS.some((name) => server[name] !== health[name])) found.push("a server does not keep the shared timeouts");
   found.push(...trustProblems(server, mode));
-  const hosts = hostsOf(mode).map((host) => env[host] as string);
+  const hosts = hostsOf(mode, env).map((host) => env[host] as string);
   const routes = arr(server.routes).map(obj);
   const exact = routes.every(
     (route) => route.terminal === true && hosts.some((host) => same(route.match, [{ host: [host] }])),
@@ -651,7 +690,7 @@ function errorProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] {
   const errors = obj(server.errors);
   const routes = arr(errors.routes).map(obj);
   const found = unknownKeys(errors, ["routes"], "the error handling");
-  for (const host of hostsOf(mode)) {
+  for (const host of hostsOf(mode, env)) {
     const own = routes.filter((route) => same(route.match, [{ host: [env[host] as string] }]));
     const [body, csp] = own.length === 1 ? pageOf(own[0] as Obj) : ["", ""];
     const page = pageProblems(body);
@@ -660,7 +699,7 @@ function errorProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] {
     }
     found.push(...page.map((problem) => `{$${host}}: the too-many-tries page ${problem}`));
   }
-  if (routes.length !== hostsOf(mode).length) found.push("an error route other than the sites' own");
+  if (routes.length !== hostsOf(mode, env).length) found.push("an error route other than the sites' own");
   return found;
 }
 
@@ -727,7 +766,7 @@ function tlsProblems(top: Obj, server: Obj, mode: EdgeMode, env: AdaptedEnv): st
   const own = { certificates: { load_files: [{ certificate, key, tags: ["cert0"] }] } };
   const [policy, rest, ...more] = arr(server.tls_connection_policies).map(obj);
   const sni = arr(obj(policy?.match).sni);
-  const hosts = hostsOf(mode).map((host) => env[host] as string);
+  const hosts = hostsOf(mode, env).map((host) => env[host] as string);
   const selected =
     policy !== undefined &&
     rest !== undefined &&
@@ -777,6 +816,67 @@ function docsSiteProblems(route: Obj): string[] {
   return found;
 }
 
+/** (strict-csp-default) as adapted: the strict policy on a response that carries none of its own. */
+const STRICT_CSP_DEFAULT: Json = {
+  handler: "headers",
+  response: {
+    require: { headers: { "Content-Security-Policy": null } },
+    set: {
+      "Content-Security-Policy": ["default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"],
+    },
+  },
+};
+/**
+ * One of the chat site's two upstream routes: its path pattern, by `name`, the handlers `before` its upstream, then
+ * (upstream) to `upstream` alone.
+ */
+const chatUpstreamRoute = (name: string, pattern: string, upstream: string, before: Json[] = []): Json => ({
+  match: [{ vars_regexp: { "{http.request.uri.path}": { name, pattern } } }],
+  handle: [{ handler: "subroute", routes: [{ handle: [...before, ruledProxy(upstream)] }] }],
+});
+/** The Matrix route sends Synapse no cookie (review finding N3): the door's and Pangolin's stay at the edge. */
+const NO_COOKIE: Json = { handler: "headers", request: { delete: ["Cookie"] } };
+
+/**
+ * The chat site (P6.02; ADR 0093 decision 6, ADR 0099): one plain route, as every site; before it exactly the security
+ * headers, the default policy and noindex; inside it, in order and each whole, the zones, the Matrix client API to
+ * Synapse with no cookie, the door's routes to the door, and the edge's own 404 for anything else. So no other path,
+ * no other upstream and no client address reaches either, and the door's and Synapse's own policies stand.
+ */
+function chatSiteProblems(route: Obj, env: AdaptedEnv): string[] {
+  const name = "{$CHAT_HOST}";
+  const [outer, ...extra] = arr(route.handle).map(obj);
+  const [only, ...otherRoutes] = arr(outer?.routes).map(obj);
+  const site = arr(only?.handle).map(obj);
+  const inner = site.at(-1);
+  if (
+    outer?.handler !== "subroute" ||
+    extra.length > 0 ||
+    only === undefined ||
+    otherRoutes.length > 0 ||
+    "match" in only ||
+    inner?.handler !== "subroute"
+  ) {
+    return [`${name}: not exactly one plain route`];
+  }
+  const found: string[] = [];
+  if (!same(site.slice(0, -1), [...SECURITY_HEADERS, STRICT_CSP_DEFAULT, NOINDEX])) {
+    found.push(`${name}: the site's headers are not the ruled ones`);
+  }
+  const [zones, matrix, door, last, ...more] = arr(inner.routes);
+  if (!same(zones, { handle: [limiter(CHAT_ZONES)] })) found.push(`${name}: the zones are not the ruled ones`);
+  if (!same(matrix, chatUpstreamRoute("matrix", CHAT_MATRIX_PATH, env.MATRIX_UPSTREAM as string, [NO_COOKIE]))) {
+    found.push(`${name}: the Matrix route is not the ruled one`);
+  }
+  if (!same(door, chatUpstreamRoute("door", CHAT_DOOR_PATH, env.CHAT_UPSTREAM as string))) {
+    found.push(`${name}: the door route is not the ruled one`);
+  }
+  if (!same(last, { handle: [{ handler: "static_response", status_code: 404 }] }) || more.length > 0) {
+    found.push(`${name}: the route is not the zones, the Matrix route, the door route, then 404`);
+  }
+  return found;
+}
+
 /** The docs file server: root DOCS_ROOT and Caddy's own `hide` list of the config files it read, nothing else. */
 const isDocsFiles = (handler: Obj | undefined): boolean =>
   handler?.handler === "file_server" &&
@@ -787,6 +887,7 @@ const isDocsFiles = (handler: Obj | undefined): boolean =>
 /** One site's rules; `route` is the public server's route for `host`. */
 function siteProblems(route: Obj, host: Host, mode: EdgeMode, env: AdaptedEnv): string[] {
   if (host === "DOCS_HOST") return docsSiteProblems(route);
+  if (host === "CHAT_HOST") return chatSiteProblems(route, env);
   const name = `{$${host}}`;
   const [outer, ...extra] = arr(route.handle).map(obj);
   const [only, ...otherRoutes] = arr(outer?.routes).map(obj);
@@ -923,8 +1024,13 @@ const APP_ZONES: readonly Zone[] = [
 ];
 /** The docs site's one zone (dev/docs.caddy; limits.json docsRateLimitZones): every request, by client. */
 const DOCS_ZONES: readonly Zone[] = [["docs_global", 6000, 300]];
+/** The chat site's zones (dev/chat.caddy; limits.json chatRateLimitZones): each sign-in hop, then every request. */
+const CHAT_ZONES: readonly Zone[] = [
+  ["chat_global", 6000, 300],
+  ["chat_signin", 20, 300, paths("/sign-in", "/sign-in/redeem", "/sign-out/redeem")],
+];
 /** Each site's unmatched zone, which no other site's rate_limit may hold. */
-const GLOBALS = ["global", "app_global", "docs_global"];
+const GLOBALS = ["global", "app_global", "docs_global", "chat_global"];
 /** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64, but web's. */
 const limiter = (zones: readonly Zone[]): Json => ({
   handler: "rate_limit",
@@ -998,20 +1104,22 @@ function proxyProblems(name: string, proxy: Obj, upstream: string): string[] {
     found.push(`${name}: a reverse_proxy passes X-Forwarded-Host`);
   }
   // Then the handler whole, so it sets no other request header and keeps the ruled transport and timeouts.
-  const ruled: Json = {
-    handler: "reverse_proxy",
-    headers: {
-      request: {
-        delete: [...ADDRESS_HEADERS, WEB_KEY_HEADER],
-        set: { "X-Forwarded-Host": ["{http.request.host}"], "X-Forwarded-Proto": ["https"] },
-      },
-    },
-    transport: { protocol: "http", dial_timeout: 5_000_000_000, response_header_timeout: 130_000_000_000 },
-    upstreams: [{ dial: upstream }],
-  };
-  if (!same(proxy, ruled)) found.push(`${name}: a reverse_proxy is not the ruled one`);
+  if (!same(proxy, ruledProxy(upstream))) found.push(`${name}: a reverse_proxy is not the ruled one`);
   return found;
 }
+
+/** (upstream) as adapted for `upstream` (snippets/upstream.caddy): every rule proxyProblems names, whole. */
+const ruledProxy = (upstream: string): Json => ({
+  handler: "reverse_proxy",
+  headers: {
+    request: {
+      delete: [...ADDRESS_HEADERS, WEB_KEY_HEADER],
+      set: { "X-Forwarded-Host": ["{http.request.host}"], "X-Forwarded-Proto": ["https"] },
+    },
+  },
+  transport: { protocol: "http", dial_timeout: 5_000_000_000, response_header_timeout: 130_000_000_000 },
+  upstreams: [{ dial: upstream }],
+});
 
 /** The index of the first inner route that holds a reverse_proxy, or the route count when none does. */
 const upstreamAt = (routes: Obj[]): number => {
@@ -1140,7 +1248,11 @@ function strayProblems(top: Obj, server: Obj, mode: EdgeMode, env: AdaptedEnv): 
   if (named(all, "file_server").length !== fontServers + docsServers) {
     found.push("serves files outside pds-fonts");
   }
+  // The chat site's headers are judged whole by chatSiteProblems; its default policy may sit only there.
+  const chatSite = siteRoute(server, env.CHAT_HOST ?? "");
+  const chatHeaders = new Set(chatSite === null ? [] : named(handlersIn(arr(chatSite.handle)), "headers"));
   for (const handler of named(all, "headers")) {
+    if (chatHeaders.has(handler) && same(handler, STRICT_CSP_DEFAULT)) continue;
     const fonts = same(handler, append);
     if ("require" in obj(handler.response) && !fonts && !same(handler, SECURITY_HEADERS[1])) {
       found.push("a response matcher outside pds-fonts");

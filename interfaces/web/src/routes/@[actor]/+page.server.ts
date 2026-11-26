@@ -114,5 +114,7 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     cards,
     // The header's About panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
     contact: contactAction(cards),
+    // Build step 10 (ADR 0094 decision 6, ADR 0101 decision 3): into the chat page by DID, the same for every visitor.
+    message: `${config.CHAT_DOOR_ORIGIN}/dm/${did}`,
   };
 };

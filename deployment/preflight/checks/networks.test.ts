@@ -4,7 +4,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { parseCompose } from "../compose-parse.ts";
 import { SecretMap } from "../secret-map.ts";
-import { devTunnelProblems, edgeAliasProblems, networkTableProblems, pdsNeighbours, repository } from "./networks.ts";
+import {
+  devTunnelProblems,
+  edgeAliasProblems,
+  type NetworkTable,
+  networkTableProblems,
+  pdsNeighbours,
+  repository,
+  withLocalOnly,
+} from "./networks.ts";
 import type { Inputs } from "./types.ts";
 
 const compose = (yaml: string) => parseCompose(`name: unset-dev\n${yaml}`, "c.yaml");
@@ -375,5 +383,27 @@ describe("an image's repository (architecture 03:05Z addendum)", () => {
       expect(pdsNeighbours(inputs(image)), image).toEqual(["pds and relay both run the pds"]);
     }
     expect(pdsNeighbours(inputs("example/pds-proxy"))).toEqual(["relay shares a network with the pds"]);
+  });
+});
+
+describe("the chat rows (P6.02 part 4)", () => {
+  // Staging runs the chat services from the checkout only (ADR 0098 Decision 2: local has no chat server yet), so the
+  // image stack and the local stack are judged without their networks and without them in any other row.
+  const table: NetworkTable = new Map([
+    ["db", { internal: true, members: ["postgres", "web", "chat-auth"] }],
+    ["chat_count", { internal: true, members: ["synapse", "web", "chat-auth"] }],
+    ["newt_edge", { internal: true, members: ["newt", "edge"] }],
+  ]);
+
+  test("chat_rows_count_only_for_the_source_stack", () => {
+    expect(withLocalOnly(table, "dev", true)).toBe(table);
+    for (const [env, source] of [
+      ["dev", false],
+      ["local", false],
+    ] as const) {
+      const judged = withLocalOnly(table, env, source) as NetworkTable;
+      expect(judged.has("chat_count"), env).toBe(false);
+      expect(judged.get("db")?.members, env).toEqual(["postgres", "web"]);
+    }
   });
 });

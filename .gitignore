@@ -22,3 +22,7 @@ jscpd-report/
 /pa11y-results.json
 /e2e-prod.log
 /e2e-test.log
+# P6.10a Synapse module: Python bytecode and checker caches
+__pycache__/
+.mypy_cache/
+.ruff_cache/
