@@ -91,4 +91,4 @@ Interpolation and env files are not in the checkout. The templates are:
 | `deployment/env/pds.example.env` | `../unset-dev-env/pds.env` | `PDS_JWT_SECRET`, `PDS_ADMIN_PASSWORD`, `PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX`, `PDS_RECOVERY_DID_KEY`, and under dev and prod also `PDS_EMAIL_SMTP_URL`, `PDS_MODERATION_EMAIL_SMTP_URL` |
 | `deployment/env/newt.example.env` | `../unset-dev-env/newt.env` | `PANGOLIN_ENDPOINT`, `NEWT_ID`, `NEWT_SECRET` |
 
-Every value in the templates is a placeholder. `deployment/limits.dev.json` holds `mem_limit`, `cpus` and `pids_limit` for the seven service names, including `pds-token-reader`. `deployment/networks.dev.json` is the table above. There is no `networks.prod.json`.
+Every value in the templates is a placeholder. `deployment/limits.dev.json` holds `mem_limit`, `cpus` and `pids_limit` for the eleven service names, including `pds-token-reader`. `deployment/networks.dev.json` is the table above. There is no `networks.prod.json`.

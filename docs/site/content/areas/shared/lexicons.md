@@ -10,7 +10,7 @@ The `sh.unset.*` record schemas, their validator, the field limits and the OAuth
 | Path | Role |
 | --- | --- |
 | `shared/lexicons/schemas/` | Our lexicon JSON |
-| `shared/lexicons/published/` | Snapshot JSON. One file: `sh.unset.profile.json`. |
+| `shared/lexicons/published/` | Snapshot JSON. Two files: `sh.unset.page.json` and `sh.unset.profile.json`. |
 | `shared/lexicons/published.lock.json` | `{}`. Names no NSID. |
 | `shared/lexicons/vendor/` | Bluesky lexicons we read, copied from tag `@atproto/api@0.23.0`. Hashes are in `vendor/SOURCE.md`. |
 | `shared/lexicons/generated/` | `lex build` output, checked in. Its `tsconfig.json` sets `exactOptionalPropertyTypes` off. Do not edit it. |
@@ -25,6 +25,7 @@ Our schemas:
 | File | NSID |
 | --- | --- |
 | `schemas/sh.unset.profile.json` | `sh.unset.profile` |
+| `schemas/sh.unset.page.json` | `sh.unset.page` |
 | `schemas/sh.unset.card.json` | `sh.unset.card` |
 | `schemas/sh.unset.block.text.json` | `sh.unset.block.text` |
 | `schemas/sh.unset.block.links.json` | `sh.unset.block.links` |
@@ -38,11 +39,12 @@ Snapshots:
 
 | File | NSID |
 | --- | --- |
+| `published/sh.unset.page.json` | `sh.unset.page` |
 | `published/sh.unset.profile.json` | `sh.unset.profile` |
 
-`published/sh.unset.profile.json` has the same contents as `schemas/sh.unset.profile.json`. Records of `sh.unset.profile` are already in members' repositories, so this NSID has a snapshot (`publishedProblems` in `breaking-check.ts`).
+`published/sh.unset.page.json` has the same contents as `schemas/sh.unset.page.json`. `published/sh.unset.profile.json` has the same contents as `schemas/sh.unset.profile.json`. Records of `sh.unset.profile` are already in members' repositories, so that NSID has a snapshot (`publishedProblems` in `breaking-check.ts`).
 
-`NSID` in `shared/lexicons/index.ts` repeats the three record and set ids (profile, card, authFull); a card's blocks are named by their own ids ([ADR 0086](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0086-cards-hold-reusable-blocks.md)). `NSID.authFull` is the same string as `PERMISSION_SET_NSID` in [config](../config/). This package may not import `shared/config`. No file under `shared/config/` imports this package. `permanent.test.ts` pins `PERMISSION_SET_NSID` to the string and to the ADR 0086 row that supersedes ADR 0025 Q4. It does not import `NSID`.
+`NSID` in `shared/lexicons/index.ts` repeats the four record and set ids (profile, page, card, authFull); a card's blocks are named by their own ids ([ADR 0086](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0086-cards-hold-reusable-blocks.md)). `NSID.authFull` is the same string as `PERMISSION_SET_NSID` in [config](../config/). This package may not import `shared/config`. No file under `shared/config/` imports this package. `permanent.test.ts` pins `PERMISSION_SET_NSID` to the string and to the ADR 0086 row that supersedes ADR 0025 Q4. It does not import `NSID`.
 
 Vendored files (`vendor/SOURCE.md`; sha256 of the JSON value):
 
@@ -82,9 +84,9 @@ When the published `defs.main.type` is `permission-set`, scope and consent rules
 | NSID source | On this tree |
 | --- | --- |
 | Keys of `published.lock.json` | None. The file is `{}`. |
-| `published/*.json`, name without `.json` | `sh.unset.profile` |
+| `published/*.json`, name without `.json` | `sh.unset.page`, `sh.unset.profile` |
 
-The profile snapshot is compared. The two files have the same contents.
+Both snapshots are compared. Each file has the same contents as its schema.
 
 ## May import
 
@@ -119,4 +121,4 @@ Who may import the index is the [shared](../) table. The domain row names `share
 
 ## Data
 
-No Postgres schema, role or table. The record contract is the JSON under `schemas/` and `vendor/`. `published.lock.json` names no NSID. The snapshot `publishedProblems` compares is `published/sh.unset.profile.json`.
+No Postgres schema, role or table. The record contract is the JSON under `schemas/` and `vendor/`. `published.lock.json` names no NSID. The snapshots `publishedProblems` compares are `published/sh.unset.page.json` and `published/sh.unset.profile.json`.

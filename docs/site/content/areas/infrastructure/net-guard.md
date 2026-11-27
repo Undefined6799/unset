@@ -15,17 +15,28 @@ The egress classifier. Package `@unset/infrastructure-net-guard`. Plan §2 rule 
 | `infrastructure/net-guard/src/dns.ts` | `resolveTxt` on `node:dns/promises` `Resolver`. |
 | `infrastructure/net-guard/src/policies.ts` | The policies below. |
 | `infrastructure/net-guard/src/request.ts` | `createNetGuard`. |
-| `infrastructure/net-guard/src/libraryFetch.ts` | `libraryFetch` and `guardedFetch`, a `fetch` shape over the guard. |
+| `infrastructure/net-guard/src/libraryFetch.ts` | `libraryFetch`, `guardedFetch` and `objectStoreFetch`, a `fetch` shape over the guard. `objectStoreFetch` uses `objectStore` and caps the answer at `OBJECT_STORE_BYTES`. |
 | `infrastructure/net-guard/src/remote.fake.ts` | Test double. Not exported from `index.ts`. |
 
-Policies `policies.ts` exports:
+Policies `policies.ts` exports. A policy with no `requestBytes` sends a request body of at most `DEFAULT_REQUEST_BYTES` (1 MiB). In this file only `atprotoBlobUpload` and `objectStore` set 5 MiB, and `review` sets 66 MiB. `requestCap` throws `RangeError` when the cap is not an integer in (0, 66 MiB]. [ADR 0076](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0076-image-uploads-up-to-64-mib.md) is the 66 MiB ceiling; [ADR 0088](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0088-picture-main-version-webp-5mb.md) is the 5 MiB picture hops.
 
 | Export | Value |
 | --- | --- |
-| `plc` | `kind: "fixed"`, host `plc.directory` |
-| `atproto` | `kind: "public"` |
-| `internalPolicy` | Builds a `kind: "internal"` policy from exact http(s) origins |
-| `objectStore(origin)` | `internalPolicy("object-store", [origin])`, one exact internal origin passed in by the caller |
+| `DEFAULT_REQUEST_BYTES` | 1 MiB (`1024 * 1024`). |
+| `REQUEST_BODY_CEILING` | 66 MiB (`66 * 1024 * 1024`). |
+| `plc` | `kind: "fixed"`, host `plc.directory`. No `requestBytes`. |
+| `atproto` | `kind: "public"`. No `requestBytes`. |
+| `PICTURE_HOP_BYTES` | 5 MiB (`5 * 1024 * 1024`). |
+| `atprotoBlobUpload` | `kind: "public"`, name `atproto-upload`, `requestBytes: PICTURE_HOP_BYTES`. `libraryFetch` uses it only for `POST` with pathname `/xrpc/com.atproto.repo.uploadBlob`. |
+| `requestCap(policy)` | `policy.requestBytes ?? DEFAULT_REQUEST_BYTES`. `RangeError` outside (0, 66 MiB]. |
+| `internalPolicy(name, origins, requestBytes?)` | Builds a `kind: "internal"` policy from exact http(s) origins. An empty list or a bad origin throws `TypeError`. A `requestBytes` outside (0, 66 MiB] throws `RangeError`. |
+| `localPlc` | `internalPolicy("plc", ["http://plc:2582"])`. |
+| `OBJECT_STORE_BYTES` | `PICTURE_HOP_BYTES`. |
+| `objectStore(origin)` | `internalPolicy("object-store", [origin], OBJECT_STORE_BYTES)`, one exact internal origin. |
+| `review(origin)` | `internalPolicy("review", [origin], REQUEST_BODY_CEILING)`. |
+| `pdsAdmin(origin)` | `internalPolicy("pds-admin", [origin])`. No `requestBytes`. |
+
+`index.ts` re-exports every row except `PICTURE_HOP_BYTES`, `requestCap` and `localPlc`, plus the `Policy` type.
 
 `localPlc` is a dead export, [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md), decided (0001 log), acceptance pending.
 
@@ -50,7 +61,7 @@ Declared in `infrastructure/net-guard/package.json`: `undici` 8.12.2. `request.t
 | Package export `.` | `infrastructure/net-guard/index.ts` |
 | Composition | `createNetGuard` in `interfaces/web/src/lib/server/compose.ts` |
 
-No `main.ts` and no Compose service for this package. `libraryFetch` is what `infrastructure/pds` passes the OAuth client (`oauth-client.ts` option `fetch`).
+No `main.ts` and no Compose service for this package. `libraryFetch` is what `infrastructure/pds` passes the OAuth client (`oauth-client.ts` option `fetch`). `objectStoreFetch` is what `interfaces/web/src/lib/server/compose.ts` and `interfaces/media/compose.ts` pass the object store.
 
 ## Data
 
