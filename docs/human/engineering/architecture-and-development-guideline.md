@@ -20,7 +20,7 @@ unset.sh/
 │   └── chat/             chat client on its own origin (unset.cc), Phase 6
 │
 ├── interfaces/           entry points; one folder per running process, each its own container
-│   ├── http/             web server: routes, forms, its jobs
+│   ├── web/              web server: routes, forms, its jobs
 │   ├── admin/            admin server: gate, session, enrolment, actions
 │   ├── api/              public read API, own database role
 │   ├── indexer/          reads records from the network (Tap consumer)
@@ -78,9 +78,12 @@ Folders are created when their first code lands, never ahead of it.
 
 Folder responsibilities
 
-* apps/ hold screens, islands and styles and import only shared/. The server renders them: the
-  interface that serves an app (interfaces/http for web, interfaces/admin for admin) may import that
-  app's render entry and pass it data as props. Islands reach the server over HTTP, never by import.
+* apps/ hold screens and styles and import only shared/. The interface that serves an app
+  (interfaces/admin for admin) may import that app's render entry and pass it data as props.
+  The web process is interfaces/web (SvelteKit, ADR 0056): pages under interfaces/web/src/routes/
+  import components from apps/web. Server files there (server.ts, src/hooks.server.ts,
+  src/lib/server/, and route *.server.ts and +server.ts) import a domain or infrastructure;
+  dependency-cruiser enforces that (svelte-screens-no-core).
 * interfaces/ are the doors: they authenticate, apply the CSRF gate and limits, call a domain, and
   shape the response. Every running process has its own folder here, so process, network and
   database-role isolation from the plan stays intact; a new process adds a folder, never shares one.
@@ -149,7 +152,7 @@ Before creating a file, determine:
 
 For each feature, identify its path before implementation. Example, posting a video:
 
-apps/web → interfaces/http → domains/content (+ domains/moderation) → infrastructure/pds, storage → PDS
+apps/web → interfaces/web → domains/content (+ domains/moderation) → infrastructure/pds, storage → PDS
 
 Important features have a predictable ownership path and consistent naming. Each step-book phase's
 refine step records the paths for that phase; larger features document theirs in
@@ -231,7 +234,7 @@ remember it.
 Build one small, complete happy path first: sign in with an atproto account and see your own
 profile page.
 
-apps/web → interfaces/http → domains/identity → infrastructure/pds → development PDS
+apps/web → interfaces/web → domains/identity → infrastructure/pds → development PDS
 
 It includes only the security pieces that path needs (typed config, CSRF gate, CSP, OAuth session,
 Postgres with roles, net-guard for handle resolution). Then test it, review the architecture,
