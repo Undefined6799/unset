@@ -27,7 +27,7 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
   avatar opening a native popover About panel (handle, details) with no hover, so it works the same with script
   off. The public page runs the client since P1.22e (ADR 0114); a member's text there is text nodes only. A stored
   `layout` field from before is an undefined field the merge keeps.
-- `cards.ts`: reading profile cards, one `sh.unset.section` record each (ADR 0051). Lenient: a card that does not
+- `cards.ts`: reading profile cards, one `sh.unset.card` record each (one `sh.unset.block.*` block, ADR 0086). Lenient: a card that does not
   validate or whose kind is unknown is hidden, and an address that is not plain http(s) is dropped.
   Optional `surface` (ADR 0068) reads as filled when absent or unknown; the editor offers filled, outlined and plain.
 - `card-edit.ts`: writing cards. `parseCardInput`, `toCardRecord`, `reorderCards` and `CARD_EDIT_LIMITS` (rows per

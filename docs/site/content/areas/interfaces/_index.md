@@ -14,15 +14,15 @@ Route tables are on [Endpoints](/endpoints/). This section does not list paths.
 
 ## Owns
 
-On this tree: `interfaces/web` (the web server), `interfaces/indexer`, `interfaces/media`, `interfaces/pds-admin` and `interfaces/review`. The other processes in guideline §1 get their folder with their first code (decision 34).
+On this tree: `interfaces/web` (the web server), `interfaces/indexer`, `interfaces/media`, `interfaces/pds-admin` and `interfaces/review`. The other processes in guideline §1 get their folder with their first code (decision 34). The plan is [`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md).
 
 | Process | Path | Page |
 | --- | --- | --- |
 | web | `interfaces/web` | [web](./web/) |
-| indexer | `interfaces/indexer` | |
-| media | `interfaces/media` | |
-| pds-admin | `interfaces/pds-admin` | |
-| review | `interfaces/review` | |
+| indexer | `interfaces/indexer` | [indexer](./indexer/) |
+| media | `interfaces/media` | [media](./media/) |
+| pds-admin | `interfaces/pds-admin` | [pds-admin](./pds-admin/) |
+| review | `interfaces/review` | [review](./review/) |
 
 ## May import
 
@@ -57,8 +57,10 @@ No `index.ts` under `interfaces/`. The web process starts at `interfaces/web/ser
 | Process | Start | Composition root | In a container today |
 | --- | --- | --- | --- |
 | web | `interfaces/web/server.ts` | `interfaces/web/src/lib/server/compose.ts` | Yes. `deployment/images/node-app.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/web/server.ts"]`. Compose service `web` runs that image (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`). |
-| media | `interfaces/media/main.ts` | `interfaces/media/compose.ts` | No. No Compose file on main runs it. |
-| review | `interfaces/review/main.ts` | `interfaces/review/compose.ts` | Only the stacks built from the checkout (`SOURCE_ONLY_SERVICES` in `deployment/preflight/local-only.ts`): `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml`. Not `deployment/compose.dev.yaml`. |
+| indexer | `interfaces/indexer/main.ts` | `interfaces/indexer/compose.ts` | `deployment/images/indexer.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/indexer/main.ts"]`. Service `indexer` is in `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml` (`SOURCE_ONLY_SERVICES` in `deployment/preflight/local-only.ts`). It is absent from `deployment/compose.dev.yaml`. |
+| media | `interfaces/media/main.ts` | `interfaces/media/compose.ts` | No image under `deployment/images/` and no Compose service. |
+| pds-admin | `interfaces/pds-admin/main.ts` | `interfaces/pds-admin/compose.ts` | `deployment/images/pds-admin.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/pds-admin/main.ts"]`. Service `pds-admin` is in the same two files as `indexer`, and absent from `deployment/compose.dev.yaml`. |
+| review | `interfaces/review/main.ts` | `interfaces/review/compose.ts` | `deployment/images/review.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/review/main.ts"]`. Service `review` is in the same two files as `indexer`, and absent from `deployment/compose.dev.yaml`. |
 
 `server.ts` loads settings with `bootOrExit` and listens after the SvelteKit `init` hook has built the adapters.
 
@@ -76,6 +78,6 @@ Postgres roles for these processes are in `infrastructure/postgres/roles.json`. 
 
 `infrastructure/postgres/roles.ts` syncs passwords only when `passwordFrom` is not null.
 
-[web](./web/) and `interfaces/indexer` each open a pool. `roles.json` also lists roles for processes that have no folder on this tree. Per-role grants for `web` are on its page.
+[web](./web/) opens a pool. [indexer](./indexer/) opens one when `INDEXER_ENABLED` is on. [media](./media/), [pds-admin](./pds-admin/) and [review](./review/) do not. `roles.json` also lists roles for processes that have no folder on this tree. Per-role grants for `web` are on its page.
 
-`review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2).
+`review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2). The review process does not connect as either role.

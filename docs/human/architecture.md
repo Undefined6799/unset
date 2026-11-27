@@ -26,9 +26,9 @@ People will use three apps. Today only `apps/web` exists. `apps/admin` is planne
 process in `interfaces/`, which checks who is asking, calls a product rule in `domains/`, and
 reaches outside systems (Postgres, the PDS, Tap, Matrix, storage, Arachnid, email) only through
 `infrastructure/`. Every running process has its own folder, container, database role and network,
-so a fault or a compromise in one does not reach the others. `pds-admin` (planned, P2.09) and
-`chat-admin` (planned, phase 6) hold the admin credentials. They import nothing but their own
-folder, Node built-ins and `shared/admin-envelope/` (planned).
+so a fault or a compromise in one does not reach the others. `pds-admin` holds the PDS admin
+password and imports nothing but its own folder, Node built-ins and `shared/admin-envelope/`.
+There is no `chat-admin`.
 
 ## PDS presentation boundary (ADR 0027)
 
@@ -105,7 +105,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | AB-4 | Every guard proves it examined more than zero items and fails on a known-bad fixture | checked: `scripts/guards/guards.test.ts`, `depcruise_cruised_nonzero` |
 | DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | checked: `transactions_only_in_tx` (Semgrep rule transactions-only-in-tx, proven on fixtures by the CI semgrep job) |
 | DA-1 | `idx` can be dropped and rebuilt without losing a decision | planned: P3.03 |
-| SE-4 | Every route names a rate-limit policy in its own interface's `limits.ts`, or is "exempt" on a static route | checked: `every_route_has_a_policy` and `only_health_skips_the_rate_limit` (tests/integration/web/gate.test.ts): every SvelteKit route has a policy file, whose type takes only a policy name defined in interfaces/web/src/lib/server/limits.ts, and only /health, a static route, skips the limit. The web process only: a later process that is not SvelteKit (media, api, indexer) needs its own route-policy check when it lands |
+| SE-4 | Every route names a rate-limit policy in its own interface's `limits.ts`, or is "exempt" on a static route | checked: `every_route_has_a_policy` and `only_health_skips_the_rate_limit` (tests/integration/web/gate.test.ts): every SvelteKit route has a policy file, whose type takes only a policy name defined in interfaces/web/src/lib/server/limits.ts, and only /health, a static route, skips the limit. Those checks cover the web process only. media, indexer, pds-admin and review are in the tree and have no limits.ts and no route-policy check. api does not exist. |
 | SE-6 | A PR that changes a trusted-base path, a check path among them, carries the `security-review` label (ADR 0044); the review of the exact head, and Alex's line for a loosening, are review-only | checked: `trusted_path_needs_label`, `renovate_needs_label_too`, `trusted_paths_named`, `trusted_base_list_from_codeowners`, `list_is_union_of_base_and_head` |
 
 The docs test (P0.09, `architecture_rule_table_matches_depcruise`) reads this table. It fails if a named check
