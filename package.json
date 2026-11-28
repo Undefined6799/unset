@@ -35,22 +35,22 @@
   },
   "dependencies": {
     "aws4fetch": "1.0.20",
-    "parse5": "8.0.1"
+    "parse5": "8.1.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@biomejs/biome": "2.5.15",
-    "@capsizecss/metrics": "4.4.0",
+    "@capsizecss/metrics": "4.5.0",
     "@capsizecss/unpack": "4.0.1",
     "@playwright/test": "1.64.1",
-    "@swc/core": "1.16.18",
+    "@swc/core": "1.16.22",
     "@types/node": "26.6.5",
     "dependency-cruiser": "18.7.0",
     "fast-check": "4.10.2",
     "jscpd": "5.4.2",
     "tar-stream": "3.2.2",
     "typescript": "7.0.2",
-    "vite": "8.3.5",
+    "vite": "8.3.8",
     "vitest": "5.0.5",
     "yaml": "2.9.1"
   }

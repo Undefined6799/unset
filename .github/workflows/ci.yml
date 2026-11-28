@@ -39,7 +39,7 @@ jobs:
     env:
       # The notes guard's code-moved warning diffs BASE_SHA...HEAD (P0.09d).
       BASE_SHA: ${{ github.event.before }}
-      RENOVATE_IMAGE: renovate/renovate:44.224.1@sha256:0405454d925558d5a2368ddb1d8318244e96c73974697a5264a4d1977a277598
+      RENOVATE_IMAGE: renovate/renovate:44.257.8@sha256:68f58fa3b0e92875fa2f44c4ae02936186818b0170c2d39fe7261a2af5260f36
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,7 +154,7 @@ jobs:
     permissions:
       contents: read
     env:
-      SEMGREP_IMAGE: semgrep/semgrep:1.185.0@sha256:67518c174185a2043fdbed16c70631b79209499b3671178e7194379b48295a0d
+      SEMGREP_IMAGE: semgrep/semgrep:1.186.0@sha256:6e1b04340e60e910fbb4ddbf3c857ab0918f064417ad5ac530014ccb3cf8c8f1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -274,7 +274,7 @@ jobs:
     # layout only that builder produces fails here first (staging's Postgres, 2026-10-23: --chmod also reached the
     # folder COPY created, which the runner's own builder did not do). scripts/ci/check-job.test.ts keeps the two equal.
     env:
-      BUILDKIT_IMAGE: moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+      BUILDKIT_IMAGE: moby/buildkit:v0.35.1@sha256:baf6138eb8c37644800c7c913fba051e840ebb9ba13eaf92d92ef9a1712d0b4c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
