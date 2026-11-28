@@ -8,11 +8,11 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@atproto/lex-json": "0.1.9",
-    "@atproto/lex-schema": "0.2.11"
+    "@atproto/lex-json": "0.1.10",
+    "@atproto/lex-schema": "0.3.1"
   },
   "devDependencies": {
-    "@atproto/lex": "0.4.7",
-    "@atproto/lex-document": "0.1.16"
+    "@atproto/lex": "0.6.1",
+    "@atproto/lex-document": "0.1.18"
   }
 }

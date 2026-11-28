@@ -8,11 +8,11 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@atproto/api": "0.30.3",
-    "@atproto/common-web": "0.5.17",
+    "@atproto/api": "0.32.5",
+    "@atproto/common-web": "0.5.19",
     "@atproto/jwk-jose": "0.2.4",
-    "@atproto/oauth-client-node": "0.5.16",
-    "@atproto/oauth-scopes": "0.5.14",
+    "@atproto/oauth-client-node": "0.5.19",
+    "@atproto/oauth-scopes": "0.5.16",
     "@unset/domains-identity": "*",
     "@unset/infrastructure-net-guard": "*",
     "@unset/shared-admin-envelope": "*",
